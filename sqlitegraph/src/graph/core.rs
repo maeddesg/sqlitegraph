@@ -5,7 +5,8 @@ use std::path::Path;
 use rusqlite::Connection;
 
 use crate::{
-    cache::AdjacencyCache, errors::SqliteGraphError, mvcc::SnapshotManager, schema::ensure_schema,
+    cache::AdjacencyCache, errors::SqliteGraphError, mvcc::SnapshotManager,
+    query_cache::QueryCache, schema::ensure_schema,
 };
 
 use super::metrics::{GraphMetrics, StatementTracker};
@@ -18,6 +19,7 @@ pub struct SqliteGraph {
     pub(crate) conn: Connection,
     pub(crate) outgoing_cache: AdjacencyCache,
     pub(crate) incoming_cache: AdjacencyCache,
+    pub(crate) query_cache: QueryCache,
     pub(crate) metrics: GraphMetrics,
     pub(crate) statement_tracker: StatementTracker,
     pub(crate) snapshot_manager: SnapshotManager,
@@ -86,6 +88,7 @@ impl SqliteGraph {
             conn,
             outgoing_cache: AdjacencyCache::new(),
             incoming_cache: AdjacencyCache::new(),
+            query_cache: QueryCache::new(),
             metrics: GraphMetrics::default(),
             statement_tracker: StatementTracker::default(),
             snapshot_manager: SnapshotManager::new(),

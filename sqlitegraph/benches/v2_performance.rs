@@ -1,0 +1,364 @@
+//! V2 Performance Benchmarks
+//!
+//! Comprehensive performance testing for SQLiteGraph V2 backend.
+//! Measures insertion throughput, neighbor queries, traversal performance,
+//! and file growth patterns under different graph topologies.
+
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use sqlitegraph::{BackendDirection, GraphConfig, NeighborQuery};
+
+mod v2_dataset_generator;
+use v2_dataset_generator::{V2GraphMode, V2GraphSpec, generate_v2_graph};
+
+/// Benchmark V2 edge insertion throughput
+fn bench_v2_insertion(c: &mut Criterion) {
+    let mut group = c.benchmark_group("v2_insertion");
+
+    // Test different graph sizes
+    for &node_count in &[1_000, 5_000, 10_000, 25_000] {
+        let edge_count = node_count * 4; // Sparse graph ratio
+
+        let spec = V2GraphSpec::new(node_count, edge_count, V2GraphMode::Mixed);
+
+        group.throughput(Throughput::Elements(edge_count as u64));
+        group.bench_with_input(
+            BenchmarkId::new("mixed_graph", node_count),
+            &spec,
+            |b, spec| {
+                b.iter(|| {
+                    let result = generate_v2_graph(spec);
+                    black_box(result.edge_count);
+                    black_box(result.file_size_bytes);
+                    black_box(result.bytes_per_edge);
+                    black_box(result.bytes_per_node);
+                    black_box(result.growth_efficiency);
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark neighbor query performance for different node degrees
+fn bench_v2_neighbor_queries(c: &mut Criterion) {
+    let mut group = c.benchmark_group("v2_neighbor_queries");
+
+    // Create test graphs with different characteristics
+    let specs = vec![
+        V2GraphSpec::new(5_000, 20_000, V2GraphMode::Sparse), // Low degree
+        V2GraphSpec::new(5_000, 20_000, V2GraphMode::PowerLaw), // Hub-heavy
+        V2GraphSpec::new(5_000, 20_000, V2GraphMode::MultiEdge), // Multi-edge
+        V2GraphSpec::new(5_000, 20_000, V2GraphMode::Bidirectional), // High bidirectional
+    ];
+
+    for (i, spec) in specs.iter().enumerate() {
+        // Generate graph once for each spec
+        let result = generate_v2_graph(spec);
+
+        // Find nodes with different degree characteristics
+        let mut low_degree_nodes = Vec::new();
+        let mut high_degree_nodes = Vec::new();
+        let mut hub_nodes = Vec::new();
+
+        for (&node_id, &(outgoing, incoming)) in &result.node_degrees {
+            let total_degree = outgoing + incoming;
+            if total_degree <= 5 {
+                low_degree_nodes.push(node_id);
+            } else if total_degree >= 50 {
+                hub_nodes.push(node_id);
+            } else if total_degree >= 20 {
+                high_degree_nodes.push(node_id);
+            }
+        }
+
+        // Benchmark low degree nodes
+        if !low_degree_nodes.is_empty() {
+            group.bench_with_input(
+                BenchmarkId::new(format!("{}_low_degree", i), low_degree_nodes.len()),
+                &(&result, &low_degree_nodes),
+                |b, (result, nodes)| {
+                    let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+                        .expect("Failed to reopen graph");
+
+                    b.iter(|| {
+                        for &node_id in nodes.iter().take(10) {
+                            let _neighbors = black_box(
+                                graph
+                                    .neighbors(
+                                        node_id,
+                                        NeighborQuery {
+                                            direction: BackendDirection::Outgoing,
+                                            edge_type: None,
+                                        },
+                                    )
+                                    .expect("Failed to get neighbors"),
+                            );
+                        }
+                    });
+                },
+            );
+        }
+
+        // Benchmark high degree nodes
+        if !high_degree_nodes.is_empty() {
+            group.bench_with_input(
+                BenchmarkId::new(format!("{}_high_degree", i), high_degree_nodes.len()),
+                &(&result, &high_degree_nodes),
+                |b, (result, nodes)| {
+                    let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+                        .expect("Failed to reopen graph");
+
+                    b.iter(|| {
+                        for &node_id in nodes.iter().take(5) {
+                            let _neighbors = black_box(
+                                graph
+                                    .neighbors(
+                                        node_id,
+                                        NeighborQuery {
+                                            direction: BackendDirection::Outgoing,
+                                            edge_type: None,
+                                        },
+                                    )
+                                    .expect("Failed to get neighbors"),
+                            );
+                        }
+                    });
+                },
+            );
+        }
+
+        // Benchmark hub nodes
+        if !hub_nodes.is_empty() {
+            group.bench_with_input(
+                BenchmarkId::new(format!("{}_hub_nodes", i), hub_nodes.len()),
+                &(&result, &hub_nodes),
+                |b, (result, nodes)| {
+                    let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+                        .expect("Failed to reopen graph");
+
+                    b.iter(|| {
+                        for &node_id in nodes.iter().take(3) {
+                            let _neighbors = black_box(
+                                graph
+                                    .neighbors(
+                                        node_id,
+                                        NeighborQuery {
+                                            direction: BackendDirection::Outgoing,
+                                            edge_type: None,
+                                        },
+                                    )
+                                    .expect("Failed to get neighbors"),
+                            );
+                        }
+                    });
+                },
+            );
+        }
+    }
+
+    group.finish();
+}
+
+/// Benchmark BFS traversal performance
+fn bench_v2_bfs_traversal(c: &mut Criterion) {
+    let mut group = c.benchmark_group("v2_bfs_traversal");
+
+    // Test BFS on different graph sizes
+    for &node_count in &[1_000, 5_000, 10_000] {
+        let edge_count = node_count * 6; // Slightly denser for better BFS
+        let spec = V2GraphSpec::new(node_count, edge_count, V2GraphMode::Mixed);
+
+        let result = generate_v2_graph(&spec);
+
+        group.bench_with_input(
+            BenchmarkId::new("bfs_depth_5", node_count),
+            &(&result, 5),
+            |b, (result, depth)| {
+                let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+                    .expect("Failed to reopen graph");
+
+                let start_node = result.node_ids[0]; // Use first node as start
+
+                b.iter(|| {
+                    let _visited =
+                        black_box(graph.bfs(start_node, *depth).expect("Failed to run BFS"));
+                });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("bfs_depth_10", node_count),
+            &(&result, 10),
+            |b, (result, depth)| {
+                let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+                    .expect("Failed to reopen graph");
+
+                let start_node = result.node_ids[0];
+
+                b.iter(|| {
+                    let _visited =
+                        black_box(graph.bfs(start_node, *depth).expect("Failed to run BFS"));
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark k-hop traversal performance
+fn bench_v2_k_hop_traversal(c: &mut Criterion) {
+    let mut group = c.benchmark_group("v2_k_hop_traversal");
+
+    let spec = V2GraphSpec::new(10_000, 60_000, V2GraphMode::Mixed);
+    let result = generate_v2_graph(&spec);
+
+    let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+        .expect("Failed to reopen graph");
+
+    let start_node = result.node_ids[0];
+
+    for depth in [2, 3, 4, 5].iter() {
+        group.bench_with_input(BenchmarkId::new("outgoing", *depth), depth, |b, &depth| {
+            b.iter(|| {
+                let _neighbors = black_box(
+                    graph
+                        .k_hop(start_node, depth, BackendDirection::Outgoing)
+                        .expect("Failed to run k-hop"),
+                );
+            });
+        });
+
+        group.bench_with_input(BenchmarkId::new("incoming", *depth), depth, |b, &depth| {
+            b.iter(|| {
+                let _neighbors = black_box(
+                    graph
+                        .k_hop(start_node, depth, BackendDirection::Incoming)
+                        .expect("Failed to run k-hop"),
+                );
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// Benchmark file growth and memory usage
+fn bench_v2_file_growth(c: &mut Criterion) {
+    let mut group = c.benchmark_group("v2_file_growth");
+
+    // Test file growth patterns with different topologies
+    let modes = [
+        V2GraphMode::Sparse,
+        V2GraphMode::PowerLaw,
+        V2GraphMode::MultiEdge,
+    ];
+
+    for mode in modes.iter() {
+        for &size in &[1_000, 5_000, 10_000] {
+            let edge_count = match mode {
+                V2GraphMode::MultiEdge => size * 10, // More edges for multi-edge
+                _ => size * 4,
+            };
+
+            let spec = V2GraphSpec::new(size, edge_count, *mode);
+
+            group.bench_with_input(
+                BenchmarkId::new(format!("{:?}", mode), size),
+                &spec,
+                |b, spec| {
+                    b.iter(|| {
+                        let result = generate_v2_graph(spec);
+                        let bytes_per_edge =
+                            result.file_size_bytes as f64 / result.edge_count as f64;
+                        let bytes_per_node =
+                            result.file_size_bytes as f64 / result.node_ids.len() as f64;
+
+                        black_box(bytes_per_edge);
+                        black_box(bytes_per_node);
+                        black_box(result.file_size_bytes);
+                    });
+                },
+            );
+        }
+    }
+
+    group.finish();
+}
+
+/// Benchmark multi-edge specific scenarios (Phase 50 validation)
+fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
+    let mut group = c.benchmark_group("v2_multiedge_scenarios");
+
+    // Test with different multi-edge factors
+    for &multi_factor in &[3, 5, 10, 20] {
+        let spec = V2GraphSpec::new(2_000, 2_000 * multi_factor, V2GraphMode::MultiEdge)
+            .with_multi_edge_factor(multi_factor);
+
+        group.bench_with_input(
+            BenchmarkId::new("insertion", multi_factor),
+            &spec,
+            |b, spec| {
+                b.iter(|| {
+                    let result = generate_v2_graph(spec);
+                    black_box(result.edge_count);
+                });
+            },
+        );
+
+        // Benchmark neighbor queries on multi-edge graphs
+        let result = generate_v2_graph(&spec);
+        let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+            .expect("Failed to reopen graph");
+
+        // Find nodes with multi-edge connections (high degree)
+        let mut multiedge_nodes = Vec::new();
+        for (&node_id, &(outgoing, _)) in &result.node_degrees {
+            if outgoing >= multi_factor {
+                multiedge_nodes.push(node_id);
+                if multiedge_nodes.len() >= 10 {
+                    break;
+                }
+            }
+        }
+
+        if !multiedge_nodes.is_empty() {
+            group.bench_with_input(
+                BenchmarkId::new("neighbors_dedup", multi_factor),
+                &(&graph, &multiedge_nodes),
+                |b, (graph, nodes)| {
+                    b.iter(|| {
+                        for &node_id in nodes.iter() {
+                            let _neighbors = black_box(
+                                graph
+                                    .neighbors(
+                                        node_id,
+                                        NeighborQuery {
+                                            direction: BackendDirection::Outgoing,
+                                            edge_type: None,
+                                        },
+                                    )
+                                    .expect("Failed to get neighbors"),
+                            );
+                        }
+                    });
+                },
+            );
+        }
+    }
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_v2_insertion,
+    bench_v2_neighbor_queries,
+    bench_v2_bfs_traversal,
+    bench_v2_k_hop_traversal,
+    bench_v2_file_growth,
+    bench_v2_multiedge_scenarios
+);
+
+criterion_main!(benches);

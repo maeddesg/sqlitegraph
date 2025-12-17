@@ -42,9 +42,13 @@ pub fn map_to_graph_error(err: NativeBackendError) -> SqliteGraphError {
                 expected, found
             ))
         }
-        NativeBackendError::UnsupportedVersion { version } => {
-            SqliteGraphError::connection(format!("Unsupported version: {} (supported: 1)", version))
-        }
+        NativeBackendError::UnsupportedVersion {
+            version,
+            supported_version,
+        } => SqliteGraphError::connection(format!(
+            "Unsupported version: {} (supported: {})",
+            version, supported_version
+        )),
         NativeBackendError::InvalidHeader { field, reason } => {
             SqliteGraphError::connection(format!("Invalid header field '{}': {}", field, reason))
         }
@@ -56,9 +60,39 @@ pub fn map_to_graph_error(err: NativeBackendError) -> SqliteGraphError {
         }
         NativeBackendError::Utf8Error(e) => SqliteGraphError::connection(e.to_string()),
         NativeBackendError::JsonError(e) => SqliteGraphError::connection(e.to_string()),
+        NativeBackendError::BincodeError(e) => SqliteGraphError::connection(e.to_string()),
         NativeBackendError::InvalidUtf8(e) => SqliteGraphError::connection(e.to_string()),
         NativeBackendError::BufferTooSmall { size, min_size } => {
             SqliteGraphError::connection(format!("Buffer too small: {} < {}", size, min_size))
+        }
+        NativeBackendError::InvalidStringOffset { offset } => {
+            SqliteGraphError::connection(format!("Invalid string table offset: {}", offset))
+        }
+        NativeBackendError::CorruptStringTable { reason } => {
+            SqliteGraphError::connection(format!("Corrupt string table: {}", reason))
+        }
+        NativeBackendError::InvalidMagicBytes { found } => {
+            SqliteGraphError::connection(format!("Invalid magic bytes: {:?}", found))
+        }
+        NativeBackendError::ValidationFailed {
+            metric,
+            expected,
+            actual,
+        } => SqliteGraphError::connection(format!(
+            "Validation failed for {}: expected {}, got {}",
+            metric, expected, actual
+        )),
+        NativeBackendError::OutOfSpace => {
+            SqliteGraphError::connection("Out of space in file".to_string())
+        }
+        NativeBackendError::CorruptFreeSpace { reason } => {
+            SqliteGraphError::connection(format!("Corrupt free space: {}", reason))
+        }
+        NativeBackendError::TransactionRolledBack(reason) => {
+            SqliteGraphError::connection(format!("Transaction rolled back: {}", reason))
+        }
+        NativeBackendError::NodeNotFound { node_id, operation } => {
+            SqliteGraphError::query(format!("Node {} not found during {}", node_id, operation))
         }
     }
 }
@@ -121,7 +155,7 @@ pub fn validate_node_id_range(
     graph_file: &super::graph_file::GraphFile,
     node_id: NativeNodeId,
 ) -> Result<(), NativeBackendError> {
-    let header = graph_file.header();
+    let header = graph_file.persistent_header();
 
     // Check lower bound (must be positive)
     if node_id <= 0 {
@@ -149,7 +183,7 @@ pub fn validate_edge_id_range(
     graph_file: &super::graph_file::GraphFile,
     edge_id: NativeEdgeId,
 ) -> Result<(), NativeBackendError> {
-    let header = graph_file.header();
+    let header = graph_file.persistent_header();
 
     if edge_id <= 0 || edge_id > header.edge_count as NativeEdgeId {
         return Err(NativeBackendError::InvalidEdgeId {
@@ -165,7 +199,7 @@ pub fn validate_edge_id_range(
 pub fn check_file_consistency(
     graph_file: &super::graph_file::GraphFile,
 ) -> Result<(), NativeBackendError> {
-    let header = graph_file.header();
+    let header = graph_file.persistent_header();
 
     // Basic header validation
     if header.node_count < 0 || header.edge_count < 0 {

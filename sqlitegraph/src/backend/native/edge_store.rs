@@ -6,7 +6,9 @@
 use super::node_store::NodeStore;
 use crate::backend::native::constants::*;
 use crate::backend::native::graph_file::GraphFile;
-use crate::backend::native::types::*;
+use crate::backend::native::types::{node_slot_offset, *};
+use crate::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
+use std::io::{Read, Seek};
 
 /// Edge store manages edge records and adjacency layout in the graph file
 pub struct EdgeStore<'a> {
@@ -49,8 +51,8 @@ impl<'a> EdgeStore<'a> {
         self.update_node_adjacency(&edge)?;
 
         // Update header if this is a new edge
-        if edge.id as u64 > self.graph_file.header().edge_count {
-            self.graph_file.header_mut().edge_count = edge.id as u64;
+        if edge.id as u64 > self.graph_file.persistent_header().edge_count {
+            self.graph_file.persistent_header_mut().edge_count = edge.id as u64;
             // Persist header changes to disk
             self.graph_file.flush()?;
         }
@@ -60,23 +62,666 @@ impl<'a> EdgeStore<'a> {
 
     /// Update node adjacency metadata when an edge is written
     fn update_node_adjacency(&mut self, edge: &EdgeRecord) -> NativeResult<()> {
+        let header = self.graph_file.header();
+
+        // Check if we need to use V2 atomic commit protocol
+        let is_v2_framed = (header.flags & super::constants::FLAG_V2_FRAMED_RECORDS) != 0;
+        let is_atomic_commit = (header.flags & super::constants::FLAG_V2_ATOMIC_COMMIT) != 0;
+
+        // PHASE 5 DEBUG: Check V2 flag routing during edge insertion
+        if std::env::var("V2_SLOT_DEBUG").is_ok() {
+            println!(
+                "[V2_SLOT_DEBUG] EDGE_INSERT: flags=0x{:08x}, is_v2_framed={}, is_atomic_commit={}",
+                header.flags, is_v2_framed, is_atomic_commit
+            );
+        }
+
+        // PHASE 2D: EDGE_CLUSTER_DEBUG - Probe node1 corruption before any operations
+        if std::env::var("EDGE_CLUSTER_DEBUG").is_ok() {
+            // Read node1 slot DIRECTLY from disk before any edge insertion operations
+            let mut disk_file = std::fs::File::open(&self.graph_file.file_path())?;
+            let mut node1_bytes = vec![0u8; 32];
+            disk_file.seek(std::io::SeekFrom::Start(0x400))?;
+            disk_file.read_exact(&mut node1_bytes)?;
+            let version_before = node1_bytes[0];
+            let file_size_before = self.graph_file.file_size().unwrap_or(0);
+            println!(
+                "[EDGE_CLUSTER_DEBUG] BEFORE_EDGE_INSERT: node1_version={}, file_size={}, node1_bytes={:02x?}",
+                version_before, file_size_before, &node1_bytes
+            );
+        }
+
+        // V2-ONLY: Only V2 atomic commit protocol is supported
+        if is_v2_framed && is_atomic_commit {
+            // Phase 70: Use SQLite-style atomic commit for V2 clusters
+            self.update_node_adjacency_v2_atomic(edge)
+        } else {
+            // V1 adjacency updates are no longer supported
+            return Err(NativeBackendError::UnsupportedVersion {
+                version: 1,
+                supported_version: 2,
+            });
+        }
+    }
+
+    /// Phase 70: V2 atomic commit protocol for clustered adjacency
+    fn update_node_adjacency_v2_atomic(&mut self, edge: &EdgeRecord) -> NativeResult<()> {
+        // STEP 1: Begin atomic transaction
+        let next_tx_id = self.graph_file.tx_state().tx_id + 1;
+
+        // PHASE 2D: Probe after transaction begin
+        if std::env::var("EDGE_CLUSTER_DEBUG").is_ok() {
+            let mut disk_file = std::fs::File::open(&self.graph_file.file_path())?;
+            let mut node1_bytes = vec![0u8; 32];
+            disk_file.seek(std::io::SeekFrom::Start(0x400))?;
+            disk_file.read_exact(&mut node1_bytes)?;
+            let version_after_tx_begin = node1_bytes[0];
+            let file_size_after_tx_begin = self.graph_file.file_size().unwrap_or(0);
+            println!(
+                "[EDGE_CLUSTER_DEBUG] AFTER_TX_BEGIN: node1_version={}, file_size={}, node1_bytes={:02x?}",
+                version_after_tx_begin, file_size_after_tx_begin, &node1_bytes
+            );
+        }
+
+        self.graph_file.begin_transaction(next_tx_id)?;
+
+        // STEP 2: Write V2 cluster data before updating node metadata
+        let (actual_outgoing_size, actual_incoming_size) = self.write_v2_edge_clusters(edge)?;
+
+        // STEP 3: Update node cluster metadata with ACTUAL sizes written to disk
+        if let Err(e) = self.update_node_cluster_metadata_with_sizes(
+            edge,
+            actual_outgoing_size,
+            actual_incoming_size,
+        ) {
+            // Rollback on metadata update failure
+            let _ = self.graph_file.rollback_transaction();
+            return Err(e);
+        }
+
+        // STEP 4: Update header offsets and checksum
+        if let Err(e) = self.finalize_v2_header_updates() {
+            // Rollback on header update failure
+            let _ = self.graph_file.rollback_transaction();
+            return Err(e);
+        }
+
+        // STEP 5: Commit transaction atomically
+        self.graph_file.commit_transaction()?;
+
+        Ok(())
+    }
+
+    /// Write V2 edge clusters for source and target nodes
+    fn write_v2_edge_clusters(&mut self, edge: &EdgeRecord) -> NativeResult<(u64, u64)> {
+        // Return (outgoing_size, incoming_size)
+
+        // HOT PATH FIX: Only serialize edge data if it's non-empty/null
+        // JSON serialization is expensive and unnecessary for neighbor queries
+        let edge_data_bytes = if edge.data == serde_json::Value::Null {
+            Vec::new() // Empty bytes for null data (common case)
+        } else {
+            serde_json::to_vec(&edge.data).map_err(|e| NativeBackendError::JsonError(e))?
+        };
+
+        // For outgoing cluster (source node)
+        let outgoing_edge = CompactEdgeRecord::new(
+            edge.to_id, // neighbor_id
+            0,          // edge_type_offset (simplified - would use string table)
+            edge_data_bytes.clone(),
+        );
+        let outgoing_size =
+            self.write_or_update_v2_cluster(edge.from_id, outgoing_edge, Direction::Outgoing)?;
+
+        // For incoming cluster (target node)
+        let incoming_edge = CompactEdgeRecord::new(
+            edge.from_id, // neighbor_id
+            0,            // edge_type_offset (simplified - would use string table)
+            edge_data_bytes,
+        );
+        let incoming_size =
+            self.write_or_update_v2_cluster(edge.to_id, incoming_edge, Direction::Incoming)?;
+
+        Ok((outgoing_size, incoming_size))
+    }
+
+    /// Write or update a V2 cluster for a specific node and direction
+    fn write_or_update_v2_cluster(
+        &mut self,
+        node_id: NativeNodeId,
+        edge: CompactEdgeRecord,
+        direction: super::v2::edge_cluster::Direction,
+    ) -> NativeResult<u64> {
+        // Return actual bytes written
+        use super::v2::edge_cluster::EdgeCluster;
+        use super::v2::node_record_v2::NodeRecordV2;
+        use super::v2::string_table::StringTable;
+
+        // Convert CompactEdgeRecord back to EdgeRecord for proper cluster creation
+        let edge_record = EdgeRecord::new(
+            0, // Will be assigned proper edge_id by the system
+            if matches!(direction, super::v2::edge_cluster::Direction::Outgoing) {
+                node_id
+            } else {
+                edge.neighbor_id
+            },
+            if matches!(direction, super::v2::edge_cluster::Direction::Outgoing) {
+                edge.neighbor_id
+            } else {
+                node_id
+            },
+            "edge_type".to_string(), // Will be handled by string table
+            serde_json::from_slice(&edge.edge_data).unwrap_or_default(),
+        );
+
+        // Create cluster using the proper EdgeRecord->CompactEdgeRecord conversion with string table
+        let mut string_table = StringTable::new();
+        let edge_id = edge_record.id;
+        let cluster =
+            EdgeCluster::create_from_edges(&[edge_record], node_id, direction, &mut string_table)
+                .map_err(|e| NativeBackendError::CorruptEdgeRecord {
+                edge_id,
+                reason: format!("Cluster creation failed: {}", e),
+            })?;
+
+        // Serialize the cluster with proper framing
+        let cluster_data = cluster.serialize();
+
+        // PHASE 5 CRITICAL FIX: Use proper cluster offset tracking to prevent overwrites
+        // The issue was both clusters writing to same offset = corruption
+        let header = self.graph_file.header();
+
+        // CRITICAL FIX: Calculate proper cluster offsets to prevent node slot corruption
+        // The header may have stale values from initialization when node_count=0
+        let node_data_start = 1024u64;
+        let node_slot_size = super::constants::node::NODE_SLOT_SIZE;
+        let current_node_count = header.node_count;
+        let node_region_end = node_data_start + (current_node_count * node_slot_size);
+
+        // Ensure cluster offsets are positioned AFTER the node region
+        let safe_cluster_offset = if header.outgoing_cluster_offset < node_region_end {
+            println!(
+                "🔥 CRITICAL FIX: Correcting outgoing_cluster_offset from {} to {} to prevent node slot corruption (node_count={})",
+                header.outgoing_cluster_offset, node_region_end, current_node_count
+            );
+            node_region_end
+        } else {
+            header.outgoing_cluster_offset
+        };
+
+        let cluster_offset = match direction {
+            super::v2::edge_cluster::Direction::Outgoing => safe_cluster_offset,
+            super::v2::edge_cluster::Direction::Incoming => {
+                // Position incoming clusters after outgoing with reasonable spacing
+                let safe_incoming_offset = if header.incoming_cluster_offset < node_region_end {
+                    let min_incoming_offset = safe_cluster_offset + (current_node_count * 256); // 256 bytes per node estimate
+                    println!(
+                        "🔥 CRITICAL FIX: Correcting incoming_cluster_offset from {} to {} to prevent node slot corruption (node_count={})",
+                        header.incoming_cluster_offset, min_incoming_offset, current_node_count
+                    );
+                    min_incoming_offset
+                } else {
+                    header.incoming_cluster_offset
+                };
+                safe_incoming_offset
+            }
+        };
+
+        // V2_CLUSTER_AUDIT: Log file write details
+        if std::env::var("V2_CLUSTER_AUDIT").is_ok() {
+            println!(
+                "[V2_CLUSTER_AUDIT] {}:write_cluster(): file:{} line={}, node_id={}, direction={:?}, cluster_offset={}, cluster_size={}",
+                std::module_path!(),
+                file!(),
+                line!(),
+                node_id,
+                direction,
+                cluster_offset,
+                cluster_data.len()
+            );
+
+            // CRITICAL: Check if this cluster write will corrupt any node slots
+            let node_data_start = 1024u64;
+            let node_slot_size = super::constants::node::NODE_SLOT_SIZE;
+            let cluster_end = cluster_offset + cluster_data.len() as u64;
+
+            // Check if cluster write overlaps with node 257 slot specifically
+            let node_257_slot_start = node_slot_offset(node_data_start, 257);
+            let node_257_slot_end = node_257_slot_start + node_slot_size;
+
+            if cluster_offset <= node_257_slot_end && cluster_end >= node_257_slot_start {
+                println!(
+                    "🔥 CLUSTER CORRUPTION RISK: cluster write [0x{:x}-0x{:x}) overlaps with node 257 slot [0x{:x}-0x{:x})",
+                    cluster_offset, cluster_end, node_257_slot_start, node_257_slot_end
+                );
+                println!(
+                    "   THIS WILL CORRUPT NODE 257! node_id={}, direction={:?}",
+                    node_id, direction
+                );
+            }
+        }
+
+        // PHASE 74 INSTRUMENTATION: Store checksum before write
+        #[cfg(feature = "trace_v2_io")]
+        {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+
+            let mut hasher = DefaultHasher::new();
+            for byte in &cluster_data {
+                byte.hash(&mut hasher);
+            }
+            let checksum32 = hasher.finish() as u32;
+
+            println!(
+                "[phase74] WRITE_PRE: tx_id={}, node_id={}, direction={:?}, checksum32=0x{:08x}, size={}",
+                self.graph_file.tx_state().tx_id,
+                node_id,
+                direction,
+                checksum32,
+                cluster_data.len()
+            );
+        }
+
+        if std::env::var("V2_SLOT_DEBUG").is_ok() {
+            println!(
+                "[V2_SLOT_DEBUG] CLUSTER_WRITE_FIXED: direction={:?}, cluster_offset={}, cluster_size={}, file_will_grow_to={}",
+                direction,
+                cluster_offset,
+                cluster_data.len(),
+                cluster_offset + cluster_data.len() as u64
+            );
+        }
+
+        self.graph_file.write_bytes(cluster_offset, &cluster_data)?;
+
+        // PHASE 74 INSTRUMENTATION: Post-write verification
+        #[cfg(feature = "trace_v2_io")]
+        {
+            // Read back what we just wrote to verify it matches
+            let mut read_back = vec![0u8; cluster_data.len()];
+            if let Ok(_) = self.graph_file.read_bytes(cluster_offset, &mut read_back) {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+
+                let mut hasher = DefaultHasher::new();
+                for byte in &read_back {
+                    byte.hash(&mut hasher);
+                }
+                let readback_checksum32 = hasher.finish() as u32;
+
+                let post_tx_id = self.graph_file.tx_state().tx_id;
+
+                println!(
+                    "[phase74] WRITE_POST: tx_id={}, node_id={}, direction={:?}, offset={}, size={}, checksum32=0x{:08x}",
+                    post_tx_id,
+                    node_id,
+                    direction,
+                    cluster_offset,
+                    read_back.len(),
+                    readback_checksum32
+                );
+            }
+        }
+
+        // PHASE 2 FIX: Advance header cluster offset by actual written bytes to prevent reuse
+        let mut header = self.graph_file.header_mut();
+        let written_bytes = cluster_data.len() as u64;
+
+        if matches!(direction, super::v2::edge_cluster::Direction::Outgoing) {
+            // CRITICAL: Advance outgoing_cluster_offset to next free position
+            let next_outgoing_offset = cluster_offset + written_bytes;
+            header.outgoing_cluster_offset = next_outgoing_offset;
+
+            if std::env::var("V2_CLUSTER_AUDIT").is_ok() {
+                println!(
+                    "[V2_CLUSTER_AUDIT] {}:header_advance(): file:{} line={}, direction=Outgoing, old_offset={}, written_bytes={}, new_offset={}",
+                    std::module_path!(),
+                    file!(),
+                    line!(),
+                    cluster_offset,
+                    written_bytes,
+                    next_outgoing_offset
+                );
+            }
+        } else {
+            // CRITICAL: Advance incoming_cluster_offset to next free position
+            let next_incoming_offset = cluster_offset + written_bytes;
+            header.incoming_cluster_offset = next_incoming_offset;
+
+            if std::env::var("V2_CLUSTER_AUDIT").is_ok() {
+                println!(
+                    "[V2_CLUSTER_AUDIT] {}:header_advance(): file:{} line={}, direction=Incoming, old_offset={}, written_bytes={}, new_offset={}",
+                    std::module_path!(),
+                    file!(),
+                    line!(),
+                    cluster_offset,
+                    written_bytes,
+                    next_incoming_offset
+                );
+            }
+        }
+
+        Ok(written_bytes) // Return actual bytes written
+    }
+
+    /// Update node cluster metadata after successful cluster writes
+    fn update_node_cluster_metadata(&mut self, edge: &EdgeRecord) -> NativeResult<()> {
+        use super::v2::node_record_v2::NodeRecordV2;
+
+        // Get cluster offsets and calculate cluster sizes before creating node_store
+        let (outgoing_offset, incoming_offset) = {
+            let header = self.graph_file.header();
+            (
+                header.outgoing_cluster_offset,
+                header.incoming_cluster_offset,
+            )
+        };
+
+        // PHASE 5 FIX: Use realistic cluster size calculations instead of header offsets
+        let (outgoing_cluster_size, incoming_cluster_size) = {
+            // For now, use fixed estimates since we're writing minimal clusters
+            // In a full implementation, we'd track actual sizes during cluster writing
+            let outgoing_size = 50; // Approximate size of one edge cluster
+            let incoming_size = 50; // Approximate size of one edge cluster
+
+            (outgoing_size, incoming_size)
+        };
+
+        // Phase 75: Record that both nodes will have V2 cluster metadata modified
+        self.graph_file
+            .record_node_v2_cluster_modified(edge.from_id);
+        self.graph_file.record_node_v2_cluster_modified(edge.to_id);
+
         let mut node_store = NodeStore::new(self.graph_file);
 
-        // Update source node (outgoing)
-        let mut source_node = node_store.read_node(edge.from_id)?;
-        if source_node.outgoing_count == 0 {
-            source_node.outgoing_offset = edge.id as FileOffset;
+        // Update source node (outgoing) - use V2 node record
+        // PHASE 5 DEBUG: Track node read sequence during edge insertion
+        if std::env::var("V2_SLOT_DEBUG").is_ok() {
+            println!(
+                "[V2_SLOT_DEBUG] EDGE_UPDATE: about to read source node {} for metadata update",
+                edge.from_id
+            );
         }
-        source_node.outgoing_count += 1;
-        node_store.write_node(&source_node)?;
+        // V2-ONLY: Direct V2 node reading with no V1 fallback
+        use super::v2::node_record_v2::NodeRecordV2Ext;
 
-        // Update target node (incoming)
-        let mut target_node = node_store.read_node(edge.to_id)?;
-        if target_node.incoming_count == 0 {
-            target_node.incoming_offset = edge.id as FileOffset;
+        // PHASE 5 DEBUG: Track exactly where corruption happens
+        if std::env::var("V2_SLOT_DEBUG").is_ok() {
+            println!(
+                "[V2_SLOT_DEBUG] SOURCE_NODE_READ: attempting to read node {} as V2",
+                edge.from_id
+            );
         }
-        target_node.incoming_count += 1;
-        node_store.write_node(&target_node)?;
+
+        let mut source_node_v2 = node_store.read_node_v2(edge.from_id)?;
+
+        source_node_v2.outgoing_edge_count += 1;
+        source_node_v2.outgoing_cluster_offset = outgoing_offset;
+        source_node_v2.outgoing_cluster_size = outgoing_cluster_size;
+        // Phase 75: Check for fault injection before writing node metadata
+        #[cfg(feature = "trace_v2_io")]
+        if std::env::var("PHASE75_FORCE_ROLLBACK").is_ok() {
+            use crate::fault_injection::check_fault;
+            if let Err(e) = check_fault(
+                crate::fault_injection::FaultPoint::Phase75V2ClusterMetadataBeforeCommit,
+            ) {
+                #[cfg(feature = "trace_v2_io")]
+                println!(
+                    "[phase75] FAULT_INJECTED: Rolling back before source node metadata write for node {} (outgoing)",
+                    edge.from_id
+                );
+                return Err(NativeBackendError::TransactionRolledBack(format!(
+                    "Phase 75 fault injection: {}",
+                    e
+                )));
+            }
+        }
+
+        node_store.write_node_v2(&source_node_v2)?;
+
+        // Phase 75: Trace node metadata update
+        #[cfg(feature = "trace_v2_io")]
+        if std::env::var("PHASE75_INSTRUMENTATION").is_ok() {
+            println!(
+                "[phase75] NODE_METADATA_UPDATE: node_id={}, direction=outgoing, offset={}, size={}, count={}",
+                edge.from_id,
+                outgoing_offset,
+                outgoing_cluster_size,
+                source_node_v2.outgoing_edge_count
+            );
+        }
+
+        // Update target node (incoming) - V2-ONLY: Direct V2 node reading
+        let mut target_node_v2 = node_store.read_node_v2(edge.to_id)?;
+
+        target_node_v2.incoming_edge_count += 1;
+        target_node_v2.incoming_cluster_offset = incoming_offset;
+        target_node_v2.incoming_cluster_size = incoming_cluster_size;
+
+        // Phase 75: Trace node metadata update
+        #[cfg(feature = "trace_v2_io")]
+        if std::env::var("PHASE75_INSTRUMENTATION").is_ok() {
+            println!(
+                "[phase75] NODE_METADATA_UPDATE: node_id={}, direction=incoming, offset={}, size={}, count={}",
+                edge.to_id,
+                incoming_offset,
+                incoming_cluster_size,
+                target_node_v2.incoming_edge_count
+            );
+        }
+
+        node_store.write_node_v2(&target_node_v2)?;
+
+        Ok(())
+    }
+
+    /// Update node cluster metadata with ACTUAL sizes written to disk (PHASE 3 FIX)
+    fn update_node_cluster_metadata_with_sizes(
+        &mut self,
+        edge: &EdgeRecord,
+        actual_outgoing_size: u64,
+        actual_incoming_size: u64,
+    ) -> NativeResult<()> {
+        use super::v2::node_record_v2::NodeRecordV2;
+
+        // Phase 75: Record that both nodes will have V2 cluster metadata modified
+        self.graph_file
+            .record_node_v2_cluster_modified(edge.from_id);
+        self.graph_file.record_node_v2_cluster_modified(edge.to_id);
+
+        // Get cluster offsets from current header state (after advancement) BEFORE borrowing node_store
+        let (outgoing_offset, incoming_offset) = {
+            let header = self.graph_file.header();
+            let current_outgoing = header.outgoing_cluster_offset;
+            let current_incoming = header.incoming_cluster_offset;
+
+            let actual_outgoing_offset =
+                if actual_outgoing_size > 0 && actual_outgoing_size <= current_outgoing {
+                    current_outgoing - actual_outgoing_size
+                } else {
+                    current_outgoing
+                };
+
+            let actual_incoming_offset =
+                if actual_incoming_size > 0 && actual_incoming_size <= current_incoming {
+                    current_incoming - actual_incoming_size
+                } else {
+                    current_incoming
+                };
+
+            (actual_outgoing_offset, actual_incoming_offset)
+        };
+
+        // HARD INVARIANT: Validate node existence before updating adjacency
+        let node_data_offset = self.graph_file.persistent_header().node_data_offset;
+        let source_slot_offset = node_slot_offset(node_data_offset, edge.from_id);
+        let target_slot_offset = node_slot_offset(node_data_offset, edge.to_id);
+
+        // Check source node existence by reading slot version directly
+        let mut source_buffer = [0u8; 1];
+        let source_exists = if self
+            .graph_file
+            .read_bytes(source_slot_offset, &mut source_buffer)
+            .is_ok()
+        {
+            source_buffer[0] == 2u8 // V2 version byte
+        } else {
+            false
+        };
+
+        // Check target node existence by reading slot version directly
+        let mut target_buffer = [0u8; 1];
+        let target_exists = if self
+            .graph_file
+            .read_bytes(target_slot_offset, &mut target_buffer)
+            .is_ok()
+        {
+            target_buffer[0] == 2u8 // V2 version byte
+        } else {
+            false
+        };
+
+        // ENFORCEMENT: Both nodes must exist before edge insertion
+        if !source_exists {
+            return Err(NativeBackendError::NodeNotFound {
+                node_id: edge.from_id,
+                operation: "edge insertion (source)".to_string(),
+            });
+        }
+
+        if !target_exists {
+            return Err(NativeBackendError::NodeNotFound {
+                node_id: edge.to_id,
+                operation: "edge insertion (target)".to_string(),
+            });
+        }
+
+        // SLOT CORRUPTION DEBUG: Check node slots before reading
+        if std::env::var("SLOT_CORRUPTION_DEBUG").is_ok() {
+            // Check source node slot before reading
+            let source_node_data_offset = self.graph_file.persistent_header().node_data_offset;
+            let source_slot_offset = node_slot_offset(source_node_data_offset, edge.from_id);
+            let mut source_buffer = [0u8; 1];
+            if self
+                .graph_file
+                .read_bytes(source_slot_offset, &mut source_buffer)
+                .is_ok()
+            {
+                println!(
+                    "[SLOT_CORRUPTION] PRE_READ_SOURCE: node_id={}, slot_offset=0x{:x}, version={}",
+                    edge.from_id, source_slot_offset, source_buffer[0]
+                );
+            }
+
+            // Check target node slot before reading
+            let target_node_data_offset = self.graph_file.persistent_header().node_data_offset;
+            let target_slot_offset = node_slot_offset(target_node_data_offset, edge.to_id);
+            let mut target_buffer = [0u8; 1];
+            if self
+                .graph_file
+                .read_bytes(target_slot_offset, &mut target_buffer)
+                .is_ok()
+            {
+                println!(
+                    "[SLOT_CORRUPTION] PRE_READ_TARGET: node_id={}, slot_offset=0x{:x}, version={}",
+                    edge.to_id, target_slot_offset, target_buffer[0]
+                );
+            }
+        }
+
+        let mut node_store = NodeStore::new(self.graph_file);
+
+        // Update source node (outgoing) with ACTUAL size
+        let mut source_node_v2 = node_store.read_node_v2(edge.from_id)?;
+        source_node_v2.outgoing_edge_count += 1;
+        source_node_v2.outgoing_cluster_offset = outgoing_offset;
+        source_node_v2.outgoing_cluster_size = actual_outgoing_size as u32;
+
+        // Phase 75: Check for fault injection before writing source node metadata
+        #[cfg(feature = "trace_v2_io")]
+        if std::env::var("PHASE75_FORCE_ROLLBACK").is_ok() {
+            use crate::fault_injection::check_fault;
+            if let Err(e) = check_fault(
+                crate::fault_injection::FaultPoint::Phase75V2ClusterMetadataBeforeCommit,
+            ) {
+                #[cfg(feature = "trace_v2_io")]
+                println!(
+                    "[phase75] FAULT_INJECTED: Rolling back before source node metadata write for node {} (outgoing)",
+                    edge.from_id
+                );
+                return Err(NativeBackendError::TransactionRolledBack(format!(
+                    "Phase 75 fault injection: {}",
+                    e
+                )));
+            }
+        }
+
+        node_store.write_node_v2(&source_node_v2)?;
+
+        // Update target node (incoming) with ACTUAL size
+        // SLOT CORRUPTION DEBUG: Check target node state before reading
+        if std::env::var("SLOT_CORRUPTION_DEBUG").is_ok() && edge.to_id == 257 {
+            println!(
+                "[SLOT_CORRUPTION] ABOUT_TO_READ_TARGET: node_id={}, about_to_read_target_257",
+                edge.to_id
+            );
+        }
+        let mut target_node_v2 = node_store.read_node_v2(edge.to_id)?;
+        target_node_v2.incoming_edge_count += 1;
+        target_node_v2.incoming_cluster_offset = incoming_offset;
+        target_node_v2.incoming_cluster_size = actual_incoming_size as u32;
+
+        // Phase 75: Check for fault injection before writing target node metadata
+        #[cfg(feature = "trace_v2_io")]
+        if std::env::var("PHASE75_FORCE_ROLLBACK").is_ok() {
+            use crate::fault_injection::check_fault;
+            if let Err(e) = check_fault(
+                crate::fault_injection::FaultPoint::Phase75V2ClusterMetadataBeforeCommit,
+            ) {
+                #[cfg(feature = "trace_v2_io")]
+                println!(
+                    "[phase75] FAULT_INJECTED: Rolling back before target node metadata write for node {} (incoming)",
+                    edge.to_id
+                );
+                return Err(NativeBackendError::TransactionRolledBack(format!(
+                    "Phase 75 fault injection: {}",
+                    e
+                )));
+            }
+        }
+
+        node_store.write_node_v2(&target_node_v2)?;
+
+        if std::env::var("V2_CLUSTER_AUDIT").is_ok() {
+            println!(
+                "[V2_CLUSTER_AUDIT] {}:metadata_fix(): file:{} line={}, node_id={}, actual_outgoing_size={}, actual_incoming_size={}",
+                std::module_path!(),
+                file!(),
+                line!(),
+                edge.from_id,
+                actual_outgoing_size,
+                actual_incoming_size
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Finalize header updates after successful cluster and node writes
+    fn finalize_v2_header_updates(&mut self) -> NativeResult<()> {
+        let mut header = self.graph_file.header_mut();
+
+        // Update edge count
+        header.edge_count += 1;
+
+        // Note: Checksum will be updated by write_header()
+
+        // Write updated header to file
+        self.graph_file.write_header()?;
+
+        // Ensure all writes are flushed to disk
+        self.graph_file.sync()?;
 
         Ok(())
     }
@@ -92,7 +737,7 @@ impl<'a> EdgeStore<'a> {
         }
 
         // Validate node references against current node count
-        let max_node_id = self.graph_file.header().node_count as NativeNodeId;
+        let max_node_id = self.graph_file.persistent_header().node_count as NativeNodeId;
         if edge.from_id <= 0 || edge.from_id > max_node_id {
             return Err(NativeBackendError::InvalidNodeId {
                 id: edge.from_id,
@@ -177,7 +822,7 @@ impl<'a> EdgeStore<'a> {
 
     /// Calculate file offset for an edge record
     fn edge_offset(&self, edge_id: NativeEdgeId) -> FileOffset {
-        let base_offset = self.graph_file.header().edge_data_offset;
+        let base_offset = self.graph_file.persistent_header().edge_data_offset;
         // Use fixed-size edge records for simplicity: 256 bytes per edge
         // This ensures we have enough space for any edge and keeps offset calculation simple
         base_offset + ((edge_id - 1) as u64 * 256)
@@ -211,7 +856,12 @@ impl<'a> EdgeStore<'a> {
         buffer.extend_from_slice(&(edge_type_bytes.len() as u16).to_be_bytes());
 
         // Data length (big-endian)
-        let data_bytes = serde_json::to_vec(&edge.data)?;
+        // HOT PATH FIX: Only serialize edge data if it's non-empty/null
+        let data_bytes = if edge.data == serde_json::Value::Null {
+            Vec::new() // Empty bytes for null data (common case)
+        } else {
+            serde_json::to_vec(&edge.data)?
+        };
         if data_bytes.len() > edge::MAX_DATA_LENGTH as usize {
             return Err(NativeBackendError::RecordTooLarge {
                 size: data_bytes.len() as u32,
@@ -325,7 +975,8 @@ impl<'a> EdgeStore<'a> {
 
         // Read data
         let data_bytes = &buffer[offset..offset + data_len];
-        let data = serde_json::from_slice(data_bytes)?;
+        let data = serde_json::from_slice(data_bytes)
+            .map_err(|e| NativeBackendError::JsonError(e.into()))?;
 
         Ok(EdgeRecord {
             id,
@@ -339,14 +990,14 @@ impl<'a> EdgeStore<'a> {
 
     /// Get the maximum valid edge ID
     pub fn max_edge_id(&self) -> NativeEdgeId {
-        self.graph_file.header().edge_count as NativeEdgeId
+        self.graph_file.persistent_header().edge_count as NativeEdgeId
     }
 
     /// Allocate a new edge ID
     pub fn allocate_edge_id(&mut self) -> NativeEdgeId {
-        let current_count = self.graph_file.header().edge_count;
+        let current_count = self.graph_file.persistent_header().edge_count;
         let new_id = current_count + 1;
-        self.graph_file.header_mut().edge_count = new_id;
+        self.graph_file.persistent_header_mut().edge_count = new_id;
         new_id as NativeEdgeId
     }
 
@@ -362,7 +1013,7 @@ impl<'a> EdgeStore<'a> {
 
         // For simplicity, allocate at the end of the file
         let file_size = self.graph_file.file_size()?;
-        let offset = file_size.max(self.graph_file.header().edge_data_offset);
+        let offset = file_size.max(self.graph_file.persistent_header().edge_data_offset);
 
         // Ensure file is large enough for the edges
         let estimated_edge_size = 128; // Rough estimate per edge
@@ -387,7 +1038,7 @@ impl<'a> EdgeStore<'a> {
 
         // For simplicity, allocate at the end of the file after outgoing edges
         let file_size = self.graph_file.file_size()?;
-        let offset = file_size.max(self.graph_file.header().edge_data_offset);
+        let offset = file_size.max(self.graph_file.persistent_header().edge_data_offset);
 
         // Ensure file is large enough for the edges
         let estimated_edge_size = 128; // Rough estimate per edge
@@ -420,7 +1071,7 @@ impl<'a> EdgeStore<'a> {
     /// Validate edge consistency across the file
     pub fn validate_consistency(&mut self) -> NativeResult<()> {
         let max_id = self.max_edge_id();
-        let max_node_id = self.graph_file.header().node_count as NativeNodeId;
+        let max_node_id = self.graph_file.persistent_header().node_count as NativeNodeId;
 
         for edge_id in 1..=max_id {
             match self.read_edge(edge_id) {
@@ -450,6 +1101,97 @@ impl<'a> EdgeStore<'a> {
         }
 
         Ok(())
+    }
+
+    /// Read V2 clustered neighbors from the file (Phase 69 implementation)
+    pub fn iter_neighbors(
+        &mut self,
+        cluster_offset: u64,
+        cluster_size: u32,
+        direction: crate::backend::native::v2::edge_cluster::Direction,
+        node_id: NativeNodeId,
+    ) -> NativeResult<Vec<NativeNodeId>> {
+        use crate::backend::native::v2::edge_cluster::{EdgeCluster, TraceContext, TraceGuard};
+
+        // Check if this is a V2 file with framed records
+        let header = self.graph_file.header();
+        let is_framed =
+            (header.flags & crate::backend::native::constants::FLAG_V2_FRAMED_RECORDS) != 0;
+
+        if !is_framed {
+            return Err(NativeBackendError::CorruptEdgeRecord {
+                edge_id: -1,
+                reason: "iter_neighbors called on non-V2 framed file".to_string(),
+            });
+        }
+
+        // Read cluster bytes from file
+        let mut cluster_bytes = vec![0u8; cluster_size as usize];
+        self.graph_file
+            .read_bytes(cluster_offset, &mut cluster_bytes)?;
+
+        // V2_CLUSTER_AUDIT: Log file read details
+        if std::env::var("V2_CLUSTER_AUDIT").is_ok() {
+            println!(
+                "[V2_CLUSTER_AUDIT] {}:read_cluster(): file:{} line={}, node_id={}, direction={:?}, cluster_offset={}, cluster_size={}, actual_bytes_read={}",
+                std::module_path!(),
+                file!(),
+                line!(),
+                node_id,
+                direction,
+                cluster_offset,
+                cluster_size,
+                cluster_bytes.len()
+            );
+        }
+
+        // PHASE 74 INSTRUMENTATION: Reader trace before deserialization
+        #[cfg(feature = "trace_v2_io")]
+        {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+
+            let mut hasher = DefaultHasher::new();
+            for byte in &cluster_bytes {
+                byte.hash(&mut hasher);
+            }
+            let checksum32 = hasher.finish() as u32;
+
+            let first_32 = if cluster_bytes.len() >= 32 {
+                &cluster_bytes[..32]
+            } else {
+                &cluster_bytes[..]
+            };
+            let last_32 = if cluster_bytes.len() >= 32 {
+                &cluster_bytes[cluster_bytes.len() - 32..]
+            } else {
+                &cluster_bytes[..]
+            };
+
+            println!(
+                "[phase74] READ_START: node_id={}, direction={:?}, offset={}, size={}, checksum32=0x{:08x}, first_32={:02x?}, last_32={:02x?}",
+                node_id, direction, cluster_offset, cluster_size, checksum32, first_32, last_32
+            );
+        }
+
+        // Set up trace context for Phase 69 debugging
+        let trace_context = TraceContext {
+            node_id: node_id as i64,
+            direction,
+            cluster_offset,
+            payload_size: cluster_size,
+            strict: true, // Phase 69: Always use strict mode for framed records
+        };
+
+        let _trace_guard = TraceGuard::new(trace_context);
+
+        // Deserialize cluster using strict V2 framed mode
+        let cluster = EdgeCluster::deserialize(&cluster_bytes)?;
+
+        // Extract neighbor IDs from cluster
+        let neighbors: Vec<NativeNodeId> = cluster.iter_neighbors().collect();
+
+        Ok(neighbors)
     }
 }
 

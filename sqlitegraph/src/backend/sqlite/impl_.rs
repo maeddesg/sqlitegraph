@@ -121,11 +121,29 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
     }
 
     fn bfs(&self, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
-        bfs_neighbors(&self.graph, start, depth)
+        // Check query cache first
+        if let Some(cached_result) = self.graph.query_cache.get_bfs(start, depth) {
+            return Ok(cached_result);
+        }
+
+        // Cache miss - compute and cache the result
+        let result = bfs_neighbors(&self.graph, start, depth)?;
+        self.graph.query_cache.put_bfs(start, depth, result.clone());
+        Ok(result)
     }
 
     fn shortest_path(&self, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
-        shortest_path(&self.graph, start, end)
+        // Check query cache first
+        if let Some(cached_result) = self.graph.query_cache.get_shortest_path(start, end) {
+            return Ok(cached_result);
+        }
+
+        // Cache miss - compute and cache the result
+        let result = shortest_path(&self.graph, start, end)?;
+        self.graph
+            .query_cache
+            .put_shortest_path(start, end, result.clone());
+        Ok(result)
     }
 
     fn node_degree(&self, node: i64) -> Result<(usize, usize), SqliteGraphError> {
@@ -140,7 +158,17 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         depth: u32,
         direction: BackendDirection,
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        multi_hop::k_hop(&self.graph, start, depth, direction)
+        // Check query cache first
+        if let Some(cached_result) = self.graph.query_cache.get_k_hop(start, depth, direction) {
+            return Ok(cached_result);
+        }
+
+        // Cache miss - compute and cache the result
+        let result = multi_hop::k_hop(&self.graph, start, depth, direction)?;
+        self.graph
+            .query_cache
+            .put_k_hop(start, depth, direction, result.clone());
+        Ok(result)
     }
 
     fn k_hop_filtered(
@@ -150,7 +178,26 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         direction: BackendDirection,
         allowed_edge_types: &[&str],
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        multi_hop::k_hop_filtered(&self.graph, start, depth, direction, allowed_edge_types)
+        // Check query cache first
+        if let Some(cached_result) =
+            self.graph
+                .query_cache
+                .get_k_hop_filtered(start, depth, direction, allowed_edge_types)
+        {
+            return Ok(cached_result);
+        }
+
+        // Cache miss - compute and cache the result
+        let result =
+            multi_hop::k_hop_filtered(&self.graph, start, depth, direction, allowed_edge_types)?;
+        self.graph.query_cache.put_k_hop_filtered(
+            start,
+            depth,
+            direction,
+            allowed_edge_types,
+            result.clone(),
+        );
+        Ok(result)
     }
 
     fn chain_query(

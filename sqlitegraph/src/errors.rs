@@ -19,6 +19,8 @@ pub enum SqliteGraphError {
     TransactionError(String),
     #[error("validation error: {0}")]
     ValidationError(String),
+    #[error("native backend error: {0}")]
+    NativeError(#[from] crate::backend::native::types::NativeBackendError),
 }
 
 impl SqliteGraphError {

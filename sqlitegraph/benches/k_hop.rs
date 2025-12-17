@@ -10,7 +10,10 @@ use rand::SeedableRng;
 use sqlitegraph::{BackendDirection, BackendKind, EdgeSpec, NodeSpec};
 
 mod bench_utils;
-use bench_utils::{BENCHMARK_SIZES, MEASURE, WARM_UP, create_benchmark_temp_dir};
+use bench_utils::{
+    BENCHMARK_SIZES, BenchInMemoryGraph, BenchmarkGraph, GraphTopology, MEASURE, WARM_UP,
+    create_benchmark_temp_dir,
+};
 
 /// Benchmark 1-hop traversals (direct neighbors)
 fn k_hop_1(criterion: &mut Criterion) {
@@ -100,6 +103,33 @@ fn k_hop_1(criterion: &mut Criterion) {
                 let _k_hop_result = graph
                     .k_hop(node_ids[0], 1, BackendDirection::Outgoing)
                     .expect("Failed to perform 1-hop traversal");
+            });
+        });
+
+        // In-memory CPU-only ceiling
+        group.bench_with_input(BenchmarkId::new("in_memory", size), &size, |b, &size| {
+            b.iter(|| {
+                let spec = BenchmarkGraph::new(size, size - 1, GraphTopology::Star);
+                let graph = BenchInMemoryGraph::from_spec(&spec);
+
+                // Simple 1-hop traversal
+                let start_node = 0u32;
+                let mut visited = std::collections::HashSet::new();
+                let mut current_hop = vec![start_node];
+                visited.insert(start_node);
+
+                for _ in 0..1 {
+                    let mut next_hop = Vec::new();
+                    for &node in &current_hop {
+                        for &neighbor in graph.neighbors(node) {
+                            if !visited.contains(&neighbor) {
+                                visited.insert(neighbor);
+                                next_hop.push(neighbor);
+                            }
+                        }
+                    }
+                    current_hop = next_hop;
+                }
             });
         });
     }
@@ -198,6 +228,33 @@ fn k_hop_2(criterion: &mut Criterion) {
                     .expect("Failed to perform 2-hop traversal");
             });
         });
+
+        // In-memory CPU-only ceiling
+        group.bench_with_input(BenchmarkId::new("in_memory", size), &size, |b, &size| {
+            b.iter(|| {
+                let spec = BenchmarkGraph::new(size, size - 1, GraphTopology::Chain);
+                let graph = BenchInMemoryGraph::from_spec(&spec);
+
+                // Simple 2-hop traversal
+                let start_node = 0u32;
+                let mut visited = std::collections::HashSet::new();
+                let mut current_hop = vec![start_node];
+                visited.insert(start_node);
+
+                for _ in 0..2 {
+                    let mut next_hop = Vec::new();
+                    for &node in &current_hop {
+                        for &neighbor in graph.neighbors(node) {
+                            if !visited.contains(&neighbor) {
+                                visited.insert(neighbor);
+                                next_hop.push(neighbor);
+                            }
+                        }
+                    }
+                    current_hop = next_hop;
+                }
+            });
+        });
     }
 
     group.finish();
@@ -292,6 +349,33 @@ fn k_hop_3(criterion: &mut Criterion) {
                 let _k_hop_result = graph
                     .k_hop(node_ids[0], 3, BackendDirection::Outgoing)
                     .expect("Failed to perform 3-hop traversal");
+            });
+        });
+
+        // In-memory CPU-only ceiling
+        group.bench_with_input(BenchmarkId::new("in_memory", size), &size, |b, &size| {
+            b.iter(|| {
+                let spec = BenchmarkGraph::new(size, size - 1, GraphTopology::Chain);
+                let graph = BenchInMemoryGraph::from_spec(&spec);
+
+                // Simple 3-hop traversal
+                let start_node = 0u32;
+                let mut visited = std::collections::HashSet::new();
+                let mut current_hop = vec![start_node];
+                visited.insert(start_node);
+
+                for _ in 0..3 {
+                    let mut next_hop = Vec::new();
+                    for &node in &current_hop {
+                        for &neighbor in graph.neighbors(node) {
+                            if !visited.contains(&neighbor) {
+                                visited.insert(neighbor);
+                                next_hop.push(neighbor);
+                            }
+                        }
+                    }
+                    current_hop = next_hop;
+                }
             });
         });
     }

@@ -10,6 +10,7 @@ pub enum FaultPoint {
     BulkInsertEntitiesBeforeCommit,
     BulkInsertEdgesBeforeCommit,
     RecoveryLoadBeforeCommit,
+    Phase75V2ClusterMetadataBeforeCommit,
 }
 
 struct FaultEntry {

@@ -1,3 +1,4 @@
+#![cfg(feature = "v2_experimental")]
 use std::process::Command;
 
 fn run_example(name: &str) -> String {

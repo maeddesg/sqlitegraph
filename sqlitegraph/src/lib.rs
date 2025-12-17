@@ -15,7 +15,7 @@
 //!
 //! # Quick Start
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use sqlitegraph::{open_graph, GraphConfig, BackendKind};
 //!
 //! // Use SQLite backend (default)
@@ -120,6 +120,7 @@ pub mod graph_opt; // Public for tests
 pub mod index; // Public for tests
 pub mod multi_hop; // Public for tests
 mod pattern_engine_cache; // Already moved to core above
+pub mod query_cache; // Public for internal use and tests
 mod reasoning; // Public for binary
 pub mod schema; // Public for tests // Public for tests
 

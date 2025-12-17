@@ -67,9 +67,14 @@ impl GraphBackend for NativeGraphBackend {
     fn insert_node(&self, node: NodeSpec) -> Result<i64, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
             let mut node_store = NodeStore::new(graph_file);
-            let node_id = node_store.allocate_node_id();
-            let record = node_spec_to_record(node, node_id);
-            node_store.write_node(&record)?;
+            let node_id = node_store.allocate_node_id()?;
+
+            // Phase 31: V2 is now the default format (no feature gating)
+            let record_v2 = crate::backend::native::v2::node_record_v2::NodeRecordV2::new(
+                node_id, node.kind, node.name, node.data,
+            );
+            node_store.write_node_v2(&record_v2)?;
+
             Ok(node_id as i64)
         })
     }
@@ -84,11 +89,26 @@ impl GraphBackend for NativeGraphBackend {
 
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
-            let mut edge_store = EdgeStore::new(graph_file);
-            let edge_id = edge_store.allocate_edge_id();
-            let record = edge_spec_to_record(edge, edge_id);
-            edge_store.write_edge(&record)?;
-            Ok(edge_id as i64)
+            // Phase 44.2: Use V2 clustered adjacency when experimental feature is enabled
+            // Phase 44.2: Use V2 clustered adjacency when experimental feature is enabled
+            #[cfg(feature = "v2_experimental")]
+            {
+                let mut edge_store = EdgeStore::new(graph_file);
+                let edge_id = edge_store.allocate_edge_id();
+                let record = edge_spec_to_record(edge, edge_id);
+
+                // write_edge already calls update_v2_clustered_adjacency internally
+                edge_store.write_edge(&record)?;
+                Ok(edge_id as i64)
+            }
+            #[cfg(not(feature = "v2_experimental"))]
+            {
+                let mut edge_store = EdgeStore::new(graph_file);
+                let edge_id = edge_store.allocate_edge_id();
+                let record = edge_spec_to_record(edge, edge_id);
+                edge_store.write_edge(&record)?;
+                Ok(edge_id as i64)
+            }
         })
     }
 

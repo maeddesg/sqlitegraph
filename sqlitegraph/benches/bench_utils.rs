@@ -223,3 +223,78 @@ pub const MEDIUM_SIZES: &[usize] = &[1_000, 5_000];
 
 /// Large benchmark graphs for stress testing
 pub const LARGE_SIZES: &[usize] = &[10_000, 20_000];
+
+/// In-memory CPU-only graph for performance ceiling
+#[derive(Debug)]
+pub struct BenchInMemoryGraph {
+    pub adjacency: Vec<Vec<u32>>,
+}
+
+impl BenchInMemoryGraph {
+    /// Create an in-memory graph from benchmark specification
+    pub fn from_spec(spec: &BenchmarkGraph) -> Self {
+        let mut adjacency = vec![Vec::new(); spec.node_count];
+        let mut rng = rand::rngs::StdRng::seed_from_u64(spec.seed);
+
+        match spec.topology {
+            GraphTopology::Chain => {
+                for i in 0..spec.node_count.min(spec.edge_count) {
+                    if i + 1 < spec.node_count {
+                        adjacency[i].push(i as u32 + 1);
+                    }
+                }
+            }
+            GraphTopology::Star => {
+                if spec.node_count > 0 {
+                    for i in 1..spec.node_count.min(spec.edge_count + 1) {
+                        adjacency[0].push(i as u32);
+                    }
+                }
+            }
+            GraphTopology::Random => {
+                use rand::Rng;
+                for _ in 0..spec.edge_count {
+                    let from_idx = rng.gen_range(0..spec.node_count);
+                    let mut to_idx = rng.gen_range(0..spec.node_count);
+                    while to_idx == from_idx {
+                        to_idx = rng.gen_range(0..spec.node_count);
+                    }
+                    adjacency[from_idx].push(to_idx as u32);
+                }
+            }
+            GraphTopology::Grid => {
+                let grid_size = (spec.node_count as f64).sqrt() as usize;
+                for i in 0..spec.node_count.min(spec.edge_count) {
+                    let row = i / grid_size;
+                    let col = i % grid_size;
+
+                    // Right neighbor
+                    if col + 1 < grid_size && i + 1 < spec.node_count {
+                        adjacency[i].push((i + 1) as u32);
+                    }
+
+                    // Bottom neighbor
+                    if row + 1 < grid_size && i + grid_size < spec.node_count {
+                        adjacency[i].push((i + grid_size) as u32);
+                    }
+                }
+            }
+        }
+
+        Self { adjacency }
+    }
+
+    /// Get neighbors for BFS traversal
+    pub fn neighbors(&self, node: u32) -> &[u32] {
+        if node as usize >= self.adjacency.len() {
+            &[]
+        } else {
+            &self.adjacency[node as usize]
+        }
+    }
+
+    /// Get node count
+    pub fn node_count(&self) -> usize {
+        self.adjacency.len()
+    }
+}

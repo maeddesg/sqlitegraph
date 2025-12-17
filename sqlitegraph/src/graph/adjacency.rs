@@ -43,6 +43,7 @@ impl SqliteGraph {
     pub(crate) fn invalidate_caches(&self) {
         self.outgoing_cache.clear();
         self.incoming_cache.clear();
+        self.query_cache.invalidate_all();
     }
 
     pub fn outgoing_cache_ref(&self) -> &AdjacencyCache {

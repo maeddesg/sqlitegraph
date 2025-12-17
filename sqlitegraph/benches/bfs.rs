@@ -11,7 +11,8 @@ use sqlitegraph::{BackendDirection, BackendKind, EdgeSpec, NeighborQuery, NodeSp
 
 mod bench_utils;
 use bench_utils::{
-    BENCHMARK_SIZES, BenchmarkGraph, GraphTopology, MEASURE, WARM_UP, create_benchmark_temp_dir,
+    BENCHMARK_SIZES, BenchInMemoryGraph, BenchmarkGraph, GraphTopology, MEASURE, WARM_UP,
+    create_benchmark_temp_dir,
 };
 
 /// Benchmark BFS traversal on chain graphs
@@ -83,11 +84,41 @@ fn bfs_chain(criterion: &mut Criterion) {
                             data: serde_json::json!({"id": i}),
                         })
                         .expect("Failed to insert node");
+
+                    // DEBUG: Track node ID allocation pattern
+                    if std::env::var("BFS_DEBUG").is_ok() {
+                        println!("[BFS_DEBUG] Created node index={} -> node_id={}", i, node_id);
+                    }
+
                     node_ids.push(node_id);
+                }
+
+                // SLOT CORRUPTION DEBUG: Check critical node slots after node creation, before edge creation
+                if std::env::var("SLOT_CORRUPTION_DEBUG").is_ok() {
+                    // Check node_id=257 specifically (if it exists)
+                    if size > 257 {
+                        println!("[BFS_TRANSITION] About to check node 257 status");
+
+                        let graph_path = temp_dir.path().join("benchmark.db");
+                        let debug_graph = sqlitegraph::open_graph(&graph_path, &sqlitegraph::GraphConfig::native())
+                            .expect("Failed to open debug graph");
+
+                        // Try to read node_id=257 directly to see its state
+                        match debug_graph.get_node(257) {
+                            Ok(_) => println!("[BFS_CHECKPOINT] After node creation, before edges: node_id=257 EXISTS"),
+                            Err(e) => println!("[BFS_CHECKPOINT] After node creation, before edges: node_id=257 MISSING - {:?}", e),
+                        }
+
+                        println!("[BFS_TRANSITION] About to start edge creation loop");
+                    }
                 }
 
                 // Create chain edges
                 for i in 0..size - 1 {
+                    let max_created_node_id = *node_ids.iter().max().unwrap_or(&0);
+                    assert!(node_ids[i] <= max_created_node_id, "EDGE {} references non-existent FROM node {} (max created: {})", i, node_ids[i], max_created_node_id);
+                    assert!(node_ids[i + 1] <= max_created_node_id, "EDGE {} references non-existent TO node {} (max created: {})", i, node_ids[i + 1], max_created_node_id);
+
                     graph
                         .insert_edge(EdgeSpec {
                             from: node_ids[i],
@@ -102,6 +133,30 @@ fn bfs_chain(criterion: &mut Criterion) {
                 let _bfs_result = graph
                     .bfs(node_ids[0], size as u32)
                     .expect("Failed to perform BFS");
+            });
+        });
+
+        // In-memory CPU-only ceiling
+        group.bench_with_input(BenchmarkId::new("in_memory", size), &size, |b, &size| {
+            b.iter(|| {
+                let spec = BenchmarkGraph::new(size, size - 1, GraphTopology::Chain);
+                let graph = BenchInMemoryGraph::from_spec(&spec);
+
+                // Simple BFS implementation
+                let mut visited = vec![false; graph.node_count()];
+                let mut queue = vec![0u32];
+                visited[0] = true;
+                let mut visited_count = 0;
+
+                while let Some(node) = queue.pop() {
+                    visited_count += 1;
+                    for &neighbor in graph.neighbors(node) {
+                        if !visited[neighbor as usize] {
+                            visited[neighbor as usize] = true;
+                            queue.push(neighbor);
+                        }
+                    }
+                }
             });
         });
     }
@@ -193,6 +248,30 @@ fn bfs_star(criterion: &mut Criterion) {
 
                 // Perform BFS from center node
                 let _bfs_result = graph.bfs(node_ids[0], 2).expect("Failed to perform BFS");
+            });
+        });
+
+        // In-memory CPU-only ceiling
+        group.bench_with_input(BenchmarkId::new("in_memory", size), &size, |b, &size| {
+            b.iter(|| {
+                let spec = BenchmarkGraph::new(size, size - 1, GraphTopology::Star);
+                let graph = BenchInMemoryGraph::from_spec(&spec);
+
+                // Simple BFS implementation
+                let mut visited = vec![false; graph.node_count()];
+                let mut queue = vec![0u32];
+                visited[0] = true;
+                let mut visited_count = 0;
+
+                while let Some(node) = queue.pop() {
+                    visited_count += 1;
+                    for &neighbor in graph.neighbors(node) {
+                        if !visited[neighbor as usize] {
+                            visited[neighbor as usize] = true;
+                            queue.push(neighbor);
+                        }
+                    }
+                }
             });
         });
     }
@@ -305,6 +384,30 @@ fn bfs_random(criterion: &mut Criterion) {
 
                 // Perform BFS from first node
                 let _bfs_result = graph.bfs(node_ids[0], 3).expect("Failed to perform BFS");
+            });
+        });
+
+        // In-memory CPU-only ceiling
+        group.bench_with_input(BenchmarkId::new("in_memory", size), &size, |b, &size| {
+            b.iter(|| {
+                let spec = BenchmarkGraph::new(size, edge_count, GraphTopology::Random);
+                let graph = BenchInMemoryGraph::from_spec(&spec);
+
+                // Simple BFS implementation
+                let mut visited = vec![false; graph.node_count()];
+                let mut queue = vec![0u32];
+                visited[0] = true;
+                let mut visited_count = 0;
+
+                while let Some(node) = queue.pop() {
+                    visited_count += 1;
+                    for &neighbor in graph.neighbors(node) {
+                        if !visited[neighbor as usize] {
+                            visited[neighbor as usize] = true;
+                            queue.push(neighbor);
+                        }
+                    }
+                }
             });
         });
     }

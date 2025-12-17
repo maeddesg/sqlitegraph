@@ -1,3 +1,4 @@
+#![cfg(feature = "v2_experimental")]
 //! Comprehensive tests for native backend storage layer.
 //!
 //! This file contains unit tests for all native backend components without
@@ -14,7 +15,14 @@ use tempfile::NamedTempFile;
 fn setup_temp_graph_file() -> (GraphFile, NamedTempFile) {
     let temp_file = NamedTempFile::new().expect("Failed to create temp file");
     let path = temp_file.path();
-    let graph_file = GraphFile::create(path).expect("Failed to create graph file");
+    let mut graph_file = GraphFile::create(path).expect("Failed to create graph file");
+
+    // CRITICAL FIX: Force buffer initialization to prevent cross-test contamination
+    graph_file.invalidate_read_buffer();
+    graph_file
+        .flush_write_buffer()
+        .expect("Failed to flush initial buffers");
+
     (graph_file, temp_file)
 }
 

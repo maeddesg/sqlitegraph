@@ -6,11 +6,11 @@
 /// Magic number for native graph database files
 pub const MAGIC_BYTES: [u8; 8] = [b'S', b'Q', b'L', b'T', b'G', b'F', 0, 0];
 
-/// Current file format version
-pub const FILE_FORMAT_VERSION: u32 = 1;
+/// Header size in bytes for V2 files (includes cluster/free-space offsets).
+pub const HEADER_SIZE: u64 = 80;
 
-/// Header size in bytes (fixed for all files)
-pub const HEADER_SIZE: u64 = 64;
+/// Current file format version (V2)
+pub const FILE_FORMAT_VERSION: u32 = 2;
 
 /// Header field offsets
 pub mod header_offset {
@@ -64,6 +64,9 @@ pub mod node {
     /// Maximum allowed string lengths as u32 for compatibility with error types
     pub const MAX_STRING_LENGTH_U32: u32 = 65535;
     pub const MAX_DATA_LENGTH: u32 = 1_000_000; // 1MB per node max
+
+    /// Size of each node slot in bytes (fixed 4KB for V2 format)
+    pub const NODE_SLOT_SIZE: u64 = 4096;
 }
 
 /// Edge record constants
@@ -86,8 +89,17 @@ pub mod edge {
     pub const MAX_DATA_LENGTH: u32 = 1_000_000; // 1MB per edge max
 }
 
-/// Default feature flags (currently none defined)
-pub const DEFAULT_FEATURE_FLAGS: u32 = 0;
+/// Header feature flags
+pub const FLAG_V2_FRAMED_RECORDS: u32 = 0x0000_0001;
+pub const FLAG_V2_ATOMIC_COMMIT: u32 = 0x0000_0002;
+
+/// V2 Atomic Commit transaction states
+pub const TX_STATE_MASK: u32 = 0x0000_00F0;
+pub const TX_STATE_CLEAN: u32 = 0x0000_0000; // No transaction in progress
+pub const TX_STATE_IN_PROGRESS: u32 = 0x0000_0010; // Transaction is being written
+
+/// Default feature flags (enable framed cluster records for all new files)
+pub const DEFAULT_FEATURE_FLAGS: u32 = FLAG_V2_FRAMED_RECORDS | FLAG_V2_ATOMIC_COMMIT;
 
 /// Default schema version
 pub const DEFAULT_SCHEMA_VERSION: u64 = 1;

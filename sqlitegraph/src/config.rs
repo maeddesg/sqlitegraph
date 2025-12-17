@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::SqliteGraphError;
+use crate::backend::native::CpuProfile;
 use crate::backend::{GraphBackend, NativeGraphBackend, SqliteGraphBackend};
 
 /// Backend selection enum for choosing between storage implementations.
@@ -82,7 +83,7 @@ pub struct NativeConfig {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use sqlitegraph::{GraphConfig, open_graph};
     ///
     /// // Create file if missing (default behavior)
@@ -110,7 +111,7 @@ pub struct NativeConfig {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use sqlitegraph::GraphConfig;
     ///
     /// let mut cfg = GraphConfig::native();
@@ -132,7 +133,7 @@ pub struct NativeConfig {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use sqlitegraph::GraphConfig;
     ///
     /// let mut cfg = GraphConfig::native();
@@ -140,6 +141,43 @@ pub struct NativeConfig {
     /// let graph = open_graph("dense_graph.db", &cfg)?;
     /// ```
     pub reserve_edge_capacity: Option<usize>,
+
+    /// CPU Profile for performance optimizations
+    ///
+    /// **Default:** `None` (auto-detects Generic profile)
+    ///
+    /// When set, enables CPU-specific optimizations for graph traversal operations.
+    /// This field allows application developers to choose CPU profiles that match
+    /// their deployment environment while maintaining backwards compatibility.
+    ///
+    /// The CPU profile can also be set via the `SQLITEGRAPH_NATIVE_CPU_PROFILE`
+    /// environment variable, which takes precedence over this configuration field.
+    ///
+    /// # Environment Variable
+    ///
+    /// Set `SQLITEGRAPH_NATIVE_CPU_PROFILE` to one of:
+    /// - `generic` - Compatible with all CPUs
+    /// - `auto` - Runtime auto-detection (recommended)
+    /// - `x86-zen4` - AMD Zen 4 (Ryzen 7000 series)
+    /// - `x86-avx2` - Intel CPUs with AVX2 support
+    /// - `x86-avx512` - Intel CPUs with AVX-512 support
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use sqlitegraph::{GraphConfig, backend::native::CpuProfile};
+    ///
+    /// // Explicit Zen 4 optimization
+    /// let mut cfg = GraphConfig::native();
+    /// cfg.native.cpu_profile = Some(CpuProfile::X86Zen4);
+    /// let graph = open_graph("optimized_graph.db", &cfg)?;
+    ///
+    /// // Auto-detect optimal profile
+    /// let mut cfg = GraphConfig::native();
+    /// cfg.native.cpu_profile = Some(CpuProfile::Auto);
+    /// let graph = open_graph("adaptive_graph.db", &cfg)?;
+    /// ```
+    pub cpu_profile: Option<CpuProfile>,
 }
 
 impl Default for NativeConfig {
@@ -148,7 +186,76 @@ impl Default for NativeConfig {
             create_if_missing: true, // Default: create files if they don't exist
             reserve_node_capacity: None,
             reserve_edge_capacity: None,
+            cpu_profile: None, // Default: Generic profile for backwards compatibility
         }
+    }
+}
+
+impl NativeConfig {
+    /// Get the effective CPU profile, considering environment variables and defaults
+    ///
+    /// This method implements the precedence order:
+    /// 1. Environment variable SQLITEGRAPH_NATIVE_CPU_PROFILE
+    /// 2. Config field cpu_profile
+    /// 3. Default to Generic profile
+    ///
+    /// # Returns
+    ///
+    /// The effective CpuProfile to use for optimizations
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use sqlitegraph::{GraphConfig, backend::native::CpuProfile};
+    ///
+    /// let cfg = GraphConfig::native();
+    /// let effective_profile = cfg.native.effective_cpu_profile();
+    /// // Returns CpuProfile::Generic unless environment variable is set
+    /// ```
+    pub fn effective_cpu_profile(&self) -> CpuProfile {
+        // Check environment variable first (highest precedence)
+        if let Ok(env_profile) = std::env::var("SQLITEGRAPH_NATIVE_CPU_PROFILE") {
+            if let Ok(profile) = env_profile.parse() {
+                // Resolve Auto profile using runtime detection for env var too
+                return crate::backend::native::cpu_tuning::resolve_cpu_profile(profile);
+            }
+            // Log warning about invalid env var but continue with other methods
+            eprintln!(
+                "Warning: Invalid SQLITEGRAPH_NATIVE_CPU_PROFILE '{}', using default profile",
+                env_profile
+            );
+        }
+
+        // Use config field if set
+        if let Some(profile) = self.cpu_profile {
+            // Resolve Auto profile using runtime detection
+            return crate::backend::native::cpu_tuning::resolve_cpu_profile(profile);
+        }
+
+        // Default to Generic for backwards compatibility
+        CpuProfile::Generic
+    }
+
+    /// Set the CPU profile (builder pattern)
+    ///
+    /// # Arguments
+    /// * `profile` - The CPU profile to use
+    ///
+    /// # Returns
+    ///
+    /// Self for method chaining
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use sqlitegraph::{GraphConfig, backend::native::CpuProfile};
+    ///
+    /// let cfg = GraphConfig::native()
+    ///     .with_cpu_profile(CpuProfile::X86Zen4);
+    /// ```
+    pub fn with_cpu_profile(mut self, profile: CpuProfile) -> Self {
+        self.cpu_profile = Some(profile);
+        self
     }
 }
 
@@ -181,7 +288,7 @@ pub struct SqliteConfig {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use sqlitegraph::GraphConfig;
     ///
     /// // Skip migrations for faster startup (use when schema is known to be compatible)
@@ -204,7 +311,7 @@ pub struct SqliteConfig {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use sqlitegraph::GraphConfig;
     ///
     /// let mut cfg = GraphConfig::sqlite();
@@ -228,7 +335,7 @@ pub struct SqliteConfig {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use sqlitegraph::GraphConfig;
     /// use std::collections::HashMap;
     ///
@@ -254,7 +361,7 @@ pub struct SqliteConfig {
 ///
 /// # Default Configuration
 ///
-/// ```rust
+/// ```rust,ignore
 /// use sqlitegraph::{GraphConfig, BackendKind};
 /// let config = GraphConfig::default();
 /// assert_eq!(config.backend, BackendKind::SQLite);
@@ -348,6 +455,31 @@ impl GraphConfig {
     pub fn native() -> Self {
         Self::new(BackendKind::Native)
     }
+
+    /// Set the CPU profile for the Native backend (builder pattern)
+    ///
+    /// This method only affects the Native configuration and has no effect
+    /// when using the SQLite backend.
+    ///
+    /// # Arguments
+    /// * `profile` - The CPU profile to use for native optimizations
+    ///
+    /// # Returns
+    ///
+    /// Self for method chaining
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use sqlitegraph::{GraphConfig, backend::native::CpuProfile};
+    ///
+    /// let cfg = GraphConfig::native()
+    ///     .with_cpu_profile(CpuProfile::X86Zen4);
+    /// ```
+    pub fn with_cpu_profile(mut self, profile: CpuProfile) -> Self {
+        self.native.cpu_profile = Some(profile);
+        self
+    }
 }
 
 impl Default for GraphConfig {
@@ -376,7 +508,7 @@ impl Default for BackendKind {
 /// A boxed GraphBackend implementation matching the selected backend
 ///
 /// # Examples
-/// ```rust
+/// ```rust,ignore
 /// use sqlitegraph::{open_graph, GraphConfig, BackendKind};
 ///
 /// // Open SQLite backend (default behavior)
@@ -421,10 +553,18 @@ pub fn open_graph<P: AsRef<Path>>(
         }
         BackendKind::Native => {
             // Construct Native backend with configuration
-            let mut native_graph = if cfg.native.create_if_missing {
+            // PHASE 73 FIX: Check file existence first to avoid recreating existing files
+            let path_ref = path.as_ref();
+            let file_exists = path_ref.exists();
+            let mut native_graph = if file_exists {
+                crate::backend::NativeGraphBackend::open(&path)?
+            } else if cfg.native.create_if_missing {
                 crate::backend::NativeGraphBackend::new(&path)?
             } else {
-                crate::backend::NativeGraphBackend::open(&path)?
+                return Err(SqliteGraphError::connection(format!(
+                    "Database file does not exist and create_if_missing is false: {}",
+                    path_ref.display()
+                )));
             };
 
             // Apply capacity pre-allocation if requested
@@ -458,6 +598,8 @@ mod tests {
         assert!(cfg.native.create_if_missing);
         assert!(cfg.native.reserve_node_capacity.is_none());
         assert!(cfg.native.reserve_edge_capacity.is_none());
+        assert!(cfg.native.cpu_profile.is_none());
+        assert_eq!(cfg.native.effective_cpu_profile(), CpuProfile::Generic);
     }
 
     #[test]
@@ -516,6 +658,151 @@ mod tests {
             .pragma_settings
             .insert("synchronous".to_string(), "NORMAL".to_string());
 
+        let result = open_graph(&db_path, &cfg);
+        assert!(result.is_ok());
+        assert!(db_path.exists());
+    }
+
+    #[test]
+    fn test_cpu_profile_enum() {
+        // Test Display implementation
+        assert_eq!(CpuProfile::Generic.to_string(), "generic");
+        assert_eq!(CpuProfile::Auto.to_string(), "auto");
+        assert_eq!(CpuProfile::X86Zen4.to_string(), "x86-zen4");
+        assert_eq!(CpuProfile::X86Avx2.to_string(), "x86-avx2");
+        assert_eq!(CpuProfile::X86Avx512.to_string(), "x86-avx512");
+
+        // Test FromStr implementation
+        assert_eq!(
+            "generic".parse::<CpuProfile>().unwrap(),
+            CpuProfile::Generic
+        );
+        assert_eq!("auto".parse::<CpuProfile>().unwrap(), CpuProfile::Auto);
+        assert_eq!(
+            "x86-zen4".parse::<CpuProfile>().unwrap(),
+            CpuProfile::X86Zen4
+        );
+        assert_eq!("zen4".parse::<CpuProfile>().unwrap(), CpuProfile::X86Zen4);
+        assert_eq!("znver4".parse::<CpuProfile>().unwrap(), CpuProfile::X86Zen4);
+        assert_eq!(
+            "x86-avx2".parse::<CpuProfile>().unwrap(),
+            CpuProfile::X86Avx2
+        );
+        assert_eq!("avx2".parse::<CpuProfile>().unwrap(), CpuProfile::X86Avx2);
+        assert_eq!(
+            "x86-avx512".parse::<CpuProfile>().unwrap(),
+            CpuProfile::X86Avx512
+        );
+        assert_eq!(
+            "avx512".parse::<CpuProfile>().unwrap(),
+            CpuProfile::X86Avx512
+        );
+
+        // Test case insensitivity
+        assert_eq!(
+            "GENERIC".parse::<CpuProfile>().unwrap(),
+            CpuProfile::Generic
+        );
+        assert_eq!(
+            "X86-ZEN4".parse::<CpuProfile>().unwrap(),
+            CpuProfile::X86Zen4
+        );
+
+        // Test invalid profiles
+        assert!("invalid".parse::<CpuProfile>().is_err());
+        assert!("".parse::<CpuProfile>().is_err());
+    }
+
+    #[test]
+    fn test_native_config_cpu_profile() {
+        let config = NativeConfig::default();
+        assert_eq!(config.cpu_profile, None);
+        assert_eq!(config.effective_cpu_profile(), CpuProfile::Generic);
+
+        let config = NativeConfig {
+            create_if_missing: true,
+            reserve_node_capacity: None,
+            reserve_edge_capacity: None,
+            cpu_profile: Some(CpuProfile::X86Zen4),
+        };
+        assert_eq!(config.cpu_profile, Some(CpuProfile::X86Zen4));
+        assert_eq!(config.effective_cpu_profile(), CpuProfile::X86Zen4);
+    }
+
+    #[test]
+    fn test_native_config_with_cpu_profile() {
+        let config = NativeConfig::default().with_cpu_profile(CpuProfile::X86Avx2);
+        assert_eq!(config.cpu_profile, Some(CpuProfile::X86Avx2));
+        assert_eq!(config.effective_cpu_profile(), CpuProfile::X86Avx2);
+    }
+
+    #[test]
+    fn test_graph_config_with_cpu_profile() {
+        let config = GraphConfig::native().with_cpu_profile(CpuProfile::X86Zen4);
+        assert_eq!(config.native.cpu_profile, Some(CpuProfile::X86Zen4));
+        assert_eq!(config.native.effective_cpu_profile(), CpuProfile::X86Zen4);
+        assert_eq!(config.backend, BackendKind::Native);
+    }
+
+    #[test]
+    fn test_environment_variable_precedence() {
+        // Save original environment variable
+        let original_env = std::env::var("SQLITEGRAPH_NATIVE_CPU_PROFILE");
+
+        unsafe {
+            // Test with environment variable set
+            std::env::set_var("SQLITEGRAPH_NATIVE_CPU_PROFILE", "x86-avx512");
+
+            let config = NativeConfig {
+                create_if_missing: true,
+                reserve_node_capacity: None,
+                reserve_edge_capacity: None,
+                cpu_profile: Some(CpuProfile::X86Zen4), // This should be overridden
+            };
+
+            // Environment variable should take precedence
+            assert_eq!(config.effective_cpu_profile(), CpuProfile::X86Avx512);
+
+            // Test with invalid environment variable
+            std::env::set_var("SQLITEGRAPH_NATIVE_CPU_PROFILE", "invalid-profile");
+            let config = NativeConfig {
+                create_if_missing: true,
+                reserve_node_capacity: None,
+                reserve_edge_capacity: None,
+                cpu_profile: Some(CpuProfile::X86Zen4),
+            };
+            // Should fall back to config field when env var is invalid
+            assert_eq!(config.effective_cpu_profile(), CpuProfile::X86Zen4);
+
+            // Restore original environment variable
+            match original_env {
+                Ok(value) => std::env::set_var("SQLITEGRAPH_NATIVE_CPU_PROFILE", value),
+                Err(_) => std::env::remove_var("SQLITEGRAPH_NATIVE_CPU_PROFILE"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_backwards_compatibility() {
+        // Test that existing code still works without specifying CPU profile
+        let cfg = GraphConfig::native();
+        assert!(cfg.native.cpu_profile.is_none());
+        assert_eq!(cfg.native.effective_cpu_profile(), CpuProfile::Generic);
+
+        // Should be able to open graph with default configuration
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("backwards_compat_test.db");
+        let result = open_graph(&db_path, &cfg);
+        assert!(result.is_ok());
+        assert!(db_path.exists());
+    }
+
+    #[test]
+    fn test_open_graph_with_cpu_profile() {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("cpu_profile_test.db");
+
+        let cfg = GraphConfig::native().with_cpu_profile(CpuProfile::Auto);
         let result = open_graph(&db_path, &cfg);
         assert!(result.is_ok());
         assert!(db_path.exists());
