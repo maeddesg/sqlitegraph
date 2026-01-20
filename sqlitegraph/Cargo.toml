@@ -1,13 +1,13 @@
 [package]
 name = "sqlitegraph"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
-description = "Deterministic, embedded graph database with SQLite and Native V2 backends"
+description = "Embedded graph database with full ACID transactions, HNSW vector search, and dual backend support"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/oldnordic/sqlitegraph"
 documentation = "https://docs.rs/sqlitegraph"
 readme = "README.md"
-keywords = ["graph", "database", "sqlite", "embedded"]
+keywords = ["graph", "database", "sqlite", "embedded", "acid", "transactions", "vector", "hnsw", "algorithms"]
 categories = ["database", "data-structures"]
 
 [lib]
