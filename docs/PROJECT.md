@@ -8,13 +8,27 @@ SQLiteGraph is an embedded graph database library in Rust with dual backend supp
 
 **Feature parity, performance, and reliability equally.** Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
 
-## Current State: v1.1 Shipped
+## Current Milestone: v1.2 Benchmark Infrastructure
+
+**Goal:** Fix broken benchmark harness to get complete performance numbers for honest public comparison.
+
+**Target features:**
+- Fix HNSW API mismatch (2 argument requirement)
+- Fix Native V2 temp-file init pattern
+- Run full benchmark suite for complete numbers
+- Update documentation with honest performance claims
+
+**Started:** 2026-01-20
+
+---
+
+## Validated
+
+### v1.1 Shipped
 
 **Shipped:** 2026-01-20
 
 v1.1 ACID & Reliability is **COMPLETE** with all requirements satisfied. The milestone achieved full ACID transaction correctness for Native V2 backend with comprehensive reliability improvements.
-
-### Validated
 
 <details>
 <summary>v1.0 Production capabilities (shipped 2026-01-17)</summary>
@@ -87,9 +101,11 @@ v1.1 ACID & Reliability is **COMPLETE** with all requirements satisfied. The mil
 
 ### Active
 
-*Ready for next milestone planning*
+**v1.2 Benchmark Infrastructure** (started 2026-01-20)
 
-Run `/gsd:new-milestone` to define v1.2 goals and requirements.
+Focus: Fix broken benchmark harness to enable honest public performance comparison.
+
+Run `/gsd:plan-phase 23` to start execution.
 
 ### Out of Scope
 
@@ -150,4 +166,4 @@ Run `/gsd:new-milestone` to define v1.2 goals and requirements.
 | Multi-file checkpoint | Support databases >1GB | ✓ Complete (v1.1) |
 
 ---
-*Last updated: 2026-01-20 after v1.1 ACID & Reliability milestone completion*
+*Last updated: 2026-01-20 for v1.2 Benchmark Infrastructure milestone*
