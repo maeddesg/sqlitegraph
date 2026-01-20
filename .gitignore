@@ -80,7 +80,22 @@ Archive.zip
 # Project development files (internal use)
 CLAUDE.md
 .planning/
+.codemcp
 *.zip
 *.tar.gz
 *.tgz
 *.rar
+
+# Development and build artifacts (messy files)
+build.txt
+compilation_output.txt
+perf.data
+perf.data.*
+memory
+memory.checkpoint
+memory.wal
+test_instrumentation.sh
+test_wal_api
+main
+test_*_api
+*.sqlitegraph-*
