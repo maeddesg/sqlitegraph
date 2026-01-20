@@ -55,7 +55,7 @@ fn create_hnsw_index(
         .build()
         .expect("HNSW configuration should be valid");
 
-    sqlitegraph::hnsw::HnswIndex::new(config).expect("Failed to create HNSW index")
+    sqlitegraph::hnsw::HnswIndex::new("benchmark_index", config).expect("Failed to create HNSW index")
 }
 
 /// Benchmark vector insertion performance
@@ -164,7 +164,7 @@ fn hnsw_distance_metrics(criterion: &mut Criterion) {
                         .build()
                         .expect("HNSW configuration should be valid");
 
-                    let mut hnsw = sqlitegraph::hnsw::HnswIndex::new(config)
+                    let mut hnsw = sqlitegraph::hnsw::HnswIndex::new("benchmark_metrics", config)
                         .expect("Failed to create HNSW index");
 
                     let vectors = generate_test_vectors(dataset_size, dimension);
