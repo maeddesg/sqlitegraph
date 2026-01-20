@@ -10,9 +10,9 @@ None — No specialized domain expertise directories available. Relying on codeb
 
 ## Milestones
 
-- **v0.2 Foundation** — Phases 1-7 (shipped 2026-01-17)
-- **v1.0 Production** — Phases 8-10 (shipped 2026-01-17)
-- **v1.1 ACID & Reliability** — Phases 11-21 (in progress)
+- **v0.2 Foundation** — Phases 1-7 (shipped 2026-01-17) → [Archive](milestones/v0.2-ROADMAP.md)
+- **v1.0 Production** — Phases 8-10 (shipped 2026-01-17) → [Archive](milestones/v1.0-ROADMAP.md)
+- **v1.1 ACID & Reliability** — Phases 11-22 (shipped 2026-01-20) → [Archive](milestones/v1.1-ROADMAP.md)
 
 ---
 
@@ -131,11 +131,34 @@ Plans:
 
 </details>
 
----
-
-### 🚧 v1.1 ACID & Reliability (In Progress)
+<details>
+<summary>✅ v1.1 ACID & Reliability (Phases 11-22) - SHIPPED 2026-01-20</summary>
 
 **Milestone Goal:** Complete ACID transaction correctness for Native V2 backend and resolve all identified technical debt, security issues, and reliability concerns.
+
+**Phases:** 11 (Atomicity), 12 (Consistency), 13 (Isolation), 14 (Durability), 15 (HNSW Multi-Layer), 16 (Memory Safety), 17 (Input Validation - completed in 16), 18 (Code Structure), 19 (Concurrent Features), 20 (Data Management), 21 (Test Coverage), 22 (Scaling & Dependencies)
+
+**Key accomplishments:**
+- Full ACID transaction correctness (Atomicity, Consistency, Isolation, Durability)
+- Transaction coordinator with deadlock detection and victim selection
+- All 19 unsafe transmute sites replaced with Arc<RwLock<GraphFile>>
+- All 5 large files refactored into focused submodules
+- Connection pooling with 4-5x throughput improvement
+- Multi-file checkpointing for >1GB databases
+- HNSW multi-layer with O(log N) search (100% recall)
+- 126 tests passing, comprehensive test suite
+
+**Full details:** [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
+
+</details>
+
+---
+
+## Next Milestone
+
+Run `/gsd:new-milestone` to define v1.2 goals.
+
+---
 
 ### Phase 11: ACID Atomicity
 **Goal**: Complete rollback implementation for all operations, especially node deletion
@@ -306,10 +329,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 21-01: Enable and fix WAL recovery tests
-- [ ] 21-02: Enable and fix cluster validation tests
-- [ ] 21-03: Enable and fix checkpoint validation tests
-- [ ] 21-04: Add HNSW multi-layer and Miri tests
+- [x] 21-01: Enable and fix WAL recovery tests ✅
+- [x] 21-02: Enable and fix cluster validation tests ✅
+- [x] 21-03: Enable and fix checkpoint validation tests ✅
+- [x] 21-04: Add HNSW multi-layer and Miri tests ✅
 
 ### Phase 22: Scaling & Dependencies
 **Goal**: Address scaling limits and dependency updates
@@ -323,10 +346,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 22-01: Implement multi-file checkpointing
-- [ ] 22-02: Implement dirty block overflow strategy
-- [ ] 22-03: Add transaction ID bounds and cleanup
-- [ ] 22-04: Plan bincode 2.0 migration and monitor rusqlite updates
+- [x] 22-01: Implement multi-file checkpointing ✅
+- [x] 22-02: Implement dirty block overflow strategy ✅
+- [x] 22-03: Add transaction ID bounds and cleanup ✅
+- [x] 22-04: Plan bincode 2.0 migration and monitor rusqlite updates ✅
 
 ## Progress
 
