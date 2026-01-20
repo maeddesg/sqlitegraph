@@ -50,12 +50,13 @@ benchmark_results/
 # Claude and internal development files
 .claude/
 results/
+AGENTS.md
 
 # Temporary benchmark scripts and results
 quick_comparison_results.json
 scripts/
 
-# Internal documentation and reports
+# Internal documentation and reports (development artifacts)
 V1_LEGACY_PURGE_MISSION_REPORT.md
 V2_REGRESSION_GATES_*.md
 docs/V1_*.md
@@ -67,9 +68,18 @@ docs/V2_INVARIANTS_*.md
 docs/V2_PERFORMANCE_*.md
 docs/V2_PROOF_*.md
 docs/V2_TEST_*.md
+docs/*REPORT*.md
+docs/*RESEARCH*.md
+docs/*PLAN*.md
+docs/*INVESTIGATION*.md
+docs/*PROGRESS*.md
+docs/*ANALYSIS*.md
+docs/*COMPLETION*.md
+Archive.zip
 
-# Project development files (should never be in repo)
+# Project development files (internal use)
 CLAUDE.md
+.planning/
 *.zip
 *.tar.gz
 *.tgz

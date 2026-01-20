@@ -281,7 +281,7 @@ match HnswConfig::builder().build() {
 ```toml
 [dependencies]
 # SQLite backend only
-sqlitegraph = "1.0"
+sqlitegraph = "1.1"
 
 # Native V2 backend
 sqlitegraph = { version = "1.0", features = ["native-v2"] }

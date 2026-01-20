@@ -4,7 +4,9 @@
 
 SQLiteGraph is an embedded graph database in Rust featuring a dual backend architecture. It provides SQLite and Native V2 storage options with graph algorithms, HNSW vector search, and MVCC snapshots.
 
-**Current Status: v1.0.0 - Tested with Phase 1-10 completion**
+**Current Status: v1.1.0 - ACID & Reliability Complete**
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 SQLiteGraph provides two backend options:
 - **SQLite Backend**: SQLite storage with ACID transactions
@@ -80,7 +82,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.0"
+sqlitegraph = "1.1"
 ```
 
 ### SQLite Backend (Default)
@@ -150,7 +152,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.0"
+sqlitegraph = "1.1"
 
 # Native V2 backend
 sqlitegraph = { version = "1.0", features = ["native-v2"] }
@@ -230,9 +232,9 @@ cargo test --doc
 
 ## Documentation
 
-- **[Operator Manual](manual.md)** - Comprehensive usage guide
+- **[Operator Manual](MANUAL.md)** - Comprehensive usage guide
+- **[API Docs](API.md)** - Quick API reference
 - **[CHANGELOG](CHANGELOG.md)** - Version history
-- **[API Docs](https://docs.rs/sqlitegraph)** - rustdoc API reference
 
 ## Architecture
 
@@ -255,7 +257,7 @@ GPL-3.0-or-later - see [LICENSE](LICENSE) for details.
 ## Contributing
 
 Contributions welcome. Please:
-1. Read the [Operator Manual](manual.md)
+1. Read the [Operator Manual](MANUAL.md)
 2. Run tests to verify setup
 3. Follow TDD methodology
 4. Keep modules under 300 LOC
