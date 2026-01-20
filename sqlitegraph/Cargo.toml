@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/oldnordic/sqlitegraph"
 documentation = "https://docs.rs/sqlitegraph"
 readme = "README.md"
-keywords = ["graph", "database", "sqlite", "embedded", "acid", "transactions", "vector", "hnsw", "algorithms"]
+keywords = ["graph", "database", "sqlite", "embedded", "vector"]
 categories = ["database", "data-structures"]
 
 [lib]
