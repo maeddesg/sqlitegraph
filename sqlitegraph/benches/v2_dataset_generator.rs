@@ -105,7 +105,7 @@ pub struct V2GraphResult {
 /// Generate a V2 test graph with deterministic patterns
 pub fn generate_v2_graph(spec: &V2GraphSpec) -> V2GraphResult {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let db_path = temp_dir.path().join("v2_test.db");
+    let db_path = temp_dir.path().join("v2_test.v2");
 
     // Use native backend for V2 testing
     let config = GraphConfig::native();

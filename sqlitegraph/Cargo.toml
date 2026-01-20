@@ -95,3 +95,8 @@ harness = false
 [[bench]]
 name = "connection_pool"
 harness = false
+
+# Phase 23: V2 performance benchmarks
+[[bench]]
+name = "v2_performance"
+harness = false

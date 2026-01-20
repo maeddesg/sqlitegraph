@@ -14,8 +14,8 @@ use v2_dataset_generator::{V2GraphMode, V2GraphSpec, generate_v2_graph};
 fn bench_v2_insertion(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_insertion");
 
-    // Test different graph sizes
-    for &node_count in &[1_000, 5_000, 10_000, 25_000] {
+    // Test different graph sizes (must fit within 8MB node region = ~2048 nodes)
+    for &node_count in &[100, 500, 1_000, 1_500] {
         let edge_count = node_count * 4; // Sparse graph ratio
 
         let spec = V2GraphSpec::new(node_count, edge_count, V2GraphMode::Mixed);
@@ -27,11 +27,15 @@ fn bench_v2_insertion(c: &mut Criterion) {
             |b, spec| {
                 b.iter(|| {
                     let result = generate_v2_graph(spec);
-                    black_box(result.edge_count);
-                    black_box(result.file_size_bytes);
-                    black_box(result.bytes_per_edge);
-                    black_box(result.bytes_per_node);
-                    black_box(result.growth_efficiency);
+                    let output = black_box((
+                        result.edge_count,
+                        result.file_size_bytes,
+                        result.bytes_per_edge,
+                        result.bytes_per_node,
+                        result.growth_efficiency,
+                    ));
+                    std::mem::forget(result); // Prevent TempDir deletion during benchmark
+                    output
                 });
             },
         );
@@ -44,12 +48,12 @@ fn bench_v2_insertion(c: &mut Criterion) {
 fn bench_v2_neighbor_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_neighbor_queries");
 
-    // Create test graphs with different characteristics
+    // Create test graphs with different characteristics (must fit within node region)
     let specs = vec![
-        V2GraphSpec::new(5_000, 20_000, V2GraphMode::Sparse), // Low degree
-        V2GraphSpec::new(5_000, 20_000, V2GraphMode::PowerLaw), // Hub-heavy
-        V2GraphSpec::new(5_000, 20_000, V2GraphMode::MultiEdge), // Multi-edge
-        V2GraphSpec::new(5_000, 20_000, V2GraphMode::Bidirectional), // High bidirectional
+        V2GraphSpec::new(1_000, 4_000, V2GraphMode::Sparse), // Low degree
+        V2GraphSpec::new(1_000, 4_000, V2GraphMode::PowerLaw), // Hub-heavy
+        V2GraphSpec::new(1_000, 4_000, V2GraphMode::MultiEdge), // Multi-edge
+        V2GraphSpec::new(1_000, 4_000, V2GraphMode::Bidirectional), // High bidirectional
     ];
 
     for (i, spec) in specs.iter().enumerate() {
@@ -164,9 +168,9 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
 fn bench_v2_bfs_traversal(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_bfs_traversal");
 
-    // Test BFS on different graph sizes
-    for &node_count in &[1_000, 5_000, 10_000] {
-        let edge_count = node_count * 6; // Slightly denser for better BFS
+    // Test BFS on different graph sizes (must fit within node region)
+    for &node_count in &[500, 1_000, 1_500] {
+        let edge_count = node_count * 4; // Sparse graph for BFS
         let spec = V2GraphSpec::new(node_count, edge_count, V2GraphMode::Mixed);
 
         let result = generate_v2_graph(&spec);
@@ -211,7 +215,7 @@ fn bench_v2_bfs_traversal(c: &mut Criterion) {
 fn bench_v2_k_hop_traversal(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_k_hop_traversal");
 
-    let spec = V2GraphSpec::new(10_000, 60_000, V2GraphMode::Mixed);
+    let spec = V2GraphSpec::new(1_500, 6_000, V2GraphMode::Mixed);
     let result = generate_v2_graph(&spec);
 
     let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
@@ -248,7 +252,7 @@ fn bench_v2_k_hop_traversal(c: &mut Criterion) {
 fn bench_v2_file_growth(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_file_growth");
 
-    // Test file growth patterns with different topologies
+    // Test file growth patterns with different topologies (must fit within node region)
     let modes = [
         V2GraphMode::Sparse,
         V2GraphMode::PowerLaw,
@@ -256,9 +260,9 @@ fn bench_v2_file_growth(c: &mut Criterion) {
     ];
 
     for mode in modes.iter() {
-        for &size in &[1_000, 5_000, 10_000] {
+        for &size in &[100, 500, 1_000] {
             let edge_count = match mode {
-                V2GraphMode::MultiEdge => size * 10, // More edges for multi-edge
+                V2GraphMode::MultiEdge => size * 5, // Fewer edges for multi-edge
                 _ => size * 4,
             };
 
@@ -274,10 +278,9 @@ fn bench_v2_file_growth(c: &mut Criterion) {
                             result.file_size_bytes as f64 / result.edge_count as f64;
                         let bytes_per_node =
                             result.file_size_bytes as f64 / result.node_ids.len() as f64;
-
-                        black_box(bytes_per_edge);
-                        black_box(bytes_per_node);
-                        black_box(result.file_size_bytes);
+                        let output = black_box((bytes_per_edge, bytes_per_node, result.file_size_bytes));
+                        std::mem::forget(result); // Prevent TempDir deletion during benchmark
+                        output
                     });
                 },
             );
@@ -291,9 +294,10 @@ fn bench_v2_file_growth(c: &mut Criterion) {
 fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_multiedge_scenarios");
 
-    // Test with different multi-edge factors
-    for &multi_factor in &[3, 5, 10, 20] {
-        let spec = V2GraphSpec::new(2_000, 2_000 * multi_factor, V2GraphMode::MultiEdge)
+    // Test with different multi-edge factors (must fit within node region)
+    for &multi_factor in &[3, 5, 10] {
+        let node_count = std::cmp::min(500, 2000 / multi_factor);
+        let spec = V2GraphSpec::new(node_count, node_count * multi_factor, V2GraphMode::MultiEdge)
             .with_multi_edge_factor(multi_factor);
 
         group.bench_with_input(
@@ -302,7 +306,9 @@ fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
             |b, spec| {
                 b.iter(|| {
                     let result = generate_v2_graph(spec);
-                    black_box(result.edge_count);
+                    let output = black_box(result.edge_count);
+                    std::mem::forget(result); // Prevent TempDir deletion during benchmark
+                    output
                 });
             },
         );
