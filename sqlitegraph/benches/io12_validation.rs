@@ -37,6 +37,7 @@
 use std::time::Duration;
 
 use criterion::{black_box, BenchmarkId, Criterion, criterion_group, criterion_main};
+use rand::{Rng, SeedableRng};
 use sqlitegraph::backend::native::{
     edge_store::EdgeStore,
     graph_file::GraphFile,
@@ -47,7 +48,7 @@ use sqlitegraph::backend::native::{
 use tempfile::TempDir;
 
 mod bench_utils;
-use bench_utils::{create_benchmark_temp_dir, BenchmarkGraph, GraphTopology};
+use bench_utils::{create_benchmark_temp_dir};
 
 /// Common benchmark configuration
 const MEASURE: Duration = Duration::from_millis(500);
@@ -176,44 +177,66 @@ fn bench_chain_traversal(c: &mut Criterion) {
 /// This benchmark validates that fallback path has no regression.
 ///
 /// Setup pattern:
-/// 1. Use bench_utils::create_benchmark_graph() for star topology
+/// 1. Create star graph manually with GraphFile API
 /// 2. Validate center node exists
 /// 3. b.iter() - Measure ONLY traversal time (depth = 2 for center + spokes)
-/// 4. std::mem::forget(result) - Prevent deletion during async Criterion runs
+/// 4. std::mem::forget(temp_dir) - Prevent deletion during async Criterion runs
 fn bench_star_traversal(c: &mut Criterion) {
     let mut group = c.benchmark_group("star_traversal");
     group.measurement_time(MEASURE);
     group.warm_up_time(WARM_UP);
 
     let star_size = 100;
-    let spec = BenchmarkGraph::new(star_size, 99, GraphTopology::Star);
+    let temp_dir = create_benchmark_temp_dir();
+    let db_path = temp_dir.path().join("benchmark_star.db");
 
-    // Create star graph once
-    let result = bench_utils::create_benchmark_graph(
-        sqlitegraph::BackendKind::Native,
-        &spec,
-    );
+    // Create star graph: center node connected to all other nodes
+    let mut graph_file = GraphFile::create(&db_path).expect("Failed to create graph file");
 
-    // Center node is first created node
-    let start_node = 1;
+    // Create center node (ID 1) and spoke nodes (IDs 2-100)
+    let mut node_ids = Vec::with_capacity(star_size);
+    for i in 0..star_size {
+        let mut node_store = NodeStore::new(&mut graph_file);
+        let node_id = node_store
+            .allocate_node_id()
+            .expect("Failed to allocate node ID");
+        let record = sqlitegraph::backend::native::NodeRecord::new(
+            node_id,
+            "Node".to_string(),
+            if i == 0 { "center".to_string() } else { format!("spoke_{}", i) },
+            serde_json::json!({"id": i}),
+        );
+        node_store.write_node(&record).expect("Failed to write node");
+        node_ids.push(node_id);
+    }
 
-    // Validate start_node exists
-    assert!(
-        start_node > 0,
-        "start_node {} must be positive",
-        start_node
-    );
+    // Create star edges: center (node 1) -> all other nodes
+    let center_node = node_ids[0];
+    let mut edge_store = EdgeStore::new(&mut graph_file);
+    for &spoke_node in &node_ids[1..] {
+        let edge_id = edge_store.allocate_edge_id();
+        let edge = sqlitegraph::backend::native::EdgeRecord::new(
+            edge_id,
+            center_node,
+            spoke_node,
+            "star".to_string(),
+            serde_json::json!({}),
+        );
+        edge_store
+            .write_edge(&edge)
+            .expect("Failed to write star edge");
+    }
 
     group.bench_function(
         BenchmarkId::new("star", star_size),
         |b| {
             b.iter(|| {
                 // Open graph inside iteration (isolated per measurement)
-                let mut graph_file = GraphFile::open(&result.db_path)
+                let mut graph_file = GraphFile::open(&db_path)
                     .expect("Failed to open graph");
 
                 // Depth = 2 reaches center node (depth 1) + all spokes (depth 2)
-                let visited = native_bfs(&mut graph_file, start_node, 2)
+                let visited = native_bfs(&mut graph_file, center_node, 2)
                     .expect("Failed to traverse star");
                 black_box(visited)
             });
@@ -221,7 +244,7 @@ fn bench_star_traversal(c: &mut Criterion) {
     );
 
     // LIFETIME: Prevent temp_dir cleanup during benchmark execution
-    std::mem::forget(result);
+    std::mem::forget(temp_dir);
     group.finish();
 }
 
@@ -237,10 +260,10 @@ fn bench_star_traversal(c: &mut Criterion) {
 /// This benchmark validates that standard lookup path has no regression.
 ///
 /// Setup pattern:
-/// 1. Use bench_utils::create_benchmark_graph() for random topology
-/// 2. Validate start_node exists
+/// 1. Create random graph manually with GraphFile API
+/// 2. Validate start node exists
 /// 3. b.iter() - Measure ONLY traversal time (depth = 10 for realistic traversal)
-/// 4. std::mem::forget(result) - Prevent deletion during async Criterion runs
+/// 4. std::mem::forget(temp_dir) - Prevent deletion during async Criterion runs
 fn bench_random_traversal(c: &mut Criterion) {
     let mut group = c.benchmark_group("random_traversal");
     group.measurement_time(MEASURE);
@@ -249,30 +272,60 @@ fn bench_random_traversal(c: &mut Criterion) {
     // Test both small and large random graphs
     for &random_size in &[100, 500] {
         let edge_count = random_size * 2; // Sparse random graph
-        let spec = BenchmarkGraph::new(random_size, edge_count, GraphTopology::Random);
+        let temp_dir = create_benchmark_temp_dir();
+        let db_path = temp_dir.path().join(format!("benchmark_random_{}.db", random_size));
 
-        // Create random graph once
-        let result = bench_utils::create_benchmark_graph(
-            sqlitegraph::BackendKind::Native,
-            &spec,
-        );
+        // Create random graph using deterministic seed
+        let mut graph_file = GraphFile::create(&db_path).expect("Failed to create graph file");
 
-        // Use first created node as start
-        let start_node = 1;
+        // Create nodes
+        let mut node_ids = Vec::with_capacity(random_size);
+        for i in 0..random_size {
+            let mut node_store = NodeStore::new(&mut graph_file);
+            let node_id = node_store
+                .allocate_node_id()
+                .expect("Failed to allocate node ID");
+            let record = sqlitegraph::backend::native::NodeRecord::new(
+                node_id,
+                "Node".to_string(),
+                format!("node_{}", i),
+                serde_json::json!({"id": i}),
+            );
+            node_store.write_node(&record).expect("Failed to write node");
+            node_ids.push(node_id);
+        }
 
-        // Validate start_node exists
-        assert!(
-            start_node > 0,
-            "start_node {} must be positive",
-            start_node
-        );
+        // Create random edges using deterministic seed
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0x5F3759DF);
+        for _ in 0..edge_count {
+            let from_idx = rng.gen_range(0..random_size);
+            let mut to_idx = rng.gen_range(0..random_size);
+            while to_idx == from_idx {
+                to_idx = rng.gen_range(0..random_size);
+            }
+
+            let edge_id = edge_store.allocate_edge_id();
+            let edge = sqlitegraph::backend::native::EdgeRecord::new(
+                edge_id,
+                node_ids[from_idx],
+                node_ids[to_idx],
+                "random".to_string(),
+                serde_json::json!({}),
+            );
+            edge_store
+                .write_edge(&edge)
+                .expect("Failed to write random edge");
+        }
+
+        let start_node = node_ids[0];
 
         group.bench_function(
             BenchmarkId::new("random", random_size),
             |b| {
                 b.iter(|| {
                     // Open graph inside iteration (isolated per measurement)
-                    let mut graph_file = GraphFile::open(&result.db_path)
+                    let mut graph_file = GraphFile::open(&db_path)
                         .expect("Failed to open graph");
 
                     // Depth = 10 for realistic traversal (not full graph exploration)
@@ -284,7 +337,7 @@ fn bench_random_traversal(c: &mut Criterion) {
         );
 
         // LIFETIME: Prevent temp_dir cleanup during benchmark execution
-        std::mem::forget(result);
+        std::mem::forget(temp_dir);
     }
 
     group.finish();

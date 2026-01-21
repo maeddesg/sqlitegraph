@@ -50,7 +50,7 @@ See milestone archives for complete history.
 ### Phase 33: Traversal-Time Chain Detection
 **Goal:** Traversal detects linear chains and switches to sequential cluster reads
 **Depends on**: Phase 32 (v1.4 complete)
-**Requirements:** CL-01 ✓ SATISFIED
+**Requirements:** CL-01 ✓ SATISFIED, CL-03 ✓ SATISFIED
 **Plans:** 5/5 complete (extend LinearDetector with cluster offset tracking, contiguity validation, sequential read trigger, instrumentation, integration tests)
 
 **Success Criteria:**
@@ -58,10 +58,12 @@ See milestone archives for complete history.
 2. After confirming degree <= 1 pattern for N consecutive nodes, traversal triggers sequential read path
 3. Detection threshold (N) is configurable and validated against false positives on trees
 4. Chain detection instrumentation reports chains found and average chain length
+5. **LinearDetector validates cluster contiguity before committing to sequential read path** (CL-03)
 
 **Key deliverables:**
 - Extended LinearDetector with cluster offset tracking
 - Chain confirmation logic (degree <= 1 validation)
+- Cluster contiguity validation (are_clusters_contiguous(), validate_contiguity())
 - Configurable detection threshold
 - Unit tests for chain detection on various graph patterns
 
@@ -69,6 +71,13 @@ See milestone archives for complete history.
 - Write-time detection (detects at traversal time only)
 - False positives on tree structures
 - Committing to chain layout before validation
+
+**Plans:**
+- [x] 33-01-PLAN.md — Cluster offset tracking in LinearDetector
+- [x] 33-02-PLAN.md — Cluster contiguity validation
+- [x] 33-03-PLAN.md — Sequential read trigger condition
+- [x] 33-04-PLAN.md — Chain detection instrumentation
+- [x] 33-05-PLAN.md — Integration tests for graph patterns
 
 ### Phase 34: Sequential Cluster Reader
 **Goal:** Sequential cluster reader reads all clusters for a chain in single I/O operation
@@ -104,12 +113,12 @@ See milestone archives for complete history.
 ### Phase 35: Neighbor Extraction and Fallback
 **Goal:** Extract neighbors from cluster buffer and fall back immediately when pattern breaks
 **Depends on**: Phase 34
-**Requirements:** CL-02 (completion), CL-03, CL-04
+**Requirements:** CL-02 (completion), CL-04
 **Plans:** 4 plans
 
 **Success Criteria:**
 1. Neighbors are extracted from cluster_buffer using node_id -> cluster_index mapping
-2. LinearDetector validates cluster contiguity before committing to sequential read path
+2. ~~LinearDetector validates cluster contiguity before committing to sequential read path~~ (completed in Phase 33)
 3. When clusters are not contiguous, traversal falls back immediately to standard path
 4. Fallback happens within the same traversal (no restart required)
 5. Pattern breaks (degree > 1, branching) trigger immediate fallback
@@ -117,7 +126,7 @@ See milestone archives for complete history.
 **Key deliverables:**
 - Node_id -> cluster_index mapping in TraversalContext
 - Neighbor extraction from cluster_buffer in get_neighbors_optimized()
-- Cluster contiguity validation logic
+- ~~Cluster contiguity validation logic~~ (completed in Phase 33)
 - Fallback path integration
 - Unit tests for neighbor extraction and non-contiguous cluster handling
 - Integration tests for tree/diamond graph patterns
@@ -128,16 +137,16 @@ See milestone archives for complete history.
 - Complex fallback state machines
 
 **Plans:**
-- [ ] 35-01-PLAN.md — Add node_cluster_index field to TraversalContext
-- [ ] 35-02-PLAN.md — Extract neighbors from cluster_buffer using mapping
-- [ ] 35-03-PLAN.md — Add traverse_with_detection helper and unit tests
-- [ ] 35-04-PLAN.md — Integration tests for extraction and fallback
+- [x] 35-01-PLAN.md — Add node_cluster_index field to TraversalContext
+- [x] 35-02-PLAN.md — Extract neighbors from cluster_buffer using mapping
+- [x] 35-03-PLAN.md — Add traverse_with_detection helper and unit tests
+- [x] 35-04-PLAN.md — Integration tests for extraction and fallback
 
 ### Phase 36: IO-12 Validation
 **Goal:** MVCC isolation preserved and IO-12 target achieved
 **Depends on**: Phase 35
 **Requirements:** CL-05
-**Plans:** TBD
+**Plans:** 4 plans
 
 **Success Criteria:**
 1. Chain(500) traversal achieves <=75ms (3x SQLite baseline of ~22ms)
@@ -156,6 +165,12 @@ See milestone archives for complete history.
 - Breaking MVCC isolation guarantees
 - Hiding performance numbers
 
+**Plans:**
+- [ ] 36-01-PLAN.md — Create Criterion benchmark suite for IO-12 validation
+- [ ] 36-02-PLAN.md — Validate MVCC isolation for sequential cluster reads
+- [ ] 36-03-PLAN.md — Run benchmarks and document IO-12 status
+- [ ] 36-04-PLAN.md — Update documentation with Phase 36 completion
+
 ---
 
 ## Progress
@@ -168,7 +183,7 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 1-32 | v0.2-v1.4 | 109/109 | Complete | 2026-01-21 |
 | 33. Traversal-Time Chain Detection | v1.6 | 5/5 | Complete | 2026-01-21 |
 | 34. Sequential Cluster Reader | v1.6 | 3/3 | Complete | 2026-01-21 |
-| 35. Neighbor Extraction and Fallback | v1.6 | 0/4 | Not Started | — |
-| 36. IO-12 Validation | v1.6 | 0/TBD | Not Started | — |
+| 35. Neighbor Extraction and Fallback | v1.6 | 4/4 | Complete | 2026-01-21 |
+| 36. IO-12 Validation | v1.6 | 0/4 | Not Started | — |
 
-**Overall Progress:** 121/121 plans planned. v1.6 in progress (2/4 phases complete, 2/4 not started).
+**Overall Progress:** 125/129 plans planned and executed. v1.6 in progress (3/4 phases complete, 1/4 not started).

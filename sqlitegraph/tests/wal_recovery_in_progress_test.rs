@@ -6,8 +6,8 @@
 //! 2. IN_PROGRESS transactions are NOT replayed (committed=false)
 //! 3. Database state is preserved as if the transaction never happened
 
-use crate::backend::native::v2::wal::recovery::core::TransactionState;
-use crate::backend::native::v2::wal::V2WALRecord;
+use sqlitegraph::backend::native::v2::wal::recovery::core::TransactionState;
+use sqlitegraph::backend::native::v2::wal::V2WALRecord;
 use tempfile::tempdir;
 
 /// Test that uncommitted transactions are filtered out during replay
