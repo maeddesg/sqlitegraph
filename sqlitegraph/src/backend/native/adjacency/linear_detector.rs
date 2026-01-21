@@ -758,4 +758,192 @@ mod tests {
         let _format = format!("{:?}", pattern); // Debug works
         let _eq = pattern == TraversalPattern::Linear; // PartialEq works
     }
+
+    // Phase 33: Cluster offset tracking tests
+
+    #[test]
+    fn test_cluster_offsets_initially_empty() {
+        let detector = LinearDetector::new();
+        assert_eq!(detector.cluster_offsets().len(), 0);
+        assert!(detector.cluster_offsets().is_empty());
+    }
+
+    #[test]
+    fn test_cluster_offsets_single_observation() {
+        let mut detector = LinearDetector::new();
+
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+
+        let offsets = detector.cluster_offsets();
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0], (1024, 4096));
+    }
+
+    #[test]
+    fn test_cluster_offsets_multiple_observations() {
+        let mut detector = LinearDetector::new();
+
+        // Simulate contiguous clusters: 1024 + 4096 = 5120, 5120 + 4096 = 9216
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 9216, 4096);
+        detector.observe_with_cluster(4, 1, 13312, 4096);
+
+        let offsets = detector.cluster_offsets();
+        assert_eq!(offsets.len(), 4);
+        assert_eq!(offsets[0], (1024, 4096));
+        assert_eq!(offsets[1], (5120, 4096));
+        assert_eq!(offsets[2], (9216, 4096));
+        assert_eq!(offsets[3], (13312, 4096));
+    }
+
+    #[test]
+    fn test_cluster_offsets_recorded_in_order() {
+        let mut detector = LinearDetector::new();
+
+        // Non-contiguous offsets to verify ordering is preserved
+        detector.observe_with_cluster(1, 1, 100, 100);
+        detector.observe_with_cluster(2, 1, 5000, 200);
+        detector.observe_with_cluster(3, 1, 10000, 150);
+        detector.observe_with_cluster(4, 1, 2000, 300);
+
+        let offsets = detector.cluster_offsets();
+        assert_eq!(offsets.len(), 4);
+
+        // Verify order matches observation order
+        assert_eq!(offsets[0], (100, 100));
+        assert_eq!(offsets[1], (5000, 200));
+        assert_eq!(offsets[2], (10000, 150));
+        assert_eq!(offsets[3], (2000, 300));
+    }
+
+    #[test]
+    fn test_cluster_offsets_reset_clears_history() {
+        let mut detector = LinearDetector::new();
+
+        // Record some offsets
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 9216, 4096);
+
+        assert_eq!(detector.cluster_offsets().len(), 3);
+
+        // Reset
+        detector.reset();
+
+        // Verify cleared
+        assert_eq!(detector.cluster_offsets().len(), 0);
+        assert!(detector.cluster_offsets().is_empty());
+    }
+
+    #[test]
+    fn test_cluster_offsets_with_pattern_detection() {
+        let mut detector = LinearDetector::new();
+
+        // Pattern detection should work alongside offset recording
+        assert_eq!(
+            detector.observe_with_cluster(1, 1, 1024, 4096),
+            TraversalPattern::Unknown
+        );
+        assert_eq!(detector.cluster_offsets().len(), 1);
+
+        assert_eq!(
+            detector.observe_with_cluster(2, 1, 5120, 4096),
+            TraversalPattern::Unknown
+        );
+        assert_eq!(detector.cluster_offsets().len(), 2);
+
+        assert_eq!(
+            detector.observe_with_cluster(3, 1, 9216, 4096),
+            TraversalPattern::Linear
+        );
+        assert_eq!(detector.cluster_offsets().len(), 3);
+        assert!(detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_cluster_offsets_after_branching() {
+        let mut detector = LinearDetector::new();
+
+        // Linear steps
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 9216, 4096);
+
+        // Branching - offsets continue to be recorded
+        assert_eq!(
+            detector.observe_with_cluster(4, 2, 13312, 8192),
+            TraversalPattern::Branching
+        );
+
+        let offsets = detector.cluster_offsets();
+        assert_eq!(offsets.len(), 4);
+        assert_eq!(offsets[3], (13312, 8192));
+    }
+
+    #[test]
+    fn test_cluster_offsets_different_sizes() {
+        let mut detector = LinearDetector::new();
+
+        // Clusters can have different sizes
+        detector.observe_with_cluster(1, 1, 0, 100);
+        detector.observe_with_cluster(2, 1, 100, 200);
+        detector.observe_with_cluster(3, 1, 300, 150);
+        detector.observe_with_cluster(4, 1, 450, 4000);
+
+        let offsets = detector.cluster_offsets();
+        assert_eq!(offsets.len(), 4);
+        assert_eq!(offsets[0].1, 100);
+        assert_eq!(offsets[1].1, 200);
+        assert_eq!(offsets[2].1, 150);
+        assert_eq!(offsets[3].1, 4000);
+    }
+
+    #[test]
+    fn test_cluster_offsets_empty_using_observe() {
+        let mut detector = LinearDetector::new();
+
+        // Using observe() (without cluster info) should not record offsets
+        detector.observe(1, 1);
+        detector.observe(2, 1);
+        detector.observe(3, 1);
+
+        // No offsets recorded via observe()
+        assert_eq!(detector.cluster_offsets().len(), 0);
+    }
+
+    #[test]
+    fn test_cluster_offsets_mixed_observe_methods() {
+        let mut detector = LinearDetector::new();
+
+        // Mix of observe() and observe_with_cluster()
+        detector.observe(1, 1);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe(3, 1);
+        detector.observe_with_cluster(4, 1, 13312, 4096);
+
+        // Only observe_with_cluster() calls record offsets
+        let offsets = detector.cluster_offsets();
+        assert_eq!(offsets.len(), 2);
+        assert_eq!(offsets[0], (5120, 4096));
+        assert_eq!(offsets[1], (13312, 4096));
+
+        // But pattern detection still works
+        assert!(detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_cluster_offsets_large_offsets() {
+        let mut detector = LinearDetector::new();
+
+        // Test with large offset values (near u32::MAX boundary for u64)
+        let large_offset: u64 = 4_000_000_000;
+        let large_size: u32 = 4096;
+
+        detector.observe_with_cluster(1, 1, large_offset, large_size);
+
+        let offsets = detector.cluster_offsets();
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0], (large_offset, large_size));
+    }
 }
