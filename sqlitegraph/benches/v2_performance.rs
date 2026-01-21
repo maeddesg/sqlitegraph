@@ -19,6 +19,11 @@ mod v2_dataset_generator;
 use v2_dataset_generator::{V2GraphMode, V2GraphSpec, generate_v2_graph};
 
 /// Benchmark V2 edge insertion throughput
+///
+/// Setup pattern:
+/// 1. V2GraphSpec created outside measurement
+/// 2. b.iter() - Measures FULL graph generation (intentional)
+/// Note: Insertion benchmark measures generation time as proxy for throughput
 fn bench_v2_insertion(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_insertion");
 
@@ -53,6 +58,12 @@ fn bench_v2_insertion(c: &mut Criterion) {
 }
 
 /// Benchmark neighbor query performance for different node degrees
+///
+/// Setup pattern:
+/// 1. generate_v2_graph() - Create dataset ONCE outside measurement
+/// 2. open_graph() - Open graph ONCE outside measurement
+/// 3. validate - Assert node existence before measurement
+/// 4. b.iter() - Measure ONLY query performance
 fn bench_v2_neighbor_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_neighbor_queries");
 
@@ -210,6 +221,12 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
 
 /// Benchmark BFS traversal performance
 ///
+/// Setup pattern:
+/// 1. generate_v2_graph() - Create dataset ONCE outside measurement
+/// 2. validate - Assert start_node exists before measurement
+/// 3. open_graph() - Open graph ONCE inside each bench_with_input (isolated per variant)
+/// 4. b.iter() - Measure ONLY BFS traversal performance
+///
 /// NOTE: Baseline from Phase 24 shows 2-10x chain traversal slowdown vs SQLite.
 /// This benchmark will measure improvement after per-traversal cache (Phase 26-27).
 fn bench_v2_bfs_traversal(c: &mut Criterion) {
@@ -266,6 +283,12 @@ fn bench_v2_bfs_traversal(c: &mut Criterion) {
 }
 
 /// Benchmark k-hop traversal performance
+///
+/// Setup pattern:
+/// 1. generate_v2_graph() - Create dataset ONCE outside measurement
+/// 2. validate - Assert start_node exists before measurement
+/// 3. open_graph() - Open graph ONCE outside measurement
+/// 4. b.iter() - Measure ONLY k-hop traversal performance
 fn bench_v2_k_hop_traversal(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_k_hop_traversal");
 
@@ -311,6 +334,11 @@ fn bench_v2_k_hop_traversal(c: &mut Criterion) {
 }
 
 /// Benchmark file growth and memory usage
+///
+/// Setup pattern:
+/// 1. V2GraphSpec created outside measurement
+/// 2. b.iter() - Measures FULL graph generation + file metrics (intentional)
+/// Note: File growth benchmark measures generation time as proxy for throughput
 fn bench_v2_file_growth(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_file_growth");
 
@@ -353,6 +381,12 @@ fn bench_v2_file_growth(c: &mut Criterion) {
 }
 
 /// Benchmark multi-edge specific scenarios (Phase 50 validation)
+///
+/// Setup pattern:
+/// 1. generate_v2_graph() - Create dataset ONCE outside measurement (for query benchmarks)
+/// 2. validate - Assert multiedge nodes exist before measurement
+/// 3. open_graph() - Open graph ONCE outside measurement
+/// 4. b.iter() - Measure ONLY operation performance (insertion or query)
 fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_multiedge_scenarios");
 
