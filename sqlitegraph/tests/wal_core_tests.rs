@@ -4,6 +4,7 @@
 //! configuration management, header validation, and basic WAL operations.
 //! Tests follow TDD methodology with comprehensive edge case coverage.
 
+use sqlitegraph::backend::native::v2::storage::JsonLimits;
 use sqlitegraph::backend::native::v2::wal::{
     V2WALConfig, V2WALHeader,
 };
@@ -31,6 +32,7 @@ fn test_wal_config_validation() -> NativeResult<()> {
         auto_checkpoint: false,
         background_checkpoint_thread: false,
         background_checkpoint_interval_secs: 0,
+        json_limits: JsonLimits::default(),
     };
 
     // Config creation test - verify fields are set correctly
@@ -230,6 +232,7 @@ fn test_config_serialization() -> NativeResult<()> {
         auto_checkpoint: false,
         background_checkpoint_thread: false,
         background_checkpoint_interval_secs: 0,
+        json_limits: JsonLimits::default(),
     };
 
     // Simple config test - verify fields are set correctly
@@ -267,6 +270,7 @@ fn test_wal_file_creation() -> NativeResult<()> {
         auto_checkpoint: false,
         background_checkpoint_thread: false,
         background_checkpoint_interval_secs: 0,
+        json_limits: JsonLimits::default(),
     };
 
     // Test configuration fields
@@ -329,6 +333,7 @@ fn test_concurrent_access_patterns() -> NativeResult<()> {
         auto_checkpoint: false,
         background_checkpoint_thread: false,
         background_checkpoint_interval_secs: 0,
+        json_limits: JsonLimits::default(),
     });
 
     let validation_results = Arc::new(Mutex::new(Vec::new()));
@@ -397,6 +402,7 @@ fn test_memory_resource_management() -> NativeResult<()> {
             auto_checkpoint: false,
             background_checkpoint_thread: false,
             background_checkpoint_interval_secs: 0,
+        json_limits: JsonLimits::default(),
         };
 
         // Simple validation - check field values
