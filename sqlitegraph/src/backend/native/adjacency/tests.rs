@@ -479,3 +479,155 @@ mod linear_detector_tests {
         // This is intentional: dead ends are rare in chain traversals.
     }
 }
+
+#[cfg(test)]
+mod sequential_read_tests {
+    use super::super::SequentialReadBuffer;
+    use super::*;
+
+    /// Helper to create a graph file with a specified number of nodes
+    fn create_test_graph_file_with_nodes(node_count: u64) -> (GraphFile, tempfile::NamedTempFile) {
+        let (mut graph_file, temp_file) = create_test_graph_file();
+        let mut node_store = NodeStore::new(&mut graph_file);
+
+        // Create nodes sequentially
+        for i in 1..=node_count {
+            let node = NodeRecord::new(
+                i as i64,
+                "TestNode".to_string(),
+                format!("node_{}", i),
+                serde_json::json!({"index": i}),
+            );
+            node_store.write_node(&node).unwrap();
+        }
+
+        (graph_file, temp_file)
+    }
+
+    #[test]
+    fn test_read_slots_batch_basic() {
+        let (mut graph_file, _temp_file) = create_test_graph_file_with_nodes(10);
+        let mut node_store = NodeStore::new(&mut graph_file);
+
+        // Read 3 slots starting at node 1
+        let result = node_store.read_slots_batch(1, 3);
+        assert!(result.is_ok());
+
+        let nodes = result.unwrap();
+        assert_eq!(nodes.len(), 3);
+        assert_eq!(nodes[0].id, 1);
+        assert_eq!(nodes[1].id, 2);
+        assert_eq!(nodes[2].id, 3);
+    }
+
+    #[test]
+    fn test_read_slots_batch_bounds_clamping() {
+        let (mut graph_file, _temp_file) = create_test_graph_file_with_nodes(5);
+        let mut node_store = NodeStore::new(&mut graph_file);
+
+        // Request 10 slots but only 5 exist - should clamp to 5
+        let result = node_store.read_slots_batch(1, 10);
+        assert!(result.is_ok());
+
+        let nodes = result.unwrap();
+        assert_eq!(nodes.len(), 5); // Clamped to available nodes
+    }
+
+    #[test]
+    fn test_read_slots_batch_invalid_start() {
+        let (mut graph_file, _temp_file) = create_test_graph_file_with_nodes(10);
+        let mut node_store = NodeStore::new(&mut graph_file);
+
+        // Start node ID <= 0 should error
+        let result = node_store.read_slots_batch(0, 3);
+        assert!(result.is_err());
+
+        // Start node ID > node_count should error
+        let result = node_store.read_slots_batch(99, 3);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sequential_buffer_prefetch_integration() {
+        let (mut graph_file, _temp_file) = create_test_graph_file_with_nodes(20);
+        let mut buffer = SequentialReadBuffer::new();
+
+        // Prefetch from node 5 (should cache nodes 5-12 with default window of 8)
+        let result = buffer.prefetch_from(&mut graph_file, 5);
+        assert!(result.is_ok());
+
+        // Verify nodes are cached
+        assert!(buffer.contains(5));
+        assert!(buffer.contains(6));
+        assert!(buffer.contains(12));
+
+        // Nodes outside prefetch window should not be cached
+        assert!(!buffer.contains(4));
+        assert!(!buffer.contains(13));
+    }
+
+    #[test]
+    fn test_sequential_buffer_get_after_prefetch() {
+        let (mut graph_file, _temp_file) = create_test_graph_file_with_nodes(10);
+        let mut buffer = SequentialReadBuffer::new();
+
+        // Prefetch from node 1
+        buffer.prefetch_from(&mut graph_file, 1).unwrap();
+
+        // Get should return Some for cached nodes
+        let node = buffer.get(3);
+        assert!(node.is_some());
+        assert_eq!(node.unwrap().id, 3);
+
+        // Get should return None for uncached nodes
+        let node = buffer.get(99);
+        assert!(node.is_none());
+    }
+
+    #[test]
+    fn test_sequential_buffer_custom_prefetch_window() {
+        let (mut graph_file, _temp_file) = create_test_graph_file_with_nodes(20);
+        let mut buffer = SequentialReadBuffer::with_prefetch_window(4);
+
+        // Prefetch from node 5 with custom window of 4
+        buffer.prefetch_from(&mut graph_file, 5).unwrap();
+
+        // Verify only 4 nodes are cached (5-8)
+        assert!(buffer.contains(5));
+        assert!(buffer.contains(8));
+        assert!(!buffer.contains(9));
+
+        // Verify buffer reports correct length
+        assert_eq!(buffer.len(), 4);
+    }
+
+    #[test]
+    fn test_read_slots_batch_single_node() {
+        let (mut graph_file, _temp_file) = create_test_graph_file_with_nodes(10);
+        let mut node_store = NodeStore::new(&mut graph_file);
+
+        // Read just 1 slot
+        let result = node_store.read_slots_batch(5, 1);
+        assert!(result.is_ok());
+
+        let nodes = result.unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id, 5);
+        assert_eq!(nodes[0].kind, "TestNode");
+        assert_eq!(nodes[0].name, "node_5");
+    }
+
+    #[test]
+    fn test_sequential_buffer_empty_after_prefetch_error() {
+        let (mut graph_file, _temp_file) = create_test_graph_file_with_nodes(5);
+        let mut buffer = SequentialReadBuffer::new();
+
+        // Try to prefetch from invalid node ID (beyond file)
+        let result = buffer.prefetch_from(&mut graph_file, 99);
+        assert!(result.is_err());
+
+        // Buffer should remain empty after failed prefetch
+        assert!(buffer.is_empty());
+        assert!(!buffer.contains(1));
+    }
+}
