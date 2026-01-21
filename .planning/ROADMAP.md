@@ -276,19 +276,19 @@ Plans:
 - MVCC isolation tests (no cross-traversal staleness)
 
 Plans:
-- [ ] 31-01-PLAN.md — Create TraversalContext and get_neighbors_optimized()
-- [ ] 31-02-PLAN.md — Integrate into BFS variants (scalar, pointer-table, fully-optimized)
-- [ ] 31-03-PLAN.md — Integrate into k-hop, shortest path, and chain query functions
+- [x] 31-01-PLAN.md — Create TraversalContext and get_neighbors_optimized()
+- [x] 31-02-PLAN.md — Integrate into BFS variants (scalar, pointer-table, fully-optimized)
+- [x] 31-03-PLAN.md — Integrate into k-hop, shortest path, and chain query functions
 
 ### Phase 32: Validation and Tuning
 **Goal:** Sequential I/O optimization reduces chain traversal gap from 11x to <=3x
 **Depends on**: Phase 31
 **Requirements:** IO-12, IO-13
-**Plans**: TBD
+**Plans:** 3 plans in 2 waves
 
 **Success Criteria:**
 1. Chain(500) traversal improves from 11x -> <=3x vs SQLite baseline (cold cache)
-2. MVCC snapshot isolation preserved (tests verify no cross-transaction staleness)
+2. MVCC snapshot isolation preserved (tests verify no cross-traversal staleness)
 3. Buffer hit rate metrics available for instrumentation
 4. Star and random traversals do not regress (within 10% of v1.3 baseline)
 5. Memory overhead is bounded and documented
@@ -299,6 +299,11 @@ Plans:
 - Prefetch window tuning (4/8/16 slots based on results)
 - Memory overhead profiling
 - Updated documentation with expected speedups
+
+Plans:
+- [ ] 32-01-PLAN.md — Execute performance benchmarks and validate 3x SQLite target (IO-12)
+- [ ] 32-02-PLAN.md — Create MVCC isolation tests for TraversalContext (IO-13)
+- [ ] 32-03-PLAN.md — Prefetch window tuning and memory overhead documentation
 
 ---
 
@@ -339,7 +344,7 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 28 → 29 → 30 → 
 | 28. Performance Validation | v1.3 | 4/4 | Complete | 2026-01-21 |
 | 29. Linear Pattern Detection | v1.4 | 3/3 | Complete | 2026-01-21 |
 | 30. Sequential Slot Reading | v1.4 | 3/3 | Complete | 2026-01-21 |
-| 31. Traversal Integration | v1.4 | 0/3 | Pending | — |
-| 32. Validation and Tuning | v1.4 | 0/2 | Pending | — |
+| 31. Traversal Integration | v1.4 | 3/3 | Complete | 2026-01-21 |
+| 32. Validation and Tuning | v1.4 | 0/3 | Pending | — |
 
-**Overall Progress:** 100/103 plans complete (97.1%). v1.4: 9/13 plans complete (69.2%).
+**Overall Progress:** 103/106 plans complete (97.2%). v1.4: 9/12 plans complete (75.0%).

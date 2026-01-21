@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 31 of 32 complete (1/5 plans)
+Phase: 31 of 32 complete (3/3 plans) — Verified
 Milestone: v1.4 Sequential I/O Optimization
-Status: Phase 31 in progress
-Last activity: 2026-01-21 — Completed Phase 31 Plan 01: TraversalContext and 3-Tier Lookup
+Status: Phase 31 verified, ready for Phase 32
+Last activity: 2026-01-21 — Verified Phase 31: Traversal Integration (5/5 success criteria)
 
-Progress: [█████████░] 94.2% (31/32 phases in progress, 102/103 plans)
+Progress: [█████████░] 96.9% (31/32 phases complete, 103/103 plans)
 
 ## v1.4 Milestone Goals
 
@@ -68,6 +68,8 @@ Recent decisions affecting current work:
 - v1.4: 3-step linear detection threshold to avoid false positives on trees
 - v1.4: 8-slot prefetch window (32KB) based on RocksDB/LMDB research
 - v1.4 Phase 31-01: L1 buffer lookup is instrumentation-only - records hit/miss but falls through to L2/L3 to avoid scope creep; full neighbor extraction from buffered NodeRecordV2 deferred to Phase 32
+- v1.4 Phase 31-02: BFS functions preserve pointer table fast paths - these optimizations bypass cache entirely and are orthogonal to sequential I/O optimization
+- v1.4 Phase 31-03: Edge-type filtered chain queries bypass optimization - filtered traversals don't benefit from sequential I/O patterns and continue using AdjacencyHelpers directly
 
 ### Pending Todos
 
@@ -78,7 +80,8 @@ v1.4 Sequential I/O Optimization:
 - [x] Phase 30 Plan 02: Create SequentialReadBuffer module with prefetch logic (AHashMap storage, 8 tests passing)
 - [x] Phase 30 Plan 03: Add unit tests for batch reading and buffer correctness (10 unit tests, 8 integration tests)
 - [x] Phase 31 Plan 01: TraversalContext struct and get_neighbors_optimized() function (3-tier lookup, 11 tests passing)
-- [ ] Phase 31 Plans 02-05: Integrate into traversal hot paths (BFS, k-hop, shortest path, chain queries)
+- [x] Phase 31 Plan 02: BFS TraversalContext integration (all three BFS variants use pattern detection and 3-tier lookup)
+- [x] Phase 31 Plan 03: Traversal hot path integration (k-hop, shortest path, chain queries with direction-aware pattern detection)
 - [ ] Phase 32: Validate performance improvement and MVCC preservation
 
 ### Blockers/Concerns
@@ -88,7 +91,7 @@ v1.4 Sequential I/O Optimization:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 31 Plan 01: TraversalContext and 3-Tier Lookup
+Stopped at: Completed Phase 31 Plan 03: Traversal Hot Path Integration
 Resume file: None
 
 ### Roadmap Evolution
@@ -101,5 +104,5 @@ Resume file: None
 - **v1.4 Sequential I/O Optimization** (2026-01-21): Phases 29-32 in progress
   - Linear pattern detection (29-01, 29-02, 29-03 complete)
   - Sequential slot reading (30-01, 30-02, 30-03 complete)
-  - Traversal integration (31-01 complete, 31-02 through 31-05 pending)
+  - Traversal integration (31-01, 31-02, 31-03 complete)
   - Validation and tuning (IO-12, IO-13)
