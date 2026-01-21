@@ -225,10 +225,17 @@ fn bench_v2_k_hop_traversal(c: &mut Criterion) {
     let spec = V2GraphSpec::new(1_500, 6_000, V2GraphMode::Mixed);
     let result = generate_v2_graph(&spec);
 
+    // VALIDATION: Assert start_node exists in the generated dataset
+    let start_node = result.node_ids[0];
+    assert!(
+        result.node_ids.contains(&start_node),
+        "K-hop start_node {} not found in generated dataset of {} nodes",
+        start_node,
+        result.node_ids.len()
+    );
+
     let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
         .expect("Failed to reopen graph");
-
-    let start_node = result.node_ids[0];
 
     for depth in [2, 3, 4, 5].iter() {
         group.bench_with_input(BenchmarkId::new("outgoing", *depth), depth, |b, &depth| {
@@ -252,6 +259,7 @@ fn bench_v2_k_hop_traversal(c: &mut Criterion) {
         });
     }
 
+    std::mem::forget(result); // Preserve temp_dir after benchmark
     group.finish();
 }
 
