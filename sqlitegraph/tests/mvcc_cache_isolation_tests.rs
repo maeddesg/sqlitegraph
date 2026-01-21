@@ -212,36 +212,43 @@ fn test_concurrent_traversals_have_separate_caches() {
     // Save graph state and create path for thread to open
     graph_file.flush().expect("Failed to flush");
     graph_file.sync().expect("Failed to sync");
-    let db_path_clone = db_path.clone();
 
     let barrier = Arc::new(Barrier::new(2));
+
+    // Clone node_ids for thread 1
+    let node_ids_t1 = node_ids.clone();
+    let db_path_t1 = db_path.clone();
 
     // Thread 1: BFS from node 1 (left side)
     let handle1 = {
         let barrier = barrier.clone();
         thread::spawn(move || {
-            let mut graph_file = GraphFile::open(&db_path_clone).expect("Failed to open graph");
+            let mut graph_file = GraphFile::open(&db_path_t1).expect("Failed to open graph");
 
             barrier.wait();
 
             // BFS depth 2 from node 1: should reach 2, 3
-            let result = native_bfs(&mut graph_file, node_ids[0], 2)
+            let result = native_bfs(&mut graph_file, node_ids_t1[0], 2)
                 .expect("Thread 1 BFS should succeed");
 
             (1, result)
         })
     };
 
+    // Clone node_ids for thread 2
+    let node_ids_t2 = node_ids.clone();
+    let db_path_t2 = db_path.clone();
+
     // Thread 2: BFS from node 4 (right side)
     let handle2 = {
         let barrier = barrier.clone();
         thread::spawn(move || {
-            let mut graph_file = GraphFile::open(&db_path).expect("Failed to open graph");
+            let mut graph_file = GraphFile::open(&db_path_t2).expect("Failed to open graph");
 
             barrier.wait();
 
             // BFS depth 2 from node 4: should reach 5, 6
-            let result = native_bfs(&mut graph_file, node_ids[3], 2)
+            let result = native_bfs(&mut graph_file, node_ids_t2[3], 2)
                 .expect("Thread 2 BFS should succeed");
 
             (2, result)
@@ -249,8 +256,8 @@ fn test_concurrent_traversals_have_separate_caches() {
     };
 
     // Wait for both threads
-    let (thread_id1, result1) = handle1.join().expect("Thread 1 panicked");
-    let (thread_id2, result2) = handle2.join().expect("Thread 2 panicked");
+    let (_thread_id1, result1) = handle1.join().expect("Thread 1 panicked");
+    let (_thread_id2, result2) = handle2.join().expect("Thread 2 panicked");
 
     // Thread 1 should reach nodes 2 and 3
     assert!(result1.contains(&node_ids[1]), "Thread 1 should reach node 2");
