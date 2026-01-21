@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 33 - Traversal-Time Chain Detection
-Plan: 5 of 5
-Status: Phase complete - integration tests validated
-Last activity: 2026-01-21 — Completed 33-05 integration tests
+Phase: 34 - Sequential Cluster Reader
+Plan: 1 of 1
+Status: Plan complete - SequentialClusterReader module implemented
+Last activity: 2026-01-21 — Completed 34-01 SequentialClusterReader module
 
-Progress: [█████████░] 97.4% (32/32 phases complete, 114/118 plans complete, v1.4 complete, v1.6 75% done)
+Progress: [█████████░] 97.5% (32/32 phases complete, 115/118 plans complete, v1.4 complete, v1.6 75% done)
 
 ## v1.6 Milestone Goals
 
@@ -35,8 +35,8 @@ Progress: [█████████░] 97.4% (32/32 phases complete, 114/118
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CL-01: Traversal detects linear chains and switches to sequential cluster reads | Phase 33 | In Progress (contiguity validation complete) |
-| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34 | Pending |
+| CL-01: Traversal detects linear chains and switches to sequential cluster reads | Phase 33 | Complete (5/5 plans) |
+| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34 | Complete (34-01) |
 | CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 33 | Complete (33-02) |
 | CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Pending |
 | CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Pending |
@@ -52,14 +52,14 @@ Progress: [█████████░] 97.4% (32/32 phases complete, 114/118
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | Complete (5/5 plans) |
-| 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Pending |
+| 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Complete (34-01) |
 | 35 - Contiguity Validation and Fallback | Validate cluster contiguity and fall back immediately when pattern breaks | CL-04 | Pending |
 | 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Pending |
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 114
+- Total plans completed: 115
 - Average duration: 7 min
 - Total execution time: ~13 hours
 
@@ -103,6 +103,9 @@ Recent decisions affecting current work:
 - **v1.6.4: Simple u64 counters for chain instrumentation (chains_detected, total_chain_length) - no atomic operations needed for single-threaded traversal**
 - **v1.6.5: should_use_sequential_read() combines is_linear_confirmed() && validate_contiguity() for Phase 34 integration**
 - **v1.6.5: Integration tests validate chain detection on Chain(100), prevent false positives on trees/diamonds, and reject non-contiguous storage**
+- **v1.6.6: 512KB MAX_CLUSTER_BUFFER_SIZE bounds memory usage, sufficient for ~128 clusters of 4KB each**
+- **v1.6.6: Stateless SequentialClusterReader design with parameter-passed offsets keeps module simple and testable**
+- **v1.6.6: Deferred deserialization (raw bytes → neighbors on-demand) avoids CPU cost for clusters never accessed**
 
 ### Pending Todos
 
@@ -112,7 +115,7 @@ v1.6 Chain Locality:
 - [x] Phase 33 Plan 03: Sequential read trigger (completed)
 - [x] Phase 33 Plan 04: Chain detection instrumentation (completed)
 - [x] Phase 33 Plan 05: Integration tests for graph patterns (completed)
-- [ ] Phase 34: Sequential cluster reader implementation
+- [x] Phase 34 Plan 01: Sequential cluster reader module (completed)
 - [ ] Phase 35: Contiguity validation and fallback handling
 - [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
 
@@ -124,7 +127,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 33-05 integration tests (Phase 33 complete)
+Stopped at: Completed 34-01 SequentialClusterReader module
 Resume file: None
 
 ### Roadmap Evolution
@@ -141,3 +144,4 @@ Resume file: None
   - Phase 33 Plan 03 (2026-01-21): Sequential read trigger complete
   - Phase 33 Plan 04 (2026-01-21): Chain detection instrumentation complete
   - Phase 33 Plan 05 (2026-01-21): Integration tests for graph patterns complete (Phase 33 complete)
+  - Phase 34 Plan 01 (2026-01-21): SequentialClusterReader module complete (Phase 34 complete)

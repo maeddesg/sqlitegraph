@@ -31,6 +31,8 @@ use crate::backend::native::graph_ops::{TraversalCache, TraversalCacheStats};
 /// - **stats**: Cache statistics (for debug logging)
 /// - **buffer_hits**: Extended statistics: L1 buffer hits
 /// - **buffer_misses**: Extended statistics: L1 buffer misses
+/// - **cluster_buffer**: Raw bytes from sequential cluster read (Phase 34)
+/// - **cluster_buffer_offsets**: Cluster offsets for positioning (Phase 34)
 ///
 /// # Example
 ///
@@ -63,6 +65,24 @@ pub struct TraversalContext {
 
     /// Buffer miss tracking (extended stats)
     pub buffer_misses: u64,
+
+    /// Raw bytes from sequential cluster read (all clusters in one I/O)
+    ///
+    /// Stored as Vec<u8> to defer deserialization until neighbor extraction.
+    /// Populated by SequentialClusterReader::read_chain_clusters() when
+    /// LinearDetector confirms a linear chain with contiguous clusters.
+    ///
+    /// Phase 34: Sequential Cluster Reader
+    pub cluster_buffer: Option<Vec<u8>>,
+
+    /// Cluster offsets corresponding to cluster_buffer (for positioning)
+    ///
+    /// Copied from detector.cluster_offsets() when sequential read is triggered.
+    /// Used by SequentialClusterReader::extract_neighbors() to calculate
+    /// byte offsets within the buffer for each cluster.
+    ///
+    /// Phase 34: Sequential Cluster Reader
+    pub cluster_buffer_offsets: Vec<(u64, u32)>,
 }
 
 impl TraversalContext {
@@ -93,6 +113,8 @@ impl TraversalContext {
             stats: TraversalCacheStats::new(),
             buffer_hits: 0,
             buffer_misses: 0,
+            cluster_buffer: None,
+            cluster_buffer_offsets: Vec::new(),
         }
     }
 
@@ -163,6 +185,32 @@ impl TraversalContext {
             total_hits as f64 / total_lookups as f64
         }
     }
+
+    /// Clear cluster buffer (called on traversal reset or fallback)
+    ///
+    /// Clears both the raw cluster buffer and offset tracking. Called when:
+    /// - Traversal resets via reset()
+    /// - Sequential read fails and we fall back to standard path
+    /// - Pattern breaks (branching detected) during traversal
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ctx = TraversalContext::new();
+    ///
+    /// // Simulate sequential read populating buffer
+    /// ctx.cluster_buffer = Some(vec![1, 2, 3, 4]);
+    /// ctx.cluster_buffer_offsets = vec![(100, 4), (104, 4)];
+    ///
+    /// ctx.clear_cluster_buffer();
+    ///
+    /// assert!(ctx.cluster_buffer.is_none());
+    /// assert!(ctx.cluster_buffer_offsets.is_empty());
+    /// ```
+    pub fn clear_cluster_buffer(&mut self) {
+        self.cluster_buffer = None;
+        self.cluster_buffer_offsets.clear();
+    }
 }
 
 impl Default for TraversalContext {
@@ -185,6 +233,8 @@ mod tests {
         assert_eq!(ctx.buffer_misses, 0);
         assert_eq!(ctx.stats.hits, 0);
         assert_eq!(ctx.stats.misses, 0);
+        assert!(ctx.cluster_buffer.is_none());
+        assert!(ctx.cluster_buffer_offsets.is_empty());
     }
 
     #[test]
@@ -194,6 +244,8 @@ mod tests {
         assert_eq!(ctx.buffer.len(), 0);
         assert_eq!(ctx.buffer_hits, 0);
         assert_eq!(ctx.buffer_misses, 0);
+        assert!(ctx.cluster_buffer.is_none());
+        assert!(ctx.cluster_buffer_offsets.is_empty());
     }
 
     #[test]
@@ -301,5 +353,48 @@ mod tests {
         ctx.buffer_misses = 50;
         assert_eq!(ctx.buffer_hits, 100);
         assert_eq!(ctx.buffer_misses, 50);
+    }
+
+    #[test]
+    fn test_traversal_context_new_has_empty_cluster_buffer() {
+        let ctx = TraversalContext::new();
+        assert!(ctx.cluster_buffer.is_none());
+        assert!(ctx.cluster_buffer_offsets.is_empty());
+    }
+
+    #[test]
+    fn test_clear_cluster_buffer() {
+        let mut ctx = TraversalContext::new();
+
+        // Populate buffer
+        ctx.cluster_buffer = Some(vec![1, 2, 3, 4]);
+        ctx.cluster_buffer_offsets = vec![(100, 4), (104, 4)];
+
+        // Clear buffer
+        ctx.clear_cluster_buffer();
+
+        // Verify cleared
+        assert!(ctx.cluster_buffer.is_none());
+        assert!(ctx.cluster_buffer_offsets.is_empty());
+    }
+
+    #[test]
+    fn test_clear_cluster_buffer_idempotent() {
+        let mut ctx = TraversalContext::new();
+
+        // First clear (already empty)
+        ctx.clear_cluster_buffer();
+        assert!(ctx.cluster_buffer.is_none());
+        assert!(ctx.cluster_buffer_offsets.is_empty());
+
+        // Populate and clear
+        ctx.cluster_buffer = Some(vec![1, 2, 3]);
+        ctx.cluster_buffer_offsets = vec![(100, 3)];
+        ctx.clear_cluster_buffer();
+
+        // Second clear (already empty again)
+        ctx.clear_cluster_buffer();
+        assert!(ctx.cluster_buffer.is_none());
+        assert!(ctx.cluster_buffer_offsets.is_empty());
     }
 }
