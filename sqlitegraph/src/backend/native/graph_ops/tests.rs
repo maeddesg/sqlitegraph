@@ -223,3 +223,51 @@ fn test_bfs_cache_cycles() {
     let count_4 = result.iter().filter(|&&n| n == 4).count();
     assert_eq!(count_4, 1, "Node 4 should appear exactly once despite two paths");
 }
+
+#[test]
+fn test_bfs_unchanged_behavior() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create star graph: 1 -> 2, 1 -> 3, 1 -> 4, 1 -> 5
+    for i in 1..=5 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Star edges from center node 1
+    for i in 2..=5 {
+        let edge = EdgeRecord::new(
+            i,
+            1,
+            i,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // BFS depth 1 should return all neighbors of node 1
+    let result = native_bfs(&mut graph_file, 1, 1).unwrap();
+    let mut expected = vec![2, 3, 4, 5];
+    expected.sort();
+    let mut result_sorted = result.clone();
+    result_sorted.sort();
+    assert_eq!(result_sorted, expected, "BFS depth 1 should return all direct neighbors");
+
+    // BFS depth 0 should return just start node
+    let result_zero = native_bfs(&mut graph_file, 1, 0).unwrap();
+    assert_eq!(result_zero, vec![1], "BFS depth 0 should return start node only");
+
+    // BFS from leaf node (no outgoing edges) should return empty
+    let result_leaf = native_bfs(&mut graph_file, 2, 2).unwrap();
+    assert!(result_leaf.is_empty(), "BFS from leaf node should return empty");
+}
