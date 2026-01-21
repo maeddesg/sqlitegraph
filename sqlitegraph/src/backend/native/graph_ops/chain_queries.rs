@@ -6,6 +6,9 @@ use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::*;
 use crate::backend::{BackendDirection, ChainStep, PatternMatch, PatternQuery};
 
+// Per-traversal cache for eliminating redundant I/O during chain traversal
+use super::{TraversalCache, get_neighbors_cached, TraversalCacheStats};
+
 /// Native chain query implementation
 pub fn native_chain_query(
     graph_file: &mut GraphFile,
@@ -14,6 +17,10 @@ pub fn native_chain_query(
 ) -> Result<Vec<NativeNodeId>, NativeBackendError> {
     let mut current_nodes = vec![start];
     let mut result = current_nodes.clone();
+
+    // Per-traversal cache - evaporates when function returns
+    let mut cache: TraversalCache = TraversalCache::new();
+    let mut stats = TraversalCacheStats::default();
 
     for step in chain {
         let mut next_nodes = Vec::new();
@@ -38,14 +45,14 @@ pub fn native_chain_query(
                     )?,
                 }
             } else {
-                match direction {
-                    Direction::Outgoing => {
-                        AdjacencyHelpers::get_outgoing_neighbors(graph_file, node)?
-                    }
-                    Direction::Incoming => {
-                        AdjacencyHelpers::get_incoming_neighbors(graph_file, node)?
-                    }
-                }
+                // Unfiltered path: use cache
+                get_neighbors_cached(
+                    graph_file,
+                    node,
+                    direction,
+                    &mut cache,
+                    &mut stats,
+                )?
             };
 
             next_nodes.extend(neighbors);
@@ -57,6 +64,19 @@ pub fn native_chain_query(
 
         current_nodes = next_nodes;
         result.extend(current_nodes.clone());
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        if stats.hits + stats.misses > 0 {
+            let hit_rate = stats.hit_rate();
+            log::debug!(
+                "Chain query cache stats: hits={}, misses={}, hit_rate={:.2}%",
+                stats.hits,
+                stats.misses,
+                hit_rate * 100.0
+            );
+        }
     }
 
     Ok(result)
