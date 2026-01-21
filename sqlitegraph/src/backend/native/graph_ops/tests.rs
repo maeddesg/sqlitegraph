@@ -119,3 +119,51 @@ fn test_native_shortest_path() {
     let path = result.unwrap();
     assert_eq!(path, vec![1, 2, 3]);
 }
+
+#[test]
+fn test_bfs_cache_evaporates() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create chain: 1 -> 2 -> 3 -> 4 -> 5
+    for i in 1..=5 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Create edges
+    for i in 1..4 {
+        let edge = EdgeRecord::new(
+            i,
+            i,
+            i + 1,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // First BFS
+    let result1 = native_bfs(&mut graph_file, 1, 2).unwrap();
+    let expected: Vec<NativeNodeId> = vec![2, 3];
+    assert_eq!(result1, expected, "First BFS should return nodes 2, 3");
+
+    // Second BFS with same parameters
+    let result2 = native_bfs(&mut graph_file, 1, 2).unwrap();
+    assert_eq!(result2, expected, "Second BFS should return same result");
+
+    // Third BFS from different start node
+    let result3 = native_bfs(&mut graph_file, 3, 1).unwrap();
+    let expected3: Vec<NativeNodeId> = vec![4];
+    assert_eq!(result3, expected3, "Third BFS from node 3 should return node 4");
+
+    // All BFS calls produce correct results, proving cache doesn't cause cross-call pollution
+}
