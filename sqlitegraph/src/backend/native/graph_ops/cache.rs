@@ -363,12 +363,28 @@ pub fn get_neighbors_optimized(
         }
     }
 
-    // Phase 34 TODO: Extract neighbors from cluster_buffer
-    // This requires tracking node_id -> cluster_index mapping during traversal
-    // Deferred to Phase 35 (fallback handling) which adds proper mapping
-    // For now, sequential read triggers and stores buffer, but extraction
-    // happens via standard L2/L3 path. The benefit is still realized
-    // because cluster_buffer can be used for subsequent nodes in the chain.
+    // Phase 35: Extract neighbors from cluster_buffer using node_id -> cluster_index mapping
+    if let Some(buffer) = &ctx.cluster_buffer {
+        // Look up cluster index for this node_id
+        if let Some(&cluster_index) = ctx.node_cluster_index.get(&node_id) {
+            // Extract neighbors from buffered cluster
+            match SequentialClusterReader::extract_neighbors(
+                buffer,
+                cluster_index,
+                &ctx.cluster_buffer_offsets,
+            ) {
+                Ok(neighbors) => {
+                    // Insert into L2 cache for future lookups
+                    ctx.cache.insert(cache_key, neighbors.clone());
+                    return Ok(neighbors);
+                }
+                Err(_) => {
+                    // Extraction failed - fall through to L2/L3
+                    // This shouldn't happen if clusters are valid, but handle gracefully
+                }
+            }
+        }
+    }
 
     // L2: Check TraversalCache (v1.3 cache)
     if let Some(cached) = ctx.cache.get(&cache_key) {

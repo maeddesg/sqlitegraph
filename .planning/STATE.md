@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 34 - Sequential Cluster Reader
-Plan: 3 of 3
-Status: Phase complete - Lazy sequential cluster read integration in get_neighbors_optimized()
-Last activity: 2026-01-21 — Completed 34-03 Lazy sequential cluster read trigger
+Phase: 35 - Neighbor Extraction and Fallback
+Plan: 1 of 4 (in progress)
+Status: Phase in progress - Node_id mapping complete
+Last activity: 2026-01-21 — Completed Phase 35 Plan 01: Node_id -> cluster_index mapping
 
-Progress: [█████████░] 98.3% (32/32 phases complete, 117/118 plans complete, v1.4 complete, v1.6 87.5% done)
+Progress: [████████░] 98.6% (34/36 phases planned, 118/121 plans complete, v1.4 complete, v1.6 54% done)
 
 ## v1.6 Milestone Goals
 
@@ -36,9 +36,9 @@ Progress: [█████████░] 98.3% (32/32 phases complete, 117/118
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CL-01: Traversal detects linear chains and switches to sequential cluster reads | Phase 33 | Complete (5/5 plans) |
-| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34 | Complete (34-01, 34-02, 34-03) |
+| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34-35 | Partial (34-01/02/03 complete, 35 planned) |
 | CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 33 | Complete (33-02) |
-| CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Pending |
+| CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Planned |
 | CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Pending |
 
 **Coverage: 5/5 requirements mapped (100%)**
@@ -52,14 +52,15 @@ Progress: [█████████░] 98.3% (32/32 phases complete, 117/118
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | Complete (5/5 plans) |
-| 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Complete (3/3 plans) |
-| 35 - Contiguity Validation and Fallback | Validate cluster contiguity and fall back immediately when pattern breaks | CL-04 | Pending |
+| 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 (partial, with Phase 35 split) | Complete (3/3 plans) |
+| 35 - Neighbor Extraction and Fallback | Extract neighbors from cluster_buffer and fall back immediately when pattern breaks | CL-02 (completion), CL-03, CL-04 | Planned (4 plans) |
 | 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Pending |
 
 ## Performance Metrics
 
 **Velocity:**
 - Total plans completed: 117
+- Total plans planned: 121
 - Average duration: 7 min
 - Total execution time: ~13.5 hours
 
@@ -72,13 +73,13 @@ Progress: [█████████░] 98.3% (32/32 phases complete, 117/118
 | v1.2 (23-24) | 7 | 1 day | ~7 min |
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
-| v1.6 (33-36) | 7 | ~15 min | ~2 min (so far) |
+| v1.6 (33-36) | 11 | ~15 min | ~2 min (so far) |
 
 **Recent Trend:**
 - Last 5 plans: ~5 min each
 - Trend: Stable
 
-*Updated after each plan completion*
+---
 
 ## Accumulated Context
 
@@ -112,6 +113,10 @@ Recent decisions affecting current work:
 - **v1.6.8: Lazy trigger pattern ensures sequential read happens once on first miss after linear confirmation**
 - **v1.6.8: Error handling leaves cluster_buffer as None on sequential read failure (graceful fallback to L2/L3)**
 - **v1.6.8: Full neighbor extraction from cluster_buffer deferred to Phase 35 (requires node_id -> cluster_index mapping)**
+- **v1.6.9: AHashMap<NativeNodeId, usize> for node_id -> cluster_index mapping (Phase 35)**
+- **v1.6.9: Caller responsibility for mapping population (preserves separation of concerns)**
+- **v1.6.9: Immediate fallback on Branching pattern (clear cluster_buffer and node_cluster_index)**
+- **v1.6.9: Minimal fallback state reset (only cluster_buffer fields, not L1/L2/L3 caches)**
 
 ### Pending Todos
 
@@ -124,7 +129,10 @@ v1.6 Chain Locality:
 - [x] Phase 34 Plan 01: Sequential cluster reader module (completed)
 - [x] Phase 34 Plan 02: TraversalContext cluster buffer integration (completed)
 - [x] Phase 34 Plan 03: Lazy sequential cluster read trigger (completed)
-- [ ] Phase 35: Contiguity validation and fallback handling
+- [x] Phase 35 Plan 01: Node_id -> cluster_index mapping (completed)
+- [ ] Phase 35 Plan 02: Neighbor extraction from cluster_buffer (planned)
+- [ ] Phase 35 Plan 03: Traversal helper and unit tests (planned)
+- [ ] Phase 35 Plan 04: Integration tests for extraction and fallback (planned)
 - [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
 
 ### Blockers/Concerns
@@ -135,7 +143,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 34-03 Lazy sequential cluster read trigger
+Stopped at: Completed Phase 35 Plan 01: Node_id -> cluster_index mapping
 Resume file: None
 
 ### Roadmap Evolution
@@ -155,3 +163,7 @@ Resume file: None
   - Phase 34 Plan 01 (2026-01-21): SequentialClusterReader module complete
   - Phase 34 Plan 02 (2026-01-21): TraversalContext cluster buffer integration complete
   - Phase 34 Plan 03 (2026-01-21): Lazy sequential cluster read trigger complete (Phase 34 complete)
+  - Phase 35 Plan 01 (2026-01-21): Node_id -> cluster_index mapping complete
+  - Phase 35 (2026-01-21): Neighbor Extraction and Fallback - 3 plans remaining
+
+*Updated after each plan completion*
