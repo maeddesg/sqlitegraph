@@ -5,6 +5,9 @@ use crate::backend::native::adjacency::{AdjacencyHelpers, Direction};
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::*;
 
+// Per-traversal cache for eliminating redundant I/O during k-hop
+use super::{TraversalCache, get_neighbors_cached, TraversalCacheStats};
+
 /// Native k-hop implementation
 pub fn native_k_hop(
     graph_file: &mut GraphFile,
@@ -21,14 +24,21 @@ pub fn native_k_hop(
     visited.insert(start);
     let mut result = Vec::new();
 
+    // Per-traversal cache - evaporates when function returns
+    let mut cache: TraversalCache = TraversalCache::new();
+    let mut stats = TraversalCacheStats::default();
+
     for _ in 0..depth {
         let mut next_level = Vec::new();
 
         for node in current_level {
-            let neighbors = match direction {
-                Direction::Outgoing => AdjacencyHelpers::get_outgoing_neighbors(graph_file, node)?,
-                Direction::Incoming => AdjacencyHelpers::get_incoming_neighbors(graph_file, node)?,
-            };
+            let neighbors = get_neighbors_cached(
+                graph_file,
+                node,
+                direction,
+                &mut cache,
+                &mut stats,
+            )?;
 
             for neighbor in neighbors {
                 if !visited.contains(&neighbor) {
@@ -42,6 +52,19 @@ pub fn native_k_hop(
         current_level = next_level;
         if current_level.is_empty() {
             break;
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        if stats.hits + stats.misses > 0 {
+            let hit_rate = stats.hit_rate();
+            log::debug!(
+                "K-hop cache stats: hits={}, misses={}, hit_rate={:.2}%",
+                stats.hits,
+                stats.misses,
+                hit_rate * 100.0
+            );
         }
     }
 
