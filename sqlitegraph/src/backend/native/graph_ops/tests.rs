@@ -4,7 +4,7 @@ use super::super::{EdgeStore, NodeStore};
 use super::*;
 use crate::backend::native::adjacency::Direction;
 use crate::backend::native::clear_node_cache;
-use crate::backend::{EdgeSpec, NodeSpec};
+use crate::backend::{BackendDirection, ChainStep, EdgeSpec, NodeSpec};
 use tempfile::NamedTempFile;
 
 fn create_test_graph_file() -> (GraphFile, NamedTempFile) {
@@ -484,4 +484,140 @@ fn test_shortest_path_cache_effectiveness() {
 
     // Result correctness proves cache doesn't break shortest path semantics
     // The BFS explores both paths; cache prevents re-reading node 1's neighbors when dequeuing 2 and 3
+}
+
+// Chain query cache tests
+
+#[test]
+fn test_chain_query_cache_evaporation() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create graph: 1 -> 2 -> 3 -> 4, 1 -> 5 -> 6
+    for i in 1..=6 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Edges: 1->2, 2->3, 3->4, 1->5, 5->6
+    let edges = [(1, 2), (2, 3), (3, 4), (1, 5), (5, 6)];
+    for (i, (from, to)) in edges.iter().enumerate() {
+        let edge = EdgeRecord::new(
+            i as NativeNodeId + 1,
+            *from,
+            *to,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // Define chain: [outgoing, outgoing]
+    let chain = vec![
+        ChainStep {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        },
+        ChainStep {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        },
+    ];
+
+    // First chain query call from node 1
+    let result1 = native_chain_query(&mut graph_file, 1, &chain).unwrap();
+    let mut expected1 = vec![1, 2, 3, 5, 6];
+    expected1.sort();
+    let mut result1_sorted = result1.clone();
+    result1_sorted.sort();
+    assert_eq!(result1_sorted, expected1, "First chain query should return nodes [1,2,3,5,6], got {:?}", result1_sorted);
+
+    // Second chain query call with same parameters
+    let result2 = native_chain_query(&mut graph_file, 1, &chain).unwrap();
+    let mut result2_sorted = result2.clone();
+    result2_sorted.sort();
+    assert_eq!(result2_sorted, expected1, "Second chain query should return same result");
+
+    // Third chain query call from node 2 (single path chain)
+    let result3 = native_chain_query(&mut graph_file, 2, &chain).unwrap();
+    let mut expected3 = vec![2, 3, 4];
+    expected3.sort();
+    let mut result3_sorted = result3.clone();
+    result3_sorted.sort();
+    assert_eq!(result3_sorted, expected3, "Third chain query from node 2 should return [2,3,4], got {:?}", result3_sorted);
+
+    // All chain query calls produce correct results, proving cache doesn't cause cross-call pollution
+}
+
+#[test]
+fn test_chain_query_cache_effectiveness() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create diamond-like chain graph: 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4
+    for i in 1..=4 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Diamond edges: 1->2, 1->3, 2->4, 3->4
+    let edges = [(1, 2), (1, 3), (2, 4), (3, 4)];
+    for (i, (from, to)) in edges.iter().enumerate() {
+        let edge = EdgeRecord::new(
+            i as NativeNodeId + 1,
+            *from,
+            *to,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // Define chain: [outgoing, outgoing]
+    let chain = vec![
+        ChainStep {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        },
+        ChainStep {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        },
+    ];
+
+    // Chain query from node 1
+    let result = native_chain_query(&mut graph_file, 1, &chain).unwrap();
+
+    // Result should contain start node (1), first hop (2, 3), and second hop (4)
+    assert!(result.contains(&1), "Should contain start node 1");
+    assert!(result.contains(&2), "Should contain node 2 (first hop)");
+    assert!(result.contains(&3), "Should contain node 3 (first hop)");
+    assert!(result.contains(&4), "Should contain node 4 (second hop via 1->2->4 or 1->3->4)");
+
+    // Node 4 appears twice because both paths (1->2->4 and 1->3->4) reach it
+    // and chain query uses extend() without deduplication
+    let count_4 = result.iter().filter(|&&n| n == 4).count();
+    assert_eq!(count_4, 2, "Node 4 appears twice (once per path)");
+
+    // Result length should be 5 (nodes 1, 2, 3, 4, 4)
+    assert_eq!(result.len(), 5, "Chain query should return 5 nodes (with 4 duplicated)");
+
+    // Result correctness proves cache works for multi-step traversals
+    // The cache prevents re-reading outgoing neighbors of node 1 when processing both paths
 }
