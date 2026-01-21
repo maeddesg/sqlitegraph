@@ -60,6 +60,7 @@
 //! detector into traversal hot paths to trigger sequential I/O optimization.
 
 use crate::backend::native::types::NativeNodeId;
+use std::time::Instant;
 
 /// Check if cluster offsets form a contiguous sequence on disk.
 ///
@@ -207,6 +208,8 @@ enum DetectorState {
 /// - **cluster_offsets**: History of (cluster_offset, cluster_size) tuples observed during traversal
 /// - **chains_detected**: Number of chains detected during traversal (Phase 33)
 /// - **total_chain_length**: Cumulative length of all detected chains (Phase 33)
+/// - **time_linear_detection_ns**: Total time spent in pattern detection (nanoseconds)
+/// - **time_contiguity_validation_ns**: Total time spent in contiguity validation (nanoseconds)
 ///
 /// # Cluster Offset Tracking (Phase 33)
 ///
@@ -216,6 +219,12 @@ enum DetectorState {
 /// - Sequential cluster reads require clusters to be contiguous on disk
 /// - Tracking offsets during traversal avoids additional I/O for validation
 /// - Offsets are cleared on `reset()` to maintain per-traversal isolation
+///
+/// # Timing Instrumentation (Phase 37)
+///
+/// The `time_linear_detection_ns` and `time_contiguity_validation_ns` fields accumulate
+/// timing information for diagnostic telemetry. These help identify performance bottlenecks
+/// during Chain(500) traversal analysis.
 ///
 /// # Example
 ///
@@ -250,6 +259,10 @@ pub struct LinearDetector {
     chains_detected: u64,
     /// Cumulative length of all detected chains (Phase 33)
     total_chain_length: u64,
+    /// Total time spent in pattern detection (Phase 37 instrumentation)
+    time_linear_detection_ns: u64,
+    /// Total time spent in contiguity validation (Phase 37 instrumentation)
+    time_contiguity_validation_ns: u64,
 }
 
 impl LinearDetector {
@@ -276,6 +289,8 @@ impl LinearDetector {
             cluster_offsets: Vec::new(),
             chains_detected: 0,
             total_chain_length: 0,
+            time_linear_detection_ns: 0,
+            time_contiguity_validation_ns: 0,
         }
     }
 
@@ -306,6 +321,8 @@ impl LinearDetector {
             cluster_offsets: Vec::new(),
             chains_detected: 0,
             total_chain_length: 0,
+            time_linear_detection_ns: 0,
+            time_contiguity_validation_ns: 0,
         }
     }
 
@@ -347,7 +364,8 @@ impl LinearDetector {
     /// ```
     #[inline]
     pub fn observe(&mut self, node_id: NativeNodeId, degree: u32) -> TraversalPattern {
-        match self.state {
+        let start = Instant::now();
+        let result = match self.state {
             DetectorState::Branching => {
                 // Terminal state: once branching, always branching
                 return TraversalPattern::Branching;
@@ -380,7 +398,9 @@ impl LinearDetector {
                 // degree == 0: dead end, stay Unknown
                 TraversalPattern::Unknown
             }
-        }
+        };
+        self.time_linear_detection_ns += start.elapsed().as_nanos() as u64;
+        result
     }
 
     /// Observe a node with its cluster information.
@@ -440,6 +460,7 @@ impl LinearDetector {
         self.cluster_offsets.push((cluster_offset, cluster_size));
 
         // Delegate to existing observe() for pattern detection
+        // Note: timing is already accumulated by observe()
         self.observe(node_id, degree)
     }
 
@@ -590,6 +611,8 @@ impl LinearDetector {
         self.cluster_offsets.clear();
         self.chains_detected = 0;
         self.total_chain_length = 0;
+        self.time_linear_detection_ns = 0;
+        self.time_contiguity_validation_ns = 0;
     }
 
     /// Get current pattern without observation.
@@ -792,8 +815,72 @@ impl LinearDetector {
     /// assert!(!detector.validate_contiguity());
     /// ```
     #[inline]
-    pub fn validate_contiguity(&self) -> bool {
-        are_clusters_contiguous(&self.cluster_offsets)
+    pub fn validate_contiguity(&mut self) -> bool {
+        let start = Instant::now();
+        let result = are_clusters_contiguous(&self.cluster_offsets);
+        self.time_contiguity_validation_ns += start.elapsed().as_nanos() as u64;
+        result
+    }
+
+    /// Get total time spent in linear pattern detection (milliseconds).
+    ///
+    /// Returns the accumulated time for all calls to `observe()` and `observe_with_cluster()`.
+    /// This is diagnostic instrumentation for Phase 37 gap analysis.
+    ///
+    /// # Returns
+    ///
+    /// Total detection time in milliseconds (converted from nanoseconds).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // Perform observations
+    /// for i in 1..=100 {
+    ///     detector.observe(i, 1);
+    /// }
+    ///
+    /// // Get accumulated timing
+    /// let detection_ms = detector.time_linear_detection_ms();
+    /// ```
+    #[inline]
+    pub fn time_linear_detection_ms(&self) -> f64 {
+        self.time_linear_detection_ns as f64 / 1_000_000.0
+    }
+
+    /// Get total time spent in contiguity validation (milliseconds).
+    ///
+    /// Returns the accumulated time for all calls to `validate_contiguity()`.
+    /// This is diagnostic instrumentation for Phase 37 gap analysis.
+    ///
+    /// # Returns
+    ///
+    /// Total validation time in milliseconds (converted from nanoseconds).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // Perform observations with cluster info
+    /// detector.observe_with_cluster(1, 1, 1024, 4096);
+    /// detector.observe_with_cluster(2, 1, 5120, 4096);
+    ///
+    /// // Validate contiguity multiple times
+    /// let _ = detector.validate_contiguity();
+    /// let _ = detector.validate_contiguity();
+    ///
+    /// // Get accumulated timing
+    /// let validation_ms = detector.time_contiguity_validation_ms();
+    /// ```
+    #[inline]
+    pub fn time_contiguity_validation_ms(&self) -> f64 {
+        self.time_contiguity_validation_ns as f64 / 1_000_000.0
     }
 
     /// Check if sequential read path should be used.
@@ -855,8 +942,13 @@ impl LinearDetector {
     /// assert!(!detector.should_use_sequential_read());
     /// ```
     #[inline]
-    pub fn should_use_sequential_read(&self) -> bool {
-        self.is_linear_confirmed() && self.validate_contiguity()
+    pub fn should_use_sequential_read(&mut self) -> bool {
+        self.is_linear_confirmed() && {
+            let start = Instant::now();
+            let result = are_clusters_contiguous(&self.cluster_offsets);
+            self.time_contiguity_validation_ns += start.elapsed().as_nanos() as u64;
+            result
+        }
     }
 }
 
@@ -1317,7 +1409,7 @@ mod tests {
 
     #[test]
     fn test_validate_contiguity_empty_returns_false() {
-        let detector = LinearDetector::new();
+        let mut detector = LinearDetector::new();
         assert!(!detector.validate_contiguity());
     }
 
