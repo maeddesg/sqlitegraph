@@ -143,6 +143,8 @@ enum DetectorState {
 /// - **consecutive_linear**: Count of consecutive degree-1 steps observed
 /// - **threshold**: Number of consecutive degree-1 steps required to confirm Linear (default: 3)
 /// - **cluster_offsets**: History of (cluster_offset, cluster_size) tuples observed during traversal
+/// - **chains_detected**: Number of chains detected during traversal (Phase 33)
+/// - **total_chain_length**: Cumulative length of all detected chains (Phase 33)
 ///
 /// # Cluster Offset Tracking (Phase 33)
 ///
@@ -182,6 +184,10 @@ pub struct LinearDetector {
     threshold: u32,
     /// Cluster offset history: (offset, size) tuples for contiguity validation
     cluster_offsets: Vec<(u64, u32)>,
+    /// Number of chains detected during traversal (Phase 33)
+    chains_detected: u64,
+    /// Cumulative length of all detected chains (Phase 33)
+    total_chain_length: u64,
 }
 
 impl LinearDetector {
@@ -206,6 +212,8 @@ impl LinearDetector {
             consecutive_linear: 0,
             threshold: 3,
             cluster_offsets: Vec::new(),
+            chains_detected: 0,
+            total_chain_length: 0,
         }
     }
 
@@ -234,6 +242,8 @@ impl LinearDetector {
             consecutive_linear: 0,
             threshold,
             cluster_offsets: Vec::new(),
+            chains_detected: 0,
+            total_chain_length: 0,
         }
     }
 
