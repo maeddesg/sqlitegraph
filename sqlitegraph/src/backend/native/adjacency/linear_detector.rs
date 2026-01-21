@@ -1705,4 +1705,158 @@ mod tests {
         assert!(!detector.is_linear_confirmed());
         assert!(!detector.should_use_sequential_read());
     }
+
+    // Phase 33 Plan 05: Integration tests for graph patterns
+
+    #[test]
+    fn test_chain_detection_on_linear_graph() {
+        let mut detector = LinearDetector::new();
+
+        // Simulate linear chain of 100 nodes with contiguous cluster storage
+        // Each cluster is 4096 bytes (4KB), starting at offset 0
+        let cluster_size = 4096u64;
+        let mut current_offset = 0u64;
+
+        for node_id in 1..=100 {
+            detector.observe_with_cluster(node_id, 1, current_offset, cluster_size as u32);
+            current_offset += cluster_size;
+        }
+
+        // After 100 linear nodes with contiguous clusters, should use sequential read
+        assert!(detector.is_linear_confirmed());
+        assert!(detector.validate_contiguity());
+        assert!(detector.should_use_sequential_read());
+
+        // Verify all 100 cluster offsets were recorded
+        assert_eq!(detector.cluster_offsets().len(), 100);
+
+        // Verify first and last offsets
+        assert_eq!(detector.cluster_offsets()[0], (0, 4096));
+        assert_eq!(
+            detector.cluster_offsets()[99],
+            (99 * 4096, 4096)
+        );
+    }
+
+    #[test]
+    fn test_no_false_positive_on_tree() {
+        let mut detector = LinearDetector::new();
+
+        // Simulate a binary tree with 31 nodes (depth 4)
+        // Structure: level 0 has 1 node (root), level 1 has 2 nodes, etc.
+        // In a BFS traversal, degrees vary:
+        // - Root (node 1): degree 2 (has 2 children)
+        // - Internal nodes: degree 3 (1 parent + 2 children, except leaves)
+        // - Leaf nodes: degree 1 (only parent)
+
+        // Node 1: root with degree 2 (branches immediately)
+        detector.observe_with_cluster(1, 2, 0, 4096);
+
+        // Already in Branching state - should NOT use sequential read
+        assert!(!detector.is_linear_confirmed());
+        assert!(!detector.should_use_sequential_read());
+
+        // Even if we observe more nodes (simulating traversal continues)
+        detector.observe_with_cluster(2, 3, 4096, 4096);
+        detector.observe_with_cluster(3, 3, 8192, 4096);
+        detector.observe_with_cluster(4, 1, 12288, 4096);
+
+        // Still NOT linear - tree pattern detected
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Branching);
+        assert!(!detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_no_false_positive_on_diamond() {
+        let mut detector = LinearDetector::new();
+
+        // Diamond pattern: A -> B, C; B, C -> D
+        // Node sequence: A(1), B(2), C(2), D(2)
+        // Degrees shown in parentheses
+
+        // Node A: degree 2 (branches to B and C)
+        detector.observe_with_cluster(1, 2, 0, 4096);
+
+        // Immediately in Branching state
+        assert_eq!(detector.current_pattern(), TraversalPattern::Branching);
+        assert!(!detector.is_linear_confirmed());
+        assert!(!detector.should_use_sequential_read());
+
+        // Continue traversal through B, C, D
+        // Even if clusters happen to be contiguous, pattern is NOT linear
+        detector.observe_with_cluster(2, 2, 4096, 4096); // Node B
+        detector.observe_with_cluster(3, 2, 8192, 4096); // Node C
+        detector.observe_with_cluster(4, 2, 12288, 4096); // Node D
+
+        // Diamond pattern correctly detected as non-linear
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Branching);
+        assert!(!detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_mixed_pattern_detection() {
+        let mut detector = LinearDetector::new();
+
+        // Create graph with 5 linear nodes then branch
+        // Nodes 1-5: degree 1 (linear prefix)
+        // Node 6: degree 2 (branching point)
+
+        // Linear prefix: nodes 1-5 with contiguous clusters
+        for i in 1..=5 {
+            let offset = ((i - 1) * 4096) as u64;
+            detector.observe_with_cluster(i, 1, offset, 4096);
+        }
+
+        // After 5 linear nodes, should be confirmed
+        assert!(detector.is_linear_confirmed());
+        assert!(detector.validate_contiguity());
+        assert!(detector.should_use_sequential_read());
+
+        // Node 6: branching starts (degree 2)
+        detector.observe_with_cluster(6, 2, 5 * 4096, 4096);
+
+        // After branching, should NOT use sequential read
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Branching);
+        assert!(!detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_non_contiguous_linear_chain() {
+        let mut detector = LinearDetector::new();
+
+        // Create linear chain where clusters are NOT contiguous
+        // All nodes have degree 1 (linear pattern)
+        // But clusters have gaps between them
+
+        // Node 1: offset 0
+        detector.observe_with_cluster(1, 1, 0, 4096);
+
+        // Node 2: offset 4096 (contiguous so far)
+        detector.observe_with_cluster(2, 1, 4096, 4096);
+
+        // Node 3: offset 8192 (contiguous so far)
+        detector.observe_with_cluster(3, 1, 8192, 4096);
+
+        // Linear pattern confirmed (3+ degree-1 nodes)
+        assert!(detector.is_linear_confirmed());
+
+        // But clusters ARE contiguous so far
+        assert!(detector.validate_contiguity());
+
+        // Node 4: offset 20000 (GAP! should be 12280)
+        // This breaks contiguity
+        detector.observe_with_cluster(4, 1, 20000, 4096);
+
+        // Linear pattern still confirmed (all degree 1)
+        assert!(detector.is_linear_confirmed());
+
+        // But clusters are NOT contiguous due to gap
+        assert!(!detector.validate_contiguity());
+
+        // Therefore, should NOT use sequential read
+        assert!(!detector.should_use_sequential_read());
+    }
 }
