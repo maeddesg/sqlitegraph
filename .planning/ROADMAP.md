@@ -252,15 +252,15 @@ Plans:
 - Unit tests for buffer correctness (hit/miss, eviction, bounds)
 
 Plans:
-- [ ] 30-01-PLAN.md — Implement NodeStore::read_slots_batch() method
-- [ ] 30-02-PLAN.md — Create SequentialReadBuffer module with prefetch logic
-- [ ] 30-03-PLAN.md — Add unit tests for batch reading and buffer correctness
+- [x] 30-01-PLAN.md — Implement NodeStore::read_slots_batch() method
+- [x] 30-02-PLAN.md — Create SequentialReadBuffer module with prefetch logic
+- [x] 30-03-PLAN.md — Add unit tests for batch reading and buffer correctness
 
 ### Phase 31: Traversal Integration
 **Goal:** Sequential I/O optimization integrated into all traversal hot paths
 **Depends on**: Phase 30
 **Requirements:** IO-07, IO-08, IO-09, IO-10, IO-11
-**Plans**: TBD
+**Plans:** 3 plans in 2 waves
 
 **Success Criteria:**
 1. TraversalContext keeps decoded slots alive across hops (buffer check before cache miss)
@@ -274,6 +274,11 @@ Plans:
 - `get_neighbors_optimized()` with L1 (buffer) -> L2 (cache) -> L3 (storage) hierarchy
 - Updated BFS, k-hop, shortest path implementations
 - MVCC isolation tests (no cross-traversal staleness)
+
+Plans:
+- [ ] 31-01-PLAN.md — Create TraversalContext and get_neighbors_optimized()
+- [ ] 31-02-PLAN.md — Integrate into BFS variants (scalar, pointer-table, fully-optimized)
+- [ ] 31-03-PLAN.md — Integrate into k-hop, shortest path, and chain query functions
 
 ### Phase 32: Validation and Tuning
 **Goal:** Sequential I/O optimization reduces chain traversal gap from 11x to <=3x
@@ -333,8 +338,8 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 28 → 29 → 30 → 
 | 27. K-Hop Traversal Cache | v1.3 | 4/4 | Complete | 2026-01-21 |
 | 28. Performance Validation | v1.3 | 4/4 | Complete | 2026-01-21 |
 | 29. Linear Pattern Detection | v1.4 | 3/3 | Complete | 2026-01-21 |
-| 30. Sequential Slot Reading | v1.4 | 0/3 | Pending | — |
-| 31. Traversal Integration | v1.4 | 0/5 | Pending | — |
+| 30. Sequential Slot Reading | v1.4 | 3/3 | Complete | 2026-01-21 |
+| 31. Traversal Integration | v1.4 | 0/3 | Pending | — |
 | 32. Validation and Tuning | v1.4 | 0/2 | Pending | — |
 
-**Overall Progress:** 95/95 v1.3 plans complete (100%). v1.4: 3/13 plans complete (23%).
+**Overall Progress:** 100/103 plans complete (97.1%). v1.4: 9/13 plans complete (69.2%).
