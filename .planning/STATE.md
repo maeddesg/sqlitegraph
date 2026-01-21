@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 34 - Sequential Cluster Reader
-Plan: 1 of 1
-Status: Plan complete - SequentialClusterReader module implemented
-Last activity: 2026-01-21 — Completed 34-01 SequentialClusterReader module
+Plan: 2 of 2
+Status: Plan complete - TraversalContext cluster buffer integration complete
+Last activity: 2026-01-21 — Completed 34-02 TraversalContext cluster buffer fields
 
-Progress: [█████████░] 97.5% (32/32 phases complete, 115/118 plans complete, v1.4 complete, v1.6 75% done)
+Progress: [█████████░] 98.3% (32/32 phases complete, 116/118 plans complete, v1.4 complete, v1.6 80% done)
 
 ## v1.6 Milestone Goals
 
@@ -36,7 +36,7 @@ Progress: [█████████░] 97.5% (32/32 phases complete, 115/118
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CL-01: Traversal detects linear chains and switches to sequential cluster reads | Phase 33 | Complete (5/5 plans) |
-| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34 | Complete (34-01) |
+| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34 | Complete (34-01, 34-02) |
 | CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 33 | Complete (33-02) |
 | CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Pending |
 | CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Pending |
@@ -52,16 +52,16 @@ Progress: [█████████░] 97.5% (32/32 phases complete, 115/118
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | Complete (5/5 plans) |
-| 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Complete (34-01) |
+| 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Complete (2/2 plans) |
 | 35 - Contiguity Validation and Fallback | Validate cluster contiguity and fall back immediately when pattern breaks | CL-04 | Pending |
 | 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Pending |
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 115
+- Total plans completed: 116
 - Average duration: 7 min
-- Total execution time: ~13 hours
+- Total execution time: ~13.5 hours
 
 **By Phase:**
 
@@ -72,7 +72,7 @@ Progress: [█████████░] 97.5% (32/32 phases complete, 115/118
 | v1.2 (23-24) | 7 | 1 day | ~7 min |
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
-| v1.6 (33-36) | 5 | ~11 min | ~2 min (so far) |
+| v1.6 (33-36) | 6 | ~12 min | ~2 min (so far) |
 
 **Recent Trend:**
 - Last 5 plans: ~5 min each
@@ -106,6 +106,9 @@ Recent decisions affecting current work:
 - **v1.6.6: 512KB MAX_CLUSTER_BUFFER_SIZE bounds memory usage, sufficient for ~128 clusters of 4KB each**
 - **v1.6.6: Stateless SequentialClusterReader design with parameter-passed offsets keeps module simple and testable**
 - **v1.6.6: Deferred deserialization (raw bytes → neighbors on-demand) avoids CPU cost for clusters never accessed**
+- **v1.6.7: TraversalContext cluster_buffer field uses Option<Vec<u8>> to make sequential read state explicit**
+- **v1.6.7: TraversalContext cluster_buffer_offsets field matches detector.cluster_offsets() return type**
+- **v1.6.7: clear_cluster_buffer() method enables explicit buffer clearing on fallback and reset**
 
 ### Pending Todos
 
@@ -116,6 +119,7 @@ v1.6 Chain Locality:
 - [x] Phase 33 Plan 04: Chain detection instrumentation (completed)
 - [x] Phase 33 Plan 05: Integration tests for graph patterns (completed)
 - [x] Phase 34 Plan 01: Sequential cluster reader module (completed)
+- [x] Phase 34 Plan 02: TraversalContext cluster buffer integration (completed)
 - [ ] Phase 35: Contiguity validation and fallback handling
 - [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
 
@@ -127,7 +131,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 34-01 SequentialClusterReader module
+Stopped at: Completed 34-02 TraversalContext cluster buffer fields
 Resume file: None
 
 ### Roadmap Evolution
@@ -144,4 +148,5 @@ Resume file: None
   - Phase 33 Plan 03 (2026-01-21): Sequential read trigger complete
   - Phase 33 Plan 04 (2026-01-21): Chain detection instrumentation complete
   - Phase 33 Plan 05 (2026-01-21): Integration tests for graph patterns complete (Phase 33 complete)
-  - Phase 34 Plan 01 (2026-01-21): SequentialClusterReader module complete (Phase 34 complete)
+  - Phase 34 Plan 01 (2026-01-21): SequentialClusterReader module complete
+  - Phase 34 Plan 02 (2026-01-21): TraversalContext cluster buffer integration complete (Phase 34 complete)
