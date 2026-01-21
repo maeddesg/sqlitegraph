@@ -128,34 +128,44 @@ fn test_chain_traversal_regression_eliminated() {
 
 /// Load Criterion benchmark results from target/criterion directory
 fn load_criterion_results() -> Result<Vec<BenchRun>, String> {
+    // CARGO_MANIFEST_DIR points to the crate directory (sqlitegraph/)
+    // But Criterion output goes to workspace-root/target/criterion
+    // Need to go up one level to reach workspace root
     let criterion_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("criterion");
+        .join("../target/criterion");
 
     let mut results = Vec::new();
 
     // Load bfs_chain/native/100
-    if let Ok(value) = load_estimate_json(&criterion_dir.join("bfs_chain/native/100/new/estimates.json")) {
-        let mean_ns = extract_point_estimate(&value)?;
-        results.push(BenchRun {
-            name: "bfs_chain/native/100".to_string(),
-            mean_ns,
-            samples: 20, // Criterion default
-        });
-    } else {
-        return Err("Missing bfs_chain/native/100 estimates.json. Run: cargo bench --bench bfs".into());
+    let path_100 = criterion_dir.join("bfs_chain/native/100/new/estimates.json");
+    match load_estimate_json(&path_100) {
+        Ok(value) => {
+            let mean_ns = extract_point_estimate(&value)?;
+            results.push(BenchRun {
+                name: "bfs_chain/native/100".to_string(),
+                mean_ns,
+                samples: 20, // Criterion default
+            });
+        }
+        Err(e) => {
+            return Err(format!("Failed to load {}: {}. Run: cargo bench --bench bfs", path_100.display(), e));
+        }
     }
 
     // Load bfs_chain/native/500
-    if let Ok(value) = load_estimate_json(&criterion_dir.join("bfs_chain/native/500/new/estimates.json")) {
-        let mean_ns = extract_point_estimate(&value)?;
-        results.push(BenchRun {
-            name: "bfs_chain/native/500".to_string(),
-            mean_ns,
-            samples: 20, // Criterion default
-        });
-    } else {
-        return Err("Missing bfs_chain/native/500 estimates.json. Run: cargo bench --bench bfs".into());
+    let path_500 = criterion_dir.join("bfs_chain/native/500/new/estimates.json");
+    match load_estimate_json(&path_500) {
+        Ok(value) => {
+            let mean_ns = extract_point_estimate(&value)?;
+            results.push(BenchRun {
+                name: "bfs_chain/native/500".to_string(),
+                mean_ns,
+                samples: 20, // Criterion default
+            });
+        }
+        Err(e) => {
+            return Err(format!("Failed to load {}: {}. Run: cargo bench --bench bfs", path_500.display(), e));
+        }
     }
 
     Ok(results)
