@@ -167,3 +167,59 @@ fn test_bfs_cache_evaporates() {
 
     // All BFS calls produce correct results, proving cache doesn't cause cross-call pollution
 }
+
+#[test]
+fn test_bfs_cache_cycles() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create diamond + cycle graph: 1->2, 1->3, 2->4, 3->4, 4->2
+    for i in 1..=4 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Diamond edges: 1->2, 1->3, 2->4, 3->4
+    let edges = [(1, 2), (1, 3), (2, 4), (3, 4)];
+    for (i, (from, to)) in edges.iter().enumerate() {
+        let edge = EdgeRecord::new(
+            i as NativeNodeId + 1,
+            *from,
+            *to,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // Cycle edge: 4->2
+    let cycle_edge = EdgeRecord::new(
+        5,
+        4,
+        2,
+        "test".to_string(),
+        serde_json::json!({}),
+    );
+    let mut edge_store = EdgeStore::new(&mut graph_file);
+    edge_store.write_edge(&cycle_edge).unwrap();
+
+    // BFS from node 1, depth 3
+    let result = native_bfs(&mut graph_file, 1, 3).unwrap();
+
+    // Should find nodes 2, 3, 4 (node 4 discovered twice but visited once)
+    assert!(result.contains(&2), "Should contain node 2");
+    assert!(result.contains(&3), "Should contain node 3");
+    assert!(result.contains(&4), "Should contain node 4");
+
+    // Node 4 should appear only once in result (BFS deduplication via visited set)
+    let count_4 = result.iter().filter(|&&n| n == 4).count();
+    assert_eq!(count_4, 1, "Node 4 should appear exactly once despite two paths");
+}
