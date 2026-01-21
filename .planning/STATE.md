@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 36 - IO-12 Validation
-Plan: 02 (complete)
-Status: Next phase - Performance validation and final milestone completion
-Last activity: 2026-01-21 — Completed Phase 36 Plan 02: MVCC isolation tests for sequential cluster reads
+Plan: 04 (documentation update)
+Status: Phase 36 complete - IO-12 target NOT achieved, gap analysis needed
+Last activity: 2026-01-21 — Completed Phase 36 Plan 03: Performance validation
 
-Progress: [████████░] 99.2% (35/36 phases planned, 127/127 plans complete, v1.4 complete, v1.6 75% done)
+Progress: [██████████] 100% (36/36 phases planned, 129/129 plans complete, v1.4 complete, v1.6 complete)
 
 ## v1.6 Milestone Goals
 
@@ -31,6 +31,15 @@ Progress: [████████░] 99.2% (35/36 phases planned, 127/127 pla
 
 **Target:** IO-12 — Chain(500) <=75ms (3x SQLite)
 
+**Actual Result:** Chain(500) = 231.12ms (NOT achieved, 3.08x over target)
+**Gap:** 156.12ms remaining
+**Speedup:** 1.07x vs baseline (248.68ms -> 231.12ms, expected 3.3x)
+
+**Root Cause Analysis (from 36-03):**
+- Sequential cluster reader implemented but not achieving expected speedup
+- Possible bottlenecks: I/O count, CPU time, LinearDetector not confirming, SequentialClusterReader not engaging
+- Next: Profile Chain(500) to identify bottleneck
+
 ## v1.6 Requirements Coverage
 
 | Requirement | Phase | Status |
@@ -39,9 +48,9 @@ Progress: [████████░] 99.2% (35/36 phases planned, 127/127 pla
 | CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34-35 | Complete (34-01/02/03, 35-01/02/03/04) |
 | CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 33 | Complete (33-02) |
 | CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Complete (35-01/02/03/04) |
-| CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Complete (36-02) |
+| CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Complete (36-01/02/03/04) |
 
-**Coverage: 5/5 requirements complete (100%), v1.6 Chain Locality milestone complete**
+**Coverage: 5/5 requirements complete (100%)**
 
 ## v1.6 Roadmap Summary
 
@@ -54,7 +63,7 @@ Progress: [████████░] 99.2% (35/36 phases planned, 127/127 pla
 | 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | Complete (5/5 plans) |
 | 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 (partial, with Phase 35 split) | Complete (3/3 plans) |
 | 35 - Neighbor Extraction and Fallback | Extract neighbors from cluster_buffer and fall back immediately when pattern breaks | CL-02 (completion), CL-04 | Complete (4/4 plans) |
-| 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Complete (36-01/02) |
+| 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Complete (36-01/02/03/04) |
 
 ## Performance Metrics
 
@@ -124,6 +133,12 @@ Recent decisions affecting current work:
 - **v1.6.11: Immediate fallback on Branching triggers clear_cluster_buffer() (Phase 35-03)**
 - **v1.6.12: MVCC isolation testing pattern - scoped blocks to force context drop, assert fresh state (Phase 36-02)**
 - **v1.6.12: Per-field isolation testing - cluster_buffer, cluster_buffer_offsets, node_cluster_index independently validated (Phase 36-02)**
+- **v1.6.13: IO-12 target NOT achieved - Chain(500) = 231.12ms, only 1.07x speedup vs 248.68ms baseline (expected 3.3x for 75ms target)**
+- **v1.6.13: Sequential cluster reads not providing expected improvement - gap closure requires profiling to identify bottleneck (I/O vs CPU)**
+- **v1.6: Chain Locality milestone complete** - All 4 phases executed, MVCC isolation confirmed (CL-05 satisfied)
+- **v1.6: IO-12 target NOT achieved** - Chain(500) = 231.12ms vs 75ms target (3.08x gap)
+- **v1.6: Sequential cluster reader implemented** - Infrastructure in place but not achieving expected 3.3x speedup
+- **v1.6: Next action required** - Profile Chain(500) to identify bottleneck before gap closure
 
 ### Pending Todos
 
@@ -142,7 +157,15 @@ v1.6 Chain Locality:
 - [x] Phase 35 Plan 04: Integration tests for extraction and fallback (completed)
 - [x] Phase 36 Plan 01: IO-12 validation benchmark suite (completed)
 - [x] Phase 36 Plan 02: MVCC isolation tests (completed)
-- [ ] Phase 36: Run benchmarks and verify Chain(500) <=75ms target
+- [x] Phase 36 Plan 03: Performance validation (completed - IO-12 NOT achieved, gap closure required)
+- [x] Phase 36 Plan 04: Documentation update (completed)
+
+Next actions:
+- [ ] Profile Chain(500) to identify bottleneck (I/O count vs CPU time)
+- [ ] Verify LinearDetector confirms chain pattern
+- [ ] Verify SequentialClusterReader is engaged during traversal
+- [ ] Verify cluster_buffer is populated during traversal
+- [ ] Consider alternative optimizations if sequential reads insufficient
 
 ### Blockers/Concerns
 
@@ -152,7 +175,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 36 Plan 02: MVCC isolation tests for sequential cluster reads
+Stopped at: Completed Phase 36 Plan 03: Performance validation - IO-12 NOT achieved (Chain(500) = 231.12ms, target: 75ms, gap: 156ms)
 Resume file: None
 
 ### Roadmap Evolution
@@ -177,6 +200,8 @@ Resume file: None
   - Phase 35 Plan 03 (2026-01-21): Traversal helper and unit tests complete
   - Phase 35 Plan 04 (2026-01-21): Integration tests for extraction and fallback complete (Phase 35 complete)
   - Phase 36 Plan 01 (2026-01-21): IO-12 validation benchmark suite complete
-  - Phase 36 Plan 02 (2026-01-21): MVCC isolation tests complete (Phase 36 complete, v1.6 milestone complete)
+  - Phase 36 Plan 02 (2026-01-21): MVCC isolation tests complete
+  - Phase 36 Plan 03 (2026-01-21): Performance validation complete - IO-12 NOT achieved (Chain(500) = 231.12ms, target: 75ms, gap: 156ms)
+  - Phase 36 Plan 04 (2026-01-21): Documentation update complete (Phase 36 complete, v1.6 milestone complete, gap identified)
 
 *Updated after each plan completion*

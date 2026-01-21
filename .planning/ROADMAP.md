@@ -16,14 +16,15 @@ None — No specialized domain expertise directories available. Relying on codeb
 - **v1.2 Benchmark Infrastructure** — Phases 23-24 (shipped 2026-01-21) → [Archive](milestones/v1.2-ROADMAP.md)
 - **v1.3 Chain Traversal Performance** — Phases 25-28 (shipped 2026-01-21)
 - **v1.4 Sequential I/O Optimization** — Phases 29-32 (shipped 2026-01-21)
-- **v1.6 Chain Locality** — Phases 33-36 (current)
+- **v1.6 Chain Locality** — Phases 33-36 (shipped 2026-01-21)
+- **v1.7 Gap Closure** — Phase 37 (current)
 
 ---
 
 ## Phases
 
 <details>
-<summary>v0.2-v1.4 Archive</summary>
+<summary>v0.2-v1.6 Archive</summary>
 
 See milestone archives for complete history.
 - v0.2 Foundation: Phases 1-7
@@ -32,14 +33,21 @@ See milestone archives for complete history.
 - v1.2 Benchmark Infrastructure: Phases 23-24
 - v1.3 Chain Traversal Performance: Phases 25-28
 - v1.4 Sequential I/O Optimization: Phases 29-32
+- v1.6 Chain Locality: Phases 33-36
 
 </details>
 
 ---
 
-## v1.6 Chain Locality (Phases 33-36)
+## v1.6 Chain Locality (Phases 33-36) - COMPLETE
 
 **Milestone Goal:** Achieve IO-12 target (Chain(500) <=75ms, 3x SQLite) through traversal-time sequential cluster reads.
+
+**Status:** COMPLETE (2026-01-21)
+- IO-12 Target: NOT ACHIEVED (Chain(500) = 231.12ms vs 75ms target, 3.08x gap)
+- MVCC Isolation: CONFIRMED (15/15 tests passed)
+- Requirements: 5/5 satisfied
+- Next: Gap closure via Phase 37
 
 **Background:** v1.4 achieved linear pattern detection and sequential slot reading. However, edge clusters for sequential chains are stored non-contiguously in the global cluster pool. The IO-12 target (9.96x gap) remains unmet because prefetching non-contiguous clusters is still random I/O.
 
@@ -52,25 +60,6 @@ See milestone archives for complete history.
 **Depends on**: Phase 32 (v1.4 complete)
 **Requirements:** CL-01 ✓ SATISFIED, CL-03 ✓ SATISFIED
 **Plans:** 5/5 complete (extend LinearDetector with cluster offset tracking, contiguity validation, sequential read trigger, instrumentation, integration tests)
-
-**Success Criteria:**
-1. LinearDetector tracks cluster offsets during traversal to identify potential chains
-2. After confirming degree <= 1 pattern for N consecutive nodes, traversal triggers sequential read path
-3. Detection threshold (N) is configurable and validated against false positives on trees
-4. Chain detection instrumentation reports chains found and average chain length
-5. **LinearDetector validates cluster contiguity before committing to sequential read path** (CL-03)
-
-**Key deliverables:**
-- Extended LinearDetector with cluster offset tracking
-- Chain confirmation logic (degree <= 1 validation)
-- Cluster contiguity validation (are_clusters_contiguous(), validate_contiguity())
-- Configurable detection threshold
-- Unit tests for chain detection on various graph patterns
-
-**Avoids:**
-- Write-time detection (detects at traversal time only)
-- False positives on tree structures
-- Committing to chain layout before validation
 
 **Plans:**
 - [x] 33-01-PLAN.md — Cluster offset tracking in LinearDetector
@@ -85,26 +74,6 @@ See milestone archives for complete history.
 **Requirements:** CL-02 (with Phase 35 split)
 **Plans:** 3/3 complete
 
-**Success Criteria:**
-1. SequentialClusterReader reads all edge clusters for a confirmed chain in single I/O
-2. Buffered clusters are stored in traversal-scoped memory (evaporates on return)
-3. ~~Neighbor extraction from buffered clusters matches existing get_neighbors() semantics~~ (deferred to Phase 35)
-4. Memory overhead is bounded and documented
-
-**Scope Note:** Phase 34-35 together deliver the full sequential cluster reader capability. Phase 34 implements the read trigger and buffer storage. Phase 35 adds neighbor extraction from buffer with proper node_id -> cluster_index mapping.
-
-**Key deliverables:**
-- SequentialClusterReader struct with read_chain_clusters() method
-- Cluster buffer allocation and management in TraversalContext
-- Sequential read trigger in get_neighbors_optimized()
-- ~~Neighbor extraction from buffered clusters~~ (deferred to Phase 35)
-- Unit tests for cluster reading and buffer storage
-
-**Avoids:**
-- Persistent cluster caching (traversal-scoped only)
-- Cross-traversal pollution
-- Unbounded memory growth
-
 **Plans:**
 - [x] 34-01-PLAN.md — Create SequentialClusterReader module with read_chain_clusters() method
 - [x] 34-02-PLAN.md — Add cluster buffer fields to TraversalContext
@@ -114,27 +83,7 @@ See milestone archives for complete history.
 **Goal:** Extract neighbors from cluster buffer and fall back immediately when pattern breaks
 **Depends on**: Phase 34
 **Requirements:** CL-02 (completion), CL-04
-**Plans:** 4 plans
-
-**Success Criteria:**
-1. Neighbors are extracted from cluster_buffer using node_id -> cluster_index mapping
-2. ~~LinearDetector validates cluster contiguity before committing to sequential read path~~ (completed in Phase 33)
-3. When clusters are not contiguous, traversal falls back immediately to standard path
-4. Fallback happens within the same traversal (no restart required)
-5. Pattern breaks (degree > 1, branching) trigger immediate fallback
-
-**Key deliverables:**
-- Node_id -> cluster_index mapping in TraversalContext
-- Neighbor extraction from cluster_buffer in get_neighbors_optimized()
-- ~~Cluster contiguity validation logic~~ (completed in Phase 33)
-- Fallback path integration
-- Unit tests for neighbor extraction and non-contiguous cluster handling
-- Integration tests for tree/diamond graph patterns
-
-**Avoids:**
-- Using sequential path on non-contiguous clusters
-- Performance degradation from false positive chain detection
-- Complex fallback state machines
+**Plans:** 4/4 complete
 
 **Plans:**
 - [x] 35-01-PLAN.md — Add node_cluster_index field to TraversalContext
@@ -146,37 +95,60 @@ See milestone archives for complete history.
 **Goal:** MVCC isolation preserved and IO-12 target achieved
 **Depends on**: Phase 35
 **Requirements:** CL-05
-**Plans:** 4 plans
+**Plans:** 4/4 complete
+**Status:** Complete (2026-01-21) - IO-12 target NOT achieved
 
-**Success Criteria:**
-1. Chain(500) traversal achieves <=75ms (3x SQLite baseline of ~22ms)
-2. MVCC snapshot isolation preserved (no cross-traversal staleness)
-3. Star and random graph traversals do not regress (within 10% of v1.4 baseline)
-4. Chain optimization metrics available for instrumentation
-
-**Key deliverables:**
-- Performance benchmarks (chain, star, random) with cold/warm numbers
-- MVCC isolation tests for sequential cluster reads
-- Updated documentation with expected speedups
-- Instrumentation metrics for chain optimization
-
-**Avoids:**
-- Regressing non-chain graph performance
-- Breaking MVCC isolation guarantees
-- Hiding performance numbers
+**Actual Results:**
+- Chain(500): 231.12ms (target: <=75ms)
+- MVCC isolation: 15/15 tests passed
+- Star/Random: No regression detected
 
 **Plans:**
-- [ ] 36-01-PLAN.md — Create Criterion benchmark suite for IO-12 validation
-- [ ] 36-02-PLAN.md — Validate MVCC isolation for sequential cluster reads
-- [ ] 36-03-PLAN.md — Run benchmarks and document IO-12 status
-- [ ] 36-04-PLAN.md — Update documentation with Phase 36 completion
+- [x] 36-01-PLAN.md — Create Criterion benchmark suite for IO-12 validation
+- [x] 36-02-PLAN.md — Validate MVCC isolation for sequential cluster reads
+- [x] 36-03-PLAN.md — Run benchmarks and document IO-12 status
+- [x] 36-04-PLAN.md — Update documentation with Phase 36 completion
+
+---
+
+## v1.7 Gap Closure (Phase 37) - IN PLANNING
+
+**Milestone Goal:** Close the 156.12ms gap to achieve IO-12 target (Chain(500) <=75ms)
+
+**Status:** IN PLANNING (2026-01-21)
+- Gap: 156.12ms remaining (231.12ms actual vs 75ms target)
+- Speedup achieved: 1.07x vs baseline (expected 3.3x)
+- Root cause: Unknown (requires profiling)
+
+**Approach:** Diagnostic investigation first, then surgical optimization:
+1. Add internal instrumentation to LinearDetector, SequentialClusterReader, TraversalContext
+2. Run external profiling (perf flamegraphs, strace I/O tracing)
+3. Create microbenchmark suite to isolate component costs
+4. Analyze telemetry to identify root cause (I/O vs CPU vs fragmentation)
+5. Implement surgical optimization based on diagnosis
+6. Verify no regressions (write cost, memory, concurrency)
+
+**Success Criteria:**
+- Chain(500) <= 75ms (IO-12 target achieved)
+- Write-path cost increase <= +5%
+- Memory overhead <= +5%
+- No new lock contention
+- Star/Random traversals within 10% of v1.6 baseline
+
+**Plans:**
+- [ ] 37-01-PLAN.md — Internal instrumentation (LinearDetector, SequentialClusterReader, TraversalContext telemetry)
+- [ ] 37-02-PLAN.md — External profiling scripts (perf flamegraphs, strace I/O tracing)
+- [ ] 37-03-PLAN.md — Microbenchmark suite (cluster population, LinearDetector overhead, fragmentation)
+- [ ] 37-04-PLAN.md — Root cause analysis (run Chain(500) with instrumentation, interpret data, generate diagnosis)
+- [ ] 37-05-PLAN.md — Surgical optimization (write-time allocation OR cluster compaction based on diagnosis)
+- [ ] 37-06-PLAN.md — Regression testing (write cost, memory, concurrency, non-chain patterns)
 
 ---
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36
+Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -184,6 +156,7 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 33. Traversal-Time Chain Detection | v1.6 | 5/5 | Complete | 2026-01-21 |
 | 34. Sequential Cluster Reader | v1.6 | 3/3 | Complete | 2026-01-21 |
 | 35. Neighbor Extraction and Fallback | v1.6 | 4/4 | Complete | 2026-01-21 |
-| 36. IO-12 Validation | v1.6 | 0/4 | Not Started | — |
+| 36. IO-12 Validation | v1.6 | 4/4 | Complete | 2026-01-21 |
+| 37. Gap Analysis and Closure | v1.7 | 0/6 | In Planning | - |
 
-**Overall Progress:** 125/129 plans planned and executed. v1.6 in progress (3/4 phases complete, 1/4 not started).
+**Overall Progress:** 129/135 plans planned (129 complete, 6 planned). v1.4 complete, v1.6 complete, v1.7 in planning.
