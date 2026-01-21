@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 29 of 32 complete (2/4 plans)
+Phase: 29 of 32 complete (3/3 plans)
 Milestone: v1.4 Sequential I/O Optimization
 Status: In progress
-Last activity: 2026-01-21 — Completed Phase 29 Plan 02: Module Exports for LinearDetector
+Last activity: 2026-01-21 — Completed Phase 29: Linear Pattern Detection
 
-Progress: [█████████░] 91.0% (29/32 phases, 99/100 plans)
+Progress: [█████████░] 91.0% (29/32 phases, 98/100 plans)
 
 ## v1.4 Milestone Goals
 
@@ -44,7 +44,7 @@ Progress: [█████████░] 91.0% (29/32 phases, 99/100 plans)
 | v1.1 (11-22) | 42 | ~4 days | ~7 min |
 | v1.2 (23-24) | 7 | 1 day | ~7 min |
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
-| v1.4 (29-32) | 1 | ~3 min | ~3 min |
+| v1.4 (29-32) | 3 | ~10 min | ~3 min |
 
 **Recent Trend:**
 - Last 5 plans: ~6 min each
