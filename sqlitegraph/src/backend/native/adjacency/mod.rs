@@ -47,7 +47,7 @@ pub use helpers::AdjacencyHelpers;
 // iterator_impl provides Iterator trait implementation for AdjacencyIterator
 
 /// Direction for adjacency traversal
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
     Outgoing,
     Incoming,

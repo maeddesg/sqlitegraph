@@ -20,6 +20,7 @@
 //! - `pathfinding.rs`: Shortest path algorithms using BFS
 //! - `k_hop.rs`: K-hop neighbor exploration operations
 //! - `chain_queries.rs`: Chain traversal and pattern matching
+//! - `cache.rs`: Per-traversal adjacency cache for eliminating redundant I/O
 //! - `tests.rs`: Comprehensive test suite
 
 use super::graph_file::GraphFile;
@@ -28,6 +29,7 @@ use super::types::*;
 
 // Module declarations
 mod bfs_implementations;
+mod cache;
 mod chain_queries;
 mod k_hop;
 mod pathfinding;
@@ -35,6 +37,7 @@ mod strategy;
 
 // Re-export all public functionality
 pub use bfs_implementations::*;
+pub use cache::{TraversalCache, TraversalCacheStats, get_neighbors_cached};
 pub use chain_queries::*;
 pub use k_hop::*;
 pub use pathfinding::*;
