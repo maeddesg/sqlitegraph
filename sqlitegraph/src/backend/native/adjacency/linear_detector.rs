@@ -1195,4 +1195,146 @@ mod tests {
         assert_eq!(offsets.len(), 1);
         assert_eq!(offsets[0], (large_offset, large_size));
     }
+
+    // Phase 33: Contiguity validation tests
+
+    #[test]
+    fn test_are_clusters_contiguous_empty_returns_false() {
+        let offsets: &[(u64, u32)] = &[];
+        assert!(!are_clusters_contiguous(offsets));
+    }
+
+    #[test]
+    fn test_are_clusters_contiguous_single_returns_false() {
+        let offsets = [(1024, 4096)];
+        assert!(!are_clusters_contiguous(&offsets));
+    }
+
+    #[test]
+    fn test_are_clusters_contiguous_two_contiguous_returns_true() {
+        // 1024 + 4096 = 5120, so next cluster starts at 5120
+        let offsets = [(1024, 4096), (5120, 4096)];
+        assert!(are_clusters_contiguous(&offsets));
+    }
+
+    #[test]
+    fn test_are_clusters_contiguous_multiple_contiguous_returns_true() {
+        // 1024 + 4096 = 5120, 5120 + 4096 = 9216, 9216 + 4096 = 13312
+        let offsets = [(1024, 4096), (5120, 4096), (9216, 4096), (13312, 4096)];
+        assert!(are_clusters_contiguous(&offsets));
+    }
+
+    #[test]
+    fn test_are_clusters_contiguous_gap_returns_false() {
+        // Gap: 5120 + 4096 = 9216, but next is 10000 (gap of 784)
+        let offsets = [(1024, 4096), (5120, 4096), (10000, 4096)];
+        assert!(!are_clusters_contiguous(&offsets));
+    }
+
+    #[test]
+    fn test_are_clusters_contiguous_overlap_returns_false() {
+        // Overlap: 1024 + 4096 = 5120, but next is 4000 (overlap)
+        let offsets = [(1024, 4096), (4000, 4096)];
+        assert!(!are_clusters_contiguous(&offsets));
+    }
+
+    #[test]
+    fn test_are_clusters_contiguous_different_sizes() {
+        // 0 + 100 = 100, 100 + 200 = 300, 300 + 150 = 450
+        let offsets = [(0, 100), (100, 200), (300, 150)];
+        assert!(are_clusters_contiguous(&offsets));
+    }
+
+    #[test]
+    fn test_are_clusters_contiguous_non_contiguous_different_sizes() {
+        // Gap: 0 + 100 = 100, but next is 150 (gap of 50)
+        let offsets = [(0, 100), (150, 200)];
+        assert!(!are_clusters_contiguous(&offsets));
+    }
+
+    #[test]
+    fn test_validate_contiguity_empty_returns_false() {
+        let detector = LinearDetector::new();
+        assert!(!detector.validate_contiguity());
+    }
+
+    #[test]
+    fn test_validate_contiguity_single_cluster_returns_false() {
+        let mut detector = LinearDetector::new();
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        assert!(!detector.validate_contiguity());
+    }
+
+    #[test]
+    fn test_validate_contiguity_contiguous_returns_true() {
+        let mut detector = LinearDetector::new();
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        assert!(detector.validate_contiguity());
+    }
+
+    #[test]
+    fn test_validate_contiguity_gap_returns_false() {
+        let mut detector = LinearDetector::new();
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 10000, 4096); // Gap: should be 9216
+        assert!(!detector.validate_contiguity());
+    }
+
+    #[test]
+    fn test_validate_contiguity_overlap_returns_false() {
+        let mut detector = LinearDetector::new();
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 4000, 4096); // Overlap
+        assert!(!detector.validate_contiguity());
+    }
+
+    #[test]
+    fn test_validate_contiguity_after_reset_returns_false() {
+        let mut detector = LinearDetector::new();
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        assert!(detector.validate_contiguity());
+
+        detector.reset();
+        assert!(!detector.validate_contiguity());
+    }
+
+    #[test]
+    fn test_validate_contiguity_with_branching() {
+        let mut detector = LinearDetector::new();
+        // Linear pattern with contiguous clusters
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 9216, 4096);
+        assert!(detector.validate_contiguity());
+
+        // Branching doesn't affect contiguity of recorded offsets
+        detector.observe_with_cluster(4, 2, 13312, 8192);
+        assert!(detector.validate_contiguity());
+    }
+
+    #[test]
+    fn test_validate_contiguity_variable_sizes() {
+        let mut detector = LinearDetector::new();
+        // 0 + 100 = 100, 100 + 200 = 300, 300 + 150 = 450, 450 + 4000 = 4450
+        detector.observe_with_cluster(1, 1, 0, 100);
+        detector.observe_with_cluster(2, 1, 100, 200);
+        detector.observe_with_cluster(3, 1, 300, 150);
+        detector.observe_with_cluster(4, 1, 450, 4000);
+        assert!(detector.validate_contiguity());
+    }
+
+    #[test]
+    fn test_validate_contiguity_large_offsets() {
+        let mut detector = LinearDetector::new();
+        let large_offset: u64 = 4_000_000_000;
+        let large_size: u32 = 4096;
+        let next_offset = large_offset + large_size as u64;
+
+        detector.observe_with_cluster(1, 1, large_offset, large_size);
+        detector.observe_with_cluster(2, 1, next_offset, large_size);
+        assert!(detector.validate_contiguity());
+    }
 }
