@@ -1,6 +1,14 @@
 //! V2 Performance Benchmarks
 //!
-//! Comprehensive performance testing for SQLiteGraph V2 backend.
+//! # Baseline Performance (Phase 24, 2026-01-21)
+//!
+//! ## Chain Traversal Regression (to be fixed in v1.3)
+//! - Chain BFS (100 nodes): 15.379ms V2 vs 7.2433ms SQLite (2.1x slower)
+//! - Chain BFS (500 nodes): 266.50ms V2 vs 24.978ms SQLite (10.7x slower)
+//!
+//! Goal for v1.3: Bring chain traversal within 2x of SQLite baseline.
+//!
+//! # Comprehensive performance testing for SQLiteGraph V2 backend.
 //! Measures insertion throughput, neighbor queries, traversal performance,
 //! and file growth patterns under different graph topologies.
 
@@ -201,6 +209,9 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
 }
 
 /// Benchmark BFS traversal performance
+///
+/// NOTE: Baseline from Phase 24 shows 2-10x chain traversal slowdown vs SQLite.
+/// This benchmark will measure improvement after per-traversal cache (Phase 26-27).
 fn bench_v2_bfs_traversal(c: &mut Criterion) {
     let mut group = c.benchmark_group("v2_bfs_traversal");
 
