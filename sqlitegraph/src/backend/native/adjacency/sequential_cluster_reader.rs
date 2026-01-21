@@ -47,6 +47,45 @@
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::{NativeBackendError, NativeNodeId, NativeResult};
 use crate::backend::native::v2::edge_cluster::cluster::EdgeCluster;
+use std::time::Instant;
+
+/// Metrics for sequential cluster reader operations (Phase 37 instrumentation).
+///
+/// Tracks timing, byte counts, and operation counts for diagnostic analysis
+/// of Chain(500) traversal performance.
+#[derive(Debug, Clone, Default)]
+pub struct SequentialClusterReaderMetrics {
+    /// Total time spent in read_chain_clusters() (nanoseconds)
+    pub read_time_ns: u64,
+    /// Total bytes read from graph file
+    pub total_bytes_read: u64,
+    /// Number of clusters read
+    pub clusters_read: u32,
+    /// Total time spent in extract_neighbors() (nanoseconds)
+    pub extract_time_ns: u64,
+    /// Number of extractions performed
+    pub extract_count: u32,
+}
+
+impl SequentialClusterReaderMetrics {
+    /// Create new zero-initialized metrics
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get read time in milliseconds
+    #[inline]
+    pub fn read_time_ms(&self) -> f64 {
+        self.read_time_ns as f64 / 1_000_000.0
+    }
+
+    /// Get extraction time in milliseconds
+    #[inline]
+    pub fn extract_time_ms(&self) -> f64 {
+        self.extract_time_ns as f64 / 1_000_000.0
+    }
+}
 
 /// Maximum buffer size for sequential cluster reads (512KB).
 ///
@@ -63,12 +102,12 @@ const MAX_CLUSTER_BUFFER_SIZE: usize = 512 * 1024; // 512KB
 
 /// Sequential cluster reader for single-I/O chain optimization.
 ///
-/// This is a stateless helper struct (no fields) with associated methods that
-/// perform sequential I/O operations on confirmed linear chains.
+/// This struct performs sequential I/O operations on confirmed linear chains
+/// and tracks metrics for diagnostic analysis.
 ///
 /// # Design
 ///
-/// - **Stateless**: All state passed as parameters (caller manages lifecycle)
+/// - **Metrics tracking**: `metrics` field tracks read time, bytes, and counts
 /// - **Single I/O**: `read_chain_clusters()` performs one large `read_bytes()` call
 /// - **Deferred deserialization**: `extract_neighbors()` deserializes on-demand
 ///
@@ -77,16 +116,32 @@ const MAX_CLUSTER_BUFFER_SIZE: usize = 512 * 1024; // 512KB
 /// ```rust,no_run
 /// use crate::backend::native::adjacency::SequentialClusterReader;
 ///
+/// let mut reader = SequentialClusterReader::new();
+///
 /// // Read all clusters for a chain in one I/O operation
 /// let cluster_offsets = [(1024, 4096), (5120, 4096), (9216, 4096)];
-/// let buffer = SequentialClusterReader::read_chain_clusters(graph_file, &cluster_offsets)?;
+/// let buffer = reader.read_chain_clusters(graph_file, &cluster_offsets)?;
 ///
 /// // Extract neighbors for cluster at index 1
-/// let neighbors = SequentialClusterReader::extract_neighbors(&buffer, 1, &cluster_offsets)?;
+/// let neighbors = reader.extract_neighbors(&buffer, 1, &cluster_offsets)?;
+///
+/// // Access metrics
+/// println!("Read time: {:.2}ms, Bytes: {}", reader.metrics.read_time_ms(), reader.metrics.total_bytes_read);
 /// ```
-pub struct SequentialClusterReader;
+pub struct SequentialClusterReader {
+    /// Metrics for diagnostic analysis (Phase 37)
+    pub metrics: SequentialClusterReaderMetrics,
+}
 
 impl SequentialClusterReader {
+    /// Create new sequential cluster reader with zero-initialized metrics
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            metrics: SequentialClusterReaderMetrics::new(),
+        }
+    }
+
     /// Read all clusters for a chain in a single I/O operation.
     ///
     /// This method performs a single sequential read of all contiguous clusters
@@ -117,19 +172,23 @@ impl SequentialClusterReader {
     /// ```rust,no_run
     /// use crate::backend::native::adjacency::{are_clusters_contiguous, SequentialClusterReader};
     ///
+    /// let mut reader = SequentialClusterReader::new();
     /// let cluster_offsets = [(1024, 4096), (5120, 4096), (9216, 4096)];
     ///
     /// // Validate contiguity first
     /// assert!(are_clusters_contiguous(&cluster_offsets));
     ///
     /// // Read all clusters in one I/O operation
-    /// let buffer = SequentialClusterReader::read_chain_clusters(graph_file, &cluster_offsets)?;
+    /// let buffer = reader.read_chain_clusters(graph_file, &cluster_offsets)?;
     /// assert_eq!(buffer.len(), 12288); // 3 × 4096
     /// ```
     pub fn read_chain_clusters(
+        &mut self,
         graph_file: &mut GraphFile,
         cluster_offsets: &[(u64, u32)],
     ) -> NativeResult<Vec<u8>> {
+        let start = Instant::now();
+
         // Validate cluster_offsets is not empty
         if cluster_offsets.is_empty() {
             return Err(NativeBackendError::InvalidParameter {
@@ -160,6 +219,11 @@ impl SequentialClusterReader {
 
         // Single I/O call to read all clusters contiguously
         graph_file.read_bytes(start_offset, &mut buffer)?;
+
+        // Record metrics (after successful read)
+        self.metrics.read_time_ns += start.elapsed().as_nanos() as u64;
+        self.metrics.total_bytes_read += total_size;
+        self.metrics.clusters_read += cluster_offsets.len() as u32;
 
         Ok(buffer)
     }
@@ -200,23 +264,27 @@ impl SequentialClusterReader {
     /// ```rust,no_run
     /// use crate::backend::native::adjacency::SequentialClusterReader;
     ///
+    /// let mut reader = SequentialClusterReader::new();
     /// let cluster_offsets = [(1024, 4096), (5120, 4096), (9216, 4096)];
-    /// let buffer = SequentialClusterReader::read_chain_clusters(graph_file, &cluster_offsets)?;
+    /// let buffer = reader.read_chain_clusters(graph_file, &cluster_offsets)?;
     ///
     /// // Extract neighbors from first cluster (index 0)
-    /// let neighbors_0 = SequentialClusterReader::extract_neighbors(&buffer, 0, &cluster_offsets)?;
+    /// let neighbors_0 = reader.extract_neighbors(&buffer, 0, &cluster_offsets)?;
     ///
     /// // Extract neighbors from second cluster (index 1)
-    /// let neighbors_1 = SequentialClusterReader::extract_neighbors(&buffer, 1, &cluster_offsets)?;
+    /// let neighbors_1 = reader.extract_neighbors(&buffer, 1, &cluster_offsets)?;
     ///
     /// // Extract neighbors from third cluster (index 2)
-    /// let neighbors_2 = SequentialClusterReader::extract_neighbors(&buffer, 2, &cluster_offsets)?;
+    /// let neighbors_2 = reader.extract_neighbors(&buffer, 2, &cluster_offsets)?;
     /// ```
     pub fn extract_neighbors(
+        &mut self,
         buffer: &[u8],
         cluster_index: usize,
         cluster_offsets: &[(u64, u32)],
     ) -> NativeResult<Vec<NativeNodeId>> {
+        let start = Instant::now();
+
         // Validate cluster_index is within bounds
         if cluster_index >= cluster_offsets.len() {
             return Err(NativeBackendError::InvalidParameter {
@@ -251,7 +319,18 @@ impl SequentialClusterReader {
             .map(|id| id as NativeNodeId)
             .collect();
 
+        // Record metrics (after successful extraction)
+        self.metrics.extract_time_ns += start.elapsed().as_nanos() as u64;
+        self.metrics.extract_count += 1;
+
         Ok(neighbors)
+    }
+}
+
+impl Default for SequentialClusterReader {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -478,7 +557,8 @@ mod tests {
             .expect("Failed to read clusters");
 
         // Extract neighbors from first cluster (index 0)
-        let neighbors = SequentialClusterReader::extract_neighbors(&buffer, 0, &cluster_offsets)
+        let mut reader = SequentialClusterReader::new();
+        let neighbors = reader.extract_neighbors(&buffer, 0, &cluster_offsets)
             .expect("Failed to extract neighbors");
 
         assert_eq!(neighbors, vec![2, 3]);
@@ -502,7 +582,8 @@ mod tests {
             .expect("Failed to read clusters");
 
         // Extract neighbors from middle cluster (index 1)
-        let neighbors = SequentialClusterReader::extract_neighbors(&buffer, 1, &cluster_offsets)
+        let mut reader = SequentialClusterReader::new();
+        let neighbors = reader.extract_neighbors(&buffer, 1, &cluster_offsets)
             .expect("Failed to extract neighbors");
 
         assert_eq!(neighbors, vec![4, 5, 6]);
@@ -524,7 +605,8 @@ mod tests {
             .expect("Failed to read clusters");
 
         // Try to extract neighbors with invalid index (out of bounds)
-        let result = SequentialClusterReader::extract_neighbors(&buffer, 5, &cluster_offsets);
+        let mut reader = SequentialClusterReader::new();
+        let result = reader.extract_neighbors(&buffer, 5, &cluster_offsets);
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -553,7 +635,8 @@ mod tests {
             .expect("Failed to read clusters");
 
         // Extract neighbors from last cluster (index 2)
-        let neighbors = SequentialClusterReader::extract_neighbors(&buffer, 2, &cluster_offsets)
+        let mut reader = SequentialClusterReader::new();
+        let neighbors = reader.extract_neighbors(&buffer, 2, &cluster_offsets)
             .expect("Failed to extract neighbors");
 
         assert_eq!(neighbors, vec![7, 8, 9, 10]);
@@ -577,11 +660,12 @@ mod tests {
             .expect("Failed to read clusters");
 
         // Extract neighbors from all clusters
-        let neighbors_0 = SequentialClusterReader::extract_neighbors(&buffer, 0, &cluster_offsets)
+        let mut reader = SequentialClusterReader::new();
+        let neighbors_0 = reader.extract_neighbors(&buffer, 0, &cluster_offsets)
             .expect("Failed to extract neighbors from cluster 0");
-        let neighbors_1 = SequentialClusterReader::extract_neighbors(&buffer, 1, &cluster_offsets)
+        let neighbors_1 = reader.extract_neighbors(&buffer, 1, &cluster_offsets)
             .expect("Failed to extract neighbors from cluster 1");
-        let neighbors_2 = SequentialClusterReader::extract_neighbors(&buffer, 2, &cluster_offsets)
+        let neighbors_2 = reader.extract_neighbors(&buffer, 2, &cluster_offsets)
             .expect("Failed to extract neighbors from cluster 2");
 
         assert_eq!(neighbors_0, vec![2, 3]);
@@ -620,11 +704,12 @@ mod tests {
         assert_eq!(buffer.len(), expected_size);
 
         // Verify extraction works with variable sizes
-        let neighbors_0 = SequentialClusterReader::extract_neighbors(&buffer, 0, &cluster_offsets)
+        let mut reader = SequentialClusterReader::new();
+        let neighbors_0 = reader.extract_neighbors(&buffer, 0, &cluster_offsets)
             .expect("Failed to extract from cluster 0");
-        let neighbors_1 = SequentialClusterReader::extract_neighbors(&buffer, 1, &cluster_offsets)
+        let neighbors_1 = reader.extract_neighbors(&buffer, 1, &cluster_offsets)
             .expect("Failed to extract from cluster 1");
-        let neighbors_2 = SequentialClusterReader::extract_neighbors(&buffer, 2, &cluster_offsets)
+        let neighbors_2 = reader.extract_neighbors(&buffer, 2, &cluster_offsets)
             .expect("Failed to extract from cluster 2");
 
         assert_eq!(neighbors_0, vec![2]);

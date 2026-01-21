@@ -348,7 +348,8 @@ pub fn get_neighbors_optimized(
     if ctx.cluster_buffer.is_none()
         && ctx.detector.should_use_sequential_read()
     {
-        match SequentialClusterReader::read_chain_clusters(
+        let mut reader = SequentialClusterReader::new();
+        match reader.read_chain_clusters(
             graph_file,
             ctx.detector.cluster_offsets(),
         ) {
@@ -368,7 +369,8 @@ pub fn get_neighbors_optimized(
         // Look up cluster index for this node_id
         if let Some(&cluster_index) = ctx.node_cluster_index.get(&node_id) {
             // Extract neighbors from buffered cluster
-            match SequentialClusterReader::extract_neighbors(
+            let mut reader = SequentialClusterReader::new();
+            match reader.extract_neighbors(
                 buffer,
                 cluster_index,
                 &ctx.cluster_buffer_offsets,
@@ -578,7 +580,7 @@ mod tests {
         // This test will fail to compile if the import is missing
         use crate::backend::native::adjacency::SequentialClusterReader;
         // If we got here, the import exists
-        let _ = SequentialClusterReader;
+        let _ = SequentialClusterReader::new();
     }
 
     // Phase 35: Traversal helper and mapping population tests
