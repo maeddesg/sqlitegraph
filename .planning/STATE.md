@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 31 of 32 complete (3/3 plans) — Verified
+Phase: 32 of 32 planned (3 plans + 1 extension) — In progress
 Milestone: v1.4 Sequential I/O Optimization
-Status: Phase 31 verified, ready for Phase 32
-Last activity: 2026-01-21 — Verified Phase 31: Traversal Integration (5/5 success criteria)
+Status: Phase 32 Plan 01 complete (checkpoint - needs Plan 32-04), Plan 02 complete, Plan 03 pending
+Last activity: 2026-01-21 — Completed 32-01: Performance benchmark execution (Chain(500) = 10.90x SQLite, needs L1 buffer neighbor extraction)
 
-Progress: [█████████░] 96.9% (31/32 phases complete, 103/103 plans)
+Progress: [█████████░] 97.2% (31/32 phases complete, 104/107 plans)
 
 ## v1.4 Milestone Goals
 
@@ -32,7 +32,7 @@ Progress: [█████████░] 96.9% (31/32 phases complete, 103/103
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 100
+- Total plans completed: 103
 - Average duration: 7 min
 - Total execution time: ~11.6 hours
 
@@ -44,7 +44,7 @@ Progress: [█████████░] 96.9% (31/32 phases complete, 103/103
 | v1.1 (11-22) | 42 | ~4 days | ~7 min |
 | v1.2 (23-24) | 7 | 1 day | ~7 min |
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
-| v1.4 (29-32) | 4 | ~13 min | ~3 min |
+| v1.4 (29-32) | 12 | ~13 min | ~3 min |
 
 **Recent Trend:**
 - Last 5 plans: ~6 min each
@@ -70,6 +70,8 @@ Recent decisions affecting current work:
 - v1.4 Phase 31-01: L1 buffer lookup is instrumentation-only - records hit/miss but falls through to L2/L3 to avoid scope creep; full neighbor extraction from buffered NodeRecordV2 deferred to Phase 32
 - v1.4 Phase 31-02: BFS functions preserve pointer table fast paths - these optimizations bypass cache entirely and are orthogonal to sequential I/O optimization
 - v1.4 Phase 31-03: Edge-type filtered chain queries bypass optimization - filtered traversals don't benefit from sequential I/O patterns and continue using AdjacencyHelpers directly
+- v1.4 Phase 32-02: TraversalContext and SequentialReadBuffer preserve MVCC isolation - ownership model guarantees buffer evaporation on function return; 13 tests confirm no cross-traversal pollution (IO-13 SATISFIED)
+- v1.4 Phase 32-01: Benchmark results show Chain(500) = 10.90x SQLite (target: 3x). Root cause: L1 buffer lookup is instrumentation-only; full neighbor extraction from buffered NodeRecordV2 was deferred from Phase 31. Decision: Extend Phase 32 with Plan 32-04 to implement actual L1 buffer neighbor extraction.
 
 ### Pending Todos
 
@@ -82,7 +84,10 @@ v1.4 Sequential I/O Optimization:
 - [x] Phase 31 Plan 01: TraversalContext struct and get_neighbors_optimized() function (3-tier lookup, 11 tests passing)
 - [x] Phase 31 Plan 02: BFS TraversalContext integration (all three BFS variants use pattern detection and 3-tier lookup)
 - [x] Phase 31 Plan 03: Traversal hot path integration (k-hop, shortest path, chain queries with direction-aware pattern detection)
-- [ ] Phase 32: Validate performance improvement and MVCC preservation
+- [x] Phase 32 Plan 01: Execute performance benchmarks and validate 3x SQLite target (IO-12) - RESULTS: 10.90x SQLite, needs Plan 32-04
+- [x] Phase 32 Plan 02: Create MVCC isolation tests for TraversalContext (IO-13) - 13 tests passing
+- [ ] Phase 32 Plan 03: Prefetch window tuning and memory overhead documentation
+- [ ] Phase 32 Plan 04: Implement L1 buffer neighbor extraction (NEW - to achieve IO-12 3x target)
 
 ### Blockers/Concerns
 
@@ -91,7 +96,7 @@ v1.4 Sequential I/O Optimization:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 31 Plan 03: Traversal Hot Path Integration
+Stopped at: Completed 32-01 (benchmark execution, Chain(500) = 10.90x SQLite) and 32-02 (MVCC isolation tests)
 Resume file: None
 
 ### Roadmap Evolution
@@ -101,8 +106,8 @@ Resume file: None
 - **v1.1 ACID & Reliability** (2026-01-20): Phases 11-22 complete
 - **v1.2 Benchmark Infrastructure** (2026-01-21): Phases 23-24 complete
 - **v1.3 Chain Traversal Performance** (2026-01-21): Phases 25-28 complete ✅
-- **v1.4 Sequential I/O Optimization** (2026-01-21): Phases 29-32 in progress
+- **v1.4 Sequential I/O Optimization** (2026-01-21): Phases 29-32 planned
   - Linear pattern detection (29-01, 29-02, 29-03 complete)
   - Sequential slot reading (30-01, 30-02, 30-03 complete)
   - Traversal integration (31-01, 31-02, 31-03 complete)
-  - Validation and tuning (IO-12, IO-13)
+  - Validation and tuning (32-01 complete, 32-02 complete, 32-03 pending, 32-04 added)
