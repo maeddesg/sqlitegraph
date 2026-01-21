@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 37 - Gap Analysis Closure
-Plan: 03 (complete)
-Status: Phase 37 Plan 03 complete - microbenchmark suite ready for component-level performance analysis
-Last activity: 2026-01-21 — Completed Phase 37 Plan 03: Microbenchmark suite (cluster population, LinearDetector overhead, fragmentation impact)
+Plan: 04 (complete)
+Status: Phase 37 Plan 04 complete - root cause identified: BFS uses observe() not observe_with_cluster()
+Last activity: 2026-01-22 — Completed Phase 37 Plan 04: Diagnostic pipeline (telemetry, flamegraph, strace, diagnosis)
 
 Progress: [██████████░] 99% (37/37 phases planned, 132/132 plans complete, v1.4 complete, v1.6 in gap analysis)
 
@@ -35,10 +35,14 @@ Progress: [██████████░] 99% (37/37 phases planned, 132/132
 **Gap:** 156.12ms remaining
 **Speedup:** 1.07x vs baseline (248.68ms -> 231.12ms, expected 3.3x)
 
-**Root Cause Analysis (from 36-03):**
-- Sequential cluster reader implemented but not achieving expected speedup
-- Possible bottlenecks: I/O count, CPU time, LinearDetector not confirming, SequentialClusterReader not engaging
-- Next: Profile Chain(500) to identify bottleneck
+**Root Cause Analysis (from 37-04):**
+- **ROOT CAUSE IDENTIFIED (HIGH confidence):** BFS uses observe() not observe_with_cluster()
+- Line 164 in graph_ops/mod.rs: `ctx.detector.observe(current_node, degree)` instead of `observe_with_cluster()`
+- Result: LinearDetector cannot track cluster offsets (cluster_offsets_count: 0), never confirms chains (chains_detected: 0)
+- Sequential cluster read optimization never engages, explaining 1.07x speedup vs expected 3.3x
+- I/O is NOT bottleneck (strace confirms mmap working)
+- CPU is NOT bottleneck outside missing optimization (flamegraph confirms no SequentialClusterReader activity)
+- Recommended fix: Update native_bfs() to use observe_with_cluster(), expected 75-100ms (2.3-3.1x speedup)
 
 ## v1.6 Requirements Coverage
 
@@ -83,7 +87,7 @@ Progress: [██████████░] 99% (37/37 phases planned, 132/132
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
 | v1.6 (33-36) | 11 | ~15 min | ~2 min |
-| 37 - Gap Analysis | 3 | ~35 min | ~12 min |
+| 37 - Gap Analysis | 4 | ~1h 20min | ~20 min |
 
 **Recent Trend:**
 - Last 5 plans: ~7 min each
@@ -149,6 +153,11 @@ Recent decisions affecting current work:
 - **v1.6.15: 99Hz sampling frequency for flamegraph - good resolution without excessive overhead (Phase 37-02)**
 - **v1.6.15: DWARF call graphs for accurate traces - optimized Rust builds with debug symbols (Phase 37-02)**
 - **v1.6.15: Trace specific syscalls (mmap, read, lseek) instead of all syscalls - focused output for I/O pattern analysis (Phase 37-02)**
+- **v1.6.16: Root cause identified with HIGH confidence - BFS uses observe() not observe_with_cluster() (Phase 37-04)**
+- **v1.6.16: Telemetry JSON provides definitive evidence - chains_detected=0, cluster_offsets_count=0, cluster_hits=498 (old prefetch buffer) (Phase 37-04)**
+- **v1.6.16: Code inspection confirms line 164 in graph_ops/mod.rs uses observe() instead of observe_with_cluster() (Phase 37-04)**
+- **v1.6.16: Recommended fix is surgical - Update native_bfs() to use observe_with_cluster() with cluster metadata (Phase 37-04)**
+- **v1.6.16: Expected improvement 75-100ms (2.3-3.1x speedup), closes 84-100% of gap to 75ms target (Phase 37-04)**
 
 ### Pending Todos
 
@@ -171,21 +180,26 @@ v1.6 Chain Locality:
 - [x] Phase 36 Plan 04: Documentation update (completed)
 
 Next actions:
-- [ ] Profile Chain(500) to identify bottleneck (I/O count vs CPU time)
-- [ ] Verify LinearDetector confirms chain pattern
-- [ ] Verify SequentialClusterReader is engaged during traversal
-- [ ] Verify cluster_buffer is populated during traversal
-- [ ] Consider alternative optimizations if sequential reads insufficient
+- [x] Profile Chain(500) to identify bottleneck (I/O count vs CPU time) - COMPLETE (37-04)
+- [x] Verify LinearDetector confirms chain pattern - COMPLETE (37-04: chains_detected=0, NOT confirming)
+- [x] Verify SequentialClusterReader is engaged during traversal - COMPLETE (37-04: NOT engaging)
+- [x] Verify cluster_buffer is populated during traversal - COMPLETE (37-04: NOT populated)
+- [ ] **Phase 37-05: Fix BFS to use observe_with_cluster()**
+- [ ] Re-run telemetry to verify cluster_offsets_count > 0, chains_detected > 0
+- [ ] Measure Chain(500) performance (target: 75-100ms)
+- [ ] Consider write-time allocation if surgical fix insufficient
 
 ### Blockers/Concerns
 
-- v1.6: Surgical scope requires discipline — avoid adding write-time allocation or metadata storage
+- v1.6: Surgical scope requires discipline — avoid adding write-time allocation or metadata storage unless surgical fix insufficient
 - v1.6: Cluster contiguity validation must be robust to avoid performance regression on non-contiguous data
+- **RESOLVED (37-04):** Root cause identified, clear surgical fix path defined
+- **LOW risk:** V2_SLOT_DEBUG logging spam in release builds may skew measurements (cleanup recommended)
 
 ## Session Continuity
 
-Last session: 2026-01-21
-Stopped at: Completed Phase 37 Plan 03: Microbenchmark suite - cluster population, LinearDetector overhead, and fragmentation impact benchmarks created
+Last session: 2026-01-22
+Stopped at: Completed Phase 37 Plan 04: Diagnostic pipeline - telemetry, flamegraph, strace, root cause diagnosis complete
 Resume file: None
 
 ### Roadmap Evolution
@@ -213,9 +227,10 @@ Resume file: None
   - Phase 36 Plan 02 (2026-01-21): MVCC isolation tests complete
   - Phase 36 Plan 03 (2026-01-21): Performance validation complete - IO-12 NOT achieved (Chain(500) = 231.12ms, target: 75ms, gap: 156ms)
   - Phase 36 Plan 04 (2026-01-21): Documentation update complete - Phase 36 complete, v1.6 milestone complete, gap identified
-- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01/02/03 complete
+- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01/02/03/04 complete
   - Phase 37 Plan 01 (2026-01-21): Gap analysis instrumentation complete - LinearDetector, SequentialClusterReader, TraversalContext with timing and telemetry export
   - Phase 37 Plan 02 (2026-01-21): External profiling scripts complete - CPU flamegraph (cargo flamegraph, 99Hz) and strace I/O tracing (mmap, read, lseek)
   - Phase 37 Plan 03 (2026-01-21): Microbenchmark suite complete - cluster population, LinearDetector overhead, fragmentation impact (Criterion-based)
+  - Phase 37 Plan 04 (2026-01-22): Diagnostic pipeline complete - telemetry benchmark executed, flamegraph generated, strace I/O traced, root cause diagnosis created (HIGH confidence: BFS uses observe() not observe_with_cluster())
 
 *Updated after each plan completion*

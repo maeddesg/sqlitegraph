@@ -38,8 +38,17 @@ pub fn bfs_generic_scalar(
         // Get degree for pattern detection
         let degree = AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
 
-        // Observe for pattern detection
-        let _pattern = ctx.detector.observe(current_node, degree);
+        // Extract cluster metadata for sequential read optimization (Phase 37-05)
+        let (cluster_offset, cluster_size) = match graph_file.read_node_at(current_node) {
+            Ok(node_record) => (
+                node_record.outgoing_cluster_offset,
+                node_record.outgoing_cluster_size,
+            ),
+            Err(_) => (0, 0), // Fallback if node read fails
+        };
+
+        // Observe for pattern detection with cluster metadata
+        let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
         // Trigger prefetch if linear confirmed and node not in buffer
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
@@ -103,7 +112,17 @@ pub fn bfs_pointer_table_optimized(
 
         // Get degree for pattern detection
         let degree = AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
-        let _pattern = ctx.detector.observe(current_node, degree);
+
+        // Extract cluster metadata for sequential read optimization (Phase 37-05)
+        let (cluster_offset, cluster_size) = match graph_file.read_node_at(current_node) {
+            Ok(node_record) => (
+                node_record.outgoing_cluster_offset,
+                node_record.outgoing_cluster_size,
+            ),
+            Err(_) => (0, 0), // Fallback if node read fails
+        };
+
+        let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
         // Trigger prefetch if linear confirmed
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
@@ -182,7 +201,17 @@ pub fn bfs_fully_optimized(
 
         // Get degree for pattern detection
         let degree = AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
-        let _pattern = ctx.detector.observe(current_node, degree);
+
+        // Extract cluster metadata for sequential read optimization (Phase 37-05)
+        let (cluster_offset, cluster_size) = match graph_file.read_node_at(current_node) {
+            Ok(node_record) => (
+                node_record.outgoing_cluster_offset,
+                node_record.outgoing_cluster_size,
+            ),
+            Err(_) => (0, 0), // Fallback if node read fails
+        };
+
+        let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
         // Trigger prefetch if linear confirmed
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {

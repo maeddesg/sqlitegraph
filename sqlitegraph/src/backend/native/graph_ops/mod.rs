@@ -161,7 +161,17 @@ fn bfs_generic_scalar_with_telemetry(
         }
 
         let degree = crate::backend::native::adjacency::AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
-        let _pattern = ctx.detector.observe(current_node, degree);
+
+        // Extract cluster metadata for sequential read optimization (Phase 37-05)
+        let (cluster_offset, cluster_size) = match graph_file.read_node_at(current_node) {
+            Ok(node_record) => (
+                node_record.outgoing_cluster_offset,
+                node_record.outgoing_cluster_size,
+            ),
+            Err(_) => (0, 0), // Fallback if node read fails
+        };
+
+        let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
             ctx.buffer.prefetch_clusters_from(graph_file, current_node)?;
