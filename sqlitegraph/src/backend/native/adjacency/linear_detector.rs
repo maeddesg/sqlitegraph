@@ -1337,4 +1337,156 @@ mod tests {
         detector.observe_with_cluster(2, 1, next_offset, large_size);
         assert!(detector.validate_contiguity());
     }
+
+    // Phase 33 Plan 04: Chain detection instrumentation tests
+
+    #[test]
+    fn test_chain_instrumentation_initial_state() {
+        let detector = LinearDetector::new();
+
+        // Initial state: zero-initialized
+        assert_eq!(detector.chain_count(), 0);
+        assert_eq!(detector.total_chain_length(), 0);
+        assert_eq!(detector.average_chain_length(), 0.0);
+    }
+
+    #[test]
+    fn test_chain_instrumentation_single_chain() {
+        let mut detector = LinearDetector::new();
+
+        // Record a single chain
+        detector.record_chain(10);
+
+        assert_eq!(detector.chain_count(), 1);
+        assert_eq!(detector.total_chain_length(), 10);
+        assert_eq!(detector.average_chain_length(), 10.0);
+    }
+
+    #[test]
+    fn test_chain_instrumentation_multiple_chains() {
+        let mut detector = LinearDetector::new();
+
+        // Record multiple chains
+        detector.record_chain(10);
+        detector.record_chain(20);
+        detector.record_chain(30);
+
+        assert_eq!(detector.chain_count(), 3);
+        assert_eq!(detector.total_chain_length(), 60);
+        assert_eq!(detector.average_chain_length(), 20.0);
+    }
+
+    #[test]
+    fn test_chain_instrumentation_average_calculation() {
+        let mut detector = LinearDetector::new();
+
+        // Test average calculation with various chain lengths
+        detector.record_chain(5);
+        assert_eq!(detector.average_chain_length(), 5.0);
+
+        detector.record_chain(15);
+        assert_eq!(detector.average_chain_length(), 10.0); // (5 + 15) / 2
+
+        detector.record_chain(10);
+        assert_eq!(detector.average_chain_length(), 10.0); // (5 + 15 + 10) / 3
+    }
+
+    #[test]
+    fn test_chain_instrumentation_accumulation() {
+        let mut detector = LinearDetector::new();
+
+        // Accumulate chains over time
+        let mut total = 0u64;
+        for i in 1u32..=10 {
+            detector.record_chain(i * 5);
+            total += (i * 5) as u64;
+
+            assert_eq!(detector.chain_count(), i as u64);
+            assert_eq!(detector.total_chain_length(), total);
+        }
+
+        // Final average: (5 + 10 + 15 + ... + 50) / 10 = 275 / 10 = 27.5
+        assert_eq!(detector.chain_count(), 10);
+        assert_eq!(detector.total_chain_length(), 275);
+        assert!((detector.average_chain_length() - 27.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_chain_instrumentation_zero_length_chain() {
+        let mut detector = LinearDetector::new();
+
+        // Record a zero-length chain (edge case)
+        detector.record_chain(0);
+
+        assert_eq!(detector.chain_count(), 1);
+        assert_eq!(detector.total_chain_length(), 0);
+        assert_eq!(detector.average_chain_length(), 0.0);
+    }
+
+    #[test]
+    fn test_chain_instrumentation_large_chain() {
+        let mut detector = LinearDetector::new();
+
+        // Record a large chain (test u32 to u64 conversion)
+        let large_length: u32 = 1_000_000;
+        detector.record_chain(large_length);
+
+        assert_eq!(detector.chain_count(), 1);
+        assert_eq!(detector.total_chain_length(), 1_000_000);
+        assert_eq!(detector.average_chain_length(), 1_000_000.0);
+    }
+
+    #[test]
+    fn test_chain_instrumentation_reset_clears_metrics() {
+        let mut detector = LinearDetector::new();
+
+        // Record some chains
+        detector.record_chain(10);
+        detector.record_chain(20);
+        detector.record_chain(30);
+
+        assert_eq!(detector.chain_count(), 3);
+        assert_eq!(detector.total_chain_length(), 60);
+        assert_eq!(detector.average_chain_length(), 20.0);
+
+        // Reset should clear instrumentation
+        detector.reset();
+
+        assert_eq!(detector.chain_count(), 0);
+        assert_eq!(detector.total_chain_length(), 0);
+        assert_eq!(detector.average_chain_length(), 0.0);
+    }
+
+    #[test]
+    fn test_chain_instrumentation_with_pattern_detection() {
+        let mut detector = LinearDetector::new();
+
+        // Record chains while pattern detection works
+        detector.observe(1, 1);
+        detector.observe(2, 1);
+        detector.observe(3, 1);
+        assert!(detector.is_linear_confirmed());
+
+        // Simulate chain detection after pattern confirmation
+        detector.record_chain(3);
+
+        assert_eq!(detector.chain_count(), 1);
+        assert_eq!(detector.total_chain_length(), 3);
+        assert_eq!(detector.average_chain_length(), 3.0);
+        // Pattern detection state unchanged
+        assert!(detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_chain_instrumentation_with_threshold() {
+        let mut detector = LinearDetector::with_threshold(5);
+
+        // Custom threshold detector should still track chains
+        detector.record_chain(7);
+        detector.record_chain(13);
+
+        assert_eq!(detector.chain_count(), 2);
+        assert_eq!(detector.total_chain_length(), 20);
+        assert_eq!(detector.average_chain_length(), 10.0);
+    }
 }
