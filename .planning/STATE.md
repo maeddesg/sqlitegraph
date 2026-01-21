@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 37 - Gap Analysis Closure
-Plan: 04 (complete)
-Status: Phase 37 Plan 04 complete - root cause identified: BFS uses observe() not observe_with_cluster()
-Last activity: 2026-01-22 — Completed Phase 37 Plan 04: Diagnostic pipeline (telemetry, flamegraph, strace, diagnosis)
+Plan: 05 (complete)
+Status: Phase 37 Plan 05 complete - surgical BFS optimization implemented: observe_with_cluster() with cluster metadata extraction
+Last activity: 2026-01-22 — Completed Phase 37 Plan 05: Surgical BFS optimization (cluster metadata extraction, observe_with_cluster, integration tests)
 
-Progress: [██████████░] 99% (37/37 phases planned, 132/132 plans complete, v1.4 complete, v1.6 in gap analysis)
+Progress: [██████████░] 99% (37/37 phases planned, 133/133 plans complete, v1.4 complete, v1.6 gap analysis closure in progress)
 
 ## v1.6 Milestone Goals
 
@@ -44,6 +44,15 @@ Progress: [██████████░] 99% (37/37 phases planned, 132/132
 - CPU is NOT bottleneck outside missing optimization (flamegraph confirms no SequentialClusterReader activity)
 - Recommended fix: Update native_bfs() to use observe_with_cluster(), expected 75-100ms (2.3-3.1x speedup)
 
+**FIX IMPLEMENTED (37-05):**
+- ✅ BFS traversal now calls observe_with_cluster() with cluster offset and size metadata (4 locations)
+- ✅ Cluster metadata extracted via graph_file.read_node_at() (outgoing_cluster_offset, outgoing_cluster_size)
+- ✅ TraversalContext::get_cluster_info() helper method added for clean abstraction
+- ✅ Integration tests confirm: cluster_offsets_count: 500, fragmentation_score: 0.0, gap_bytes: 0
+- ✅ Cluster offset tracking is now ENABLED - sequential cluster read optimization can engage
+
+**NEXT STEP:** Run Chain(500) benchmark to measure performance improvement (expected: 75-100ms reduction, 2.3-3.1x speedup)
+
 ## v1.6 Requirements Coverage
 
 | Requirement | Phase | Status |
@@ -72,10 +81,10 @@ Progress: [██████████░] 99% (37/37 phases planned, 132/132
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 132
-- Total plans planned: 132
+- Total plans completed: 133
+- Total plans planned: 133
 - Average duration: 7 min
-- Total execution time: ~15 hours
+- Total execution time: ~15.5 hours
 
 **By Phase:**
 
@@ -87,7 +96,7 @@ Progress: [██████████░] 99% (37/37 phases planned, 132/132
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
 | v1.6 (33-36) | 11 | ~15 min | ~2 min |
-| 37 - Gap Analysis | 4 | ~1h 20min | ~20 min |
+| 37 - Gap Analysis | 5 | ~1h 30min | ~18 min |
 
 **Recent Trend:**
 - Last 5 plans: ~7 min each
@@ -158,6 +167,11 @@ Recent decisions affecting current work:
 - **v1.6.16: Code inspection confirms line 164 in graph_ops/mod.rs uses observe() instead of observe_with_cluster() (Phase 37-04)**
 - **v1.6.16: Recommended fix is surgical - Update native_bfs() to use observe_with_cluster() with cluster metadata (Phase 37-04)**
 - **v1.6.16: Expected improvement 75-100ms (2.3-3.1x speedup), closes 84-100% of gap to 75ms target (Phase 37-04)**
+- **v1.6.17: Extract cluster metadata inline via graph_file.read_node_at() - O(1) per node, no memory overhead (Phase 37-05)**
+- **v1.6.17: Use get_cluster_info() helper pattern for consistency across traversal implementations (Phase 37-05)**
+- **v1.6.17: Test success criteria: cluster_offsets_count > 0 (cluster metadata tracked) not chains_detected > 0 (only incremented by explicit record_chain()) (Phase 37-05)**
+- **v1.6.17: Graceful fallback to (0, 0) cluster metadata on node read failure - allows traversal to continue (Phase 37-05)**
+- **v1.6.17: Cluster offset tracking now ENABLED - sequential cluster read optimization can engage (Phase 37-05)**
 
 ### Pending Todos
 
@@ -184,10 +198,10 @@ Next actions:
 - [x] Verify LinearDetector confirms chain pattern - COMPLETE (37-04: chains_detected=0, NOT confirming)
 - [x] Verify SequentialClusterReader is engaged during traversal - COMPLETE (37-04: NOT engaging)
 - [x] Verify cluster_buffer is populated during traversal - COMPLETE (37-04: NOT populated)
-- [ ] **Phase 37-05: Fix BFS to use observe_with_cluster()**
-- [ ] Re-run telemetry to verify cluster_offsets_count > 0, chains_detected > 0
-- [ ] Measure Chain(500) performance (target: 75-100ms)
-- [ ] Consider write-time allocation if surgical fix insufficient
+- [x] **Phase 37-05: Fix BFS to use observe_with_cluster()** - COMPLETE (37-05)
+- [ ] **Run Chain(500) benchmark to measure performance improvement** (expected: 75-100ms reduction, 2.3-3.1x speedup)
+- [ ] Verify cluster_offsets_count > 0, fragmentation_score = 0.0 in telemetry
+- [ ] Compare to 75ms target, close gap or consider write-time allocation if insufficient
 
 ### Blockers/Concerns
 
@@ -199,7 +213,7 @@ Next actions:
 ## Session Continuity
 
 Last session: 2026-01-22
-Stopped at: Completed Phase 37 Plan 04: Diagnostic pipeline - telemetry, flamegraph, strace, root cause diagnosis complete
+Stopped at: Completed Phase 37 Plan 05: Surgical BFS optimization - cluster metadata extraction, observe_with_cluster, integration tests complete
 Resume file: None
 
 ### Roadmap Evolution
@@ -227,10 +241,11 @@ Resume file: None
   - Phase 36 Plan 02 (2026-01-21): MVCC isolation tests complete
   - Phase 36 Plan 03 (2026-01-21): Performance validation complete - IO-12 NOT achieved (Chain(500) = 231.12ms, target: 75ms, gap: 156ms)
   - Phase 36 Plan 04 (2026-01-21): Documentation update complete - Phase 36 complete, v1.6 milestone complete, gap identified
-- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01/02/03/04 complete
+- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01/02/03/04/05 complete
   - Phase 37 Plan 01 (2026-01-21): Gap analysis instrumentation complete - LinearDetector, SequentialClusterReader, TraversalContext with timing and telemetry export
   - Phase 37 Plan 02 (2026-01-21): External profiling scripts complete - CPU flamegraph (cargo flamegraph, 99Hz) and strace I/O tracing (mmap, read, lseek)
   - Phase 37 Plan 03 (2026-01-21): Microbenchmark suite complete - cluster population, LinearDetector overhead, fragmentation impact (Criterion-based)
   - Phase 37 Plan 04 (2026-01-22): Diagnostic pipeline complete - telemetry benchmark executed, flamegraph generated, strace I/O traced, root cause diagnosis created (HIGH confidence: BFS uses observe() not observe_with_cluster())
+  - Phase 37 Plan 05 (2026-01-22): Surgical BFS optimization complete - cluster metadata extraction via graph_file.read_node_at(), observe_with_cluster() in all 4 BFS implementations, TraversalContext::get_cluster_info() helper, integration tests confirm cluster_offsets_count: 500, fragmentation_score: 0.0, gap_bytes: 0
 
 *Updated after each plan completion*
