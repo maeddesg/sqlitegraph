@@ -37,6 +37,7 @@ mod v2_clustered;
 mod helpers;
 mod linear_detector;
 mod sequential_buffer;
+mod sequential_cluster_reader;
 #[cfg(debug_assertions)]
 mod instrumentation;
 
@@ -47,6 +48,7 @@ pub use core_iterator::AdjacencyIterator;
 pub use helpers::AdjacencyHelpers;
 pub use linear_detector::{LinearDetector, TraversalPattern};
 pub use sequential_buffer::SequentialReadBuffer;
+pub use sequential_cluster_reader::SequentialClusterReader;
 // v2_clustered methods are impl blocks on AdjacencyIterator, so no explicit exports needed
 // iterator_impl provides Iterator trait implementation for AdjacencyIterator
 
