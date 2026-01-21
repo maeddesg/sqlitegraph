@@ -49,6 +49,7 @@ use ahash::AHashMap;
 use crate::backend::native::adjacency::{AdjacencyHelpers, Direction};
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::{NativeNodeId, NativeResult};
+use crate::backend::native::v2::edge_cluster::EdgeCluster;
 
 // Forward declaration for TraversalContext
 // TraversalContext is defined in traversal_context.rs (sibling module)
@@ -195,6 +196,7 @@ pub fn get_neighbors_cached(
 ///
 /// 1. **L1: SequentialReadBuffer** - Decoded node slots from batched reads (fastest)
 ///    - Only checked after LinearDetector confirms linear pattern
+///    - Extracts neighbors directly from buffered NodeRecordV2
 ///    - Records buffer hit/miss for statistics
 ///
 /// 2. **L2: TraversalCache** - Cached neighbor lists (from v1.3)
@@ -216,13 +218,20 @@ pub fn get_neighbors_cached(
 ///
 /// An owned `Vec<NativeNodeId>` containing the neighbor node IDs.
 ///
-/// # L1 Buffer Behavior (Phase 31)
+/// # L1 Buffer Extraction (Phase 32-04)
 ///
-/// For Phase 31, L1 buffer lookup is instrumentation-only. When a node is found
-/// in the buffer, the function records a buffer hit but falls through to L2/L3.
-/// Full neighbor extraction from buffered NodeRecordV2 is deferred to avoid
-/// scope creep. This allows measurement of buffer effectiveness without
-/// requiring the complex neighbor extraction logic in Phase 31.
+/// When a node is found in the SequentialReadBuffer and has valid cluster metadata,
+/// this function reads the edge cluster data directly from the buffered NodeRecordV2.
+/// This avoids the overhead of re-reading the node slot from storage.
+///
+/// The extraction process:
+/// 1. Check if node is in buffer (only after linear pattern confirmed)
+/// 2. Extract cluster_offset and cluster_size based on direction
+/// 3. If cluster_offset > 0 and cluster_size > 0, read cluster data
+/// 4. Deserialize EdgeCluster and extract neighbors via iter_neighbors()
+/// 5. Return neighbors immediately (early return, no L2/L3 fallback)
+///
+/// If buffer miss or cluster metadata is invalid, fall through to L2/L3.
 ///
 /// # Example
 ///
@@ -260,12 +269,49 @@ pub fn get_neighbors_optimized(
     // L1: Check SequentialReadBuffer first (fastest path)
     // Only check after linear pattern is confirmed
     if ctx.detector.is_linear_confirmed() {
-        if let Some(_node_record) = ctx.buffer.get(node_id) {
+        // Extract cluster metadata from buffer if node exists
+        let l1_result = ctx.buffer.get(node_id).map(|node_record| {
+            let (cluster_offset, cluster_size) = match direction {
+                Direction::Outgoing => (
+                    node_record.outgoing_cluster_offset,
+                    node_record.outgoing_cluster_size,
+                ),
+                Direction::Incoming => (
+                    node_record.incoming_cluster_offset,
+                    node_record.incoming_cluster_size,
+                ),
+            };
+            (cluster_offset, cluster_size)
+        });
+
+        if let Some((cluster_offset, cluster_size)) = l1_result {
             ctx.record_buffer_hit();
-            // Note: For Phase 31, L1 buffer lookup is instrumentation-only.
-            // We record the hit but fall through to L2/L3. Full neighbor
-            // extraction from buffered NodeRecordV2 is deferred to avoid
-            // scope creep. This allows measurement of buffer effectiveness.
+
+            // If cluster metadata is valid, extract neighbors from buffer
+            if cluster_offset > 0 && cluster_size > 0 {
+                // Read cluster data from file
+                let mut cluster_data = vec![0u8; cluster_size as usize];
+                if graph_file.read_bytes(cluster_offset, &mut cluster_data).is_ok() {
+                    // Deserialize edge cluster and extract neighbors
+                    if let Ok(cluster) = EdgeCluster::deserialize(&cluster_data) {
+                        let neighbors: Vec<NativeNodeId> =
+                            cluster.iter_neighbors().map(|id| id as NativeNodeId).collect();
+
+                        // Insert into L2 cache for future lookups in this traversal
+                        ctx.cache.insert(cache_key, neighbors.clone());
+
+                        return Ok(neighbors);
+                    }
+                    // If deserialization fails, fall through to L2/L3
+                }
+                // If read fails, fall through to L2/L3
+            }
+            // If cluster_offset == 0 or cluster_size == 0, node has no edges in this direction
+            // Return empty neighbors immediately
+            else {
+                ctx.cache.insert(cache_key, Vec::new());
+                return Ok(Vec::new());
+            }
         } else {
             ctx.record_buffer_miss();
         }
