@@ -64,17 +64,47 @@ SQLiteGraph provides two backend options:
 
 ## Performance Benchmarks
 
-**Based on actual benchmark runs (Phase 3, 7):**
+**Benchmark Methodology:**
+- Hardware: Linux x86_64 (kernel 6.18+)
+- Sizes: 100-500 nodes (V2 backend has 8MB node region limit, ~2048 nodes max)
+- Cache state: Warm (after warmup iterations)
+- Measurements: Criterion-based statistical analysis (95% confidence interval)
 
-Native V2 Backend Performance (tested):
-- **Node Insert**: ~50K ops/sec
-- **Edge Insert**: ~100K ops/sec for bulk inserts
-- **Neighbor Query**: Sub-millisecond for clustered nodes
-- **Vector Search**: Sub-millisecond with 95%+ accuracy
-- **Parallel WAL Recovery**: 2-3x speedup for 500+ transactions
-- **Storage Efficiency**: 70%+ reduction vs V1 format
+**Native V2 vs SQLite Backend (Phase 24, 2026-01-21):**
 
-**Note**: Performance varies based on workload, hardware, and configuration.
+| Operation | Size | Native V2 | SQLite | Ratio |
+|-----------|------|-----------|--------|-------|
+| Node Insert | 100 | 1.14 ms | 3.63 ms | 3.2x faster |
+| Node Insert | 500 | 4.91 ms | 10.57 ms | 2.2x faster |
+| Edge Insert (star) | 100 | 3.85 ms | 7.18 ms | 1.9x faster |
+| BFS Traversal (star) | 100 | 4.68 ms | 7.28 ms | 1.6x faster |
+| BFS Traversal (chain) | 100 | 15.38 ms | 7.24 ms | 2.1x **slower** |
+| BFS Traversal (chain) | 500 | 266.50 ms | 24.98 ms | 10.7x **slower** |
+| 1-Hop Query | 100 | 3.87 ms | 6.93 ms | 1.8x faster |
+
+**Key Findings:**
+- Native V2 excels at insert operations (1.3-3.2x faster)
+- Star-pattern traversals favor Native V2 (clustered adjacency locality)
+- Chain traversals show regression (V2 cluster lookup overhead vs SQLite indexed adjacency)
+- Workload pattern matters: choose backend based on your graph shape and access patterns
+
+**Connection Pooling:**
+- Warm checkout: 205 ns (pooled) vs 16.4 µs (direct) = **79.8x faster**
+- First checkout overhead: ~5 ms (pool initialization)
+
+**HNSW Vector Search:**
+- Insertion: 3-5 ms for 100 vectors (64-256 dimensions)
+- Search: Sub-millisecond typical latency
+- Accuracy: 95%+ recall on standard datasets
+
+**Storage Efficiency:**
+- Native V2 format: 70%+ size reduction vs legacy V1 format
+
+**Caveats:**
+- Numbers are for single-node embedded use (not distributed)
+- Performance varies based on graph topology, hardware, and configuration
+- V2 backend currently constrained to ~2048 nodes (8MB reserved region)
+- In-memory benchmarks show 1000-10000x headroom for future optimization
 
 ## Quick Start
 
@@ -142,11 +172,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Use Case | Recommended Backend | Why |
 |----------|-------------------|-----|
-| **High-Performance Systems** | Native V2 Backend | Clustered adjacency for traversals |
+| **Write-Heavy Workloads** | Native V2 Backend | 1.3-3.2x faster insert operations |
+| **Star-Pattern Graphs** | Native V2 Backend | Clustered adjacency benefits local queries |
+| **Chain-Depth Traversals** | SQLite Backend | V2 has 2-10x chain traversal regression |
 | **Enterprise Applications** | SQLite Backend | ACID transactions, tooling ecosystem |
 | **Existing SQLite Integration** | SQLite Backend | Direct compatibility |
 | **Vector Search Workloads** | Native V2 Backend | HNSW integration |
 | **Development/Testing** | Either Backend | Unified API, both support in-memory |
+| **Small Graphs (<2K nodes)** | Either Backend | V2 has node region limit, SQLite scales better |
 
 ### Feature Flags
 
