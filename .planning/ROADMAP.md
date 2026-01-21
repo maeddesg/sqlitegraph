@@ -50,8 +50,8 @@ See milestone archives for complete history.
 ### Phase 33: Traversal-Time Chain Detection
 **Goal:** Traversal detects linear chains and switches to sequential cluster reads
 **Depends on**: Phase 32 (v1.4 complete)
-**Requirements:** CL-01
-**Plans:** TBD
+**Requirements:** CL-01 ✓ SATISFIED
+**Plans:** 5/5 complete (extend LinearDetector with cluster offset tracking, contiguity validation, sequential read trigger, instrumentation, integration tests)
 
 **Success Criteria:**
 1. LinearDetector tracks cluster offsets during traversal to identify potential chains
@@ -74,7 +74,7 @@ See milestone archives for complete history.
 **Goal:** Sequential cluster reader reads all clusters for a chain in single I/O operation
 **Depends on**: Phase 33
 **Requirements:** CL-02
-**Plans:** TBD
+**Plans:** 3 plans
 
 **Success Criteria:**
 1. SequentialClusterReader reads all edge clusters for a confirmed chain in single I/O
@@ -92,6 +92,11 @@ See milestone archives for complete history.
 - Persistent cluster caching (traversal-scoped only)
 - Cross-traversal pollution
 - Unbounded memory growth
+
+**Plans:**
+- [ ] 34-01-PLAN.md — Create SequentialClusterReader module with read_chain_clusters() method
+- [ ] 34-02-PLAN.md — Add cluster buffer fields to TraversalContext
+- [ ] 34-03-PLAN.md — Integrate sequential cluster read into get_neighbors_optimized()
 
 ### Phase 35: Contiguity Validation and Fallback
 **Goal:** LinearDetector validates cluster contiguity and falls back immediately when pattern breaks
@@ -149,9 +154,9 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1-32 | v0.2-v1.4 | 109/109 | Complete | 2026-01-21 |
-| 33. Traversal-Time Chain Detection | v1.6 | 0/TBD | Not Started | — |
-| 34. Sequential Cluster Reader | v1.6 | 0/TBD | Not Started | — |
+| 33. Traversal-Time Chain Detection | v1.6 | 5/5 | Complete | 2026-01-21 |
+| 34. Sequential Cluster Reader | v1.6 | 0/3 | Planned | — |
 | 35. Contiguity Validation and Fallback | v1.6 | 0/TBD | Not Started | — |
 | 36. IO-12 Validation | v1.6 | 0/TBD | Not Started | — |
 
-**Overall Progress:** 109/109 plans complete through v1.4. v1.6 planned for IO-12 completion.
+**Overall Progress:** 114/117 plans planned. v1.6 in progress (1/4 phases complete, 2/4 planned).
