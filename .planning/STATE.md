@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 32 of 32 planned (3 plans + 1 extension) — In progress
+Phase: 32 of 32 planned (3 plans + 1 extension) — Checkpoint (awaiting verification)
 Milestone: v1.4 Sequential I/O Optimization
-Status: Phase 32 Plan 01 complete (checkpoint - needs Plan 32-04), Plan 02 complete, Plan 03 complete
-Last activity: 2026-01-21 — Completed 32-03: Prefetch window tuning and memory overhead documentation
+Status: Phase 32 Plan 01 complete (checkpoint - needs Plan 32-04), Plan 02 complete, Plan 03 complete, Plan 04 complete (awaiting benchmark verification)
+Last activity: 2026-01-21 — Completed 32-04: L1 buffer neighbor extraction with unit tests (checkpoint)
 
-Progress: [█████████░] 97.2% (31/32 phases complete, 105/107 plans)
+Progress: [█████████░] 97.2% (31/32 phases complete, 106/107 plans, 1 checkpoint)
 
 ## v1.4 Milestone Goals
 
@@ -73,6 +73,7 @@ Recent decisions affecting current work:
 - v1.4 Phase 32-02: TraversalContext and SequentialReadBuffer preserve MVCC isolation - ownership model guarantees buffer evaporation on function return; 13 tests confirm no cross-traversal pollution (IO-13 SATISFIED)
 - v1.4 Phase 32-01: Benchmark results show Chain(500) = 10.90x SQLite (target: 3x). Root cause: L1 buffer lookup is instrumentation-only; full neighbor extraction from buffered NodeRecordV2 was deferred from Phase 31. Decision: Extend Phase 32 with Plan 32-04 to implement actual L1 buffer neighbor extraction.
 - v1.4 Phase 32-03: Prefetch window tuning results show window 8 (32KB) provides optimal throughput/cost ratio. Memory overhead documented at ~2-3KB per traversal (evaporates on return). Window 4 is 35% faster but caches 50% fewer nodes; Window 16+ shows diminishing returns.
+- v1.4 Phase 32-04: L1 buffer neighbor extraction implemented in get_neighbors_optimized() using EdgeCluster::deserialize to read adjacency from buffered NodeRecordV2. 8 unit tests verify outgoing/incoming direction handling, buffer miss fallback, and empty cluster handling. Awaiting benchmark verification for IO-12 target (Chain(500) <=75ms).
 
 ### Pending Todos
 
@@ -88,7 +89,7 @@ v1.4 Sequential I/O Optimization:
 - [x] Phase 32 Plan 01: Execute performance benchmarks and validate 3x SQLite target (IO-12) - RESULTS: 10.90x SQLite, needs Plan 32-04
 - [x] Phase 32 Plan 02: Create MVCC isolation tests for TraversalContext (IO-13) - 13 tests passing
 - [x] Phase 32 Plan 03: Prefetch window tuning and memory overhead documentation - Window 8 confirmed as optimal, ~2-3KB overhead
-- [ ] Phase 32 Plan 04: Implement L1 buffer neighbor extraction (NEW - to achieve IO-12 3x target)
+- [x] Phase 32 Plan 04: L1 buffer neighbor extraction with unit tests - 8 tests passing, awaiting benchmark verification
 
 ### Blockers/Concerns
 
@@ -97,7 +98,7 @@ v1.4 Sequential I/O Optimization:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 32-03 (prefetch window tuning and memory overhead documentation)
+Stopped at: Completed 32-04 (L1 buffer neighbor extraction with unit tests, checkpoint awaiting benchmark verification)
 Resume file: None
 
 ### Roadmap Evolution
@@ -111,4 +112,4 @@ Resume file: None
   - Linear pattern detection (29-01, 29-02, 29-03 complete)
   - Sequential slot reading (30-01, 30-02, 30-03 complete)
   - Traversal integration (31-01, 31-02, 31-03 complete)
-  - Validation and tuning (32-01 complete, 32-02 complete, 32-03 complete, 32-04 pending)
+  - Validation and tuning (32-01 complete, 32-02 complete, 32-03 complete, 32-04 complete - checkpoint awaiting verification)
