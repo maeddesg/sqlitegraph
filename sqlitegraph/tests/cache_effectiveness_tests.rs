@@ -10,7 +10,8 @@
 use serde_json::json;
 use sqlitegraph::{
     backend::BackendDirection,
-    bfs, bfs::ChainStep,
+    bfs,
+    multi_hop, multi_hop::ChainStep,
     GraphEdge, GraphEntity, SqliteGraph,
 };
 
@@ -230,7 +231,7 @@ fn test_cache_with_k_hop_traversal() {
     }
 
     // Run k-hop with depth 2 from center
-    let result = bfs::k_hop(&graph, center, 2, BackendDirection::Outgoing)
+    let result = multi_hop::k_hop(&graph, center, 2, BackendDirection::Outgoing)
         .expect("k-hop should complete");
 
     // At depth 1, we find all 10 spokes
@@ -323,13 +324,15 @@ fn test_cache_with_chain_query() {
     ];
 
     // Run chain query
-    let result = bfs::chain_query(&graph, node1, &chain).expect("chain query should complete");
+    let result = multi_hop::chain_query(&graph, node1, &chain).expect("chain query should complete");
 
-    // Result should contain start node (1), first hop (2, 3), and second hop (4)
-    assert!(result.contains(&node1), "Should contain start node 1");
-    assert!(result.contains(&node2), "Should contain node 2 (first hop)");
-    assert!(result.contains(&node3), "Should contain node 3 (first hop)");
-    assert!(result.contains(&node4), "Should contain node 4 (second hop)");
+    // chain_query returns only the end nodes after following the chain
+    // From node1, two outgoing steps reach node4 via both paths
+    // The result is deduped (sorted and dedup in chain_query)
+    assert!(result.contains(&node4), "Should contain node 4 (end of chain)");
+
+    // Result should be just [4] since both paths converge at node4
+    assert_eq!(result.len(), 1, "Should have exactly 1 unique end node");
 
     // Cache is working - chain query completes correctly
     // The cache prevents re-reading outgoing neighbors of node 1 when
