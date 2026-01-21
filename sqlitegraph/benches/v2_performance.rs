@@ -78,13 +78,23 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
 
         // Benchmark low degree nodes
         if !low_degree_nodes.is_empty() {
+            // Open graph ONCE before benchmark loop to exclude setup time
+            let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+                .expect("Failed to reopen graph");
+
+            // Validate graph has expected nodes before benchmarking
+            let max_id = result.max_node_id();
+            let first_node = *low_degree_nodes.first().expect("low_degree_nodes should not be empty");
+            assert!(
+                max_id >= first_node,
+                "Graph max_node_id ({}) >= first target node ({})",
+                max_id, first_node
+            );
+
             group.bench_with_input(
                 BenchmarkId::new(format!("{}_low_degree", i), low_degree_nodes.len()),
-                &(&result, &low_degree_nodes),
-                |b, (result, nodes)| {
-                    let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
-                        .expect("Failed to reopen graph");
-
+                &(&graph, &low_degree_nodes),
+                |b, (graph, nodes)| {
                     b.iter(|| {
                         for &node_id in nodes.iter().take(10) {
                             let _neighbors = black_box(
@@ -106,13 +116,23 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
 
         // Benchmark high degree nodes
         if !high_degree_nodes.is_empty() {
+            // Open graph ONCE before benchmark loop to exclude setup time
+            let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+                .expect("Failed to reopen graph");
+
+            // Validate graph has expected nodes before benchmarking
+            let max_id = result.max_node_id();
+            let first_node = *high_degree_nodes.first().expect("high_degree_nodes should not be empty");
+            assert!(
+                max_id >= first_node,
+                "Graph max_node_id ({}) >= first target node ({})",
+                max_id, first_node
+            );
+
             group.bench_with_input(
                 BenchmarkId::new(format!("{}_high_degree", i), high_degree_nodes.len()),
-                &(&result, &high_degree_nodes),
-                |b, (result, nodes)| {
-                    let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
-                        .expect("Failed to reopen graph");
-
+                &(&graph, &high_degree_nodes),
+                |b, (graph, nodes)| {
                     b.iter(|| {
                         for &node_id in nodes.iter().take(5) {
                             let _neighbors = black_box(
@@ -134,13 +154,23 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
 
         // Benchmark hub nodes
         if !hub_nodes.is_empty() {
+            // Open graph ONCE before benchmark loop to exclude setup time
+            let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
+                .expect("Failed to reopen graph");
+
+            // Validate graph has expected nodes before benchmarking
+            let max_id = result.max_node_id();
+            let first_node = *hub_nodes.first().expect("hub_nodes should not be empty");
+            assert!(
+                max_id >= first_node,
+                "Graph max_node_id ({}) >= first target node ({})",
+                max_id, first_node
+            );
+
             group.bench_with_input(
                 BenchmarkId::new(format!("{}_hub_nodes", i), hub_nodes.len()),
-                &(&result, &hub_nodes),
-                |b, (result, nodes)| {
-                    let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
-                        .expect("Failed to reopen graph");
-
+                &(&graph, &hub_nodes),
+                |b, (graph, nodes)| {
                     b.iter(|| {
                         for &node_id in nodes.iter().take(3) {
                             let _neighbors = black_box(
@@ -159,6 +189,12 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
                 },
             );
         }
+
+        // Prevent temp_dir deletion until benchmark completes
+        // The benchmark closures above borrow `graph`, which borrows `db_path`,
+        // which references the temp directory. We need to keep temp_dir alive
+        // through all benchmarks in this iteration.
+        std::mem::forget(result);
     }
 
     group.finish();
