@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 34 - Sequential Cluster Reader
-Plan: 2 of 2
-Status: Plan complete - TraversalContext cluster buffer integration complete
-Last activity: 2026-01-21 — Completed 34-02 TraversalContext cluster buffer fields
+Plan: 3 of 3
+Status: Phase complete - Lazy sequential cluster read integration in get_neighbors_optimized()
+Last activity: 2026-01-21 — Completed 34-03 Lazy sequential cluster read trigger
 
-Progress: [█████████░] 98.3% (32/32 phases complete, 116/118 plans complete, v1.4 complete, v1.6 80% done)
+Progress: [█████████░] 98.3% (32/32 phases complete, 117/118 plans complete, v1.4 complete, v1.6 87.5% done)
 
 ## v1.6 Milestone Goals
 
@@ -36,7 +36,7 @@ Progress: [█████████░] 98.3% (32/32 phases complete, 116/118
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CL-01: Traversal detects linear chains and switches to sequential cluster reads | Phase 33 | Complete (5/5 plans) |
-| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34 | Complete (34-01, 34-02) |
+| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34 | Complete (34-01, 34-02, 34-03) |
 | CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 33 | Complete (33-02) |
 | CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Pending |
 | CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Pending |
@@ -52,14 +52,14 @@ Progress: [█████████░] 98.3% (32/32 phases complete, 116/118
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | Complete (5/5 plans) |
-| 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Complete (2/2 plans) |
+| 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Complete (3/3 plans) |
 | 35 - Contiguity Validation and Fallback | Validate cluster contiguity and fall back immediately when pattern breaks | CL-04 | Pending |
 | 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Pending |
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 116
+- Total plans completed: 117
 - Average duration: 7 min
 - Total execution time: ~13.5 hours
 
@@ -72,7 +72,7 @@ Progress: [█████████░] 98.3% (32/32 phases complete, 116/118
 | v1.2 (23-24) | 7 | 1 day | ~7 min |
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
-| v1.6 (33-36) | 6 | ~12 min | ~2 min (so far) |
+| v1.6 (33-36) | 7 | ~15 min | ~2 min (so far) |
 
 **Recent Trend:**
 - Last 5 plans: ~5 min each
@@ -109,6 +109,9 @@ Recent decisions affecting current work:
 - **v1.6.7: TraversalContext cluster_buffer field uses Option<Vec<u8>> to make sequential read state explicit**
 - **v1.6.7: TraversalContext cluster_buffer_offsets field matches detector.cluster_offsets() return type**
 - **v1.6.7: clear_cluster_buffer() method enables explicit buffer clearing on fallback and reset**
+- **v1.6.8: Lazy trigger pattern ensures sequential read happens once on first miss after linear confirmation**
+- **v1.6.8: Error handling leaves cluster_buffer as None on sequential read failure (graceful fallback to L2/L3)**
+- **v1.6.8: Full neighbor extraction from cluster_buffer deferred to Phase 35 (requires node_id -> cluster_index mapping)**
 
 ### Pending Todos
 
@@ -120,6 +123,7 @@ v1.6 Chain Locality:
 - [x] Phase 33 Plan 05: Integration tests for graph patterns (completed)
 - [x] Phase 34 Plan 01: Sequential cluster reader module (completed)
 - [x] Phase 34 Plan 02: TraversalContext cluster buffer integration (completed)
+- [x] Phase 34 Plan 03: Lazy sequential cluster read trigger (completed)
 - [ ] Phase 35: Contiguity validation and fallback handling
 - [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
 
@@ -131,7 +135,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 34-02 TraversalContext cluster buffer fields
+Stopped at: Completed 34-03 Lazy sequential cluster read trigger
 Resume file: None
 
 ### Roadmap Evolution
@@ -149,4 +153,5 @@ Resume file: None
   - Phase 33 Plan 04 (2026-01-21): Chain detection instrumentation complete
   - Phase 33 Plan 05 (2026-01-21): Integration tests for graph patterns complete (Phase 33 complete)
   - Phase 34 Plan 01 (2026-01-21): SequentialClusterReader module complete
-  - Phase 34 Plan 02 (2026-01-21): TraversalContext cluster buffer integration complete (Phase 34 complete)
+  - Phase 34 Plan 02 (2026-01-21): TraversalContext cluster buffer integration complete
+  - Phase 34 Plan 03 (2026-01-21): Lazy sequential cluster read trigger complete (Phase 34 complete)
