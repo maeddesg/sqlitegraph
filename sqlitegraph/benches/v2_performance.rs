@@ -47,7 +47,9 @@ fn bench_v2_insertion(c: &mut Criterion) {
                         result.bytes_per_node,
                         result.growth_efficiency,
                     ));
-                    std::mem::forget(result); // Prevent TempDir deletion during benchmark
+                    // LIFETIME: Prevent temp_dir deletion during benchmark execution
+                    // Criterion runs benchmarks asynchronously; dropping V2GraphResult would delete files
+                    std::mem::forget(result);
                     output
                 });
             },
@@ -104,6 +106,8 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
             // Validate graph has expected nodes before benchmarking
             let max_id = result.max_node_id();
             let first_node = *low_degree_nodes.first().expect("low_degree_nodes should not be empty");
+            // INVARIANT: Verify first_node exists in reopened graph (max_node_id >= first_node)
+            // Without this, benchmark would silently measure error path or query non-existent node
             assert!(
                 max_id >= first_node,
                 "Graph max_node_id ({}) >= first target node ({})",
@@ -142,6 +146,8 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
             // Validate graph has expected nodes before benchmarking
             let max_id = result.max_node_id();
             let first_node = *high_degree_nodes.first().expect("high_degree_nodes should not be empty");
+            // INVARIANT: Verify first_node exists in reopened graph (max_node_id >= first_node)
+            // Without this, benchmark would silently measure error path or query non-existent node
             assert!(
                 max_id >= first_node,
                 "Graph max_node_id ({}) >= first target node ({})",
@@ -180,6 +186,8 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
             // Validate graph has expected nodes before benchmarking
             let max_id = result.max_node_id();
             let first_node = *hub_nodes.first().expect("hub_nodes should not be empty");
+            // INVARIANT: Verify first_node exists in reopened graph (max_node_id >= first_node)
+            // Without this, benchmark would silently measure error path or query non-existent node
             assert!(
                 max_id >= first_node,
                 "Graph max_node_id ({}) >= first target node ({})",
@@ -209,7 +217,7 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
             );
         }
 
-        // Prevent temp_dir deletion until benchmark completes
+        // LIFETIME: Prevent temp_dir deletion until benchmark completes
         // The benchmark closures above borrow `graph`, which borrows `db_path`,
         // which references the temp directory. We need to keep temp_dir alive
         // through all benchmarks in this iteration.
@@ -241,6 +249,8 @@ fn bench_v2_bfs_traversal(c: &mut Criterion) {
 
         // VALIDATION: Assert start_node exists in the generated dataset
         let start_node = result.node_ids[0];
+        // INVARIANT: Verify start_node exists in the generated dataset
+        // Without this, benchmark would silently measure error path or traverse from non-existent node
         assert!(
             result.node_ids.contains(&start_node),
             "BFS start_node {} not found in generated dataset of {} nodes",
@@ -276,7 +286,9 @@ fn bench_v2_bfs_traversal(c: &mut Criterion) {
             },
         );
 
-        std::mem::forget(result); // Preserve temp_dir after benchmark
+        // LIFETIME: Preserve temp_dir after benchmark completes
+        // Prevents TempDir deletion while benchmark closures may still reference db_path
+        std::mem::forget(result);
     }
 
     group.finish();
@@ -297,6 +309,8 @@ fn bench_v2_k_hop_traversal(c: &mut Criterion) {
 
     // VALIDATION: Assert start_node exists in the generated dataset
     let start_node = result.node_ids[0];
+    // INVARIANT: Verify start_node exists in the generated dataset
+    // Without this, benchmark would silently measure error path or traverse from non-existent node
     assert!(
         result.node_ids.contains(&start_node),
         "K-hop start_node {} not found in generated dataset of {} nodes",
@@ -329,7 +343,9 @@ fn bench_v2_k_hop_traversal(c: &mut Criterion) {
         });
     }
 
-    std::mem::forget(result); // Preserve temp_dir after benchmark
+    // LIFETIME: Preserve temp_dir after benchmark completes
+    // Prevents TempDir deletion while benchmark closures may still reference db_path
+    std::mem::forget(result);
     group.finish();
 }
 
@@ -369,7 +385,9 @@ fn bench_v2_file_growth(c: &mut Criterion) {
                         let bytes_per_node =
                             result.file_size_bytes as f64 / result.node_ids.len() as f64;
                         let output = black_box((bytes_per_edge, bytes_per_node, result.file_size_bytes));
-                        std::mem::forget(result); // Prevent TempDir deletion during benchmark
+                        // LIFETIME: Prevent temp_dir deletion during benchmark execution
+                        // Criterion runs benchmarks asynchronously; dropping V2GraphResult would delete files
+                        std::mem::forget(result);
                         output
                     });
                 },
@@ -403,7 +421,9 @@ fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
                 b.iter(|| {
                     let result = generate_v2_graph(spec);
                     let output = black_box(result.edge_count);
-                    std::mem::forget(result); // Prevent TempDir deletion during benchmark
+                    // LIFETIME: Prevent temp_dir deletion during benchmark execution
+                    // Criterion runs benchmarks asynchronously; dropping V2GraphResult would delete files
+                    std::mem::forget(result);
                     output
                 });
             },
@@ -427,6 +447,8 @@ fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
 
         // VALIDATION: Assert all multiedge_nodes exist in the generated dataset
         for &node_id in &multiedge_nodes {
+            // INVARIANT: Verify each multiedge node exists in the generated dataset
+            // Without this, benchmark would query non-existent nodes and produce invalid results
             assert!(
                 result.node_ids.contains(&node_id),
                 "Multiedge node {} not found in generated dataset of {} nodes",
@@ -459,7 +481,9 @@ fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
             );
         }
 
-        std::mem::forget(result); // Preserve temp_dir after benchmark
+        // LIFETIME: Preserve temp_dir after benchmark completes
+        // Prevents TempDir deletion while benchmark closures may still reference db_path
+        std::mem::forget(result);
     }
 
     group.finish();
