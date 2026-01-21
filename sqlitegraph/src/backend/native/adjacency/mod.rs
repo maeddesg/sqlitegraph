@@ -46,7 +46,7 @@ mod tests;
 
 pub use core_iterator::AdjacencyIterator;
 pub use helpers::AdjacencyHelpers;
-pub use linear_detector::{LinearDetector, TraversalPattern};
+pub use linear_detector::{LinearDetector, TraversalPattern, are_clusters_contiguous};
 pub use sequential_buffer::SequentialReadBuffer;
 pub use sequential_cluster_reader::SequentialClusterReader;
 // v2_clustered methods are impl blocks on AdjacencyIterator, so no explicit exports needed
