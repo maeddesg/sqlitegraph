@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 33 - Traversal-Time Chain Detection
-Plan: 1 of 4
-Status: In progress - cluster offset tracking complete
-Last activity: 2026-01-21 — Completed 33-01 cluster offset tracking
+Plan: 3 of 4
+Status: In progress - chain detection instrumentation complete
+Last activity: 2026-01-21 — Completed 33-04 chain detection instrumentation
 
-Progress: [█████████░] 97.3% (32/32 phases complete, 110/110 plans complete, v1.4 complete, v1.6 25% done)
+Progress: [█████████░] 97.4% (32/32 phases complete, 112/114 plans complete, v1.4 complete, v1.6 75% done)
 
 ## v1.6 Milestone Goals
 
@@ -35,9 +35,9 @@ Progress: [█████████░] 97.3% (32/32 phases complete, 110/110
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CL-01: Traversal detects linear chains and switches to sequential cluster reads | Phase 33 | In Progress (offset tracking complete) |
+| CL-01: Traversal detects linear chains and switches to sequential cluster reads | Phase 33 | In Progress (contiguity validation complete) |
 | CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34 | Pending |
-| CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 35 | Pending |
+| CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 33 | Complete (33-02) |
 | CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Pending |
 | CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Pending |
 
@@ -51,17 +51,17 @@ Progress: [█████████░] 97.3% (32/32 phases complete, 110/110
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets and trigger sequential read path | CL-01 | In Progress (1/4 plans) |
+| 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | In Progress (3/4 plans) |
 | 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Pending |
-| 35 - Contiguity Validation and Fallback | Validate cluster contiguity and fall back immediately when pattern breaks | CL-03, CL-04 | Pending |
+| 35 - Contiguity Validation and Fallback | Validate cluster contiguity and fall back immediately when pattern breaks | CL-04 | Pending |
 | 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Pending |
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 110
+- Total plans completed: 112
 - Average duration: 7 min
-- Total execution time: ~12.5 hours
+- Total execution time: ~12.7 hours
 
 **By Phase:**
 
@@ -72,7 +72,7 @@ Progress: [█████████░] 97.3% (32/32 phases complete, 110/110
 | v1.2 (23-24) | 7 | 1 day | ~7 min |
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
-| v1.6 (33-36) | 1 | ~2 min | ~2 min (so far) |
+| v1.6 (33-36) | 3 | ~9 min | ~3 min (so far) |
 
 **Recent Trend:**
 - Last 5 plans: ~5 min each
@@ -99,12 +99,16 @@ Recent decisions affecting current work:
 - **v1.6: Surgical scope - traversal-time sequential reads only, no metadata storage**
 - **v1.6.1: Vec<(u64, u32)> for cluster_offsets - simple tuple storage sufficient for contiguity validation**
 - **v1.6.1: observe_with_cluster() separate method - maintains backward compatibility with existing observe() calls**
+- **v1.6.2: are_clusters_contiguous() pure function for independent testing and validation**
+- **v1.6.4: Simple u64 counters for chain instrumentation (chains_detected, total_chain_length) - no atomic operations needed for single-threaded traversal**
 
 ### Pending Todos
 
 v1.6 Chain Locality:
 - [x] Phase 33 Plan 01: Cluster offset tracking (completed)
-- [ ] Phase 33 Plans 02-04: Remaining Phase 33 work
+- [x] Phase 33 Plan 02: Contiguity validation (completed)
+- [x] Phase 33 Plan 04: Chain detection instrumentation (completed)
+- [ ] Phase 33 Plan 03: Integration into traversal hot paths
 - [ ] Phase 34: Sequential cluster reader implementation
 - [ ] Phase 35: Contiguity validation and fallback handling
 - [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
@@ -117,7 +121,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 33-01 cluster offset tracking
+Stopped at: Completed 33-04 chain detection instrumentation
 Resume file: None
 
 ### Roadmap Evolution
@@ -130,3 +134,5 @@ Resume file: None
 - **v1.4 Sequential I/O Optimization** (2026-01-21): Phases 29-32 complete (IO-13 satisfied, IO-12 deferred)
 - **v1.6 Chain Locality** (2026-01-21): Phases 33-36 planned (surgical traversal-time approach)
   - Phase 33 Plan 01 (2026-01-21): Cluster offset tracking complete
+  - Phase 33 Plan 02 (2026-01-21): Contiguity validation complete
+  - Phase 33 Plan 04 (2026-01-21): Chain detection instrumentation complete
