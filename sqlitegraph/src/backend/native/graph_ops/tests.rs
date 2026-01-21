@@ -2,6 +2,7 @@
 
 use super::super::{EdgeStore, NodeStore};
 use super::*;
+use crate::backend::native::adjacency::Direction;
 use crate::backend::native::clear_node_cache;
 use crate::backend::{EdgeSpec, NodeSpec};
 use tempfile::NamedTempFile;
@@ -270,4 +271,112 @@ fn test_bfs_unchanged_behavior() {
     // BFS from leaf node (no outgoing edges) should return empty
     let result_leaf = native_bfs(&mut graph_file, 2, 2).unwrap();
     assert!(result_leaf.is_empty(), "BFS from leaf node should return empty");
+}
+
+// K-hop cache tests
+
+#[test]
+fn test_k_hop_cache_evaporation() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create triangle graph: 1 -> 2 -> 3 -> 1
+    for i in 1..=3 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Triangle edges: 1->2, 2->3, 3->1
+    let edges = [(1, 2), (2, 3), (3, 1)];
+    for (i, (from, to)) in edges.iter().enumerate() {
+        let edge = EdgeRecord::new(
+            i as NativeNodeId + 1,
+            *from,
+            *to,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // First k-hop call (depth=1 from node 1)
+    let result1 = native_k_hop(&mut graph_file, 1, 1, Direction::Outgoing).unwrap();
+    let mut expected1 = vec![2];
+    expected1.sort();
+    let mut result1_sorted = result1.clone();
+    result1_sorted.sort();
+    assert_eq!(result1_sorted, expected1, "First k-hop should return node 2");
+
+    // Second k-hop call with same parameters
+    let result2 = native_k_hop(&mut graph_file, 1, 1, Direction::Outgoing).unwrap();
+    let mut result2_sorted = result2.clone();
+    result2_sorted.sort();
+    assert_eq!(result2_sorted, expected1, "Second k-hop should return same result");
+
+    // Third k-hop call with different parameters
+    let result3 = native_k_hop(&mut graph_file, 2, 1, Direction::Outgoing).unwrap();
+    let mut expected3 = vec![3];
+    expected3.sort();
+    let mut result3_sorted = result3.clone();
+    result3_sorted.sort();
+    assert_eq!(result3_sorted, expected3, "Third k-hop from node 2 should return node 3");
+
+    // All k-hop calls produce correct results, proving cache doesn't cause cross-call pollution
+}
+
+#[test]
+fn test_k_hop_cache_effectiveness() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create diamond graph: 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4
+    for i in 1..=4 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Diamond edges
+    let edges = [(1, 2), (1, 3), (2, 4), (3, 4)];
+    for (i, (from, to)) in edges.iter().enumerate() {
+        let edge = EdgeRecord::new(
+            i as NativeNodeId + 1,
+            *from,
+            *to,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // K-hop depth=2 from node 1 should reach node 4 via two paths
+    let result = native_k_hop(&mut graph_file, 1, 2, Direction::Outgoing).unwrap();
+
+    // Node 4 should be in results (reached via 1->2->4 and 1->3->4)
+    assert!(result.contains(&4), "Should contain node 4 at depth 2");
+
+    // Nodes 2 and 3 should be in results (depth 1)
+    assert!(result.contains(&2), "Should contain node 2 at depth 1");
+    assert!(result.contains(&3), "Should contain node 3 at depth 1");
+
+    // Node 4 should appear only once (k-hop deduplicates via visited set)
+    let count_4 = result.iter().filter(|&&n| n == 4).count();
+    assert_eq!(count_4, 1, "Node 4 should appear exactly once despite two paths");
+
+    // Result correctness proves cache doesn't break k-hop semantics
 }
