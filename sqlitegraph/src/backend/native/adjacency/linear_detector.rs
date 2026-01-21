@@ -651,6 +651,143 @@ impl LinearDetector {
     pub fn is_linear_confirmed(&self) -> bool {
         self.state == DetectorState::Linear
     }
+
+    /// Get the number of chains detected during traversal.
+    ///
+    /// Returns the count of chains that have been recorded via `record_chain()`.
+    /// This metric helps validate the effectiveness of chain detection for IO-12.
+    ///
+    /// # Returns
+    ///
+    /// Number of chains detected (0 if none).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// assert_eq!(detector.chain_count(), 0);
+    ///
+    /// detector.record_chain(10);
+    /// assert_eq!(detector.chain_count(), 1);
+    ///
+    /// detector.record_chain(5);
+    /// assert_eq!(detector.chain_count(), 2);
+    /// ```
+    #[inline]
+    pub fn chain_count(&self) -> u64 {
+        self.chains_detected
+    }
+
+    /// Get the total accumulated length of all detected chains.
+    ///
+    /// Returns the sum of lengths of all chains recorded via `record_chain()`.
+    /// Combined with `chain_count()`, this enables calculating average chain length.
+    ///
+    /// # Returns
+    ///
+    /// Total chain length across all detected chains (0 if none).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// assert_eq!(detector.total_chain_length(), 0);
+    ///
+    /// detector.record_chain(10);
+    /// assert_eq!(detector.total_chain_length(), 10);
+    ///
+    /// detector.record_chain(5);
+    /// assert_eq!(detector.total_chain_length(), 15);
+    /// ```
+    #[inline]
+    pub fn total_chain_length(&self) -> u64 {
+        self.total_chain_length
+    }
+
+    /// Get the average length of detected chains.
+    ///
+    /// Returns the mean chain length across all chains recorded via `record_chain()`.
+    /// Returns 0.0 if no chains have been detected.
+    ///
+    /// # Returns
+    ///
+    /// Average chain length as f64, or 0.0 if no chains detected.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // No chains: average is 0.0
+    /// assert_eq!(detector.average_chain_length(), 0.0);
+    ///
+    /// detector.record_chain(10);
+    /// assert_eq!(detector.average_chain_length(), 10.0);
+    ///
+    /// detector.record_chain(20);
+    /// // Average: (10 + 20) / 2 = 15.0
+    /// assert_eq!(detector.average_chain_length(), 15.0);
+    /// ```
+    #[inline]
+    pub fn average_chain_length(&self) -> f64 {
+        if self.chains_detected == 0 {
+            0.0
+        } else {
+            self.total_chain_length as f64 / self.chains_detected as f64
+        }
+    }
+
+    /// Validate that recorded cluster offsets form a contiguous sequence on disk.
+    ///
+    /// Contiguity is required for sequential I/O optimization to provide benefit.
+    /// Non-contiguous clusters read sequentially are still random I/O from the
+    /// disk's perspective.
+    ///
+    /// # Returns
+    ///
+    /// `true` if clusters are contiguous, `false` otherwise. Returns `false` if
+    /// fewer than 2 clusters have been recorded (contiguity is meaningless for
+    /// a single cluster).
+    ///
+    /// # Contiguity Definition
+    ///
+    /// Clusters are contiguous if each cluster starts immediately after the
+    /// previous one ends: `offsets[i+1] == offsets[i] + sizes[i]`
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // Empty history: not contiguous
+    /// assert!(!detector.validate_contiguity());
+    ///
+    /// // Single cluster: not contiguous (need >=2)
+    /// detector.observe_with_cluster(1, 1, 1024, 4096);
+    /// assert!(!detector.validate_contiguity());
+    ///
+    /// // Two contiguous clusters: 1024 + 4096 = 5120
+    /// detector.observe_with_cluster(2, 1, 5120, 4096);
+    /// assert!(detector.validate_contiguity());
+    ///
+    /// // Third cluster creates a gap
+    /// detector.observe_with_cluster(3, 1, 10000, 4096); // should be 9216
+    /// assert!(!detector.validate_contiguity());
+    /// ```
+    #[inline]
+    pub fn validate_contiguity(&self) -> bool {
+        are_clusters_contiguous(&self.cluster_offsets)
+    }
 }
 
 impl Default for LinearDetector {
