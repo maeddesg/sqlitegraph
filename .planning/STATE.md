@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 35 - Neighbor Extraction and Fallback
-Plan: 1 of 4 (in progress)
-Status: Phase in progress - Node_id mapping complete
-Last activity: 2026-01-21 — Completed Phase 35 Plan 01: Node_id -> cluster_index mapping
+Plan: 2 of 4 (in progress)
+Status: Phase in progress - Neighbor extraction complete
+Last activity: 2026-01-21 — Completed Phase 35 Plan 02: Neighbor extraction from cluster_buffer
 
-Progress: [████████░] 98.6% (34/36 phases planned, 118/121 plans complete, v1.4 complete, v1.6 54% done)
+Progress: [████████░] 98.6% (34/36 phases planned, 119/121 plans complete, v1.4 complete, v1.6 57% done)
 
 ## v1.6 Milestone Goals
 
@@ -117,6 +117,8 @@ Recent decisions affecting current work:
 - **v1.6.9: Caller responsibility for mapping population (preserves separation of concerns)**
 - **v1.6.9: Immediate fallback on Branching pattern (clear cluster_buffer and node_cluster_index)**
 - **v1.6.9: Minimal fallback state reset (only cluster_buffer fields, not L1/L2/L3 caches)**
+- **v1.6.10: Graceful fallback on extraction failure - fall through to L2/L3 instead of failing traversal (Phase 35-02)**
+- **v1.6.10: L2 cache insertion on successful extraction - subsequent lookups avoid extraction overhead (Phase 35-02)**
 
 ### Pending Todos
 
@@ -130,7 +132,7 @@ v1.6 Chain Locality:
 - [x] Phase 34 Plan 02: TraversalContext cluster buffer integration (completed)
 - [x] Phase 34 Plan 03: Lazy sequential cluster read trigger (completed)
 - [x] Phase 35 Plan 01: Node_id -> cluster_index mapping (completed)
-- [ ] Phase 35 Plan 02: Neighbor extraction from cluster_buffer (planned)
+- [x] Phase 35 Plan 02: Neighbor extraction from cluster_buffer (completed)
 - [ ] Phase 35 Plan 03: Traversal helper and unit tests (planned)
 - [ ] Phase 35 Plan 04: Integration tests for extraction and fallback (planned)
 - [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
@@ -143,7 +145,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 35 Plan 01: Node_id -> cluster_index mapping
+Stopped at: Completed Phase 35 Plan 02: Neighbor extraction from cluster_buffer
 Resume file: None
 
 ### Roadmap Evolution
@@ -164,6 +166,7 @@ Resume file: None
   - Phase 34 Plan 02 (2026-01-21): TraversalContext cluster buffer integration complete
   - Phase 34 Plan 03 (2026-01-21): Lazy sequential cluster read trigger complete (Phase 34 complete)
   - Phase 35 Plan 01 (2026-01-21): Node_id -> cluster_index mapping complete
-  - Phase 35 (2026-01-21): Neighbor Extraction and Fallback - 3 plans remaining
+  - Phase 35 Plan 02 (2026-01-21): Neighbor extraction from cluster_buffer complete
+  - Phase 35 (2026-01-21): Neighbor Extraction and Fallback - 2 plans remaining
 
 *Updated after each plan completion*
