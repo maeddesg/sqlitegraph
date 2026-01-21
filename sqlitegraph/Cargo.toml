@@ -100,3 +100,8 @@ harness = false
 [[bench]]
 name = "v2_performance"
 harness = false
+
+# Phase 32: Prefetch window tuning benchmarks
+[[bench]]
+name = "prefetch_bench"
+harness = false
