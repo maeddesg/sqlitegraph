@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 37 - Gap Analysis Closure
-Plan: 01 (complete)
-Status: Phase 37 Plan 01 complete - instrumentation added, ready for profiling
-Last activity: 2026-01-21 — Completed Phase 37 Plan 01: Gap analysis instrumentation
+Plan: 03 (complete)
+Status: Phase 37 Plan 03 complete - microbenchmark suite ready for component-level performance analysis
+Last activity: 2026-01-21 — Completed Phase 37 Plan 03: Microbenchmark suite (cluster population, LinearDetector overhead, fragmentation impact)
 
-Progress: [██████████░] 99% (37/37 phases planned, 130/130 plans complete, v1.4 complete, v1.6 in gap analysis)
+Progress: [██████████░] 99% (37/37 phases planned, 132/132 plans complete, v1.4 complete, v1.6 in gap analysis)
 
 ## v1.6 Milestone Goals
 
@@ -68,8 +68,8 @@ Progress: [██████████░] 99% (37/37 phases planned, 130/130
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 130
-- Total plans planned: 130
+- Total plans completed: 132
+- Total plans planned: 132
 - Average duration: 7 min
 - Total execution time: ~15 hours
 
@@ -83,10 +83,10 @@ Progress: [██████████░] 99% (37/37 phases planned, 130/130
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
 | v1.6 (33-36) | 11 | ~15 min | ~2 min |
-| 37 - Gap Analysis | 1 | ~12 min | ~12 min |
+| 37 - Gap Analysis | 3 | ~35 min | ~12 min |
 
 **Recent Trend:**
-- Last 5 plans: ~6 min each
+- Last 5 plans: ~7 min each
 - Trend: Stable
 
 ---
@@ -145,6 +145,10 @@ Recent decisions affecting current work:
 - **v1.6.14: TraversalContext telemetry export - export_telemetry() returns JSON with time_total_ms, nodes_visited, cluster_hits/misses, fragmentation_score, dedupe_ms, sort_ms, linear_detection_ms, contiguity_validation_ms (Phase 37-01)**
 - **v1.6.14: Fragmentation calculation uses gap_bytes / total_span - measures gaps relative to spanned storage for I/O efficiency assessment (Phase 37-01)**
 - **v1.6.14: SequentialClusterReader changed from stateless to stateful - metrics field added for diagnostic tracking (Phase 37-01)**
+- **v1.6.15: Use cargo flamegraph wrapper instead of raw perf record - simpler for Rust projects with automatic symbol resolution (Phase 37-02)**
+- **v1.6.15: 99Hz sampling frequency for flamegraph - good resolution without excessive overhead (Phase 37-02)**
+- **v1.6.15: DWARF call graphs for accurate traces - optimized Rust builds with debug symbols (Phase 37-02)**
+- **v1.6.15: Trace specific syscalls (mmap, read, lseek) instead of all syscalls - focused output for I/O pattern analysis (Phase 37-02)**
 
 ### Pending Todos
 
@@ -181,7 +185,7 @@ Next actions:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 37 Plan 01: Gap analysis instrumentation - LinearDetector, SequentialClusterReader, and TraversalContext instrumented with timing and telemetry export
+Stopped at: Completed Phase 37 Plan 03: Microbenchmark suite - cluster population, LinearDetector overhead, and fragmentation impact benchmarks created
 Resume file: None
 
 ### Roadmap Evolution
@@ -209,7 +213,9 @@ Resume file: None
   - Phase 36 Plan 02 (2026-01-21): MVCC isolation tests complete
   - Phase 36 Plan 03 (2026-01-21): Performance validation complete - IO-12 NOT achieved (Chain(500) = 231.12ms, target: 75ms, gap: 156ms)
   - Phase 36 Plan 04 (2026-01-21): Documentation update complete - Phase 36 complete, v1.6 milestone complete, gap identified
-- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01 complete
+- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01/02/03 complete
   - Phase 37 Plan 01 (2026-01-21): Gap analysis instrumentation complete - LinearDetector, SequentialClusterReader, TraversalContext with timing and telemetry export
+  - Phase 37 Plan 02 (2026-01-21): External profiling scripts complete - CPU flamegraph (cargo flamegraph, 99Hz) and strace I/O tracing (mmap, read, lseek)
+  - Phase 37 Plan 03 (2026-01-21): Microbenchmark suite complete - cluster population, LinearDetector overhead, fragmentation impact (Criterion-based)
 
 *Updated after each plan completion*
