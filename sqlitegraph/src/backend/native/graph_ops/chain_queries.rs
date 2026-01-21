@@ -6,8 +6,8 @@ use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::*;
 use crate::backend::{BackendDirection, ChainStep, PatternMatch, PatternQuery};
 
-// Per-traversal cache for eliminating redundant I/O during chain traversal
-use super::{TraversalCache, get_neighbors_cached, TraversalCacheStats};
+// Per-traversal context for 3-tier lookup (Phase 31)
+use super::{TraversalContext, get_neighbors_optimized};
 
 /// Native chain query implementation
 pub fn native_chain_query(
@@ -18,9 +18,8 @@ pub fn native_chain_query(
     let mut current_nodes = vec![start];
     let mut result = current_nodes.clone();
 
-    // Per-traversal cache - evaporates when function returns
-    let mut cache: TraversalCache = TraversalCache::new();
-    let mut stats = TraversalCacheStats::default();
+    // Per-traversal context with 3-tier lookup (Phase 31)
+    let mut ctx = TraversalContext::new();
 
     for step in chain {
         let mut next_nodes = Vec::new();
@@ -31,6 +30,7 @@ pub fn native_chain_query(
 
         for &node in &current_nodes {
             let neighbors = if let Some(edge_type) = &step.edge_type {
+                // Edge-type filtered path: use AdjacencyHelpers directly
                 let edge_type_ref = edge_type.as_str();
                 match direction {
                     Direction::Outgoing => AdjacencyHelpers::get_outgoing_neighbors_filtered(
@@ -45,13 +45,25 @@ pub fn native_chain_query(
                     )?,
                 }
             } else {
-                // Unfiltered path: use cache
-                get_neighbors_cached(
+                // Unfiltered path: use 3-tier optimized lookup (Phase 31)
+
+                // Get degree for pattern detection (before direction matching)
+                let degree = match direction {
+                    Direction::Outgoing => AdjacencyHelpers::outgoing_degree(graph_file, node)?,
+                    Direction::Incoming => AdjacencyHelpers::incoming_degree(graph_file, node)?,
+                };
+                let _pattern = ctx.detector.observe(node, degree);
+
+                // Trigger prefetch if linear confirmed
+                if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(node) {
+                    ctx.buffer.prefetch_from(graph_file, node)?;
+                }
+
+                get_neighbors_optimized(
                     graph_file,
                     node,
                     direction,
-                    &mut cache,
-                    &mut stats,
+                    &mut ctx,
                 )?
             };
 
@@ -68,13 +80,12 @@ pub fn native_chain_query(
 
     #[cfg(debug_assertions)]
     {
-        if stats.hits + stats.misses > 0 {
-            let hit_rate = stats.hit_rate();
+        let total_lookups = ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
+        if total_lookups > 0 {
             log::debug!(
-                "Chain query cache stats: hits={}, misses={}, hit_rate={:.2}%",
-                stats.hits,
-                stats.misses,
-                hit_rate * 100.0
+                "Chain query optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
+                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.combined_hit_rate() * 100.0
             );
         }
     }
