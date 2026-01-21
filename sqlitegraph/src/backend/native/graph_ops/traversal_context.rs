@@ -14,6 +14,7 @@ use crate::backend::native::adjacency::{LinearDetector, SequentialReadBuffer};
 use crate::backend::native::graph_ops::{TraversalCache, TraversalCacheStats};
 use crate::backend::native::types::NativeNodeId;
 use ahash::AHashMap;
+use serde_json::json;
 
 /// Per-traversal context for optimized I/O
 ///
@@ -35,6 +36,13 @@ use ahash::AHashMap;
 /// - **buffer_misses**: Extended statistics: L1 buffer misses
 /// - **cluster_buffer**: Raw bytes from sequential cluster read (Phase 34)
 /// - **cluster_buffer_offsets**: Cluster offsets for positioning (Phase 34)
+/// - **time_total_ms**: Total traversal time (Phase 37 telemetry)
+/// - **nodes_visited**: Number of nodes visited (Phase 37 telemetry)
+/// - **overshoot_count**: Cluster buffer overshoot corrections (Phase 37 telemetry)
+/// - **undershoot_count**: Cluster buffer undershoot corrections (Phase 37 telemetry)
+/// - **cluster_buffer_reallocs**: Buffer reallocation count (Phase 37 telemetry)
+/// - **dedupe_time_ms**: Deduplication time (Phase 37 telemetry)
+/// - **sort_time_ms**: Sort time (Phase 37 telemetry)
 ///
 /// # Example
 ///
@@ -98,6 +106,27 @@ pub struct TraversalContext {
     /// **Memory:** O(chain_length) entries, one per node in the detected chain.
     /// **Lookup:** O(1) via AHashMap for hot neighbor extraction path.
     pub node_cluster_index: AHashMap<NativeNodeId, usize>,
+
+    /// Total traversal time in milliseconds (Phase 37 telemetry)
+    pub time_total_ms: f64,
+
+    /// Number of nodes visited during traversal (Phase 37 telemetry)
+    pub nodes_visited: u64,
+
+    /// Cluster buffer overshoot corrections (Phase 37 telemetry)
+    pub overshoot_count: u64,
+
+    /// Cluster buffer undershoot corrections (Phase 37 telemetry)
+    pub undershoot_count: u64,
+
+    /// Buffer reallocation count (Phase 37 telemetry)
+    pub cluster_buffer_reallocs: u64,
+
+    /// Deduplication time in milliseconds (Phase 37 telemetry)
+    pub dedupe_time_ms: f64,
+
+    /// Sort time in milliseconds (Phase 37 telemetry)
+    pub sort_time_ms: f64,
 }
 
 impl TraversalContext {
@@ -131,6 +160,13 @@ impl TraversalContext {
             cluster_buffer: None,
             cluster_buffer_offsets: Vec::new(),
             node_cluster_index: AHashMap::new(),
+            time_total_ms: 0.0,
+            nodes_visited: 0,
+            overshoot_count: 0,
+            undershoot_count: 0,
+            cluster_buffer_reallocs: 0,
+            dedupe_time_ms: 0.0,
+            sort_time_ms: 0.0,
         }
     }
 
@@ -228,6 +264,197 @@ impl TraversalContext {
         self.cluster_buffer_offsets.clear();
         self.node_cluster_index.clear();
     }
+
+    /// Record a node visit (Phase 37 telemetry)
+    ///
+    /// Increments the nodes_visited counter to track how many nodes
+    /// were processed during traversal.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ctx = TraversalContext::new();
+    /// ctx.record_node_visit();
+    /// ctx.record_node_visit();
+    /// assert_eq!(ctx.nodes_visited, 2);
+    /// ```
+    pub fn record_node_visit(&mut self) {
+        self.nodes_visited += 1;
+    }
+
+    /// Record a cluster buffer overshoot correction (Phase 37 telemetry)
+    ///
+    /// Increments the overshoot_count counter when the sequential cluster buffer
+    /// had to be adjusted due to size overestimation.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ctx = TraversalContext::new();
+    /// ctx.record_overshoot();
+    /// assert_eq!(ctx.overshoot_count, 1);
+    /// ```
+    pub fn record_overshoot(&mut self) {
+        self.overshoot_count += 1;
+    }
+
+    /// Record a cluster buffer undershoot correction (Phase 37 telemetry)
+    ///
+    /// Increments the undershoot_count counter when the sequential cluster buffer
+    /// had to be adjusted due to size underestimation.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ctx = TraversalContext::new();
+    /// ctx.record_undershoot();
+    /// assert_eq!(ctx.undershoot_count, 1);
+    /// ```
+    pub fn record_undershoot(&mut self) {
+        self.undershoot_count += 1;
+    }
+
+    /// Record a cluster buffer reallocation (Phase 37 telemetry)
+    ///
+    /// Increments the cluster_buffer_reallocs counter when the buffer
+    /// had to be reallocated during traversal.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ctx = TraversalContext::new();
+    /// ctx.record_buffer_realloc();
+    /// assert_eq!(ctx.cluster_buffer_reallocs, 1);
+    /// ```
+    pub fn record_buffer_realloc(&mut self) {
+        self.cluster_buffer_reallocs += 1;
+    }
+
+    /// Calculate fragmentation score from cluster offsets (Phase 37 telemetry)
+    ///
+    /// Fragmentation is the ratio of gap bytes to total bytes in the
+    /// cluster offset history. Higher fragmentation indicates more
+    /// non-contiguous storage, which reduces sequential I/O effectiveness.
+    ///
+    /// # Returns
+    ///
+    /// Fragmentation score as f64 in range [0.0, 1.0], where 0.0 means
+    /// perfectly contiguous and 1.0 means completely fragmented.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ctx = TraversalContext::new();
+    /// // Clusters are contiguous
+    /// assert_eq!(ctx.calculate_fragmentation(), 0.0);
+    /// ```
+    fn calculate_fragmentation(&self) -> f64 {
+        let gap_bytes = self.calculate_gap_bytes();
+        if gap_bytes == 0 {
+            return 0.0;
+        }
+
+        // Calculate total bytes spanned by all clusters
+        let offsets = self.detector.cluster_offsets();
+        if offsets.is_empty() {
+            return 0.0;
+        }
+
+        let first_offset = offsets[0].0;
+        let last_offset = offsets.last().unwrap().0;
+        let last_size = offsets.last().unwrap().1;
+        let total_span = (last_offset + last_size as u64) - first_offset;
+
+        if total_span == 0 {
+            0.0
+        } else {
+            gap_bytes as f64 / total_span as f64
+        }
+    }
+
+    /// Calculate total gap bytes between non-contiguous clusters (Phase 37 telemetry)
+    ///
+    /// Scans the cluster offset history and sums all gaps between clusters
+    /// that are not perfectly contiguous.
+    ///
+    /// # Returns
+    ///
+    /// Total number of gap bytes.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ctx = TraversalContext::new();
+    /// // No clusters = no gaps
+    /// assert_eq!(ctx.calculate_gap_bytes(), 0);
+    /// ```
+    fn calculate_gap_bytes(&self) -> u64 {
+        let offsets = self.detector.cluster_offsets();
+        if offsets.len() < 2 {
+            return 0;
+        }
+
+        let mut gap_bytes = 0u64;
+        for i in 0..offsets.len() - 1 {
+            let (current_offset, current_size) = offsets[i];
+            let (next_offset, _) = offsets[i + 1];
+
+            let expected_next = current_offset.saturating_add(current_size as u64);
+            if next_offset > expected_next {
+                gap_bytes += next_offset - expected_next;
+            }
+        }
+
+        gap_bytes
+    }
+
+    /// Export telemetry as JSON string (Phase 37)
+    ///
+    /// Collects all diagnostic metrics from the traversal context and returns
+    /// them as a JSON string for analysis. This includes timing, hit/miss rates,
+    /// fragmentation scores, and CPU breakdown.
+    ///
+    /// # Returns
+    ///
+    /// JSON string containing all telemetry fields.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ctx = TraversalContext::new();
+    /// ctx.record_node_visit();
+    /// ctx.record_buffer_hit();
+    ///
+    /// let telemetry_json = ctx.export_telemetry();
+    /// let telemetry: serde_json::Value = serde_json::from_str(&telemetry_json).unwrap();
+    /// assert_eq!(telemetry["nodes_visited"], 1);
+    /// assert_eq!(telemetry["cluster_hits"], 1);
+    /// ```
+    pub fn export_telemetry(&self) -> String {
+        let telemetry = json!({
+            "time_total_ms": self.time_total_ms,
+            "nodes_visited": self.nodes_visited,
+            "cluster_hits": self.buffer_hits,
+            "cluster_misses": self.buffer_misses,
+            "overshoot_count": self.overshoot_count,
+            "undershoot_count": self.undershoot_count,
+            "cluster_buffer_reallocs": self.cluster_buffer_reallocs,
+            "l2_cache_hits": self.stats.hits,
+            "l2_cache_misses": self.stats.misses,
+            "dedupe_ms": self.dedupe_time_ms,
+            "sort_ms": self.sort_time_ms,
+            "linear_detection_ms": self.detector.time_linear_detection_ms(),
+            "contiguity_validation_ms": self.detector.time_contiguity_validation_ms(),
+            "chains_detected": self.detector.chain_count(),
+            "average_chain_length": self.detector.average_chain_length(),
+            "fragmentation_score": self.calculate_fragmentation(),
+            "gap_bytes": self.calculate_gap_bytes(),
+            "cluster_offsets_count": self.detector.cluster_offsets().len(),
+            "combined_hit_rate": self.combined_hit_rate(),
+        });
+
+        telemetry.to_string()
+    }
 }
 
 impl Default for TraversalContext {
@@ -253,6 +480,14 @@ mod tests {
         assert!(ctx.cluster_buffer.is_none());
         assert!(ctx.cluster_buffer_offsets.is_empty());
         assert!(ctx.node_cluster_index.is_empty());
+        // Phase 37 telemetry fields
+        assert_eq!(ctx.time_total_ms, 0.0);
+        assert_eq!(ctx.nodes_visited, 0);
+        assert_eq!(ctx.overshoot_count, 0);
+        assert_eq!(ctx.undershoot_count, 0);
+        assert_eq!(ctx.cluster_buffer_reallocs, 0);
+        assert_eq!(ctx.dedupe_time_ms, 0.0);
+        assert_eq!(ctx.sort_time_ms, 0.0);
     }
 
     #[test]
