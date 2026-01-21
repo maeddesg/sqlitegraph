@@ -175,37 +175,44 @@ fn bench_v2_bfs_traversal(c: &mut Criterion) {
 
         let result = generate_v2_graph(&spec);
 
+        // VALIDATION: Assert start_node exists in the generated dataset
+        let start_node = result.node_ids[0];
+        assert!(
+            result.node_ids.contains(&start_node),
+            "BFS start_node {} not found in generated dataset of {} nodes",
+            start_node,
+            result.node_ids.len()
+        );
+
         group.bench_with_input(
             BenchmarkId::new("bfs_depth_5", node_count),
-            &(&result, 5),
-            |b, (result, depth)| {
+            &(&result, start_node, 5),
+            |b, (result, start_node, depth)| {
                 let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
                     .expect("Failed to reopen graph");
 
-                let start_node = result.node_ids[0]; // Use first node as start
-
                 b.iter(|| {
                     let _visited =
-                        black_box(graph.bfs(start_node, *depth).expect("Failed to run BFS"));
+                        black_box(graph.bfs(*start_node, *depth).expect("Failed to run BFS"));
                 });
             },
         );
 
         group.bench_with_input(
             BenchmarkId::new("bfs_depth_10", node_count),
-            &(&result, 10),
-            |b, (result, depth)| {
+            &(&result, start_node, 10),
+            |b, (result, start_node, depth)| {
                 let graph = sqlitegraph::open_graph(&result.db_path, &GraphConfig::native())
                     .expect("Failed to reopen graph");
 
-                let start_node = result.node_ids[0];
-
                 b.iter(|| {
                     let _visited =
-                        black_box(graph.bfs(start_node, *depth).expect("Failed to run BFS"));
+                        black_box(graph.bfs(*start_node, *depth).expect("Failed to run BFS"));
                 });
             },
         );
+
+        std::mem::forget(result); // Preserve temp_dir after benchmark
     }
 
     group.finish();
