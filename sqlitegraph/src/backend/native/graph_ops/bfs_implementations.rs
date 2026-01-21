@@ -6,6 +6,9 @@ use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::optimizations;
 use crate::backend::native::types::*;
 
+// Per-traversal cache for eliminating redundant I/O during BFS
+use super::{TraversalCache, get_neighbors_cached, TraversalCacheStats};
+
 /// Generic scalar BFS implementation (baseline for all CPUs/large graphs)
 pub fn bfs_generic_scalar(
     graph_file: &mut GraphFile,
@@ -20,6 +23,10 @@ pub fn bfs_generic_scalar(
     let mut queue = std::collections::VecDeque::new();
     let mut result = Vec::new();
 
+    // Per-traversal cache - evaporates when function returns
+    let mut cache: TraversalCache = TraversalCache::new();
+    let mut stats = TraversalCacheStats::default();
+
     visited.insert(start);
     queue.push_back((start, 0));
 
@@ -28,13 +35,32 @@ pub fn bfs_generic_scalar(
             continue;
         }
 
-        let neighbors = AdjacencyHelpers::get_outgoing_neighbors(graph_file, current_node)?;
+        let neighbors = get_neighbors_cached(
+            graph_file,
+            current_node,
+            crate::backend::native::adjacency::Direction::Outgoing,
+            &mut cache,
+            &mut stats,
+        )?;
         for neighbor in neighbors {
             if !visited.contains(&neighbor) {
                 visited.insert(neighbor);
                 result.push(neighbor);
                 queue.push_back((neighbor, current_depth + 1));
             }
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        if stats.hits + stats.misses > 0 {
+            let hit_rate = stats.hit_rate();
+            log::debug!(
+                "BFS cache stats: hits={}, misses={}, hit_rate={:.2}%",
+                stats.hits,
+                stats.misses,
+                hit_rate * 100.0
+            );
         }
     }
 
@@ -54,6 +80,10 @@ pub fn bfs_pointer_table_optimized(
     let mut visited = std::collections::HashSet::new();
     let mut queue = std::collections::VecDeque::new();
     let mut result = Vec::new();
+
+    // Per-traversal cache for fallback path
+    let mut cache: TraversalCache = TraversalCache::new();
+    let mut stats = TraversalCacheStats::default();
 
     visited.insert(start);
     queue.push_back((start, 0));
@@ -75,8 +105,14 @@ pub fn bfs_pointer_table_optimized(
                 }
                 neighbor_ids
             } else {
-                // Fallback to standard adjacency lookup
-                AdjacencyHelpers::get_outgoing_neighbors(graph_file, current_node)?
+                // Fallback to standard adjacency lookup with caching
+                get_neighbors_cached(
+                    graph_file,
+                    current_node,
+                    crate::backend::native::adjacency::Direction::Outgoing,
+                    &mut cache,
+                    &mut stats,
+                )?
             };
 
         for neighbor in neighbors {
@@ -85,6 +121,19 @@ pub fn bfs_pointer_table_optimized(
                 result.push(neighbor);
                 queue.push_back((neighbor, current_depth + 1));
             }
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        if stats.hits + stats.misses > 0 {
+            let hit_rate = stats.hit_rate();
+            log::debug!(
+                "BFS pointer table optimized cache stats: hits={}, misses={}, hit_rate={:.2}%",
+                stats.hits,
+                stats.misses,
+                hit_rate * 100.0
+            );
         }
     }
 
