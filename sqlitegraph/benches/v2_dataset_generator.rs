@@ -102,6 +102,32 @@ pub struct V2GraphResult {
     pub growth_efficiency: f64, // bytes_per_entity ratio
 }
 
+impl V2GraphResult {
+    /// Get the maximum node ID from the generated graph
+    /// Used for validating that nodes exist before querying
+    pub fn max_node_id(&self) -> i64 {
+        *self.node_ids.iter().max().unwrap_or(&1)
+    }
+
+    /// Validate that a specific node ID exists in this graph result
+    pub fn validate_node_exists(&self, node_id: i64) -> bool {
+        self.node_ids.contains(&node_id)
+    }
+
+    /// Leak the temp_dir to extend lifetime for benchmark duration
+    ///
+    /// This prevents the TempDir from being deleted when V2GraphResult drops.
+    /// Call this after benchmark completes, or use std::mem::forget directly.
+    ///
+    /// # Safety
+    /// The temp directory will not be deleted and will leak until process exit.
+    /// This is acceptable for benchmarks where we need the directory to persist
+    /// through the benchmark timing loop.
+    pub fn leak_temp_dir(self) {
+        std::mem::forget(self.temp_dir);
+    }
+}
+
 /// Generate a V2 test graph with deterministic patterns
 pub fn generate_v2_graph(spec: &V2GraphSpec) -> V2GraphResult {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
