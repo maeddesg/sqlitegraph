@@ -182,7 +182,7 @@ fn insert_mixed(criterion: &mut Criterion) {
     group.measurement_time(MEASURE);
     group.warm_up_time(WARM_UP);
 
-    for &size in &[100, 1_000, 5_000] {
+    for &size in &[100, 500] {
         // Smaller sizes for mixed inserts
         // SQLite backend
         group.bench_with_input(
