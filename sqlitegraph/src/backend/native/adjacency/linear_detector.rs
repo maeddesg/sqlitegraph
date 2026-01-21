@@ -311,6 +311,95 @@ impl LinearDetector {
         }
     }
 
+    /// Observe a node with its cluster information.
+    ///
+    /// This method extends `observe()` by also recording cluster offset and size
+    /// for contiguity validation in Phase 34. It performs the same degree-based
+    /// pattern detection as `observe()` while building a history of cluster locations.
+    ///
+    /// # Parameters
+    ///
+    /// - **node_id**: The node being observed
+    /// - **degree**: The node's degree (typically from `AdjacencyHelpers::outgoing_degree()`)
+    /// - **cluster_offset**: Byte offset of the node's edge cluster in the graph file
+    /// - **cluster_size**: Size of the edge cluster in bytes
+    ///
+    /// # Returns
+    ///
+    /// The current `TraversalPattern` classification after this observation.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::{LinearDetector, TraversalPattern};
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // Observe nodes with cluster information
+    /// assert_eq!(
+    ///     detector.observe_with_cluster(1, 1, 1024, 4096),
+    ///     TraversalPattern::Unknown
+    /// );
+    /// assert_eq!(
+    ///     detector.observe_with_cluster(2, 1, 5120, 4096),
+    ///     TraversalPattern::Unknown
+    /// );
+    /// assert_eq!(
+    ///     detector.observe_with_cluster(3, 1, 9216, 4096),
+    ///     TraversalPattern::Linear
+    /// );
+    ///
+    /// // Cluster offsets are recorded for contiguity validation
+    /// let offsets = detector.cluster_offsets();
+    /// assert_eq!(offsets.len(), 3);
+    /// assert_eq!(offsets[0], (1024, 4096));
+    /// assert_eq!(offsets[1], (5120, 4096));
+    /// assert_eq!(offsets[2], (9216, 4096));
+    /// ```
+    #[inline]
+    pub fn observe_with_cluster(
+        &mut self,
+        node_id: NativeNodeId,
+        degree: u32,
+        cluster_offset: u64,
+        cluster_size: u32,
+    ) -> TraversalPattern {
+        // Record cluster offset before pattern detection
+        self.cluster_offsets.push((cluster_offset, cluster_size));
+
+        // Delegate to existing observe() for pattern detection
+        self.observe(node_id, degree)
+    }
+
+    /// Get the recorded cluster offsets.
+    ///
+    /// Returns a slice of (offset, size) tuples representing the clusters
+    /// observed during traversal. This enables contiguity validation in Phase 34.
+    ///
+    /// # Returns
+    ///
+    /// Slice of (cluster_offset, cluster_size) tuples.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// detector.observe_with_cluster(1, 1, 1024, 4096);
+    /// detector.observe_with_cluster(2, 1, 5120, 4096);
+    ///
+    /// let offsets = detector.cluster_offsets();
+    /// assert_eq!(offsets.len(), 2);
+    /// assert_eq!(offsets[0], (1024, 4096));
+    /// assert_eq!(offsets[1], (5120, 4096));
+    /// ```
+    #[inline]
+    pub fn cluster_offsets(&self) -> &[(u64, u32)] {
+        &self.cluster_offsets
+    }
+
     /// Get confidence score (0.0 to 1.0).
     ///
     /// Confidence indicates how certain the detector is that the current
