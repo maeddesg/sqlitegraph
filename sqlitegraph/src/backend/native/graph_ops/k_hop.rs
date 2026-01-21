@@ -40,7 +40,7 @@ pub fn native_k_hop(
 
             // Trigger prefetch if linear confirmed
             if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(node) {
-                ctx.buffer.prefetch_from(graph_file, node)?;
+                ctx.buffer.prefetch_clusters_from(graph_file, node)?;
             }
 
             let neighbors = get_neighbors_optimized(

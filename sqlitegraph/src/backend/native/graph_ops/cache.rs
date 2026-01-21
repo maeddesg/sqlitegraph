@@ -197,6 +197,7 @@ pub fn get_neighbors_cached(
 /// 1. **L1: SequentialReadBuffer** - Decoded node slots from batched reads (fastest)
 ///    - Only checked after LinearDetector confirms linear pattern
 ///    - Extracts neighbors directly from buffered NodeRecordV2
+///    - Checks cluster cache before doing file I/O (Phase 32-05)
 ///    - Records buffer hit/miss for statistics
 ///
 /// 2. **L2: TraversalCache** - Cached neighbor lists (from v1.3)
@@ -218,18 +219,19 @@ pub fn get_neighbors_cached(
 ///
 /// An owned `Vec<NativeNodeId>` containing the neighbor node IDs.
 ///
-/// # L1 Buffer Extraction (Phase 32-04)
+/// # L1 Buffer Extraction with Cluster Cache (Phase 32-04, 32-05)
 ///
 /// When a node is found in the SequentialReadBuffer and has valid cluster metadata,
-/// this function reads the edge cluster data directly from the buffered NodeRecordV2.
-/// This avoids the overhead of re-reading the node slot from storage.
+/// this function first checks if the cluster data is cached. If cached, it deserializes
+/// from the cached bytes (no I/O). If not cached, it reads from file.
 ///
 /// The extraction process:
 /// 1. Check if node is in buffer (only after linear pattern confirmed)
 /// 2. Extract cluster_offset and cluster_size based on direction
-/// 3. If cluster_offset > 0 and cluster_size > 0, read cluster data
-/// 4. Deserialize EdgeCluster and extract neighbors via iter_neighbors()
-/// 5. Return neighbors immediately (early return, no L2/L3 fallback)
+/// 3. Check cluster cache: if cached, deserialize from cached bytes (no I/O)
+/// 4. If not cached, read cluster data from file
+/// 5. Deserialize EdgeCluster and extract neighbors via iter_neighbors()
+/// 6. Return neighbors immediately (early return, no L2/L3 fallback)
 ///
 /// If buffer miss or cluster metadata is invalid, fall through to L2/L3.
 ///
@@ -245,9 +247,9 @@ pub fn get_neighbors_cached(
 /// let degree = AdjacencyHelpers::outgoing_degree(graph_file, node_id)?;
 /// ctx.detector.observe(node_id, degree);
 ///
-/// // Trigger prefetch if linear confirmed
+/// // Trigger prefetch with cluster caching if linear confirmed
 /// if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(node_id) {
-///     ctx.buffer.prefetch_from(graph_file, node_id)?;
+///     ctx.buffer.prefetch_clusters_from(graph_file, node_id)?;
 /// }
 ///
 /// // Get neighbors via 3-tier lookup
@@ -289,7 +291,22 @@ pub fn get_neighbors_optimized(
 
             // If cluster metadata is valid, extract neighbors from buffer
             if cluster_offset > 0 && cluster_size > 0 {
-                // Read cluster data from file
+                // First, check if cluster data is already cached in buffer
+                if let Some(cached_cluster_bytes) = ctx.buffer.get_cluster(cluster_offset) {
+                    // Cluster cache hit - deserialize from cached bytes (no I/O)
+                    if let Ok(cluster) = EdgeCluster::deserialize(cached_cluster_bytes) {
+                        let neighbors: Vec<NativeNodeId> =
+                            cluster.iter_neighbors().map(|id| id as NativeNodeId).collect();
+
+                        // Insert into L2 cache for future lookups in this traversal
+                        ctx.cache.insert(cache_key, neighbors.clone());
+
+                        return Ok(neighbors);
+                    }
+                    // If deserialization fails, fall through to file I/O below
+                }
+
+                // Cluster cache miss - read cluster data from file
                 let mut cluster_data = vec![0u8; cluster_size as usize];
                 if graph_file.read_bytes(cluster_offset, &mut cluster_data).is_ok() {
                     // Deserialize edge cluster and extract neighbors

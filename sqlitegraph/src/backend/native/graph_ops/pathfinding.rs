@@ -65,7 +65,7 @@ pub fn native_shortest_path(
 
         // Trigger prefetch if linear confirmed
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
-            ctx.buffer.prefetch_from(graph_file, current_node)?;
+            ctx.buffer.prefetch_clusters_from(graph_file, current_node)?;
         }
 
         let neighbors = get_neighbors_optimized(

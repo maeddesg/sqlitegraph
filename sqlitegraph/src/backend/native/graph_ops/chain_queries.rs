@@ -56,7 +56,7 @@ pub fn native_chain_query(
 
                 // Trigger prefetch if linear confirmed
                 if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(node) {
-                    ctx.buffer.prefetch_from(graph_file, node)?;
+                    ctx.buffer.prefetch_clusters_from(graph_file, node)?;
                 }
 
                 get_neighbors_optimized(
