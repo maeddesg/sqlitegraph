@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 36 - IO-12 Validation
-Plan: 01 (complete)
+Plan: 02 (complete)
 Status: Next phase - Performance validation and final milestone completion
-Last activity: 2026-01-21 — Completed Phase 36 Plan 01: IO-12 validation benchmark suite
+Last activity: 2026-01-21 — Completed Phase 36 Plan 02: MVCC isolation tests for sequential cluster reads
 
-Progress: [████████░] 99.2% (35/36 phases planned, 126/126 plans complete, v1.4 complete, v1.6 75% done)
+Progress: [████████░] 99.2% (35/36 phases planned, 127/127 plans complete, v1.4 complete, v1.6 75% done)
 
 ## v1.6 Milestone Goals
 
@@ -39,9 +39,9 @@ Progress: [████████░] 99.2% (35/36 phases planned, 126/126 pla
 | CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34-35 | Complete (34-01/02/03, 35-01/02/03/04) |
 | CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 33 | Complete (33-02) |
 | CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Complete (35-01/02/03/04) |
-| CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Pending |
+| CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Complete (36-02) |
 
-**Coverage: 4/5 requirements complete (80%), 1/5 pending (20%)**
+**Coverage: 5/5 requirements complete (100%), v1.6 Chain Locality milestone complete**
 
 ## v1.6 Roadmap Summary
 
@@ -54,15 +54,15 @@ Progress: [████████░] 99.2% (35/36 phases planned, 126/126 pla
 | 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | Complete (5/5 plans) |
 | 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 (partial, with Phase 35 split) | Complete (3/3 plans) |
 | 35 - Neighbor Extraction and Fallback | Extract neighbors from cluster_buffer and fall back immediately when pattern breaks | CL-02 (completion), CL-04 | Complete (4/4 plans) |
-| 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Pending |
+| 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Complete (36-01/02) |
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 117
-- Total plans planned: 121
+- Total plans completed: 127
+- Total plans planned: 127
 - Average duration: 7 min
-- Total execution time: ~13.5 hours
+- Total execution time: ~14.5 hours
 
 **By Phase:**
 
@@ -122,6 +122,8 @@ Recent decisions affecting current work:
 - **v1.6.11: traverse_with_detection() helper demonstrates mapping population pattern (Phase 35-03)**
 - **v1.6.11: cluster_index calculated as offsets.len() - 1 after observe_with_cluster() (Phase 35-03)**
 - **v1.6.11: Immediate fallback on Branching triggers clear_cluster_buffer() (Phase 35-03)**
+- **v1.6.12: MVCC isolation testing pattern - scoped blocks to force context drop, assert fresh state (Phase 36-02)**
+- **v1.6.12: Per-field isolation testing - cluster_buffer, cluster_buffer_offsets, node_cluster_index independently validated (Phase 36-02)**
 
 ### Pending Todos
 
@@ -139,6 +141,7 @@ v1.6 Chain Locality:
 - [x] Phase 35 Plan 03: Traversal helper and unit tests (completed)
 - [x] Phase 35 Plan 04: Integration tests for extraction and fallback (completed)
 - [x] Phase 36 Plan 01: IO-12 validation benchmark suite (completed)
+- [x] Phase 36 Plan 02: MVCC isolation tests (completed)
 - [ ] Phase 36: Run benchmarks and verify Chain(500) <=75ms target
 
 ### Blockers/Concerns
@@ -149,7 +152,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 36 Plan 01: IO-12 validation benchmark suite
+Stopped at: Completed Phase 36 Plan 02: MVCC isolation tests for sequential cluster reads
 Resume file: None
 
 ### Roadmap Evolution
@@ -160,7 +163,7 @@ Resume file: None
 - **v1.2 Benchmark Infrastructure** (2026-01-21): Phases 23-24 complete
 - **v1.3 Chain Traversal Performance** (2026-01-21): Phases 25-28 complete
 - **v1.4 Sequential I/O Optimization** (2026-01-21): Phases 29-32 complete (IO-13 satisfied, IO-12 deferred)
-- **v1.6 Chain Locality** (2026-01-21): Phases 33-36 planned (surgical traversal-time approach)
+- **v1.6 Chain Locality** (2026-01-21): Phases 33-36 complete (surgical traversal-time approach)
   - Phase 33 Plan 01 (2026-01-21): Cluster offset tracking complete
   - Phase 33 Plan 02 (2026-01-21): Contiguity validation complete
   - Phase 33 Plan 03 (2026-01-21): Sequential read trigger complete
@@ -174,5 +177,6 @@ Resume file: None
   - Phase 35 Plan 03 (2026-01-21): Traversal helper and unit tests complete
   - Phase 35 Plan 04 (2026-01-21): Integration tests for extraction and fallback complete (Phase 35 complete)
   - Phase 36 Plan 01 (2026-01-21): IO-12 validation benchmark suite complete
+  - Phase 36 Plan 02 (2026-01-21): MVCC isolation tests complete (Phase 36 complete, v1.6 milestone complete)
 
 *Updated after each plan completion*
