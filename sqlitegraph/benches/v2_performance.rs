@@ -344,6 +344,16 @@ fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
             }
         }
 
+        // VALIDATION: Assert all multiedge_nodes exist in the generated dataset
+        for &node_id in &multiedge_nodes {
+            assert!(
+                result.node_ids.contains(&node_id),
+                "Multiedge node {} not found in generated dataset of {} nodes",
+                node_id,
+                result.node_ids.len()
+            );
+        }
+
         if !multiedge_nodes.is_empty() {
             group.bench_with_input(
                 BenchmarkId::new("neighbors_dedup", multi_factor),
@@ -367,6 +377,8 @@ fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
                 },
             );
         }
+
+        std::mem::forget(result); // Preserve temp_dir after benchmark
     }
 
     group.finish();
