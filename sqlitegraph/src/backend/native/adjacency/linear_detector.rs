@@ -61,6 +61,68 @@
 
 use crate::backend::native::types::NativeNodeId;
 
+/// Check if cluster offsets form a contiguous sequence on disk.
+///
+/// Contiguity is required for sequential I/O to provide benefit. Non-contiguous
+/// clusters read sequentially are still random I/O from the disk's perspective.
+///
+/// # Parameters
+///
+/// - **offsets**: Slice of (cluster_offset, cluster_size) tuples
+///
+/// # Returns
+///
+/// `true` if clusters are contiguous, `false` otherwise. Returns `false` if
+/// fewer than 2 clusters are provided (contiguity is meaningless for a single cluster).
+///
+/// # Contiguity Definition
+///
+/// Clusters are contiguous if each cluster starts immediately after the
+/// previous one ends: `offsets[i+1] == offsets[i] + sizes[i]`
+///
+/// # Examples
+///
+/// ```
+/// use sqlitegraph::backend::native::adjacency::are_clusters_contiguous;
+///
+/// // Empty: not contiguous
+/// assert!(!are_clusters_contiguous(&[]));
+///
+/// // Single cluster: not contiguous (need >=2)
+/// assert!(!are_clusters_contiguous(&[(1024, 4096)]));
+///
+/// // Two contiguous clusters: 1024 + 4096 = 5120
+/// assert!(are_clusters_contiguous(&[(1024, 4096), (5120, 4096)]));
+///
+/// // Gap between clusters
+/// assert!(!are_clusters_contiguous(&[(1024, 4096), (6000, 4096)]));
+///
+/// // Overlapping clusters
+/// assert!(!are_clusters_contiguous(&[(1024, 4096), (4000, 4096)]));
+/// ```
+pub fn are_clusters_contiguous(offsets: &[(u64, u32)]) -> bool {
+    // Need at least 2 clusters to check contiguity
+    if offsets.len() < 2 {
+        return false;
+    }
+
+    // Check that each cluster starts where the previous one ended
+    for i in 0..offsets.len() - 1 {
+        let (current_offset, current_size) = offsets[i];
+        let (next_offset, _) = offsets[i + 1];
+
+        // Compute expected next offset (watch for overflow)
+        let expected_next = current_offset.saturating_add(current_size as u64);
+
+        // Next cluster must start exactly where current ends
+        if next_offset != expected_next {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Traversal pattern classification.
 ///
 /// Represents the detected traversal pattern based on observed node degrees.
@@ -408,6 +470,39 @@ impl LinearDetector {
     #[inline]
     pub fn cluster_offsets(&self) -> &[(u64, u32)] {
         &self.cluster_offsets
+    }
+
+    /// Record a detected chain for instrumentation.
+    ///
+    /// This method is called when a linear chain is detected during traversal.
+    /// It increments the chain counter and accumulates the chain length for
+    /// average chain length calculation.
+    ///
+    /// # Parameters
+    ///
+    /// - **length**: The length of the detected chain (number of nodes/edges)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // Record a chain of length 10
+    /// detector.record_chain(10);
+    /// assert_eq!(detector.chain_count(), 1);
+    /// assert_eq!(detector.total_chain_length(), 10);
+    ///
+    /// // Record another chain of length 5
+    /// detector.record_chain(5);
+    /// assert_eq!(detector.chain_count(), 2);
+    /// assert_eq!(detector.total_chain_length(), 15);
+    /// ```
+    #[inline]
+    pub fn record_chain(&mut self, length: u32) {
+        self.chains_detected += 1;
+        self.total_chain_length += length as u64;
     }
 
     /// Get confidence score (0.0 to 1.0).
