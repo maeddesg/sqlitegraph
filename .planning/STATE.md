@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 33 - Traversal-Time Chain Detection
-Plan: 3 of 4
-Status: In progress - sequential read trigger complete
-Last activity: 2026-01-21 — Completed 33-03 sequential read trigger
+Plan: 5 of 5
+Status: Phase complete - integration tests validated
+Last activity: 2026-01-21 — Completed 33-05 integration tests
 
-Progress: [█████████░] 97.4% (32/32 phases complete, 113/114 plans complete, v1.4 complete, v1.6 75% done)
+Progress: [█████████░] 97.4% (32/32 phases complete, 114/118 plans complete, v1.4 complete, v1.6 75% done)
 
 ## v1.6 Milestone Goals
 
@@ -51,7 +51,7 @@ Progress: [█████████░] 97.4% (32/32 phases complete, 113/114
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | In Progress (3/4 plans) |
+| 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | Complete (5/5 plans) |
 | 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 | Pending |
 | 35 - Contiguity Validation and Fallback | Validate cluster contiguity and fall back immediately when pattern breaks | CL-04 | Pending |
 | 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Pending |
@@ -59,9 +59,9 @@ Progress: [█████████░] 97.4% (32/32 phases complete, 113/114
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 113
+- Total plans completed: 114
 - Average duration: 7 min
-- Total execution time: ~12.8 hours
+- Total execution time: ~13 hours
 
 **By Phase:**
 
@@ -72,7 +72,7 @@ Progress: [█████████░] 97.4% (32/32 phases complete, 113/114
 | v1.2 (23-24) | 7 | 1 day | ~7 min |
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
-| v1.6 (33-36) | 3 | ~9 min | ~3 min (so far) |
+| v1.6 (33-36) | 5 | ~11 min | ~2 min (so far) |
 
 **Recent Trend:**
 - Last 5 plans: ~5 min each
@@ -102,6 +102,7 @@ Recent decisions affecting current work:
 - **v1.6.2: are_clusters_contiguous() pure function for independent testing and validation**
 - **v1.6.4: Simple u64 counters for chain instrumentation (chains_detected, total_chain_length) - no atomic operations needed for single-threaded traversal**
 - **v1.6.5: should_use_sequential_read() combines is_linear_confirmed() && validate_contiguity() for Phase 34 integration**
+- **v1.6.5: Integration tests validate chain detection on Chain(100), prevent false positives on trees/diamonds, and reject non-contiguous storage**
 
 ### Pending Todos
 
@@ -110,6 +111,7 @@ v1.6 Chain Locality:
 - [x] Phase 33 Plan 02: Contiguity validation (completed)
 - [x] Phase 33 Plan 03: Sequential read trigger (completed)
 - [x] Phase 33 Plan 04: Chain detection instrumentation (completed)
+- [x] Phase 33 Plan 05: Integration tests for graph patterns (completed)
 - [ ] Phase 34: Sequential cluster reader implementation
 - [ ] Phase 35: Contiguity validation and fallback handling
 - [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
@@ -122,7 +124,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 33-03 sequential read trigger
+Stopped at: Completed 33-05 integration tests (Phase 33 complete)
 Resume file: None
 
 ### Roadmap Evolution
@@ -138,3 +140,4 @@ Resume file: None
   - Phase 33 Plan 02 (2026-01-21): Contiguity validation complete
   - Phase 33 Plan 03 (2026-01-21): Sequential read trigger complete
   - Phase 33 Plan 04 (2026-01-21): Chain detection instrumentation complete
+  - Phase 33 Plan 05 (2026-01-21): Integration tests for graph patterns complete (Phase 33 complete)
