@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 29 of 32 complete (1/4 plans)
+Phase: 29 of 32 complete (2/4 plans)
 Milestone: v1.4 Sequential I/O Optimization
 Status: In progress
-Last activity: 2026-01-21 — Completed Phase 29 Plan 01: LinearDetector State Machine
+Last activity: 2026-01-21 — Completed Phase 29 Plan 02: Module Exports for LinearDetector
 
-Progress: [█████████░] 90.6% (29/32 phases, 98/100 plans)
+Progress: [█████████░] 91.0% (29/32 phases, 99/100 plans)
 
 ## v1.4 Milestone Goals
 
@@ -72,6 +72,7 @@ Recent decisions affecting current work:
 
 v1.4 Sequential I/O Optimization:
 - [x] Phase 29 Plan 01: Implement LinearDetector state machine (4-state FSM, 13 tests passing)
+- [x] Phase 29 Plan 02: Module exports for LinearDetector (accessible from adjacency and graph_ops)
 - [ ] Phase 30: Implement SequentialReadBuffer and batch reading
 - [ ] Phase 31: Integrate into traversal hot paths
 - [ ] Phase 32: Validate performance improvement and MVCC preservation
@@ -83,7 +84,7 @@ v1.4 Sequential I/O Optimization:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 29 Plan 01: LinearDetector State Machine
+Stopped at: Completed Phase 29 Plan 02: Module Exports for LinearDetector
 Resume file: None
 
 ### Roadmap Evolution
