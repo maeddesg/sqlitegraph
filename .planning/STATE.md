@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 35 - Neighbor Extraction and Fallback
-Plan: 3 of 4 (in progress)
-Status: Phase in progress - Traversal helper added
-Last activity: 2026-01-21 — Completed Phase 35 Plan 03: Traversal helper and unit tests
+Phase: 36 - IO-12 Validation
+Plan: 01 (complete)
+Status: Next phase - Performance validation and final milestone completion
+Last activity: 2026-01-21 — Completed Phase 36 Plan 01: IO-12 validation benchmark suite
 
-Progress: [████████░] 98.6% (34/36 phases planned, 120/121 plans complete, v1.4 complete, v1.6 57% done)
+Progress: [████████░] 99.2% (35/36 phases planned, 126/126 plans complete, v1.4 complete, v1.6 75% done)
 
 ## v1.6 Milestone Goals
 
@@ -36,12 +36,12 @@ Progress: [████████░] 98.6% (34/36 phases planned, 120/121 pla
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CL-01: Traversal detects linear chains and switches to sequential cluster reads | Phase 33 | Complete (5/5 plans) |
-| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34-35 | Partial (34-01/02/03 complete, 35 planned) |
+| CL-02: Sequential cluster reader reads all clusters for a chain in single I/O | Phase 34-35 | Complete (34-01/02/03, 35-01/02/03/04) |
 | CL-03: LinearDetector validates cluster contiguity before sequential read path | Phase 33 | Complete (33-02) |
-| CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Planned |
+| CL-04: Chain read path falls back immediately when pattern breaks | Phase 35 | Complete (35-01/02/03/04) |
 | CL-05: MVCC isolation preserved (no cross-traversal pollution) | Phase 36 | Pending |
 
-**Coverage: 5/5 requirements mapped (100%)**
+**Coverage: 4/5 requirements complete (80%), 1/5 pending (20%)**
 
 ## v1.6 Roadmap Summary
 
@@ -53,7 +53,7 @@ Progress: [████████░] 98.6% (34/36 phases planned, 120/121 pla
 |-------|------|--------------|--------|
 | 33 - Traversal-Time Chain Detection | Extend LinearDetector to track cluster offsets, validate contiguity, and instrument chain detection | CL-01, CL-03 | Complete (5/5 plans) |
 | 34 - Sequential Cluster Reader | Read all clusters for a chain in single I/O operation | CL-02 (partial, with Phase 35 split) | Complete (3/3 plans) |
-| 35 - Neighbor Extraction and Fallback | Extract neighbors from cluster_buffer and fall back immediately when pattern breaks | CL-02 (completion), CL-03, CL-04 | Planned (4 plans) |
+| 35 - Neighbor Extraction and Fallback | Extract neighbors from cluster_buffer and fall back immediately when pattern breaks | CL-02 (completion), CL-04 | Complete (4/4 plans) |
 | 36 - IO-12 Validation | Verify MVCC isolation preserved and Chain(500) <=75ms target achieved | CL-05 | Pending |
 
 ## Performance Metrics
@@ -137,8 +137,9 @@ v1.6 Chain Locality:
 - [x] Phase 35 Plan 01: Node_id -> cluster_index mapping (completed)
 - [x] Phase 35 Plan 02: Neighbor extraction from cluster_buffer (completed)
 - [x] Phase 35 Plan 03: Traversal helper and unit tests (completed)
-- [ ] Phase 35 Plan 04: Integration tests for extraction and fallback (planned)
-- [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
+- [x] Phase 35 Plan 04: Integration tests for extraction and fallback (completed)
+- [x] Phase 36 Plan 01: IO-12 validation benchmark suite (completed)
+- [ ] Phase 36: Run benchmarks and verify Chain(500) <=75ms target
 
 ### Blockers/Concerns
 
@@ -148,7 +149,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 35 Plan 03: Traversal helper and unit tests
+Stopped at: Completed Phase 36 Plan 01: IO-12 validation benchmark suite
 Resume file: None
 
 ### Roadmap Evolution
@@ -171,6 +172,7 @@ Resume file: None
   - Phase 35 Plan 01 (2026-01-21): Node_id -> cluster_index mapping complete
   - Phase 35 Plan 02 (2026-01-21): Neighbor extraction from cluster_buffer complete
   - Phase 35 Plan 03 (2026-01-21): Traversal helper and unit tests complete
-  - Phase 35 (2026-01-21): Neighbor Extraction and Fallback - 1 plan remaining
+  - Phase 35 Plan 04 (2026-01-21): Integration tests for extraction and fallback complete (Phase 35 complete)
+  - Phase 36 Plan 01 (2026-01-21): IO-12 validation benchmark suite complete
 
 *Updated after each plan completion*
