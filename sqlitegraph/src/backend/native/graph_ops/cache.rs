@@ -50,6 +50,12 @@ use crate::backend::native::adjacency::{AdjacencyHelpers, Direction};
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::{NativeNodeId, NativeResult};
 
+// Forward declaration for TraversalContext
+// TraversalContext is defined in traversal_context.rs (sibling module)
+// The module will be declared in mod.rs in Task 3 of this plan.
+// Using full crate path to avoid circular dependency issues.
+use crate::backend::native::graph_ops::traversal_context::TraversalContext;
+
 /// Per-traversal cache key combining node ID and direction.
 ///
 /// Using both node_id and direction as the key ensures that:
@@ -177,6 +183,113 @@ pub fn get_neighbors_cached(
 
     // Insert into cache for future lookups in this traversal
     cache.insert(cache_key, neighbors.clone());
+
+    Ok(neighbors)
+}
+
+/// Get neighbors with 3-tier lookup hierarchy for sequential I/O optimization.
+///
+/// This function implements a tiered lookup strategy that prioritizes faster caches:
+///
+/// # Lookup Hierarchy
+///
+/// 1. **L1: SequentialReadBuffer** - Decoded node slots from batched reads (fastest)
+///    - Only checked after LinearDetector confirms linear pattern
+///    - Records buffer hit/miss for statistics
+///
+/// 2. **L2: TraversalCache** - Cached neighbor lists (from v1.3)
+///    - Stores Vec<NativeNodeId> for (node_id, direction) keys
+///    - Records cache hit/miss for statistics
+///
+/// 3. **L3: AdjacencyHelpers** - Storage I/O (slowest)
+///    - Falls through to disk when L1 and L2 miss
+///    - Results are inserted into L2 cache for future lookups
+///
+/// # Parameters
+///
+/// - `graph_file`: Mutable borrow of the graph file for I/O operations
+/// - `node_id`: The node whose neighbors we want to fetch
+/// - `direction`: Whether to get Outgoing or Incoming neighbors
+/// - `ctx`: Mutable borrow of the unified traversal context
+///
+/// # Returns
+///
+/// An owned `Vec<NativeNodeId>` containing the neighbor node IDs.
+///
+/// # L1 Buffer Behavior (Phase 31)
+///
+/// For Phase 31, L1 buffer lookup is instrumentation-only. When a node is found
+/// in the buffer, the function records a buffer hit but falls through to L2/L3.
+/// Full neighbor extraction from buffered NodeRecordV2 is deferred to avoid
+/// scope creep. This allows measurement of buffer effectiveness without
+/// requiring the complex neighbor extraction logic in Phase 31.
+///
+/// # Example
+///
+/// ```rust
+/// use crate::backend::native::graph_ops::{TraversalContext, get_neighbors_optimized};
+/// use crate::backend::native::adjacency::Direction;
+///
+/// let mut ctx = TraversalContext::new();
+///
+/// // During traversal with pattern detection
+/// let degree = AdjacencyHelpers::outgoing_degree(graph_file, node_id)?;
+/// ctx.detector.observe(node_id, degree);
+///
+/// // Trigger prefetch if linear confirmed
+/// if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(node_id) {
+///     ctx.buffer.prefetch_from(graph_file, node_id)?;
+/// }
+///
+/// // Get neighbors via 3-tier lookup
+/// let neighbors = get_neighbors_optimized(
+///     graph_file,
+///     node_id,
+///     Direction::Outgoing,
+///     &mut ctx,
+/// )?;
+/// ```
+pub fn get_neighbors_optimized(
+    graph_file: &mut GraphFile,
+    node_id: NativeNodeId,
+    direction: Direction,
+    ctx: &mut TraversalContext,
+) -> NativeResult<Vec<NativeNodeId>> {
+    let cache_key = (node_id, direction);
+
+    // L1: Check SequentialReadBuffer first (fastest path)
+    // Only check after linear pattern is confirmed
+    if ctx.detector.is_linear_confirmed() {
+        if let Some(_node_record) = ctx.buffer.get(node_id) {
+            ctx.record_buffer_hit();
+            // Note: For Phase 31, L1 buffer lookup is instrumentation-only.
+            // We record the hit but fall through to L2/L3. Full neighbor
+            // extraction from buffered NodeRecordV2 is deferred to avoid
+            // scope creep. This allows measurement of buffer effectiveness.
+        } else {
+            ctx.record_buffer_miss();
+        }
+    }
+
+    // L2: Check TraversalCache (v1.3 cache)
+    if let Some(cached) = ctx.cache.get(&cache_key) {
+        ctx.stats.record_hit();
+        return Ok(cached.clone());
+    }
+    ctx.stats.record_miss();
+
+    // L3: Load from storage via AdjacencyHelpers
+    let neighbors = match direction {
+        Direction::Outgoing => {
+            AdjacencyHelpers::get_outgoing_neighbors(graph_file, node_id)?
+        }
+        Direction::Incoming => {
+            AdjacencyHelpers::get_incoming_neighbors(graph_file, node_id)?
+        }
+    };
+
+    // Insert into cache for future lookups
+    ctx.cache.insert(cache_key, neighbors.clone());
 
     Ok(neighbors)
 }

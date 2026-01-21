@@ -34,10 +34,11 @@ mod chain_queries;
 mod k_hop;
 mod pathfinding;
 mod strategy;
+mod traversal_context;
 
 // Re-export all public functionality
 pub use bfs_implementations::*;
-pub use cache::{TraversalCache, TraversalCacheStats, get_neighbors_cached};
+pub use cache::{TraversalCache, TraversalCacheStats, get_neighbors_cached, get_neighbors_optimized};
 pub use chain_queries::*;
 pub use k_hop::*;
 pub use pathfinding::*;
@@ -45,6 +46,9 @@ pub use strategy::*;
 
 // Re-export LinearDetector from adjacency for Phase 31 traversal integration
 pub use crate::backend::native::adjacency::{LinearDetector, TraversalPattern};
+
+// Re-export TraversalContext for Phase 31 traversal integration
+pub use traversal_context::TraversalContext;
 
 /// Native BFS implementation using adjacency helpers
 pub fn native_bfs(
