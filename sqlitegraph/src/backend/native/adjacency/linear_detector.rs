@@ -1,0 +1,650 @@
+//! Linear pattern detection state machine for graph traversals.
+//!
+//! This module provides a state machine that detects linear traversal patterns
+//! (consecutive nodes with degree <= 1) to enable sequential I/O optimization
+//! in Phase 30-31.
+//!
+//! # Design: 4-State Finite State Machine
+//!
+//! The detector tracks consecutive degree-1 steps during graph traversal:
+//!
+//! - **Unknown**: Initial state, insufficient observations (0-2 steps)
+//! - **Accumulating**: Observing linear pattern (1 to threshold-1 steps)
+//! - **Linear**: Confirmed linear pattern (threshold+ consecutive steps)
+//! - **Branching**: Branching detected (terminal state, degree > 1 at any point)
+//!
+//! # Why 3-Step Threshold?
+//!
+//! The threshold of 3 consecutive degree-1 steps prevents false positives on tree graphs.
+//! Trees often have 1-2 linear segments before branching, but rarely 3+ without branching.
+//! This threshold was chosen based on STATE.md v1.4 research to avoid triggering
+//! sequential I/O optimization incorrectly on branching traversals.
+//!
+//! # Per-Traversal Design
+//!
+//! The detector is designed to be per-traversal, not global. Each traversal operation
+//! (BFS, k-hop, shortest path) creates its own detector instance or calls `reset()`
+//! before starting. This preserves MVCC isolation and prevents cross-traversal state leakage.
+//!
+//! # Usage Pattern
+//!
+//! ```rust
+//! use crate::backend::native::adjacency::{LinearDetector, AdjacencyHelpers};
+//!
+//! // Create detector at traversal start
+//! let mut detector = LinearDetector::new();
+//!
+//! // During traversal loop
+//! for node_id in visited_nodes {
+//!     // Get degree (O(1) via AdjacencyHelpers)
+//!     let degree = AdjacencyHelpers::outgoing_degree(graph_file, node_id)?;
+//!
+//!     // Observe node for pattern detection
+//!     let pattern = detector.observe(node_id, degree);
+//!
+//!     // Check if linear pattern is confirmed
+//!     if detector.is_linear_confirmed() {
+//!         // Enable sequential I/O optimization (Phase 31)
+//!     }
+//! }
+//!
+//! // Detector evaporates when traversal ends
+//! // OR call reset() for reuse in same function
+//! detector.reset();
+//! ```
+//!
+//! # Phase 29: Read-Only Instrumentation
+//!
+//! In Phase 29, the detector is read-only instrumentation. It observes degrees and
+//! classifies patterns but does not modify I/O behavior. Phase 31 integrates the
+//! detector into traversal hot paths to trigger sequential I/O optimization.
+
+use crate::backend::native::types::NativeNodeId;
+
+/// Traversal pattern classification.
+///
+/// Represents the detected traversal pattern based on observed node degrees.
+/// This classification determines whether sequential I/O optimization should be applied.
+///
+/// # Variants
+///
+/// - **Unknown**: Not enough data to classify (0-2 observations, or degree 0 encountered)
+/// - **Linear**: Confirmed linear pattern (3+ consecutive degree-1 steps)
+/// - **Branching**: Branching detected (degree > 1 at any point)
+///
+/// # Example
+///
+/// ```rust
+/// use crate::backend::native::adjacency::{LinearDetector, TraversalPattern};
+///
+/// let mut detector = LinearDetector::new();
+///
+/// // First observation: degree 1
+/// assert_eq!(detector.observe(1, 1), TraversalPattern::Unknown);
+///
+/// // Second observation: degree 1
+/// assert_eq!(detector.observe(2, 1), TraversalPattern::Unknown);
+///
+/// // Third observation: degree 1 - threshold reached!
+/// assert_eq!(detector.observe(3, 1), TraversalPattern::Linear);
+///
+/// // Fourth observation: degree 2 - branching detected
+/// assert_eq!(detector.observe(4, 2), TraversalPattern::Branching);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TraversalPattern {
+    /// Not enough data to classify pattern
+    Unknown,
+    /// Confirmed linear: 3+ consecutive degree-1 steps
+    Linear,
+    /// Branching detected: degree > 1 at any point
+    Branching,
+}
+
+/// Internal detector state for the 4-state finite state machine.
+///
+/// This is the internal state representation, separate from the public
+/// `TraversalPattern` enum. The state machine transitions are:
+///
+/// ```text
+///     degree == 1              degree == 1, count >= threshold
+/// Unknown ---------> Accumulating ------------------------> Linear
+///    |  ^                  |  ^  |
+///    |  |                  |  |  |
+///    |  | degree == 0      |  |  | degree == 1, count < threshold
+///    |  |                  |  |  |
+///    v  |                  v  |  v
+///   Unknown <---------------   |
+///
+///     degree > 1 (any state)
+///     ------------------------> Branching (terminal)
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DetectorState {
+    /// Initial state, insufficient observations (0-2 steps or degree 0)
+    Unknown,
+    /// Observing linear pattern (1 to threshold-1 consecutive degree-1 steps)
+    Accumulating,
+    /// Confirmed linear (threshold+ consecutive degree-1 steps)
+    Linear,
+    /// Branching detected (terminal state)
+    Branching,
+}
+
+/// Linear pattern detection state machine.
+///
+/// Tracks consecutive degree-1 steps during graph traversal to detect linear
+/// access patterns. Once linear pattern is confirmed (3+ consecutive steps),
+/// the detector can trigger sequential I/O optimization.
+///
+/// # Fields
+///
+/// - **state**: Current detector state (Unknown, Accumulating, Linear, Branching)
+/// - **consecutive_linear**: Count of consecutive degree-1 steps observed
+/// - **threshold**: Number of consecutive degree-1 steps required to confirm Linear (default: 3)
+///
+/// # Example
+///
+/// ```rust
+/// use crate::backend::native::adjacency::LinearDetector;
+///
+/// let mut detector = LinearDetector::new();
+///
+/// // Observe nodes during traversal
+/// detector.observe(1, 1); // degree 1
+/// detector.observe(2, 1); // degree 1
+/// detector.observe(3, 1); // degree 1 -> Linear confirmed!
+///
+/// assert!(detector.is_linear_confirmed());
+/// assert_eq!(detector.confidence(), 1.0);
+///
+/// // Reset for new traversal
+/// detector.reset();
+/// assert!(!detector.is_linear_confirmed());
+/// assert_eq!(detector.confidence(), 0.0);
+/// ```
+pub struct LinearDetector {
+    /// Current detector state
+    state: DetectorState,
+    /// Consecutive linear steps count
+    consecutive_linear: u32,
+    /// Confidence threshold (configurable, default: 3)
+    threshold: u32,
+}
+
+impl LinearDetector {
+    /// Create new detector with default threshold (3 steps).
+    ///
+    /// The threshold of 3 consecutive degree-1 steps prevents false positives
+    /// on tree graphs which often have 1-2 linear segments before branching.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let detector = LinearDetector::new();
+    /// assert_eq!(detector.confidence(), 0.0);
+    /// assert!(!detector.is_linear_confirmed());
+    /// ```
+    #[inline]
+    pub fn new() -> Self {
+        Self::with_threshold(3)
+    }
+
+    /// Create new detector with custom threshold.
+    ///
+    /// Useful for testing with different threshold values. Lower thresholds
+    /// increase false positive rate on trees; higher thresholds may miss
+    /// legitimate linear patterns.
+    ///
+    /// # Parameters
+    ///
+    /// - **threshold**: Minimum consecutive degree-1 steps to confirm Linear pattern
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// // Detector with threshold of 5 (more conservative)
+    /// let detector = LinearDetector::with_threshold(5);
+    /// ```
+    #[inline]
+    pub fn with_threshold(threshold: u32) -> Self {
+        Self {
+            state: DetectorState::Unknown,
+            consecutive_linear: 0,
+            threshold,
+        }
+    }
+
+    /// Observe a node during traversal.
+    ///
+    /// This is the core state machine method. It takes a node ID and its degree,
+    /// updates internal state, and returns the current pattern classification.
+    ///
+    /// # State Machine Logic
+    ///
+    /// - **Branching state**: Immediately return Branching (terminal state)
+    /// - **Linear state with degree > 1**: Transition to Branching, return Branching
+    /// - **Linear state with degree <= 1**: Stay in Linear, return Linear
+    /// - **Unknown/Accumulating with degree > 1**: Transition to Branching, return Branching
+    /// - **Unknown/Accumulating with degree == 1**: Increment counter, check threshold
+    /// - **Unknown/Accumulating with degree == 0**: Stay in Unknown, return Unknown
+    ///
+    /// # Parameters
+    ///
+    /// - **node_id**: The node being observed (for debugging/logging, not used in state logic)
+    /// - **degree**: The node's degree (typically from `AdjacencyHelpers::outgoing_degree()`)
+    ///
+    /// # Returns
+    ///
+    /// The current `TraversalPattern` classification after this observation.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::{LinearDetector, TraversalPattern};
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // Chain graph: 1 -> 2 -> 3 -> 4
+    /// assert_eq!(detector.observe(1, 1), TraversalPattern::Unknown);
+    /// assert_eq!(detector.observe(2, 1), TraversalPattern::Unknown);
+    /// assert_eq!(detector.observe(3, 1), TraversalPattern::Linear); // threshold reached
+    /// assert_eq!(detector.observe(4, 1), TraversalPattern::Linear);  // stays Linear
+    /// ```
+    #[inline]
+    pub fn observe(&mut self, node_id: NativeNodeId, degree: u32) -> TraversalPattern {
+        match self.state {
+            DetectorState::Branching => {
+                // Terminal state: once branching, always branching
+                return TraversalPattern::Branching;
+            }
+            DetectorState::Linear => {
+                if degree > 1 {
+                    // Exit linear pattern on first branch
+                    self.state = DetectorState::Branching;
+                    return TraversalPattern::Branching;
+                }
+                // Stay in Linear state for degree <= 1
+                return TraversalPattern::Linear;
+            }
+            DetectorState::Unknown | DetectorState::Accumulating => {
+                if degree > 1 {
+                    // Immediate branching detection
+                    self.state = DetectorState::Branching;
+                    return TraversalPattern::Branching;
+                } else if degree == 1 {
+                    // Linear step: increment counter
+                    self.consecutive_linear += 1;
+                    if self.consecutive_linear >= self.threshold {
+                        self.state = DetectorState::Linear;
+                        return TraversalPattern::Linear;
+                    } else {
+                        self.state = DetectorState::Accumulating;
+                        return TraversalPattern::Unknown;
+                    }
+                }
+                // degree == 0: dead end, stay Unknown
+                TraversalPattern::Unknown
+            }
+        }
+    }
+
+    /// Get confidence score (0.0 to 1.0).
+    ///
+    /// Confidence indicates how certain the detector is that the current
+    /// traversal is linear:
+    ///
+    /// - **1.0**: Confirmed Linear (threshold+ consecutive degree-1 steps)
+    /// - **0.0 < x < 1.0**: Accumulating (progress toward threshold, e.g., 2/3 = 0.67)
+    /// - **0.0**: Unknown or Branching
+    ///
+    /// # Returns
+    ///
+    /// Confidence score in range [0.0, 1.0].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// assert_eq!(detector.confidence(), 0.0); // Initial state
+    ///
+    /// detector.observe(1, 1);
+    /// assert_eq!(detector.confidence(), 1.0 / 3.0); // 1/3 ≈ 0.33
+    ///
+    /// detector.observe(2, 1);
+    /// assert_eq!(detector.confidence(), 2.0 / 3.0); // 2/3 ≈ 0.67
+    ///
+    /// detector.observe(3, 1);
+    /// assert_eq!(detector.confidence(), 1.0); // Confirmed Linear
+    /// ```
+    #[inline]
+    pub fn confidence(&self) -> f64 {
+        match self.state {
+            DetectorState::Linear => 1.0,
+            DetectorState::Accumulating => {
+                // Partial confidence based on progress to threshold
+                if self.threshold > 0 {
+                    (self.consecutive_linear as f64) / (self.threshold as f64)
+                } else {
+                    0.0
+                }
+            }
+            DetectorState::Unknown | DetectorState::Branching => 0.0,
+        }
+    }
+
+    /// Reset detector state (for new traversal).
+    ///
+    /// Clears all state and returns the detector to initial Unknown condition.
+    /// Call this when starting a new traversal or reusing a detector instance.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // First traversal
+    /// detector.observe(1, 1);
+    /// detector.observe(2, 1);
+    /// detector.observe(3, 1);
+    /// assert!(detector.is_linear_confirmed());
+    ///
+    /// // Reset for second traversal
+    /// detector.reset();
+    /// assert!(!detector.is_linear_confirmed());
+    /// assert_eq!(detector.confidence(), 0.0);
+    /// ```
+    #[inline]
+    pub fn reset(&mut self) {
+        self.state = DetectorState::Unknown;
+        self.consecutive_linear = 0;
+    }
+
+    /// Get current pattern without observation.
+    ///
+    /// Returns the current pattern classification without modifying state.
+    /// Useful for checking detector state between observations.
+    ///
+    /// # Returns
+    ///
+    /// The current `TraversalPattern` classification.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::{LinearDetector, TraversalPattern};
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+    ///
+    /// detector.observe(1, 1);
+    /// assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+    ///
+    /// detector.observe(2, 1);
+    /// detector.observe(3, 1);
+    /// assert_eq!(detector.current_pattern(), TraversalPattern::Linear);
+    /// ```
+    #[inline]
+    pub fn current_pattern(&self) -> TraversalPattern {
+        match self.state {
+            DetectorState::Linear => TraversalPattern::Linear,
+            DetectorState::Branching => TraversalPattern::Branching,
+            DetectorState::Unknown | DetectorState::Accumulating => TraversalPattern::Unknown,
+        }
+    }
+
+    /// Check if linear pattern is confirmed.
+    ///
+    /// Returns `true` if the detector has observed threshold+ consecutive
+    /// degree-1 steps and is in Linear state. This is the primary method
+    /// to check whether sequential I/O optimization should be enabled.
+    ///
+    /// # Returns
+    ///
+    /// `true` if linear pattern is confirmed (confidence >= 1.0), `false` otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// assert!(!detector.is_linear_confirmed());
+    ///
+    /// detector.observe(1, 1);
+    /// assert!(!detector.is_linear_confirmed());
+    ///
+    /// detector.observe(2, 1);
+    /// assert!(!detector.is_linear_confirmed());
+    ///
+    /// detector.observe(3, 1);
+    /// assert!(detector.is_linear_confirmed()); // threshold reached!
+    /// ```
+    #[inline]
+    pub fn is_linear_confirmed(&self) -> bool {
+        self.state == DetectorState::Linear
+    }
+}
+
+impl Default for LinearDetector {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_linear_detector_new() {
+        let detector = LinearDetector::new();
+        assert_eq!(detector.confidence(), 0.0);
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+    }
+
+    #[test]
+    fn test_linear_detector_default() {
+        let detector = LinearDetector::default();
+        assert_eq!(detector.confidence(), 0.0);
+        assert!(!detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_linear_detector_with_threshold() {
+        let detector = LinearDetector::with_threshold(5);
+        assert_eq!(detector.confidence(), 0.0);
+        assert!(!detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_linear_detector_chain_confirms_after_three() {
+        let mut detector = LinearDetector::new();
+
+        // First degree-1 step: Unknown, confidence = 1/3
+        assert_eq!(detector.observe(1, 1), TraversalPattern::Unknown);
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+        assert!((detector.confidence() - 1.0 / 3.0).abs() < f64::EPSILON);
+
+        // Second degree-1 step: Unknown, confidence = 2/3
+        assert_eq!(detector.observe(2, 1), TraversalPattern::Unknown);
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+        assert!((detector.confidence() - 2.0 / 3.0).abs() < f64::EPSILON);
+
+        // Third degree-1 step: Linear confirmed, confidence = 1.0
+        assert_eq!(detector.observe(3, 1), TraversalPattern::Linear);
+        assert!(detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Linear);
+        assert_eq!(detector.confidence(), 1.0);
+    }
+
+    #[test]
+    fn test_linear_detector_star_immediate_branching() {
+        let mut detector = LinearDetector::new();
+
+        // First observation: degree 3 -> immediate Branching
+        assert_eq!(detector.observe(1, 3), TraversalPattern::Branching);
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Branching);
+        assert_eq!(detector.confidence(), 0.0);
+
+        // Subsequent observations stay in Branching (terminal state)
+        assert_eq!(detector.observe(2, 1), TraversalPattern::Branching);
+        assert_eq!(detector.observe(3, 1), TraversalPattern::Branching);
+        assert_eq!(detector.confidence(), 0.0);
+    }
+
+    #[test]
+    fn test_linear_detector_diamond_transitions_to_branching() {
+        let mut detector = LinearDetector::new();
+
+        // First node: degree 1 -> Unknown
+        assert_eq!(detector.observe(1, 1), TraversalPattern::Unknown);
+
+        // Second node: degree 2 -> Branching
+        assert_eq!(detector.observe(2, 2), TraversalPattern::Branching);
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.current_pattern(), TraversalPattern::Branching);
+        assert_eq!(detector.confidence(), 0.0);
+    }
+
+    #[test]
+    fn test_linear_detector_linear_then_branching() {
+        let mut detector = LinearDetector::new();
+
+        // Three degree-1 steps -> Linear confirmed
+        assert_eq!(detector.observe(1, 1), TraversalPattern::Unknown);
+        assert_eq!(detector.observe(2, 1), TraversalPattern::Unknown);
+        assert_eq!(detector.observe(3, 1), TraversalPattern::Linear);
+        assert!(detector.is_linear_confirmed());
+
+        // Fourth step: degree 2 -> transitions to Branching
+        assert_eq!(detector.observe(4, 2), TraversalPattern::Branching);
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.confidence(), 0.0);
+    }
+
+    #[test]
+    fn test_linear_detector_dead_end_stays_unknown() {
+        let mut detector = LinearDetector::new();
+
+        // Degree 0: dead end, stays Unknown
+        assert_eq!(detector.observe(1, 0), TraversalPattern::Unknown);
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.confidence(), 0.0);
+
+        // Another degree 0
+        assert_eq!(detector.observe(2, 0), TraversalPattern::Unknown);
+        assert_eq!(detector.confidence(), 0.0);
+
+        // Then degree 1
+        assert_eq!(detector.observe(3, 1), TraversalPattern::Unknown);
+        assert!((detector.confidence() - 1.0 / 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_linear_detector_reset() {
+        let mut detector = LinearDetector::new();
+
+        // Confirm Linear pattern
+        detector.observe(1, 1);
+        detector.observe(2, 1);
+        detector.observe(3, 1);
+        assert!(detector.is_linear_confirmed());
+        assert_eq!(detector.confidence(), 1.0);
+
+        // Reset
+        detector.reset();
+        assert!(!detector.is_linear_confirmed());
+        assert_eq!(detector.confidence(), 0.0);
+        assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+
+        // Can detect again
+        detector.observe(1, 1);
+        assert!((detector.confidence() - 1.0 / 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_linear_detector_custom_threshold() {
+        let mut detector = LinearDetector::with_threshold(5);
+
+        // 4 steps: not yet confirmed with threshold=5
+        detector.observe(1, 1);
+        assert!((detector.confidence() - 1.0 / 5.0).abs() < f64::EPSILON);
+
+        detector.observe(2, 1);
+        assert!((detector.confidence() - 2.0 / 5.0).abs() < f64::EPSILON);
+
+        detector.observe(3, 1);
+        assert!((detector.confidence() - 3.0 / 5.0).abs() < f64::EPSILON);
+
+        detector.observe(4, 1);
+        assert!((detector.confidence() - 4.0 / 5.0).abs() < f64::EPSILON);
+        assert!(!detector.is_linear_confirmed());
+
+        // Fifth step: confirmed
+        detector.observe(5, 1);
+        assert_eq!(detector.confidence(), 1.0);
+        assert!(detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_linear_detector_confidence_progression() {
+        let mut detector = LinearDetector::new();
+
+        assert_eq!(detector.confidence(), 0.0);
+
+        detector.observe(1, 1);
+        assert!((detector.confidence() - 1.0 / 3.0).abs() < f64::EPSILON);
+
+        detector.observe(2, 1);
+        assert!((detector.confidence() - 2.0 / 3.0).abs() < f64::EPSILON);
+
+        detector.observe(3, 1);
+        assert_eq!(detector.confidence(), 1.0);
+    }
+
+    #[test]
+    fn test_linear_detector_current_pattern() {
+        let mut detector = LinearDetector::new();
+
+        assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+
+        detector.observe(1, 1);
+        assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+
+        detector.observe(2, 1);
+        assert_eq!(detector.current_pattern(), TraversalPattern::Unknown);
+
+        detector.observe(3, 1);
+        assert_eq!(detector.current_pattern(), TraversalPattern::Linear);
+
+        detector.observe(4, 2);
+        assert_eq!(detector.current_pattern(), TraversalPattern::Branching);
+    }
+
+    #[test]
+    fn test_traversal_pattern_traits() {
+        // Verify TraversalPattern has required derives
+        let pattern = TraversalPattern::Linear;
+        let _ = pattern; // Copy works
+        let _clone = pattern; // Clone works
+        let _format = format!("{:?}", pattern); // Debug works
+        let _eq = pattern == TraversalPattern::Linear; // PartialEq works
+    }
+}

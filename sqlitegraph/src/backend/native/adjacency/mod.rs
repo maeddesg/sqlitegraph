@@ -35,6 +35,7 @@ mod iterator_impl;
 mod v2_clustered;
 
 mod helpers;
+mod linear_detector;
 #[cfg(debug_assertions)]
 mod instrumentation;
 
@@ -43,6 +44,7 @@ mod tests;
 
 pub use core_iterator::AdjacencyIterator;
 pub use helpers::AdjacencyHelpers;
+pub use linear_detector::{LinearDetector, TraversalPattern};
 // v2_clustered methods are impl blocks on AdjacencyIterator, so no explicit exports needed
 // iterator_impl provides Iterator trait implementation for AdjacencyIterator
 
