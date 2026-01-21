@@ -105,3 +105,8 @@ harness = false
 [[bench]]
 name = "prefetch_bench"
 harness = false
+
+# Phase 36: IO-12 Validation benchmarks
+[[bench]]
+name = "io12_validation"
+harness = false
