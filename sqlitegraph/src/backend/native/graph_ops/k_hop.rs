@@ -5,8 +5,8 @@ use crate::backend::native::adjacency::{AdjacencyHelpers, Direction};
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::*;
 
-// Per-traversal cache for eliminating redundant I/O during k-hop
-use super::{TraversalCache, get_neighbors_cached, TraversalCacheStats};
+// Per-traversal context for 3-tier lookup (Phase 31)
+use super::{TraversalContext, get_neighbors_optimized};
 
 /// Native k-hop implementation
 pub fn native_k_hop(
@@ -24,20 +24,30 @@ pub fn native_k_hop(
     visited.insert(start);
     let mut result = Vec::new();
 
-    // Per-traversal cache - evaporates when function returns
-    let mut cache: TraversalCache = TraversalCache::new();
-    let mut stats = TraversalCacheStats::default();
+    // Per-traversal context with 3-tier lookup (Phase 31)
+    let mut ctx = TraversalContext::new();
 
     for _ in 0..depth {
         let mut next_level = Vec::new();
 
         for node in current_level {
-            let neighbors = get_neighbors_cached(
+            // Get degree for pattern detection (direction-aware)
+            let degree = match direction {
+                Direction::Outgoing => AdjacencyHelpers::outgoing_degree(graph_file, node)?,
+                Direction::Incoming => AdjacencyHelpers::incoming_degree(graph_file, node)?,
+            };
+            let _pattern = ctx.detector.observe(node, degree);
+
+            // Trigger prefetch if linear confirmed
+            if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(node) {
+                ctx.buffer.prefetch_from(graph_file, node)?;
+            }
+
+            let neighbors = get_neighbors_optimized(
                 graph_file,
                 node,
                 direction,
-                &mut cache,
-                &mut stats,
+                &mut ctx,
             )?;
 
             for neighbor in neighbors {
@@ -57,13 +67,12 @@ pub fn native_k_hop(
 
     #[cfg(debug_assertions)]
     {
-        if stats.hits + stats.misses > 0 {
-            let hit_rate = stats.hit_rate();
+        let total_lookups = ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
+        if total_lookups > 0 {
             log::debug!(
-                "K-hop cache stats: hits={}, misses={}, hit_rate={:.2}%",
-                stats.hits,
-                stats.misses,
-                hit_rate * 100.0
+                "K-hop optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
+                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.combined_hit_rate() * 100.0
             );
         }
     }

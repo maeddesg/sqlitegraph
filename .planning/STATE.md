@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 30 of 32 complete (3/3 plans)
+Phase: 31 of 32 complete (1/5 plans)
 Milestone: v1.4 Sequential I/O Optimization
-Status: Phase 30 complete
-Last activity: 2026-01-21 — Completed Phase 30: Sequential Slot Reading
+Status: Phase 31 in progress
+Last activity: 2026-01-21 — Completed Phase 31 Plan 01: TraversalContext and 3-Tier Lookup
 
-Progress: [█████████░] 93.8% (30/32 phases complete, 101/103 plans)
+Progress: [█████████░] 94.2% (31/32 phases in progress, 102/103 plans)
 
 ## v1.4 Milestone Goals
 
@@ -67,6 +67,7 @@ Recent decisions affecting current work:
 - v1.4: Traversal-scoped buffers (not global) to preserve MVCC isolation
 - v1.4: 3-step linear detection threshold to avoid false positives on trees
 - v1.4: 8-slot prefetch window (32KB) based on RocksDB/LMDB research
+- v1.4 Phase 31-01: L1 buffer lookup is instrumentation-only - records hit/miss but falls through to L2/L3 to avoid scope creep; full neighbor extraction from buffered NodeRecordV2 deferred to Phase 32
 
 ### Pending Todos
 
@@ -76,7 +77,8 @@ v1.4 Sequential I/O Optimization:
 - [x] Phase 30 Plan 01: Implement NodeStore::read_slots_batch() method (batch I/O, 32KB in single syscall)
 - [x] Phase 30 Plan 02: Create SequentialReadBuffer module with prefetch logic (AHashMap storage, 8 tests passing)
 - [x] Phase 30 Plan 03: Add unit tests for batch reading and buffer correctness (10 unit tests, 8 integration tests)
-- [ ] Phase 31: Integrate into traversal hot paths
+- [x] Phase 31 Plan 01: TraversalContext struct and get_neighbors_optimized() function (3-tier lookup, 11 tests passing)
+- [ ] Phase 31 Plans 02-05: Integrate into traversal hot paths (BFS, k-hop, shortest path, chain queries)
 - [ ] Phase 32: Validate performance improvement and MVCC preservation
 
 ### Blockers/Concerns
@@ -86,7 +88,7 @@ v1.4 Sequential I/O Optimization:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 30 Plan 03: Sequential Read Buffer and Batch Reading Tests
+Stopped at: Completed Phase 31 Plan 01: TraversalContext and 3-Tier Lookup
 Resume file: None
 
 ### Roadmap Evolution
@@ -99,5 +101,5 @@ Resume file: None
 - **v1.4 Sequential I/O Optimization** (2026-01-21): Phases 29-32 in progress
   - Linear pattern detection (29-01, 29-02, 29-03 complete)
   - Sequential slot reading (30-01, 30-02, 30-03 complete)
-  - Traversal integration (IO-07, IO-08, IO-09, IO-10, IO-11)
+  - Traversal integration (31-01 complete, 31-02 through 31-05 pending)
   - Validation and tuning (IO-12, IO-13)

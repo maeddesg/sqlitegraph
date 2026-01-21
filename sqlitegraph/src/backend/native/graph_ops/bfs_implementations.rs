@@ -6,7 +6,9 @@ use crate::backend::native::optimizations;
 use crate::backend::native::types::*;
 
 // Per-traversal cache for eliminating redundant I/O during BFS
-use super::{TraversalCache, get_neighbors_cached, TraversalCacheStats};
+// Now uses unified TraversalContext with 3-tier lookup (Phase 31)
+use super::{TraversalContext, get_neighbors_optimized};
+use crate::backend::native::adjacency::AdjacencyHelpers;
 
 /// Generic scalar BFS implementation (baseline for all CPUs/large graphs)
 pub fn bfs_generic_scalar(
@@ -22,9 +24,8 @@ pub fn bfs_generic_scalar(
     let mut queue = std::collections::VecDeque::new();
     let mut result = Vec::new();
 
-    // Per-traversal cache - evaporates when function returns
-    let mut cache: TraversalCache = TraversalCache::new();
-    let mut stats = TraversalCacheStats::default();
+    // Per-traversal context with 3-tier lookup (L1: buffer, L2: cache, L3: storage)
+    let mut ctx = TraversalContext::new();
 
     visited.insert(start);
     queue.push_back((start, 0));
@@ -34,12 +35,22 @@ pub fn bfs_generic_scalar(
             continue;
         }
 
-        let neighbors = get_neighbors_cached(
+        // Get degree for pattern detection
+        let degree = AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
+
+        // Observe for pattern detection
+        let _pattern = ctx.detector.observe(current_node, degree);
+
+        // Trigger prefetch if linear confirmed and node not in buffer
+        if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
+            ctx.buffer.prefetch_from(graph_file, current_node)?;
+        }
+
+        let neighbors = get_neighbors_optimized(
             graph_file,
             current_node,
             crate::backend::native::adjacency::Direction::Outgoing,
-            &mut cache,
-            &mut stats,
+            &mut ctx,
         )?;
         for neighbor in neighbors {
             if !visited.contains(&neighbor) {
@@ -52,13 +63,12 @@ pub fn bfs_generic_scalar(
 
     #[cfg(debug_assertions)]
     {
-        if stats.hits + stats.misses > 0 {
-            let hit_rate = stats.hit_rate();
+        let total_lookups = ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
+        if total_lookups > 0 {
             log::debug!(
-                "BFS cache stats: hits={}, misses={}, hit_rate={:.2}%",
-                stats.hits,
-                stats.misses,
-                hit_rate * 100.0
+                "BFS optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
+                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.combined_hit_rate() * 100.0
             );
         }
     }
@@ -80,9 +90,8 @@ pub fn bfs_pointer_table_optimized(
     let mut queue = std::collections::VecDeque::new();
     let mut result = Vec::new();
 
-    // Per-traversal cache for fallback path
-    let mut cache: TraversalCache = TraversalCache::new();
-    let mut stats = TraversalCacheStats::default();
+    // Per-traversal context with 3-tier lookup (L1: buffer, L2: cache, L3: storage)
+    let mut ctx = TraversalContext::new();
 
     visited.insert(start);
     queue.push_back((start, 0));
@@ -90,6 +99,15 @@ pub fn bfs_pointer_table_optimized(
     while let Some((current_node, current_depth)) = queue.pop_front() {
         if current_depth >= depth {
             continue;
+        }
+
+        // Get degree for pattern detection
+        let degree = AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
+        let _pattern = ctx.detector.observe(current_node, degree);
+
+        // Trigger prefetch if linear confirmed
+        if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
+            ctx.buffer.prefetch_from(graph_file, current_node)?;
         }
 
         // Use pointer table for fast adjacency lookup
@@ -104,13 +122,12 @@ pub fn bfs_pointer_table_optimized(
                 }
                 neighbor_ids
             } else {
-                // Fallback to standard adjacency lookup with caching
-                get_neighbors_cached(
+                // Fallback to 3-tier lookup (L1: buffer, L2: cache, L3: storage)
+                get_neighbors_optimized(
                     graph_file,
                     current_node,
                     crate::backend::native::adjacency::Direction::Outgoing,
-                    &mut cache,
-                    &mut stats,
+                    &mut ctx,
                 )?
             };
 
@@ -125,13 +142,12 @@ pub fn bfs_pointer_table_optimized(
 
     #[cfg(debug_assertions)]
     {
-        if stats.hits + stats.misses > 0 {
-            let hit_rate = stats.hit_rate();
+        let total_lookups = ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
+        if total_lookups > 0 {
             log::debug!(
-                "BFS pointer table optimized cache stats: hits={}, misses={}, hit_rate={:.2}%",
-                stats.hits,
-                stats.misses,
-                hit_rate * 100.0
+                "BFS pointer table optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
+                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.combined_hit_rate() * 100.0
             );
         }
     }
@@ -153,9 +169,8 @@ pub fn bfs_fully_optimized(
     let mut queue = std::collections::VecDeque::new();
     let mut result = Vec::new();
 
-    // Per-traversal cache for fallback path
-    let mut cache: TraversalCache = TraversalCache::new();
-    let mut stats = TraversalCacheStats::default();
+    // Per-traversal context with 3-tier lookup (L1: buffer, L2: cache, L3: storage)
+    let mut ctx = TraversalContext::new();
 
     visited.insert(start);
     queue.push_back((start, 0));
@@ -163,6 +178,15 @@ pub fn bfs_fully_optimized(
     while let Some((current_node, current_depth)) = queue.pop_front() {
         if current_depth >= depth {
             continue;
+        }
+
+        // Get degree for pattern detection
+        let degree = AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
+        let _pattern = ctx.detector.observe(current_node, degree);
+
+        // Trigger prefetch if linear confirmed
+        if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
+            ctx.buffer.prefetch_from(graph_file, current_node)?;
         }
 
         // Use both pointer table and hot cache for maximum performance
@@ -195,13 +219,12 @@ pub fn bfs_fully_optimized(
 
                 neighbor_ids
             } else {
-                // Fallback to standard adjacency lookup with caching
-                get_neighbors_cached(
+                // Fallback to 3-tier lookup (L1: buffer, L2: cache, L3: storage)
+                get_neighbors_optimized(
                     graph_file,
                     current_node,
                     crate::backend::native::adjacency::Direction::Outgoing,
-                    &mut cache,
-                    &mut stats,
+                    &mut ctx,
                 )?
             };
 
@@ -216,13 +239,12 @@ pub fn bfs_fully_optimized(
 
     #[cfg(debug_assertions)]
     {
-        if stats.hits + stats.misses > 0 {
-            let hit_rate = stats.hit_rate();
+        let total_lookups = ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
+        if total_lookups > 0 {
             log::debug!(
-                "BFS fully optimized cache stats: hits={}, misses={}, hit_rate={:.2}%",
-                stats.hits,
-                stats.misses,
-                hit_rate * 100.0
+                "BFS fully optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
+                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.combined_hit_rate() * 100.0
             );
         }
     }
