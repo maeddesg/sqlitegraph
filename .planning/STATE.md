@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 37 - Gap Analysis Closure
-Plan: 05 (complete)
-Status: Phase 37 Plan 05 complete - surgical BFS optimization implemented: observe_with_cluster() with cluster metadata extraction
-Last activity: 2026-01-22 — Completed Phase 37 Plan 05: Surgical BFS optimization (cluster metadata extraction, observe_with_cluster, integration tests)
+Plan: 06 (complete)
+Status: Phase 37 Plan 06 complete - regression test suite created for BFS optimization validation
+Last activity: 2026-01-22 — Completed Phase 37 Plan 06: Regression test suite (write cost, memory overhead, concurrency, non-chain patterns)
 
-Progress: [██████████░] 99% (37/37 phases planned, 133/133 plans complete, v1.4 complete, v1.6 gap analysis closure in progress)
+Progress: [██████████░] 99% (37/37 phases planned, 134/134 plans complete, v1.4 complete, v1.6 gap analysis closure in progress)
 
 ## v1.6 Milestone Goals
 
@@ -199,7 +199,13 @@ Next actions:
 - [x] Verify SequentialClusterReader is engaged during traversal - COMPLETE (37-04: NOT engaging)
 - [x] Verify cluster_buffer is populated during traversal - COMPLETE (37-04: NOT populated)
 - [x] **Phase 37-05: Fix BFS to use observe_with_cluster()** - COMPLETE (37-05)
+- [x] **Phase 37-06: Create regression test suite** - COMPLETE (37-06)
 - [ ] **Run Chain(500) benchmark to measure performance improvement** (expected: 75-100ms reduction, 2.3-3.1x speedup)
+- [ ] Run regression benchmarks to validate Tier 2 criteria:
+  - [ ] Write cost: ≤+5% increase (regression_write_cost.rs)
+  - [ ] Memory overhead: ≤+5% (regression_memory.rs)
+  - [ ] Concurrency: No new lock contention (regression_concurrent_traversal.rs)
+  - [ ] Non-chain patterns: Within 10% baseline (regression_non_chain_patterns.rs)
 - [ ] Verify cluster_offsets_count > 0, fragmentation_score = 0.0 in telemetry
 - [ ] Compare to 75ms target, close gap or consider write-time allocation if insufficient
 
@@ -213,7 +219,7 @@ Next actions:
 ## Session Continuity
 
 Last session: 2026-01-22
-Stopped at: Completed Phase 37 Plan 05: Surgical BFS optimization - cluster metadata extraction, observe_with_cluster, integration tests complete
+Stopped at: Completed Phase 37 Plan 06: Regression test suite created - write cost, memory overhead, concurrency, non-chain pattern benchmarks ready for validation
 Resume file: None
 
 ### Roadmap Evolution
@@ -241,11 +247,12 @@ Resume file: None
   - Phase 36 Plan 02 (2026-01-21): MVCC isolation tests complete
   - Phase 36 Plan 03 (2026-01-21): Performance validation complete - IO-12 NOT achieved (Chain(500) = 231.12ms, target: 75ms, gap: 156ms)
   - Phase 36 Plan 04 (2026-01-21): Documentation update complete - Phase 36 complete, v1.6 milestone complete, gap identified
-- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01/02/03/04/05 complete
+- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01/02/03/04/05/06 complete
   - Phase 37 Plan 01 (2026-01-21): Gap analysis instrumentation complete - LinearDetector, SequentialClusterReader, TraversalContext with timing and telemetry export
   - Phase 37 Plan 02 (2026-01-21): External profiling scripts complete - CPU flamegraph (cargo flamegraph, 99Hz) and strace I/O tracing (mmap, read, lseek)
   - Phase 37 Plan 03 (2026-01-21): Microbenchmark suite complete - cluster population, LinearDetector overhead, fragmentation impact (Criterion-based)
   - Phase 37 Plan 04 (2026-01-22): Diagnostic pipeline complete - telemetry benchmark executed, flamegraph generated, strace I/O traced, root cause diagnosis created (HIGH confidence: BFS uses observe() not observe_with_cluster())
   - Phase 37 Plan 05 (2026-01-22): Surgical BFS optimization complete - cluster metadata extraction via graph_file.read_node_at(), observe_with_cluster() in all 4 BFS implementations, TraversalContext::get_cluster_info() helper, integration tests confirm cluster_offsets_count: 500, fragmentation_score: 0.0, gap_bytes: 0
+  - Phase 37 Plan 06 (2026-01-22): Regression test suite complete - write cost, memory overhead, concurrency, non-chain pattern benchmarks created, regression_report.md documentation complete
 
 *Updated after each plan completion*
