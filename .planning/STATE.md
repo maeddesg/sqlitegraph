@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 36 - IO-12 Validation
-Plan: 04 (documentation update)
-Status: Phase 36 complete - IO-12 target NOT achieved, gap analysis needed
-Last activity: 2026-01-21 — Completed Phase 36 Plan 03: Performance validation
+Phase: 37 - Gap Analysis Closure
+Plan: 01 (complete)
+Status: Phase 37 Plan 01 complete - instrumentation added, ready for profiling
+Last activity: 2026-01-21 — Completed Phase 37 Plan 01: Gap analysis instrumentation
 
-Progress: [██████████] 100% (36/36 phases planned, 129/129 plans complete, v1.4 complete, v1.6 complete)
+Progress: [██████████░] 99% (37/37 phases planned, 130/130 plans complete, v1.4 complete, v1.6 in gap analysis)
 
 ## v1.6 Milestone Goals
 
@@ -68,10 +68,10 @@ Progress: [██████████] 100% (36/36 phases planned, 129/129 p
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 127
-- Total plans planned: 127
+- Total plans completed: 130
+- Total plans planned: 130
 - Average duration: 7 min
-- Total execution time: ~14.5 hours
+- Total execution time: ~15 hours
 
 **By Phase:**
 
@@ -82,10 +82,11 @@ Progress: [██████████] 100% (36/36 phases planned, 129/129 p
 | v1.2 (23-24) | 7 | 1 day | ~7 min |
 | v1.3 (25-28) | 16 | ~30 min | ~7 min |
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
-| v1.6 (33-36) | 11 | ~15 min | ~2 min (so far) |
+| v1.6 (33-36) | 11 | ~15 min | ~2 min |
+| 37 - Gap Analysis | 1 | ~12 min | ~12 min |
 
 **Recent Trend:**
-- Last 5 plans: ~5 min each
+- Last 5 plans: ~6 min each
 - Trend: Stable
 
 ---
@@ -139,6 +140,11 @@ Recent decisions affecting current work:
 - **v1.6: IO-12 target NOT achieved** - Chain(500) = 231.12ms vs 75ms target (3.08x gap)
 - **v1.6: Sequential cluster reader implemented** - Infrastructure in place but not achieving expected 3.3x speedup
 - **v1.6: Next action required** - Profile Chain(500) to identify bottleneck before gap closure
+- **v1.6.14: Timing instrumentation added to LinearDetector - time_linear_detection_ns and time_contiguity_validation_ns track pattern detection performance (Phase 37-01)**
+- **v1.6.14: SequentialClusterReader metrics added - read_time_ns, total_bytes_read, clusters_read, extract_time_ns, extract_count for I/O profiling (Phase 37-01)**
+- **v1.6.14: TraversalContext telemetry export - export_telemetry() returns JSON with time_total_ms, nodes_visited, cluster_hits/misses, fragmentation_score, dedupe_ms, sort_ms, linear_detection_ms, contiguity_validation_ms (Phase 37-01)**
+- **v1.6.14: Fragmentation calculation uses gap_bytes / total_span - measures gaps relative to spanned storage for I/O efficiency assessment (Phase 37-01)**
+- **v1.6.14: SequentialClusterReader changed from stateless to stateful - metrics field added for diagnostic tracking (Phase 37-01)**
 
 ### Pending Todos
 
@@ -175,7 +181,7 @@ Next actions:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed Phase 36 Plan 03: Performance validation - IO-12 NOT achieved (Chain(500) = 231.12ms, target: 75ms, gap: 156ms)
+Stopped at: Completed Phase 37 Plan 01: Gap analysis instrumentation - LinearDetector, SequentialClusterReader, and TraversalContext instrumented with timing and telemetry export
 Resume file: None
 
 ### Roadmap Evolution
@@ -202,6 +208,8 @@ Resume file: None
   - Phase 36 Plan 01 (2026-01-21): IO-12 validation benchmark suite complete
   - Phase 36 Plan 02 (2026-01-21): MVCC isolation tests complete
   - Phase 36 Plan 03 (2026-01-21): Performance validation complete - IO-12 NOT achieved (Chain(500) = 231.12ms, target: 75ms, gap: 156ms)
-  - Phase 36 Plan 04 (2026-01-21): Documentation update complete (Phase 36 complete, v1.6 milestone complete, gap identified)
+  - Phase 36 Plan 04 (2026-01-21): Documentation update complete - Phase 36 complete, v1.6 milestone complete, gap identified
+- **v1.7 Gap Analysis** (2026-01-21): Phase 37-01 complete
+  - Phase 37 Plan 01 (2026-01-21): Gap analysis instrumentation complete - LinearDetector, SequentialClusterReader, TraversalContext with timing and telemetry export
 
 *Updated after each plan completion*
