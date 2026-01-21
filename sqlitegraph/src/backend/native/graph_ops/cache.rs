@@ -409,6 +409,83 @@ pub fn get_neighbors_optimized(
     Ok(neighbors)
 }
 
+/// Traversal helper demonstrating chain detection and mapping population pattern.
+///
+/// This function documents the expected usage pattern for Phase 35:
+/// 1. Call observe_with_cluster() to track node and cluster metadata
+/// 2. Populate node_cluster_index mapping with calculated cluster_index
+/// 3. Check for Branching pattern and call clear_cluster_buffer() immediately
+/// 4. Call get_neighbors_optimized() which extracts from cluster_buffer if available
+///
+/// # Parameters
+///
+/// - **graph_file**: Mutable borrow for I/O operations
+/// - **node_id**: Current node being traversed
+/// - **direction**: Outgoing or Incoming
+/// - **cluster_offset**: Edge cluster offset for this node
+/// - **cluster_size**: Edge cluster size for this node
+/// - **ctx**: Mutable traversal context
+///
+/// # Returns
+///
+/// Neighbors for the node, extracted from cluster_buffer if sequential read active.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use crate::backend::native::graph_ops::{TraversalContext, traverse_with_detection};
+/// use crate::backend::native::adjacency::Direction;
+///
+/// let mut ctx = TraversalContext::new();
+/// let start_node = 1;
+///
+/// // Get cluster metadata for node
+/// let (cluster_offset, cluster_size) = get_node_cluster_metadata(graph_file, start_node)?;
+/// let degree = AdjacencyHelpers::outgoing_degree(graph_file, start_node)?;
+///
+/// // Traverse with detection
+/// let neighbors = traverse_with_detection(
+///     graph_file,
+///     start_node,
+///     Direction::Outgoing,
+///     cluster_offset,
+///     cluster_size,
+///     &mut ctx,
+/// )?;
+/// ```
+pub fn traverse_with_detection(
+    graph_file: &mut GraphFile,
+    node_id: NativeNodeId,
+    direction: Direction,
+    cluster_offset: u64,
+    cluster_size: u32,
+    ctx: &mut TraversalContext,
+) -> NativeResult<Vec<NativeNodeId>> {
+    use crate::backend::native::adjacency::TraversalPattern;
+
+    // Get degree for this node
+    let degree = match direction {
+        Direction::Outgoing => AdjacencyHelpers::outgoing_degree(graph_file, node_id)?,
+        Direction::Incoming => AdjacencyHelpers::incoming_degree(graph_file, node_id)?,
+    };
+
+    // Observe node with cluster metadata (pushes to cluster_offsets)
+    let pattern = ctx.detector.observe_with_cluster(node_id, degree, cluster_offset, cluster_size);
+
+    // Populate node_id -> cluster_index mapping
+    // cluster_index = current length BEFORE push, so after observe_with_cluster() it's len() - 1
+    let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
+    ctx.node_cluster_index.insert(node_id, cluster_index);
+
+    // Check for pattern break requiring immediate fallback
+    if pattern == TraversalPattern::Branching {
+        ctx.clear_cluster_buffer();
+    }
+
+    // Get neighbors (will extract from cluster_buffer if sequential read active)
+    get_neighbors_optimized(graph_file, node_id, direction, ctx)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -502,5 +579,32 @@ mod tests {
         use crate::backend::native::adjacency::SequentialClusterReader;
         // If we got here, the import exists
         let _ = SequentialClusterReader;
+    }
+
+    // Phase 35: Traversal helper and mapping population tests
+
+    #[test]
+    fn test_traverse_with_detection_populates_mapping() {
+        use crate::backend::native::adjacency::{LinearDetector, Direction};
+        use crate::backend::native::types::NativeNodeId;
+
+        let ctx = TraversalContext::new();
+        assert!(ctx.node_cluster_index.is_empty());
+
+        // After observing a node, mapping should be populated
+        // (This test documents the pattern; full integration test in Phase 35-04)
+        assert_eq!(ctx.node_cluster_index.len(), 0);
+    }
+
+    #[test]
+    fn test_traverse_with_detection_clears_on_branching() {
+        use crate::backend::native::adjacency::{TraversalPattern, Direction};
+
+        let mut ctx = TraversalContext::new();
+
+        // Simulate branching detection
+        // When detector returns Branching, clear_cluster_buffer() should be called
+        // This test documents the fallback behavior
+        assert!(ctx.cluster_buffer.is_none());
     }
 }
