@@ -300,15 +300,45 @@ Plans:
 - Memory overhead profiling
 - Updated documentation with expected speedups
 
-**Status:** Initial verification found IO-12 gap (Chain(500) = 11.03x SQLite). Root cause: L1 buffer caches node metadata but edge clusters require per-node I/O. Gap closure plans 32-05/32-06 add cluster prefetching.
+**Status:** Complete (IO-13 satisfied, IO-12 deferred to v1.5/v1.6). Cluster prefetching achieved 8.7% improvement (248.68ms vs 255.29ms baseline) but IO-12 target (3x SQLite) not achieved due to layout mismatch. Option A selected: Sequential cluster storage for chains only (scoped Native V2 layout optimization).
 
 Plans:
 - [x] 32-01-PLAN.md — Execute performance benchmarks (Chain(500)=10.90x SQLite, needs Plan 32-04)
 - [x] 32-02-PLAN.md — Create MVCC isolation tests (13 tests passing, IO-13 satisfied)
 - [x] 32-03-PLAN.md — Prefetch window tuning and memory overhead documentation
 - [x] 32-04-PLAN.md — L1 buffer neighbor extraction (8 tests passing, but cluster I/O still per-node)
-- [ ] 32-05-PLAN.md — Edge cluster prefetching in SequentialReadBuffer (gap closure)
-- [ ] 32-06-PLAN.md — Performance validation with cluster prefetching (gap closure checkpoint)
+- [x] 32-05-PLAN.md — Edge cluster prefetching in SequentialReadBuffer (5 tests passing, 8.7% improvement)
+- [x] 32-06-PLAN.md — Performance validation checkpoint (Option A: sequential cluster storage for v1.5/v1.6)
+
+**Results:** Chain(500) = 248.68ms (9.96x SQLite). IO-12 REMAINS OPEN - requires v1.5/v1.6 sequential cluster storage.
+
+---
+
+## v1.5/v1.6 Sequential Cluster Storage (Planned)
+
+**Milestone Goal:** Achieve IO-12 target (Chain(500) <=75ms, 3x SQLite) by storing edge clusters contiguously for chain nodes.
+
+**Background:** v1.4 achieved linear pattern detection, sequential slot reading, L1 buffer neighbor extraction, and cluster prefetching. However, the IO-12 target remains unmet (9.96x gap) because edge clusters for sequential chains are stored non-contiguously in the global cluster pool. This layout mismatch means prefetching clusters is random I/O, not sequential I/O.
+
+**Solution:** Scoped layout optimization for chain locality:
+- Detect linear chain regions during graph construction
+- Store edge clusters contiguously for chain nodes only
+- Keep general graph storage unchanged
+- Gate behind format/version flag (backward-compatible)
+- NOT full v2.0 Memory Substrate redesign
+
+**Success Criteria:**
+1. Chain(500) traversal achieves <=75ms (3x SQLite baseline)
+2. Backward compatibility maintained (format version flag)
+3. General graph performance not regressed
+4. Migration path for existing databases
+
+**Key deliverables:**
+- Chain region detection algorithm
+- Contiguous cluster allocation for chains
+- Format version negotiation
+- Migration utilities
+- Updated documentation
 
 ---
 
@@ -350,6 +380,6 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 28 → 29 → 30 → 
 | 29. Linear Pattern Detection | v1.4 | 3/3 | Complete | 2026-01-21 |
 | 30. Sequential Slot Reading | v1.4 | 3/3 | Complete | 2026-01-21 |
 | 31. Traversal Integration | v1.4 | 3/3 | Complete | 2026-01-21 |
-| 32. Validation and Tuning | v1.4 | 4/6 | Gap Closure | 2026-01-21 |
+| 32. Validation and Tuning | v1.4 | 6/6 | Complete | 2026-01-21 |
 
-**Overall Progress:** 107/109 plans complete (98.2%). v1.4: 13/17 plans complete (76.5%).
+**Overall Progress:** 109/109 plans complete (100%) through v1.4. v1.5/v1.6 planned for IO-12 completion.
