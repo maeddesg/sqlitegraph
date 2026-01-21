@@ -1552,4 +1552,157 @@ mod tests {
         assert_eq!(detector.total_chain_length(), 20);
         assert_eq!(detector.average_chain_length(), 10.0);
     }
+
+    // Phase 33 Plan 03: Sequential read trigger tests
+
+    #[test]
+    fn test_should_use_sequential_read_returns_false_before_threshold() {
+        let mut detector = LinearDetector::new();
+
+        // Before threshold: false
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        assert!(!detector.should_use_sequential_read());
+
+        // Still before threshold: false
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        assert!(!detector.should_use_sequential_read());
+
+        // Pattern not confirmed yet
+        assert!(!detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_returns_false_for_non_contiguous() {
+        let mut detector = LinearDetector::new();
+
+        // Linear pattern confirmed but non-contiguous clusters
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 10000, 4096); // Gap: should be 9216
+
+        // Linear confirmed, but clusters not contiguous
+        assert!(detector.is_linear_confirmed());
+        assert!(!detector.validate_contiguity());
+        assert!(!detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_returns_true_for_linear_and_contiguous() {
+        let mut detector = LinearDetector::new();
+
+        // Linear pattern confirmed + contiguous clusters
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 9216, 4096);
+
+        // Both conditions met
+        assert!(detector.is_linear_confirmed());
+        assert!(detector.validate_contiguity());
+        assert!(detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_returns_false_for_branching() {
+        let mut detector = LinearDetector::new();
+
+        // Branching detected immediately
+        detector.observe_with_cluster(1, 2, 1024, 4096);
+
+        // Not linear, even if clusters happen to be contiguous
+        assert!(!detector.is_linear_confirmed());
+        assert!(!detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_linear_then_branching() {
+        let mut detector = LinearDetector::new();
+
+        // First: linear + contiguous = true
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 9216, 4096);
+        assert!(detector.should_use_sequential_read());
+
+        // Then branching: false
+        detector.observe_with_cluster(4, 2, 13312, 8192);
+        assert!(!detector.should_use_sequential_read());
+        assert!(!detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_single_cluster_returns_false() {
+        let mut detector = LinearDetector::new();
+
+        // Single cluster: not enough for contiguity check
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        assert!(!detector.should_use_sequential_read());
+
+        // Even if linear pattern is confirmed after more observations,
+        // we need at least 2 clusters for contiguity
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 9216, 4096);
+        assert!(detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_reset_clears_state() {
+        let mut detector = LinearDetector::new();
+
+        // First: true
+        detector.observe_with_cluster(1, 1, 1024, 4096);
+        detector.observe_with_cluster(2, 1, 5120, 4096);
+        detector.observe_with_cluster(3, 1, 9216, 4096);
+        assert!(detector.should_use_sequential_read());
+
+        // Reset: false
+        detector.reset();
+        assert!(!detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_with_custom_threshold() {
+        let mut detector = LinearDetector::with_threshold(5);
+
+        // Need 5 observations with custom threshold
+        for i in 0..5 {
+            let offset = (i as u64) * 4096;
+            detector.observe_with_cluster(i, 1, offset, 4096);
+        }
+
+        // Now both conditions met
+        assert!(detector.is_linear_confirmed());
+        assert!(detector.validate_contiguity());
+        assert!(detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_variable_cluster_sizes() {
+        let mut detector = LinearDetector::new();
+
+        // Different cluster sizes, but contiguous
+        // 0 + 100 = 100, 100 + 200 = 300, 300 + 150 = 450
+        detector.observe_with_cluster(1, 1, 0, 100);
+        detector.observe_with_cluster(2, 1, 100, 200);
+        detector.observe_with_cluster(3, 1, 300, 150);
+
+        assert!(detector.is_linear_confirmed());
+        assert!(detector.validate_contiguity());
+        assert!(detector.should_use_sequential_read());
+    }
+
+    #[test]
+    fn test_should_use_sequential_read_dead_end_returns_false() {
+        let mut detector = LinearDetector::new();
+
+        // Dead ends (degree 0) don't confirm linear pattern
+        detector.observe_with_cluster(1, 0, 1024, 4096);
+        assert!(!detector.should_use_sequential_read());
+
+        detector.observe_with_cluster(2, 0, 5120, 4096);
+        assert!(!detector.should_use_sequential_read());
+
+        // Even with multiple observations, degree 0 keeps us in Unknown
+        assert!(!detector.is_linear_confirmed());
+        assert!(!detector.should_use_sequential_read());
+    }
 }
