@@ -213,7 +213,7 @@ fn generate_edges(
 }
 
 /// Common benchmark graph sizes
-pub const BENCHMARK_SIZES: &[usize] = &[100, 1_000, 10_000];
+pub const BENCHMARK_SIZES: &[usize] = &[100, 500];
 
 /// Small benchmark graphs for quick testing
 pub const SMALL_SIZES: &[usize] = &[10, 50];

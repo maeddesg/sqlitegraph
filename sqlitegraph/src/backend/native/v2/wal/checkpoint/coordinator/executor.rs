@@ -36,8 +36,9 @@ impl CheckpointExecutor {
 
         let writer = BufWriter::with_capacity(DEFAULT_CHECKPOINT_BUFFER_SIZE, file);
 
-        // Extract V2 graph file path from WAL config
-        let v2_graph_path = config.wal_path.with_extension("v2");
+        // Use graph_path from WAL config instead of deriving from wal_path
+        // This allows the graph file to have any extension (.db, .v2, etc.)
+        let v2_graph_path = config.graph_path.clone();
 
         // Create V2 Graph Integrator with real backend integration
         let v2_integrator = V2GraphIntegrator::new(v2_graph_path).map_err(|e| {
