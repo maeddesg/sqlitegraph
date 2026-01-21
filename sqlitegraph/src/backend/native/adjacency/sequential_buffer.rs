@@ -275,4 +275,46 @@ mod tests {
         assert_eq!(retrieved.kind, "Type2");
         assert_eq!(retrieved.name, "node1_v2");
     }
+
+    #[test]
+    fn test_buffer_empty_behavior() {
+        let buffer = SequentialReadBuffer::new();
+
+        // Empty buffer returns None for any get()
+        assert!(buffer.get(1).is_none());
+        assert!(buffer.get(999).is_none());
+
+        // contains() returns false for any node
+        assert!(!buffer.contains(1));
+
+        // len() and is_empty() report correctly
+        assert_eq!(buffer.len(), 0);
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn test_buffer_mvcc_isolation() {
+        // Simulate two traversals by creating separate buffers
+        let mut buffer1 = SequentialReadBuffer::new();
+        let mut buffer2 = SequentialReadBuffer::new();
+
+        let node1 = NodeRecordV2::new(1, "T".into(), "a".into(), serde_json::json!({}));
+        let node2 = NodeRecordV2::new(2, "T".into(), "b".into(), serde_json::json!({}));
+
+        // Insert into buffer1 only
+        buffer1.insert(node1);
+
+        // Verify buffer2 doesn't see buffer1's data (MVCC isolation)
+        assert!(!buffer2.contains(1));
+        assert_eq!(buffer2.len(), 0);
+
+        // Insert into buffer2
+        buffer2.insert(node2);
+
+        // Verify buffers are independent
+        assert!(buffer1.contains(1));
+        assert!(!buffer1.contains(2));
+        assert!(!buffer2.contains(1));
+        assert!(buffer2.contains(2));
+    }
 }
