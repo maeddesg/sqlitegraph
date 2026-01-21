@@ -12,6 +12,8 @@
 
 use crate::backend::native::adjacency::{LinearDetector, SequentialReadBuffer};
 use crate::backend::native::graph_ops::{TraversalCache, TraversalCacheStats};
+use crate::backend::native::types::NativeNodeId;
+use ahash::AHashMap;
 
 /// Per-traversal context for optimized I/O
 ///
@@ -83,6 +85,19 @@ pub struct TraversalContext {
     ///
     /// Phase 34: Sequential Cluster Reader
     pub cluster_buffer_offsets: Vec<(u64, u32)>,
+
+    /// Node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
+    ///
+    /// Maps each observed node_id to its cluster index in the sequential cluster buffer.
+    /// When a linear chain with contiguous clusters is confirmed, this mapping enables
+    /// extracting neighbors from the buffered cluster bytes without additional I/O.
+    ///
+    /// The mapping is populated during traversal via observe_with_cluster() and
+    /// cleared on fallback via clear_cluster_buffer().
+    ///
+    /// **Memory:** O(chain_length) entries, one per node in the detected chain.
+    /// **Lookup:** O(1) via AHashMap for hot neighbor extraction path.
+    pub node_cluster_index: AHashMap<NativeNodeId, usize>,
 }
 
 impl TraversalContext {
@@ -115,6 +130,7 @@ impl TraversalContext {
             buffer_misses: 0,
             cluster_buffer: None,
             cluster_buffer_offsets: Vec::new(),
+            node_cluster_index: AHashMap::new(),
         }
     }
 
@@ -210,6 +226,7 @@ impl TraversalContext {
     pub fn clear_cluster_buffer(&mut self) {
         self.cluster_buffer = None;
         self.cluster_buffer_offsets.clear();
+        self.node_cluster_index.clear();
     }
 }
 
@@ -235,6 +252,7 @@ mod tests {
         assert_eq!(ctx.stats.misses, 0);
         assert!(ctx.cluster_buffer.is_none());
         assert!(ctx.cluster_buffer_offsets.is_empty());
+        assert!(ctx.node_cluster_index.is_empty());
     }
 
     #[test]
@@ -246,6 +264,7 @@ mod tests {
         assert_eq!(ctx.buffer_misses, 0);
         assert!(ctx.cluster_buffer.is_none());
         assert!(ctx.cluster_buffer_offsets.is_empty());
+        assert!(ctx.node_cluster_index.is_empty());
     }
 
     #[test]
@@ -369,6 +388,8 @@ mod tests {
         // Populate buffer
         ctx.cluster_buffer = Some(vec![1, 2, 3, 4]);
         ctx.cluster_buffer_offsets = vec![(100, 4), (104, 4)];
+        ctx.node_cluster_index.insert(1, 0);
+        ctx.node_cluster_index.insert(2, 1);
 
         // Clear buffer
         ctx.clear_cluster_buffer();
@@ -376,6 +397,7 @@ mod tests {
         // Verify cleared
         assert!(ctx.cluster_buffer.is_none());
         assert!(ctx.cluster_buffer_offsets.is_empty());
+        assert!(ctx.node_cluster_index.is_empty());
     }
 
     #[test]
@@ -386,15 +408,59 @@ mod tests {
         ctx.clear_cluster_buffer();
         assert!(ctx.cluster_buffer.is_none());
         assert!(ctx.cluster_buffer_offsets.is_empty());
+        assert!(ctx.node_cluster_index.is_empty());
 
         // Populate and clear
         ctx.cluster_buffer = Some(vec![1, 2, 3]);
         ctx.cluster_buffer_offsets = vec![(100, 3)];
+        ctx.node_cluster_index.insert(1, 0);
         ctx.clear_cluster_buffer();
 
         // Second clear (already empty again)
         ctx.clear_cluster_buffer();
         assert!(ctx.cluster_buffer.is_none());
         assert!(ctx.cluster_buffer_offsets.is_empty());
+        assert!(ctx.node_cluster_index.is_empty());
+    }
+
+    #[test]
+    fn test_node_cluster_index_field() {
+        let mut ctx = TraversalContext::new();
+
+        // Verify field is empty initially
+        assert!(ctx.node_cluster_index.is_empty());
+
+        // Insert mapping
+        ctx.node_cluster_index.insert(1, 0);
+        assert_eq!(ctx.node_cluster_index.get(&1), Some(&0));
+        assert_eq!(ctx.node_cluster_index.len(), 1);
+
+        // Insert another mapping
+        ctx.node_cluster_index.insert(2, 1);
+        assert_eq!(ctx.node_cluster_index.get(&2), Some(&1));
+        assert_eq!(ctx.node_cluster_index.len(), 2);
+
+        // Clear buffer clears the mapping
+        ctx.clear_cluster_buffer();
+        assert!(ctx.node_cluster_index.is_empty());
+    }
+
+    #[test]
+    fn test_clear_cluster_buffer_clears_mapping() {
+        let mut ctx = TraversalContext::new();
+
+        // Populate node_cluster_index with multiple entries
+        ctx.node_cluster_index.insert(1, 0);
+        ctx.node_cluster_index.insert(2, 1);
+        ctx.node_cluster_index.insert(3, 2);
+        ctx.node_cluster_index.insert(4, 3);
+        assert_eq!(ctx.node_cluster_index.len(), 4);
+
+        // Call clear_cluster_buffer()
+        ctx.clear_cluster_buffer();
+
+        // Verify node_cluster_index is cleared
+        assert!(ctx.node_cluster_index.is_empty());
+        assert_eq!(ctx.node_cluster_index.len(), 0);
     }
 }

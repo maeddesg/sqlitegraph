@@ -73,20 +73,23 @@ See milestone archives for complete history.
 ### Phase 34: Sequential Cluster Reader
 **Goal:** Sequential cluster reader reads all clusters for a chain in single I/O operation
 **Depends on**: Phase 33
-**Requirements:** CL-02
-**Plans:** 3 plans
+**Requirements:** CL-02 (with Phase 35 split)
+**Plans:** 3/3 complete
 
 **Success Criteria:**
 1. SequentialClusterReader reads all edge clusters for a confirmed chain in single I/O
 2. Buffered clusters are stored in traversal-scoped memory (evaporates on return)
-3. Neighbor extraction from buffered clusters matches existing get_neighbors() semantics
+3. ~~Neighbor extraction from buffered clusters matches existing get_neighbors() semantics~~ (deferred to Phase 35)
 4. Memory overhead is bounded and documented
+
+**Scope Note:** Phase 34-35 together deliver the full sequential cluster reader capability. Phase 34 implements the read trigger and buffer storage. Phase 35 adds neighbor extraction from buffer with proper node_id -> cluster_index mapping.
 
 **Key deliverables:**
 - SequentialClusterReader struct with read_chain_clusters() method
-- Cluster buffer allocation and management
-- Neighbor extraction from buffered clusters
-- Unit tests for cluster reading and neighbor extraction
+- Cluster buffer allocation and management in TraversalContext
+- Sequential read trigger in get_neighbors_optimized()
+- ~~Neighbor extraction from buffered clusters~~ (deferred to Phase 35)
+- Unit tests for cluster reading and buffer storage
 
 **Avoids:**
 - Persistent cluster caching (traversal-scoped only)
@@ -94,32 +97,41 @@ See milestone archives for complete history.
 - Unbounded memory growth
 
 **Plans:**
-- [ ] 34-01-PLAN.md — Create SequentialClusterReader module with read_chain_clusters() method
-- [ ] 34-02-PLAN.md — Add cluster buffer fields to TraversalContext
-- [ ] 34-03-PLAN.md — Integrate sequential cluster read into get_neighbors_optimized()
+- [x] 34-01-PLAN.md — Create SequentialClusterReader module with read_chain_clusters() method
+- [x] 34-02-PLAN.md — Add cluster buffer fields to TraversalContext
+- [x] 34-03-PLAN.md — Integrate sequential cluster read into get_neighbors_optimized()
 
-### Phase 35: Contiguity Validation and Fallback
-**Goal:** LinearDetector validates cluster contiguity and falls back immediately when pattern breaks
+### Phase 35: Neighbor Extraction and Fallback
+**Goal:** Extract neighbors from cluster buffer and fall back immediately when pattern breaks
 **Depends on**: Phase 34
-**Requirements:** CL-03, CL-04
-**Plans:** TBD
+**Requirements:** CL-02 (completion), CL-03, CL-04
+**Plans:** 4 plans
 
 **Success Criteria:**
-1. LinearDetector validates cluster contiguity before committing to sequential read path
-2. When clusters are not contiguous, traversal falls back immediately to standard path
-3. Fallback happens within the same traversal (no restart required)
-4. Pattern breaks (degree > 1, branching) trigger immediate fallback
+1. Neighbors are extracted from cluster_buffer using node_id -> cluster_index mapping
+2. LinearDetector validates cluster contiguity before committing to sequential read path
+3. When clusters are not contiguous, traversal falls back immediately to standard path
+4. Fallback happens within the same traversal (no restart required)
+5. Pattern breaks (degree > 1, branching) trigger immediate fallback
 
 **Key deliverables:**
+- Node_id -> cluster_index mapping in TraversalContext
+- Neighbor extraction from cluster_buffer in get_neighbors_optimized()
 - Cluster contiguity validation logic
 - Fallback path integration
-- Unit tests for non-contiguous cluster handling
+- Unit tests for neighbor extraction and non-contiguous cluster handling
 - Integration tests for tree/diamond graph patterns
 
 **Avoids:**
 - Using sequential path on non-contiguous clusters
 - Performance degradation from false positive chain detection
 - Complex fallback state machines
+
+**Plans:**
+- [ ] 35-01-PLAN.md — Add node_cluster_index field to TraversalContext
+- [ ] 35-02-PLAN.md — Extract neighbors from cluster_buffer using mapping
+- [ ] 35-03-PLAN.md — Add traverse_with_detection helper and unit tests
+- [ ] 35-04-PLAN.md — Integration tests for extraction and fallback
 
 ### Phase 36: IO-12 Validation
 **Goal:** MVCC isolation preserved and IO-12 target achieved
@@ -155,8 +167,8 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 |-------|-----------|----------------|--------|-----------|
 | 1-32 | v0.2-v1.4 | 109/109 | Complete | 2026-01-21 |
 | 33. Traversal-Time Chain Detection | v1.6 | 5/5 | Complete | 2026-01-21 |
-| 34. Sequential Cluster Reader | v1.6 | 0/3 | Planned | — |
-| 35. Contiguity Validation and Fallback | v1.6 | 0/TBD | Not Started | — |
+| 34. Sequential Cluster Reader | v1.6 | 3/3 | Complete | 2026-01-21 |
+| 35. Neighbor Extraction and Fallback | v1.6 | 0/4 | Not Started | — |
 | 36. IO-12 Validation | v1.6 | 0/TBD | Not Started | — |
 
-**Overall Progress:** 114/117 plans planned. v1.6 in progress (1/4 phases complete, 2/4 planned).
+**Overall Progress:** 121/121 plans planned. v1.6 in progress (2/4 phases complete, 2/4 not started).
