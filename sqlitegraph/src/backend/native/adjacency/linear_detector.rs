@@ -452,6 +452,8 @@ impl LinearDetector {
     /// Clears all state and returns the detector to initial Unknown condition.
     /// Call this when starting a new traversal or reusing a detector instance.
     ///
+    /// This also clears the cluster offset history, ensuring per-traversal isolation.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -469,11 +471,13 @@ impl LinearDetector {
     /// detector.reset();
     /// assert!(!detector.is_linear_confirmed());
     /// assert_eq!(detector.confidence(), 0.0);
+    /// assert_eq!(detector.cluster_offsets().len(), 0);
     /// ```
     #[inline]
     pub fn reset(&mut self) {
         self.state = DetectorState::Unknown;
         self.consecutive_linear = 0;
+        self.cluster_offsets.clear();
     }
 
     /// Get current pattern without observation.
