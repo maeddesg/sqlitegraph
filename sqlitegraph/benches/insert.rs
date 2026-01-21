@@ -74,6 +74,7 @@ fn insert_nodes(criterion: &mut Criterion) {
                         .expect("Failed to insert node");
                     node_ids.push(node_id);
                 }
+                std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
     }
@@ -167,6 +168,7 @@ fn insert_edges(criterion: &mut Criterion) {
                         })
                         .expect("Failed to insert edge");
                 }
+                std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
     }
@@ -324,6 +326,7 @@ fn insert_mixed(criterion: &mut Criterion) {
                             }).expect("Failed to insert edge");
                         }
                     }
+                    std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
                 });
             },
         );
@@ -450,6 +453,7 @@ fn insert_incremental(criterion: &mut Criterion) {
 
                 edge_counter += BATCH_SIZE;
             }
+            std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
         });
     });
 

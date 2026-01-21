@@ -133,6 +133,7 @@ fn bfs_chain(criterion: &mut Criterion) {
                 let _bfs_result = graph
                     .bfs(node_ids[0], size as u32)
                     .expect("Failed to perform BFS");
+                std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
 
@@ -248,6 +249,7 @@ fn bfs_star(criterion: &mut Criterion) {
 
                 // Perform BFS from center node
                 let _bfs_result = graph.bfs(node_ids[0], 2).expect("Failed to perform BFS");
+                std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
 
@@ -384,6 +386,7 @@ fn bfs_random(criterion: &mut Criterion) {
 
                 // Perform BFS from first node
                 let _bfs_result = graph.bfs(node_ids[0], 3).expect("Failed to perform BFS");
+                std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
 

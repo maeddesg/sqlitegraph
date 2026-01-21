@@ -103,6 +103,7 @@ fn k_hop_1(criterion: &mut Criterion) {
                 let _k_hop_result = graph
                     .k_hop(node_ids[0], 1, BackendDirection::Outgoing)
                     .expect("Failed to perform 1-hop traversal");
+                std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
 
@@ -226,6 +227,7 @@ fn k_hop_2(criterion: &mut Criterion) {
                 let _k_hop_result = graph
                     .k_hop(node_ids[0], 2, BackendDirection::Outgoing)
                     .expect("Failed to perform 2-hop traversal");
+                std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
 
@@ -349,6 +351,7 @@ fn k_hop_3(criterion: &mut Criterion) {
                 let _k_hop_result = graph
                     .k_hop(node_ids[0], 3, BackendDirection::Outgoing)
                     .expect("Failed to perform 3-hop traversal");
+                std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
 
