@@ -795,6 +795,69 @@ impl LinearDetector {
     pub fn validate_contiguity(&self) -> bool {
         are_clusters_contiguous(&self.cluster_offsets)
     }
+
+    /// Check if sequential read path should be used.
+    ///
+    /// This is the single boolean check that traversal code uses to decide
+    /// whether to use sequential cluster reads (Phase 34) or the standard path.
+    ///
+    /// # When to Call
+    ///
+    /// Call this method after `observe_with_cluster()` once the traversal has
+    /// accumulated enough observations. The method returns `true` only when:
+    ///
+    /// 1. The pattern is confirmed linear (`is_linear_confirmed()`)
+    /// 2. The clusters are contiguous on disk (`validate_contiguity()`)
+    ///
+    /// Both conditions are required for sequential I/O to provide benefit.
+    ///
+    /// # Integration with Phase 34
+    ///
+    /// When this returns `true`, the traversal can use `SequentialClusterReader`
+    /// to read all clusters for a chain in a single I/O operation. This provides
+    /// the performance optimization target for IO-12 (Chain(500) <= 75ms).
+    ///
+    /// # Relationship with TraversalContext
+    ///
+    /// The detector is per-traversal (stored in `TraversalContext` or local to
+    /// the traversal function). This preserves MVCC isolation and prevents
+    /// cross-traversal state leakage.
+    ///
+    /// # Returns
+    ///
+    /// `true` if both linear pattern is confirmed AND clusters are contiguous,
+    /// `false` otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // Before threshold: false
+    /// detector.observe_with_cluster(1, 1, 1024, 4096);
+    /// assert!(!detector.should_use_sequential_read());
+    ///
+    /// // Still before threshold: false
+    /// detector.observe_with_cluster(2, 1, 5120, 4096);
+    /// assert!(!detector.should_use_sequential_read());
+    ///
+    /// // Linear confirmed + contiguous: true
+    /// detector.observe_with_cluster(3, 1, 9216, 4096);
+    /// assert!(detector.should_use_sequential_read());
+    ///
+    /// // Non-contiguous clusters: false
+    /// detector.reset();
+    /// detector.observe_with_cluster(1, 1, 1024, 4096);
+    /// detector.observe_with_cluster(2, 1, 5120, 4096);
+    /// detector.observe_with_cluster(3, 1, 10000, 4096); // Gap: should be 9216
+    /// assert!(!detector.should_use_sequential_read());
+    /// ```
+    #[inline]
+    pub fn should_use_sequential_read(&self) -> bool {
+        self.is_linear_confirmed() && self.validate_contiguity()
+    }
 }
 
 impl Default for LinearDetector {
