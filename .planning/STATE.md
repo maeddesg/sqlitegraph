@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 Phase: 33 - Traversal-Time Chain Detection
 Plan: 3 of 4
-Status: In progress - chain detection instrumentation complete
-Last activity: 2026-01-21 — Completed 33-04 chain detection instrumentation
+Status: In progress - sequential read trigger complete
+Last activity: 2026-01-21 — Completed 33-03 sequential read trigger
 
-Progress: [█████████░] 97.4% (32/32 phases complete, 112/114 plans complete, v1.4 complete, v1.6 75% done)
+Progress: [█████████░] 97.4% (32/32 phases complete, 113/114 plans complete, v1.4 complete, v1.6 75% done)
 
 ## v1.6 Milestone Goals
 
@@ -59,9 +59,9 @@ Progress: [█████████░] 97.4% (32/32 phases complete, 112/114
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 112
+- Total plans completed: 113
 - Average duration: 7 min
-- Total execution time: ~12.7 hours
+- Total execution time: ~12.8 hours
 
 **By Phase:**
 
@@ -101,14 +101,15 @@ Recent decisions affecting current work:
 - **v1.6.1: observe_with_cluster() separate method - maintains backward compatibility with existing observe() calls**
 - **v1.6.2: are_clusters_contiguous() pure function for independent testing and validation**
 - **v1.6.4: Simple u64 counters for chain instrumentation (chains_detected, total_chain_length) - no atomic operations needed for single-threaded traversal**
+- **v1.6.5: should_use_sequential_read() combines is_linear_confirmed() && validate_contiguity() for Phase 34 integration**
 
 ### Pending Todos
 
 v1.6 Chain Locality:
 - [x] Phase 33 Plan 01: Cluster offset tracking (completed)
 - [x] Phase 33 Plan 02: Contiguity validation (completed)
+- [x] Phase 33 Plan 03: Sequential read trigger (completed)
 - [x] Phase 33 Plan 04: Chain detection instrumentation (completed)
-- [ ] Phase 33 Plan 03: Integration into traversal hot paths
 - [ ] Phase 34: Sequential cluster reader implementation
 - [ ] Phase 35: Contiguity validation and fallback handling
 - [ ] Phase 36: IO-12 validation (verify Chain(500) <=75ms target)
@@ -121,7 +122,7 @@ v1.6 Chain Locality:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 33-04 chain detection instrumentation
+Stopped at: Completed 33-03 sequential read trigger
 Resume file: None
 
 ### Roadmap Evolution
@@ -135,4 +136,5 @@ Resume file: None
 - **v1.6 Chain Locality** (2026-01-21): Phases 33-36 planned (surgical traversal-time approach)
   - Phase 33 Plan 01 (2026-01-21): Cluster offset tracking complete
   - Phase 33 Plan 02 (2026-01-21): Contiguity validation complete
+  - Phase 33 Plan 03 (2026-01-21): Sequential read trigger complete
   - Phase 33 Plan 04 (2026-01-21): Chain detection instrumentation complete
