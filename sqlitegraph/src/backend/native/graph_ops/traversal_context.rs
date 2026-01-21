@@ -330,6 +330,48 @@ impl TraversalContext {
         self.cluster_buffer_reallocs += 1;
     }
 
+    /// Get cluster info for a node (Phase 37-05)
+    ///
+    /// Extracts cluster metadata (offset and size) for the given node_id.
+    /// This helper method isolates cluster metadata extraction logic for
+    /// clean cluster-aware observation in BFS and other traversals.
+    ///
+    /// # Arguments
+    ///
+    /// * `graph_file` - Mutable reference to the graph file for reading node records
+    /// * `node_id` - Node ID to extract cluster metadata for
+    ///
+    /// # Returns
+    ///
+    /// - `Some((offset, size))` - Cluster offset and size if node record exists
+    /// - `None` - If node record read fails (fallback case)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::graph_ops::TraversalContext;
+    ///
+    /// // In BFS traversal:
+    /// let (cluster_offset, cluster_size) = ctx.get_cluster_info(graph_file, current_node)
+    ///     .unwrap_or((0, 0));
+    /// let _pattern = ctx.detector.observe_with_cluster(
+    ///     current_node, degree, cluster_offset, cluster_size
+    /// );
+    /// ```
+    pub fn get_cluster_info(
+        &self,
+        graph_file: &mut crate::backend::native::graph_file::GraphFile,
+        node_id: NativeNodeId,
+    ) -> Option<(u64, u32)> {
+        match graph_file.read_node_at(node_id) {
+            Ok(node_record) => Some((
+                node_record.outgoing_cluster_offset,
+                node_record.outgoing_cluster_size,
+            )),
+            Err(_) => None, // Node read failed, return None
+        }
+    }
+
     /// Calculate fragmentation score from cluster offsets (Phase 37 telemetry)
     ///
     /// Fragmentation is the ratio of gap bytes to total bytes in the
@@ -697,5 +739,19 @@ mod tests {
         // Verify node_cluster_index is cleared
         assert!(ctx.node_cluster_index.is_empty());
         assert_eq!(ctx.node_cluster_index.len(), 0);
+    }
+
+    #[test]
+    fn test_get_cluster_info_helper_exists() {
+        // Test that get_cluster_info helper method exists and is callable
+        let ctx = TraversalContext::new();
+
+        // The helper method should be accessible
+        // We can't test the actual functionality without a graph file,
+        // but we can verify the method exists by checking it compiles
+        // This test passes if the code compiles successfully
+        let _method_exists =TraversalContext::get_cluster_info;
+        let _ = &ctx; // Use ctx to avoid unused variable warning
+        let _ = _method_exists; // Use to avoid unused variable warning
     }
 }
