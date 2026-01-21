@@ -142,6 +142,16 @@ enum DetectorState {
 /// - **state**: Current detector state (Unknown, Accumulating, Linear, Branching)
 /// - **consecutive_linear**: Count of consecutive degree-1 steps observed
 /// - **threshold**: Number of consecutive degree-1 steps required to confirm Linear (default: 3)
+/// - **cluster_offsets**: History of (cluster_offset, cluster_size) tuples observed during traversal
+///
+/// # Cluster Offset Tracking (Phase 33)
+///
+/// The `cluster_offsets` field stores the offset and size of each edge cluster
+/// visited during traversal. This enables contiguity validation in Phase 34-35:
+///
+/// - Sequential cluster reads require clusters to be contiguous on disk
+/// - Tracking offsets during traversal avoids additional I/O for validation
+/// - Offsets are cleared on `reset()` to maintain per-traversal isolation
 ///
 /// # Example
 ///
@@ -170,6 +180,8 @@ pub struct LinearDetector {
     consecutive_linear: u32,
     /// Confidence threshold (configurable, default: 3)
     threshold: u32,
+    /// Cluster offset history: (offset, size) tuples for contiguity validation
+    cluster_offsets: Vec<(u64, u32)>,
 }
 
 impl LinearDetector {
@@ -189,7 +201,12 @@ impl LinearDetector {
     /// ```
     #[inline]
     pub fn new() -> Self {
-        Self::with_threshold(3)
+        Self {
+            state: DetectorState::Unknown,
+            consecutive_linear: 0,
+            threshold: 3,
+            cluster_offsets: Vec::new(),
+        }
     }
 
     /// Create new detector with custom threshold.
@@ -216,6 +233,7 @@ impl LinearDetector {
             state: DetectorState::Unknown,
             consecutive_linear: 0,
             threshold,
+            cluster_offsets: Vec::new(),
         }
     }
 
