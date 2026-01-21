@@ -380,3 +380,108 @@ fn test_k_hop_cache_effectiveness() {
 
     // Result correctness proves cache doesn't break k-hop semantics
 }
+
+// Shortest path cache tests
+
+#[test]
+fn test_shortest_path_cache_evaporation() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create linear graph: 1 -> 2 -> 3 -> 4
+    for i in 1..=4 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Linear edges: 1->2, 2->3, 3->4
+    let edges = [(1, 2), (2, 3), (3, 4)];
+    for (i, (from, to)) in edges.iter().enumerate() {
+        let edge = EdgeRecord::new(
+            i as NativeNodeId + 1,
+            *from,
+            *to,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // First shortest path call
+    let result1 = native_shortest_path(&mut graph_file, 1, 4).unwrap();
+    assert!(result1.is_some(), "Should find a path from 1 to 4");
+    assert_eq!(result1.unwrap(), vec![1, 2, 3, 4], "First shortest path should be [1,2,3,4]");
+
+    // Second shortest path call with same parameters
+    let result2 = native_shortest_path(&mut graph_file, 1, 4).unwrap();
+    assert!(result2.is_some(), "Should find a path from 1 to 4");
+    assert_eq!(result2.unwrap(), vec![1, 2, 3, 4], "Second shortest path should be [1,2,3,4]");
+
+    // Third shortest path call with different parameters
+    let result3 = native_shortest_path(&mut graph_file, 2, 4).unwrap();
+    assert!(result3.is_some(), "Should find a path from 2 to 4");
+    assert_eq!(result3.unwrap(), vec![2, 3, 4], "Third shortest path from 2 to 4 should be [2,3,4]");
+
+    // All shortest path calls produce correct results, proving cache doesn't cause cross-call pollution
+}
+
+#[test]
+fn test_shortest_path_cache_effectiveness() {
+    clear_node_cache();
+
+    let (mut graph_file, _temp_file) = create_test_graph_file();
+
+    // Create diamond graph with branching paths: 1 -> 2 -> 4, 1 -> 3 -> 4
+    for i in 1..=4 {
+        let node = NodeRecord::new(
+            i,
+            "Test".to_string(),
+            format!("node{}", i),
+            serde_json::json!({}),
+        );
+        let mut node_store = NodeStore::new(&mut graph_file);
+        node_store.write_node(&node).unwrap();
+    }
+
+    // Diamond edges: 1->2, 1->3, 2->4, 3->4
+    let edges = [(1, 2), (1, 3), (2, 4), (3, 4)];
+    for (i, (from, to)) in edges.iter().enumerate() {
+        let edge = EdgeRecord::new(
+            i as NativeNodeId + 1,
+            *from,
+            *to,
+            "test".to_string(),
+            serde_json::json!({}),
+        );
+        let mut edge_store = EdgeStore::new(&mut graph_file);
+        edge_store.write_edge(&edge).unwrap();
+    }
+
+    // Shortest path from 1 to 4
+    let result = native_shortest_path(&mut graph_file, 1, 4).unwrap();
+
+    assert!(result.is_some(), "Should find a path from 1 to 4");
+    let path = result.unwrap();
+
+    // Either path [1,2,4] or [1,3,4] is valid (both are shortest paths of length 3)
+    let valid_path = path == vec![1, 2, 4] || path == vec![1, 3, 4];
+    assert!(valid_path, "Path should be [1,2,4] or [1,3,4], got {:?}", path);
+
+    // Path length should be 3
+    assert_eq!(path.len(), 3, "Shortest path should have length 3");
+
+    // Path should start at 1 and end at 4
+    assert_eq!(path[0], 1, "Path should start at node 1");
+    assert_eq!(path[2], 4, "Path should end at node 4");
+
+    // Result correctness proves cache doesn't break shortest path semantics
+    // The BFS explores both paths; cache prevents re-reading node 1's neighbors when dequeuing 2 and 3
+}
