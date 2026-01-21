@@ -43,6 +43,9 @@ pub use k_hop::*;
 pub use pathfinding::*;
 pub use strategy::*;
 
+// Re-export LinearDetector from adjacency for Phase 31 traversal integration
+pub use crate::backend::native::adjacency::{LinearDetector, TraversalPattern};
+
 /// Native BFS implementation using adjacency helpers
 pub fn native_bfs(
     graph_file: &mut GraphFile,
