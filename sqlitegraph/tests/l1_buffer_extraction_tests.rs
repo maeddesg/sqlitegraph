@@ -577,3 +577,200 @@ fn test_l1_buffer_only_checked_after_linear_confirmed() {
     // Should have L2 cache miss
     assert_eq!(ctx.stats.misses, 1, "Should have 1 L2 cache miss");
 }
+
+//
+// GROUP 5: CLUSTER CACHE TESTS (Phase 32-05)
+//
+// These tests verify that edge cluster caching works correctly when using
+// prefetch_clusters_from() to prefetch both node slots and edge clusters.
+//
+
+#[test]
+fn test_cluster_cache_hit() {
+    // Scenario: Cluster is prefetched using prefetch_clusters_from()
+    // Expected: get_neighbors_optimized() returns neighbors from cached cluster (no I/O)
+
+    let (mut graph_file, node_ids, _temp_dir) = create_test_chain_graph();
+    let mut ctx = create_linear_context();
+
+    // Prefetch node slots AND edge clusters
+    ctx.buffer.prefetch_clusters_from(&mut graph_file, node_ids[0])
+        .expect("prefetch_clusters_from should succeed");
+
+    // Verify node is in buffer
+    assert!(ctx.buffer.contains(node_ids[0]), "Node should be in buffer after prefetch");
+
+    // Get neighbors via optimized path
+    let neighbors = get_neighbors_optimized(
+        &mut graph_file,
+        node_ids[0],
+        Direction::Outgoing,
+        &mut ctx,
+    ).expect("get_neighbors_optimized should succeed");
+
+    // Should find node B (single outgoing neighbor)
+    assert_eq!(neighbors.len(), 1, "Node A should have 1 outgoing neighbor");
+    assert_eq!(neighbors[0], node_ids[1], "Neighbor should be node B");
+
+    // Buffer hit should be recorded
+    assert_eq!(ctx.buffer_hits, 1, "Should have 1 buffer hit");
+    assert_eq!(ctx.buffer_misses, 0, "Should have 0 buffer misses");
+}
+
+#[test]
+fn test_cluster_cache_miss() {
+    // Scenario: Node is in buffer but cluster was NOT prefetched
+    // Expected: Falls back to file I/O for cluster read
+
+    let (mut graph_file, node_ids, _temp_dir) = create_test_chain_graph();
+    let mut ctx = create_linear_context();
+
+    // Prefetch ONLY node slots (not clusters)
+    ctx.buffer.prefetch_from(&mut graph_file, node_ids[0])
+        .expect("prefetch_from should succeed");
+
+    // Verify node is in buffer
+    assert!(ctx.buffer.contains(node_ids[0]), "Node should be in buffer");
+
+    // Verify cluster is NOT cached (we used prefetch_from, not prefetch_clusters_from)
+    let node_record = ctx.buffer.get(node_ids[0]).unwrap();
+    assert!(!ctx.buffer.has_cluster(node_record.outgoing_cluster_offset),
+            "Cluster should not be cached when using prefetch_from");
+
+    // Get neighbors - should fall back to file I/O for cluster
+    let neighbors = get_neighbors_optimized(
+        &mut graph_file,
+        node_ids[0],
+        Direction::Outgoing,
+        &mut ctx,
+    ).expect("get_neighbors_optimized should succeed");
+
+    // Should still find node B (via file I/O)
+    assert_eq!(neighbors.len(), 1, "Node A should have 1 outgoing neighbor");
+    assert_eq!(neighbors[0], node_ids[1], "Neighbor should be node B");
+
+    // Buffer hit should be recorded (node was in buffer)
+    assert_eq!(ctx.buffer_hits, 1, "Should have 1 buffer hit");
+}
+
+#[test]
+fn test_cluster_prefetch_batch() {
+    // Scenario: prefetch_clusters_from() loads clusters for all buffered nodes
+    // Expected: Multiple nodes and their clusters are prefetched
+
+    let (mut graph_file, node_ids, _temp_dir) = create_test_chain_graph();
+    let mut ctx = create_linear_context();
+
+    // Prefetch starting from node 1 (should prefetch nodes 1-8 in window)
+    ctx.buffer.prefetch_clusters_from(&mut graph_file, node_ids[0])
+        .expect("prefetch_clusters_from should succeed");
+
+    // Verify all nodes in the chain are in buffer
+    for (i, &node_id) in node_ids.iter().enumerate() {
+        assert!(ctx.buffer.contains(node_id),
+                "Node {} should be in buffer", i + 1);
+    }
+
+    // Get the first node to check its cluster
+    let node_record = ctx.buffer.get(node_ids[0]).unwrap();
+
+    // Verify outgoing cluster is cached
+    if node_record.outgoing_cluster_offset > 0 {
+        assert!(ctx.buffer.has_cluster(node_record.outgoing_cluster_offset),
+                "Outgoing cluster should be cached");
+        assert!(ctx.buffer.get_cluster(node_record.outgoing_cluster_offset).is_some(),
+                "Should be able to get cached cluster");
+    }
+
+    // Get the second node to check its clusters
+    let node_record = ctx.buffer.get(node_ids[1]).unwrap();
+
+    // Verify both outgoing and incoming clusters are cached (if non-zero)
+    if node_record.outgoing_cluster_offset > 0 {
+        assert!(ctx.buffer.has_cluster(node_record.outgoing_cluster_offset),
+                "Outgoing cluster for node 2 should be cached");
+    }
+    if node_record.incoming_cluster_offset > 0 {
+        assert!(ctx.buffer.has_cluster(node_record.incoming_cluster_offset),
+                "Incoming cluster for node 2 should be cached");
+    }
+}
+
+#[test]
+fn test_cluster_cache_clear() {
+    // Scenario: buffer.clear() should clear both node slots and cluster cache
+    // Expected: After clear, both slots and clusters are empty
+
+    let (mut graph_file, node_ids, _temp_dir) = create_test_chain_graph();
+    let mut ctx = create_linear_context();
+
+    // Prefetch nodes AND clusters
+    ctx.buffer.prefetch_clusters_from(&mut graph_file, node_ids[0])
+        .expect("prefetch_clusters_from should succeed");
+
+    // Verify nodes and clusters are cached
+    assert!(ctx.buffer.contains(node_ids[0]), "Node should be in buffer");
+    let node_record = ctx.buffer.get(node_ids[0]).unwrap();
+    if node_record.outgoing_cluster_offset > 0 {
+        assert!(ctx.buffer.has_cluster(node_record.outgoing_cluster_offset),
+                "Cluster should be cached");
+    }
+
+    // Clear the buffer
+    ctx.buffer.clear();
+
+    // Verify both nodes and clusters are cleared
+    assert!(!ctx.buffer.contains(node_ids[0]), "Node should be cleared");
+    assert_eq!(ctx.buffer.len(), 0, "Buffer should be empty");
+    assert_eq!(ctx.buffer.cluster_cache_len(), 0, "Cluster cache should be empty");
+}
+
+#[test]
+fn test_cluster_cache_with_linear_traversal() {
+    // Scenario: Simulate a linear traversal using prefetch_clusters_from
+    // Expected: All nodes accessible from cached data
+
+    let (mut graph_file, node_ids, _temp_dir) = create_test_chain_graph();
+    let mut ctx = create_linear_context();
+
+    // Simulate chain traversal: A -> B -> C -> D -> E
+    // Start by prefetching from node A
+    ctx.buffer.prefetch_clusters_from(&mut graph_file, node_ids[0])
+        .expect("First prefetch should succeed");
+
+    // Get neighbors of A (should be B)
+    let neighbors_a = get_neighbors_optimized(
+        &mut graph_file,
+        node_ids[0],
+        Direction::Outgoing,
+        &mut ctx,
+    ).expect("get_neighbors_optimized for A should succeed");
+
+    assert_eq!(neighbors_a.len(), 1);
+    assert_eq!(neighbors_a[0], node_ids[1]);
+
+    // Get neighbors of B (should be C)
+    let neighbors_b = get_neighbors_optimized(
+        &mut graph_file,
+        node_ids[1],
+        Direction::Outgoing,
+        &mut ctx,
+    ).expect("get_neighbors_optimized for B should succeed");
+
+    assert_eq!(neighbors_b.len(), 1);
+    assert_eq!(neighbors_b[0], node_ids[2]);
+
+    // Get neighbors of C (should be D)
+    let neighbors_c = get_neighbors_optimized(
+        &mut graph_file,
+        node_ids[2],
+        Direction::Outgoing,
+        &mut ctx,
+    ).expect("get_neighbors_optimized for C should succeed");
+
+    assert_eq!(neighbors_c.len(), 1);
+    assert_eq!(neighbors_c[0], node_ids[3]);
+
+    // Most lookups should be buffer hits (nodes were in prefetch window)
+    assert!(ctx.buffer_hits >= 2, "Should have at least 2 buffer hits");
+}
