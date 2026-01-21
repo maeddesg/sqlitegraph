@@ -284,7 +284,7 @@ Plans:
 **Goal:** Sequential I/O optimization reduces chain traversal gap from 11x to <=3x
 **Depends on**: Phase 31
 **Requirements:** IO-12, IO-13
-**Plans:** 3 plans in 2 waves
+**Plans:** 6 plans in 2 waves (4 complete, 2 gap closure pending)
 
 **Success Criteria:**
 1. Chain(500) traversal improves from 11x -> <=3x vs SQLite baseline (cold cache)
@@ -300,11 +300,15 @@ Plans:
 - Memory overhead profiling
 - Updated documentation with expected speedups
 
+**Status:** Initial verification found IO-12 gap (Chain(500) = 11.03x SQLite). Root cause: L1 buffer caches node metadata but edge clusters require per-node I/O. Gap closure plans 32-05/32-06 add cluster prefetching.
+
 Plans:
-- [x] 32-01-PLAN.md — Execute performance benchmarks and validate 3x SQLite target (IO-12) - RESULTS: Chain(500)=10.90x SQLite, needs Plan 32-04
-- [x] 32-02-PLAN.md — Create MVCC isolation tests for TraversalContext (IO-13) - 13 tests passing
-- [ ] 32-03-PLAN.md — Prefetch window tuning and memory overhead documentation
-- [ ] 32-04-PLAN.md — Implement L1 buffer neighbor extraction (ADDED - to achieve IO-12 target)
+- [x] 32-01-PLAN.md — Execute performance benchmarks (Chain(500)=10.90x SQLite, needs Plan 32-04)
+- [x] 32-02-PLAN.md — Create MVCC isolation tests (13 tests passing, IO-13 satisfied)
+- [x] 32-03-PLAN.md — Prefetch window tuning and memory overhead documentation
+- [x] 32-04-PLAN.md — L1 buffer neighbor extraction (8 tests passing, but cluster I/O still per-node)
+- [ ] 32-05-PLAN.md — Edge cluster prefetching in SequentialReadBuffer (gap closure)
+- [ ] 32-06-PLAN.md — Performance validation with cluster prefetching (gap closure checkpoint)
 
 ---
 
@@ -346,6 +350,6 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 28 → 29 → 30 → 
 | 29. Linear Pattern Detection | v1.4 | 3/3 | Complete | 2026-01-21 |
 | 30. Sequential Slot Reading | v1.4 | 3/3 | Complete | 2026-01-21 |
 | 31. Traversal Integration | v1.4 | 3/3 | Complete | 2026-01-21 |
-| 32. Validation and Tuning | v1.4 | 2/4 | In Progress | 2026-01-21 |
+| 32. Validation and Tuning | v1.4 | 4/6 | Gap Closure | 2026-01-21 |
 
-**Overall Progress:** 105/107 plans complete (98.1%). v1.4: 11/15 plans complete (73.3%).
+**Overall Progress:** 107/109 plans complete (98.2%). v1.4: 13/17 plans complete (76.5%).

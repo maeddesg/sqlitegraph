@@ -7,6 +7,7 @@
 //! - **Preserve MVCC isolation**: No cross-traversal data sharing
 //! - **Prefetch sequentially**: Read 8 slots (32KB) after linear detection
 //! - **Cache decoded data**: Avoid re-decoding slots across hops
+//! - **Prefetch edge clusters**: Cache edge cluster data alongside node slots
 //!
 //! # Usage Pattern
 //!
@@ -18,11 +19,14 @@
 //!
 //! // During traversal
 //! if detector.is_linear_confirmed() && !buffer.contains(node_id) {
-//!     buffer.prefetch_from(graph_file, node_id)?;
+//!     buffer.prefetch_clusters_from(graph_file, node_id)?;
 //! }
 //!
 //! if let Some(node) = buffer.get(node_id) {
 //!     // Use cached node data
+//!     if let Some(cluster_bytes) = buffer.get_cluster(node.outgoing_cluster_offset) {
+//!         // Use cached cluster data (no I/O)
+//!     }
 //! }
 //! // Buffer evaporates here
 //! ```
@@ -40,6 +44,7 @@ use crate::backend::native::v2::node_record_v2::NodeRecordV2;
 /// - Scoped to single traversal (evaporates when function returns)
 /// - Prefetches 8 slots (32KB) after LinearDetector confirms linear pattern
 /// - Stores decoded NodeRecordV2 for rapid access without re-decoding
+/// - Caches edge cluster data to eliminate per-node cluster I/O
 ///
 /// # MVCC Safety
 ///
@@ -48,6 +53,11 @@ use crate::backend::native::v2::node_record_v2::NodeRecordV2;
 pub struct SequentialReadBuffer {
     /// Decoded node records from batched reads
     slots: AHashMap<NativeNodeId, NodeRecordV2>,
+
+    /// Cached edge cluster data: (cluster_offset, cluster_bytes)
+    /// Maps cluster_offset -> raw cluster bytes for all nodes in the buffer.
+    /// This eliminates per-node edge cluster I/O during linear chain traversals.
+    cluster_cache: AHashMap<u64, Vec<u8>>,
 
     /// Prefetch window (default: 8 slots = 32KB)
     prefetch_window: usize,
@@ -61,6 +71,7 @@ impl SequentialReadBuffer {
     pub fn new() -> Self {
         Self {
             slots: AHashMap::new(),
+            cluster_cache: AHashMap::new(),
             prefetch_window: 8,  // 32KB = 8 * 4096
             next_prefetch_start: None,
         }
@@ -70,6 +81,7 @@ impl SequentialReadBuffer {
     pub fn with_prefetch_window(prefetch_window: usize) -> Self {
         Self {
             slots: AHashMap::new(),
+            cluster_cache: AHashMap::new(),
             prefetch_window,
             next_prefetch_start: None,
         }
@@ -139,6 +151,112 @@ impl SequentialReadBuffer {
         Ok(())
     }
 
+    /// Prefetch sequential slots AND their edge clusters starting from start_node_id
+    ///
+    /// This extends `prefetch_from()` by also prefetching edge cluster data for all
+    /// buffered nodes. For each node with a non-zero cluster offset, the cluster data
+    /// is read and cached, eliminating per-node cluster I/O during traversal.
+    ///
+    /// # Parameters
+    /// - `graph_file`: Mutable borrow for I/O operations
+    /// - `start_node_id`: First node ID to prefetch
+    ///
+    /// # How it works
+    /// 1. First calls `prefetch_from()` to get node slots with cluster metadata
+    /// 2. For each buffered node with non-zero cluster offsets, prefetches cluster data
+    /// 3. For non-sequential clusters (typical case), does individual prefetches but caches them
+    /// 4. Stores raw bytes in cluster_cache indexed by cluster_offset
+    ///
+    /// # Benefits
+    /// - Chain traversals visit each node once, so prefetch happens once per node
+    /// - Buffer covers 8 nodes ahead, so cluster I/O is done in anticipation of need
+    /// - Eliminates per-node `graph_file.read_bytes(cluster_offset, ...)` calls during traversal
+    ///
+    /// # Errors
+    /// Returns error if batch read or cluster prefetch fails (file I/O, decoding errors)
+    pub fn prefetch_clusters_from(
+        &mut self,
+        graph_file: &mut GraphFile,
+        start_node_id: NativeNodeId,
+    ) -> NativeResult<()> {
+        // First, prefetch node slots (this calls read_slots_batch internally)
+        self.prefetch_from(graph_file, start_node_id)?;
+
+        // Collect cluster offsets and sizes from buffered nodes
+        let mut cluster_reads: Vec<(u64, u32)> = Vec::new();
+
+        // Iterate through all buffered nodes to find clusters to prefetch
+        for (_node_id, node_record) in self.slots.iter() {
+            // Prefetch outgoing cluster if present
+            if node_record.outgoing_cluster_offset > 0 && node_record.outgoing_cluster_size > 0 {
+                cluster_reads.push((
+                    node_record.outgoing_cluster_offset,
+                    node_record.outgoing_cluster_size,
+                ));
+            }
+            // Prefetch incoming cluster if present
+            if node_record.incoming_cluster_offset > 0 && node_record.incoming_cluster_size > 0 {
+                cluster_reads.push((
+                    node_record.incoming_cluster_offset,
+                    node_record.incoming_cluster_size,
+                ));
+            }
+        }
+
+        // For non-sequential clusters (typical case), do individual prefetches
+        // The key benefit is that cluster I/O is done once per node (during prefetch)
+        // rather than on each get_neighbors() call
+        for (cluster_offset, cluster_size) in cluster_reads {
+            // Skip if already cached
+            if self.cluster_cache.contains_key(&cluster_offset) {
+                continue;
+            }
+
+            // Read cluster data and cache it
+            let mut cluster_data = vec![0u8; cluster_size as usize];
+            if graph_file.read_bytes(cluster_offset, &mut cluster_data).is_ok() {
+                self.cluster_cache.insert(cluster_offset, cluster_data);
+            }
+            // If read fails, we just don't cache it (will fall back to direct read)
+        }
+
+        Ok(())
+    }
+
+    /// Get cached cluster data by cluster_offset
+    ///
+    /// Returns a reference to the cached cluster bytes if available,
+    /// None if the cluster is not in the cache.
+    ///
+    /// # Parameters
+    /// - `cluster_offset`: The file offset of the cluster (from NodeRecordV2)
+    ///
+    /// # Returns
+    /// - `Some(&[u8])` if cluster is cached
+    /// - `None` if cluster not in cache (caller should fall back to file I/O)
+    #[inline]
+    pub fn get_cluster(&self, cluster_offset: u64) -> Option<&[u8]> {
+        self.cluster_cache.get(&cluster_offset).map(|v| v.as_slice())
+    }
+
+    /// Check if cluster data is cached
+    ///
+    /// # Parameters
+    /// - `cluster_offset`: The file offset of the cluster (from NodeRecordV2)
+    ///
+    /// # Returns
+    /// - `true` if cluster is cached, `false` otherwise
+    #[inline]
+    pub fn has_cluster(&self, cluster_offset: u64) -> bool {
+        self.cluster_cache.contains_key(&cluster_offset)
+    }
+
+    /// Get the number of clusters currently cached (for testing)
+    #[inline]
+    pub fn cluster_cache_len(&self) -> usize {
+        self.cluster_cache.len()
+    }
+
     /// Get the next prefetch start ID (for testing/monitoring)
     pub fn next_prefetch_start(&self) -> Option<NativeNodeId> {
         self.next_prefetch_start
@@ -149,9 +267,10 @@ impl SequentialReadBuffer {
         self.prefetch_window
     }
 
-    /// Clear all cached nodes
+    /// Clear all cached nodes and clusters
     pub fn clear(&mut self) {
         self.slots.clear();
+        self.cluster_cache.clear();
         self.next_prefetch_start = None;
     }
 }
@@ -242,6 +361,7 @@ mod tests {
         assert!(buffer.is_empty());
         assert!(!buffer.contains(1));
         assert!(buffer.next_prefetch_start().is_none());
+        assert_eq!(buffer.cluster_cache_len(), 0);
     }
 
     #[test]
@@ -317,4 +437,53 @@ mod tests {
         assert!(!buffer2.contains(1));
         assert!(buffer2.contains(2));
     }
+
+    #[test]
+    fn test_cluster_cache_get_and_has() {
+        let buffer = SequentialReadBuffer::new();
+
+        // Initially no clusters cached
+        assert!(!buffer.has_cluster(100));
+        assert!(buffer.get_cluster(100).is_none());
+        assert_eq!(buffer.cluster_cache_len(), 0);
+
+        // We can't easily test cluster insertion without a GraphFile,
+        // but we can verify the cache starts empty and the API works
+        assert_eq!(buffer.cluster_cache_len(), 0);
+    }
+
+    #[test]
+    fn test_cluster_cache_clear() {
+        let mut buffer = SequentialReadBuffer::new();
+
+        // Insert some nodes
+        buffer.insert(NodeRecordV2::new(1, "Test".into(), "node1".into(), serde_json::json!({})));
+
+        // Cache should be empty
+        assert_eq!(buffer.cluster_cache_len(), 0);
+
+        // Even after clear, cache should still be empty (no-op when empty)
+        buffer.clear();
+        assert_eq!(buffer.cluster_cache_len(), 0);
+    }
+
+    #[test]
+    fn test_buffer_new_includes_cluster_cache() {
+        let buffer = SequentialReadBuffer::new();
+
+        // Verify cluster cache is initialized
+        assert_eq!(buffer.cluster_cache_len(), 0);
+        assert!(!buffer.has_cluster(0));
+        assert!(!buffer.has_cluster(999));
+    }
+
+    #[test]
+    fn test_buffer_with_custom_window_includes_cluster_cache() {
+        let buffer = SequentialReadBuffer::with_prefetch_window(16);
+
+        // Verify cluster cache is initialized
+        assert_eq!(buffer.cluster_cache_len(), 0);
+        assert_eq!(buffer.prefetch_window(), 16);
+    }
 }
+
