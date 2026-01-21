@@ -4,8 +4,11 @@ use crate::backend::native::NativeBackendError;
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::*;
 
-// Per-traversal cache for eliminating redundant I/O during shortest path search
-use super::{TraversalCache, get_neighbors_cached, TraversalCacheStats};
+// Per-traversal context for 3-tier lookup (Phase 31)
+use super::{TraversalContext, get_neighbors_optimized};
+
+// Import AdjacencyHelpers for degree check (pattern detection)
+use crate::backend::native::adjacency::AdjacencyHelpers;
 
 /// Native shortest path implementation using BFS
 pub fn native_shortest_path(
@@ -17,9 +20,8 @@ pub fn native_shortest_path(
         return Ok(Some(vec![start]));
     }
 
-    // Per-traversal cache - evaporates when function returns
-    let mut cache: TraversalCache = TraversalCache::new();
-    let mut stats = TraversalCacheStats::default();
+    // Per-traversal context with 3-tier lookup (Phase 31)
+    let mut ctx = TraversalContext::new();
 
     let mut visited = std::collections::HashSet::new();
     let mut queue = std::collections::VecDeque::new();
@@ -44,13 +46,12 @@ pub fn native_shortest_path(
 
             #[cfg(debug_assertions)]
             {
-                if stats.hits + stats.misses > 0 {
-                    let hit_rate = stats.hit_rate();
+                let total_lookups = ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
+                if total_lookups > 0 {
                     log::debug!(
-                        "Shortest path cache stats: hits={}, misses={}, hit_rate={:.2}%",
-                        stats.hits,
-                        stats.misses,
-                        hit_rate * 100.0
+                        "Shortest path optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
+                        ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                        ctx.combined_hit_rate() * 100.0
                     );
                 }
             }
@@ -58,12 +59,20 @@ pub fn native_shortest_path(
             return Ok(Some(path));
         }
 
-        let neighbors = get_neighbors_cached(
+        // Get degree for pattern detection
+        let degree = AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
+        let _pattern = ctx.detector.observe(current_node, degree);
+
+        // Trigger prefetch if linear confirmed
+        if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
+            ctx.buffer.prefetch_from(graph_file, current_node)?;
+        }
+
+        let neighbors = get_neighbors_optimized(
             graph_file,
             current_node,
             crate::backend::native::adjacency::Direction::Outgoing,
-            &mut cache,
-            &mut stats,
+            &mut ctx,
         )?;
         for neighbor in neighbors {
             if !visited.contains(&neighbor) {
@@ -76,13 +85,12 @@ pub fn native_shortest_path(
 
     #[cfg(debug_assertions)]
     {
-        if stats.hits + stats.misses > 0 {
-            let hit_rate = stats.hit_rate();
+        let total_lookups = ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
+        if total_lookups > 0 {
             log::debug!(
-                "Shortest path cache stats: hits={}, misses={}, hit_rate={:.2}%",
-                stats.hits,
-                stats.misses,
-                hit_rate * 100.0
+                "Shortest path optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
+                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.combined_hit_rate() * 100.0
             );
         }
     }
