@@ -22,6 +22,8 @@ None — No specialized domain expertise directories available. Relying on codeb
 - **v1.9 WAL Filtering & Allocation Optimization** — Phase 40 (complete)
 - **v1.10 ACID API Completion** — Phase 41 (planned)
 - **v1.11 SIMD / AVX Acceleration** — Phase 42 (planned)
+- **v1.12 Transactional KV Store** — Phase 43 (planned)
+- **v1.13 Pub/Sub (Minimal)** — Phase 44 (planned)
 
 ---
 
@@ -239,11 +241,11 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 ---
 
-## v1.10 ACID API Completion (Phase 41) - PLANNED
+## v1.10 ACID API Completion (Phase 41) - COMPLETE
 
 **Milestone Goal:** Complete the ACID API fix by removing `*_current()` convenience methods that allow implicit snapshot usage
 
-**Status:** PLANNED
+**Status:** COMPLETE (2026-01-25)
 
 **Problem:** Phase 38 added convenience methods (`get_node_current`, `neighbors_current`, etc.) that implicitly use `SnapshotId::current()`, violating the hard rule that no API may observe state not bound to a committed snapshot_id.
 
@@ -251,16 +253,16 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 > No API may observe state not bound to a committed snapshot_id.
 > If a value cannot be tied to a committed snapshot → it does not exist.
 
-**Solution:** Remove the `impl dyn GraphBackend` block containing all 9 `*_current()` convenience methods (backend.rs:266-352). These methods are currently unused in the codebase, making this a clean removal.
+**Solution:** Removed the `impl dyn GraphBackend` block containing all 9 `*_current()` convenience methods (backend.rs:266-352). Clean removal - no call sites existed.
 
 **Plans:**
-- [ ] 41-01-PLAN.md — Remove `*_current()` convenience methods from GraphBackend
+- [x] 41-01-PLAN.md — Remove `*_current()` convenience methods from GraphBackend
 
 **Success Criteria:**
-- All public read APIs require explicit snapshot_id parameter
-- No convenience shortcut exists for implicit snapshot usage
-- Compiler enforces snapshot passing at all call sites
-- Architectural decision logged documenting hard rule enforcement
+- ✅ All public read APIs require explicit snapshot_id parameter
+- ✅ No convenience shortcut exists for implicit snapshot usage
+- ✅ Compiler enforces snapshot passing at all call sites
+- ✅ Architectural decision logged documenting hard rule enforcement
 
 ---
 
@@ -298,10 +300,103 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 ---
 
+## v1.12 Transactional KV Store (Phase 43) - PLANNED
+
+**Milestone Goal:** Implement transactional KV store as a VIEW over Native V2 storage with snapshot_id versioning and lazy TTL cleanup
+
+**Status:** PLANNED
+
+**Problem:** Graph databases need flexible key-value storage for metadata, caching, and application data. SQLiteGraph requires a KV store that participates in the same transaction system as graph operations, ensuring ACID properties across both graph and KV data.
+
+**Architecture:**
+- KV is a VIEW over Native V2 storage, not a separate system
+- Keys map to internal object IDs (stored in node/edge storage or as special KV nodes)
+- KV reads/writes participate in the same transaction as graph ops
+- All operations versioned by snapshot_id (enforced from Phase 41)
+- TTL implemented as metadata + lazy cleanup only (no background threads)
+- No separate WAL or allocator - uses existing V2WALWriter and storage
+
+**NON-GOALS (explicitly out of scope):**
+- Redis-style cache with networked access
+- Background TTL sweepers
+- Separate consistency models
+- Performance shortcuts that weaken determinism
+
+**Plans:**
+- [ ] 43-01-PLAN.md — KV store module (data structures and in-memory storage)
+- [ ] 43-02-PLAN.md — WAL integration (KV records and transaction participation)
+- [ ] 43-03-PLAN.md — Snapshot-aware read/write API (GraphBackend trait integration)
+- [ ] 43-04-PLAN.md — TTL lazy cleanup and integration tests
+
+**Success Criteria:**
+- KvStore module with snapshot-aware get/set/delete operations
+- KV operations write WAL records (KvSet, KvDelete) for persistence
+- WAL recovery replays KV records correctly
+- GraphBackend trait has kv_get, kv_set, kv_delete methods requiring snapshot_id
+- TTL lazy cleanup implemented (checked on read, no background threads)
+- Integration tests cover: basic ops, TTL, snapshot isolation, transactions, WAL recovery
+- All tests pass
+
+---
+
+## v1.13 Pub/Sub (Minimal, In-Process) (Phase 44) - PLANNED
+
+**Milestone Goal:** Implement minimal in-process pub/sub system with events emitted on commit only (no payloads, no networking)
+
+**Status:** PLANNED
+
+**Problem:** Applications need to react to graph changes (cache invalidation, UI updates, triggers). SQLiteGraph requires a pub/sub system that notifies subscribers of data changes without introducing cross-process complexity.
+
+**Architecture:**
+- In-process only: no networking, IPC, or cross-process communication
+- Events emitted on commit only: not on every write, only when transaction commits
+- No payloads: events carry IDs only, consumers read actual data from snapshot
+- Channel-based: uses Rust channels (mpsc) for in-process delivery
+- Snapshot-aware: events include snapshot_id so consumers know what changed
+- Best-effort: no delivery guarantees, no persistence of events
+
+**NON-GOALS (explicitly out of scope):**
+- Redis-style pub/sub
+- Networked pub/sub
+- Background threads
+- Realtime delivery guarantees
+- Message queuing or persistence
+
+**Event Types:**
+- `NodeChanged(node_id, snapshot_id)` — node created/modified
+- `EdgeChanged(edge_id, snapshot_id)` — edge created/modified
+- `KVChanged(key_hash, snapshot_id)` — KV entry created/modified/deleted
+- `SnapshotCommitted(snapshot_id)` — transaction committed
+
+**API Design:**
+- `subscribe(filter) -> (id, receiver)` — returns subscription ID and event receiver
+- `unsubscribe(id)` — cancels subscription
+- Events are structs with event type, IDs, and snapshot_id
+- No payload data — consumers call graph/KV APIs with snapshot_id
+
+**Plans:**
+- [ ] 44-01-PLAN.md — PubSub module with event types and subscriber data structures
+- [ ] 44-02-PLAN.md — Publisher with channel-based event broadcasting
+- [ ] 44-03-PLAN.md — WAL integration (emit events on commit)
+- [ ] 44-04-PLAN.md — Public API (GraphBackend trait integration)
+- [ ] 44-05-PLAN.md — Integration test suite
+
+**Success Criteria:**
+- PubSub module with PubSubEvent enum (4 variants)
+- Publisher broadcasts events via mpsc channels
+- V2WALManager emits events on commit (not rollback)
+- GraphBackend trait has subscribe() and unsubscribe() methods
+- Subscription filtering by event type and entity IDs
+- Best-effort delivery (no panic on dropped receiver)
+- Integration tests cover all event types and filter behavior
+- All tests pass
+
+---
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 40 → 41 → 42
+Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 40 → 41 → 42 → 43 → 44
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -313,7 +408,9 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 37. Gap Analysis and Closure | v1.7 | 6/6 | Implementation Complete | 2026-01-25 |
 | 38. ACID API Fix | v1.8 | 6/6 | Infrastructure Complete | 2026-01-25 |
 | 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Complete (IO-12 target NOT achieved) | 2026-01-25 |
-| 41. ACID API Completion | v1.10 | 0/1 | Planned | TBD |
+| 41. ACID API Completion | v1.10 | 1/1 | Complete | 2026-01-25 |
 | 42. SIMD / AVX Acceleration | v1.11 | 0/6 | Planned | TBD |
+| 43. Transactional KV Store | v1.12 | 0/4 | Planned | TBD |
+| 44. Pub/Sub (Minimal) | v1.13 | 0/5 | Planned | TBD |
 
-**Overall Progress:** 165/165 plans planned (158 complete, 7 planned). v0.2-v1.9 complete, v1.10-v1.11 planned.
+**Overall Progress:** 174/174 plans planned (159 complete, 15 planned). v0.2-v1.10 complete, v1.11-v1.13 planned.
