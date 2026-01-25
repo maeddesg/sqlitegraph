@@ -1061,7 +1061,6 @@ unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
     }
 
     sum.sqrt()
-}
 
 /// Runtime-dispatched Euclidean (L2) distance computation
 ///
@@ -1112,8 +1111,6 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
-#[cfg(test)]
-mod euclidean_tests {
     use super::*;
 
     #[test]
@@ -1265,5 +1262,6 @@ mod euclidean_tests {
         let b = vec![1.0, 2.0];
         euclidean_distance(&a, &b);
     }
+}
 }
 }
