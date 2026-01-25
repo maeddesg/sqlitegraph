@@ -355,6 +355,9 @@ impl TransactionValidator {
             | V2WALRecord::LockRelease { .. }
             | V2WALRecord::IndexUpdate { .. }
             | V2WALRecord::StatisticsUpdate { .. }
+            | V2WALRecord::AllocateContiguous { .. }
+            | V2WALRecord::CommitContiguous { .. }
+            | V2WALRecord::RollbackContiguous { .. }
             | V2WALRecord::Checkpoint { .. }
             | V2WALRecord::HeaderUpdate { .. }
             | V2WALRecord::SegmentEnd { .. } => Ok(ValidationResult::Valid),

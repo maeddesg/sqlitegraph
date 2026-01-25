@@ -49,7 +49,7 @@ pub use performance::{
     CompressionStats, IOBatcher, IOBatcherStats, PerformanceConfig, WALRecordCompressor,
 };
 pub use reader::V2WALReader;
-pub use record::{V2WALRecord, V2WALRecordType, WALSerializationError};
+pub use record::{ContiguousRegion, V2WALRecord, V2WALRecordType, WALSerializationError};
 pub use recovery::V2WALRecoveryEngine;
 pub use transaction_coordinator::{
     IsolationLevel, LockType, ResourceId, TransactionContext, TransactionId, TransactionState,

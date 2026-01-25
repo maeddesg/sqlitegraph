@@ -90,6 +90,15 @@ pub enum V2WALRecordType {
 
     /// Statistics update marker
     StatisticsUpdate = 27,
+
+    /// Contiguous region allocation
+    AllocateContiguous = 28,
+
+    /// Contiguous region commit
+    CommitContiguous = 29,
+
+    /// Contiguous region rollback
+    RollbackContiguous = 30,
 }
 
 impl V2WALRecordType {
@@ -107,6 +116,9 @@ impl V2WALRecordType {
             Self::FreeSpaceAllocate,
             Self::FreeSpaceDeallocate,
             Self::HeaderUpdate,
+            Self::AllocateContiguous,
+            Self::CommitContiguous,
+            Self::RollbackContiguous,
         ]
     }
 
@@ -162,6 +174,9 @@ impl TryFrom<u8> for V2WALRecordType {
             25 => Ok(Self::LockRelease),
             26 => Ok(Self::IndexUpdate),
             27 => Ok(Self::StatisticsUpdate),
+            28 => Ok(Self::AllocateContiguous),
+            29 => Ok(Self::CommitContiguous),
+            30 => Ok(Self::RollbackContiguous),
             _ => Err(NativeBackendError::CorruptStringTable {
                 reason: format!("unknown WAL record type: {}", value),
             }),
@@ -365,6 +380,95 @@ pub enum V2WALRecord {
         stats_data: Vec<u8>,
         timestamp: std::time::SystemTime,
     },
+
+    /// Contiguous region allocation
+    AllocateContiguous {
+        txn_id: u64,
+        region: ContiguousRegion,
+        timestamp: u64,
+    },
+
+    /// Contiguous region commit
+    CommitContiguous {
+        txn_id: u64,
+        region: ContiguousRegion,
+    },
+
+    /// Contiguous region rollback
+    RollbackContiguous {
+        region: ContiguousRegion,
+    },
+}
+
+/// Contiguous region descriptor for WAL records
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContiguousRegion {
+    /// Starting offset in bytes
+    pub start_offset: u64,
+    /// Total size in bytes
+    pub total_size: u64,
+    /// Number of clusters this region can hold
+    pub cluster_count: u32,
+    /// Fixed cluster size (stride between clusters)
+    pub stride: u32,
+}
+
+impl ContiguousRegion {
+    /// Create a new region descriptor
+    pub fn new(start_offset: u64, total_size: u64) -> Self {
+        Self {
+            start_offset,
+            total_size,
+            cluster_count: 0,
+            stride: 0,
+        }
+    }
+
+    /// Set cluster metadata
+    pub fn with_clusters(mut self, cluster_count: u32, stride: u32) -> Self {
+        self.cluster_count = cluster_count;
+        self.stride = stride;
+        self
+    }
+
+    /// Get the end offset of this region
+    pub fn end_offset(&self) -> u64 {
+        self.start_offset + self.total_size
+    }
+
+    /// Check if this region overlaps with another
+    pub fn overlaps(&self, other: &ContiguousRegion) -> bool {
+        self.start_offset < other.end_offset() && other.start_offset < self.end_offset()
+    }
+
+    /// Serialize to bytes
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut buffer = Vec::with_capacity(24); // 8 + 8 + 4 + 4
+        buffer.extend_from_slice(&self.start_offset.to_le_bytes());
+        buffer.extend_from_slice(&self.total_size.to_le_bytes());
+        buffer.extend_from_slice(&self.cluster_count.to_le_bytes());
+        buffer.extend_from_slice(&self.stride.to_le_bytes());
+        buffer
+    }
+
+    /// Deserialize from bytes
+    pub fn deserialize(data: &[u8]) -> Result<Self, String> {
+        if data.len() < 24 {
+            return Err(format!("Insufficient data for ContiguousRegion: expected 24, got {}", data.len()));
+        }
+
+        let start_offset = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        let total_size = u64::from_le_bytes(data[8..16].try_into().unwrap());
+        let cluster_count = u32::from_le_bytes(data[16..20].try_into().unwrap());
+        let stride = u32::from_le_bytes(data[20..24].try_into().unwrap());
+
+        Ok(Self {
+            start_offset,
+            total_size,
+            cluster_count,
+            stride,
+        })
+    }
 }
 
 impl V2WALRecord {
@@ -398,6 +502,9 @@ impl V2WALRecord {
             Self::LockRelease { .. } => V2WALRecordType::LockRelease,
             Self::IndexUpdate { .. } => V2WALRecordType::IndexUpdate,
             Self::StatisticsUpdate { .. } => V2WALRecordType::StatisticsUpdate,
+            Self::AllocateContiguous { .. } => V2WALRecordType::AllocateContiguous,
+            Self::CommitContiguous { .. } => V2WALRecordType::CommitContiguous,
+            Self::RollbackContiguous { .. } => V2WALRecordType::RollbackContiguous,
         }
     }
 
@@ -454,6 +561,9 @@ impl V2WALRecord {
             }
             Self::LockAcquire { .. } | Self::LockRelease { .. } => base_size + 8 + 8 + 1,
             Self::IndexUpdate { .. } | Self::StatisticsUpdate { .. } => base_size,
+            Self::AllocateContiguous { .. } => base_size + 8 + 24 + 8, // txn_id + region + timestamp
+            Self::CommitContiguous { .. } => base_size + 8 + 24, // txn_id + region
+            Self::RollbackContiguous { .. } => base_size + 24, // region
         }
     }
 
@@ -595,6 +705,27 @@ impl V2WALSerializer {
             V2WALRecord::TransactionRollback { tx_id, timestamp } => {
                 buffer.extend_from_slice(&tx_id.to_le_bytes());
                 buffer.extend_from_slice(&timestamp.to_le_bytes());
+            }
+
+            V2WALRecord::AllocateContiguous { txn_id, region, timestamp } => {
+                buffer.extend_from_slice(&txn_id.to_le_bytes());
+                let region_bytes = region.serialize();
+                buffer.extend_from_slice(&(region_bytes.len() as u32).to_le_bytes());
+                buffer.extend_from_slice(&region_bytes);
+                buffer.extend_from_slice(&timestamp.to_le_bytes());
+            }
+
+            V2WALRecord::CommitContiguous { txn_id, region } => {
+                buffer.extend_from_slice(&txn_id.to_le_bytes());
+                let region_bytes = region.serialize();
+                buffer.extend_from_slice(&(region_bytes.len() as u32).to_le_bytes());
+                buffer.extend_from_slice(&region_bytes);
+            }
+
+            V2WALRecord::RollbackContiguous { region } => {
+                let region_bytes = region.serialize();
+                buffer.extend_from_slice(&(region_bytes.len() as u32).to_le_bytes());
+                buffer.extend_from_slice(&region_bytes);
             }
 
             // Implement other record types similarly...
@@ -816,6 +947,75 @@ impl V2WALSerializer {
                 let timestamp = u64::from_le_bytes(record_data[8..16].try_into().unwrap());
 
                 Ok(V2WALRecord::TransactionRollback { tx_id, timestamp })
+            }
+
+            V2WALRecordType::AllocateContiguous => {
+                if record_data.len() < 40 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: format!("AllocateContiguous deserialization error - insufficient data: expected 40, got {}", record_data.len()),
+                    });
+                }
+
+                let txn_id = u64::from_le_bytes(record_data[0..8].try_into().unwrap());
+                let region_len = u32::from_le_bytes(record_data[8..12].try_into().unwrap()) as usize;
+                let region_bytes = &record_data[12..12 + region_len];
+                let timestamp = u64::from_le_bytes(record_data[12 + region_len..20 + region_len].try_into().unwrap());
+
+                let region = ContiguousRegion::deserialize(region_bytes)
+                    .map_err(|e| NativeBackendError::CorruptStringTable {
+                        reason: format!("AllocateContiguous deserialization error - invalid region: {}", e),
+                    })?;
+
+                Ok(V2WALRecord::AllocateContiguous { txn_id, region, timestamp })
+            }
+
+            V2WALRecordType::CommitContiguous => {
+                if record_data.len() < 12 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "CommitContiguous deserialization error - insufficient data".to_string(),
+                    });
+                }
+
+                let txn_id = u64::from_le_bytes(record_data[0..8].try_into().unwrap());
+                let region_len = u32::from_le_bytes(record_data[8..12].try_into().unwrap()) as usize;
+
+                if record_data.len() < 12 + region_len {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "CommitContiguous deserialization error - insufficient data for region".to_string(),
+                    });
+                }
+
+                let region_bytes = &record_data[12..12 + region_len];
+                let region = ContiguousRegion::deserialize(region_bytes)
+                    .map_err(|e| NativeBackendError::CorruptStringTable {
+                        reason: format!("CommitContiguous deserialization error - invalid region: {}", e),
+                    })?;
+
+                Ok(V2WALRecord::CommitContiguous { txn_id, region })
+            }
+
+            V2WALRecordType::RollbackContiguous => {
+                if record_data.len() < 4 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "RollbackContiguous deserialization error - insufficient data".to_string(),
+                    });
+                }
+
+                let region_len = u32::from_le_bytes(record_data[0..4].try_into().unwrap()) as usize;
+
+                if record_data.len() < 4 + region_len {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "RollbackContiguous deserialization error - insufficient data for region".to_string(),
+                    });
+                }
+
+                let region_bytes = &record_data[4..4 + region_len];
+                let region = ContiguousRegion::deserialize(region_bytes)
+                    .map_err(|e| NativeBackendError::CorruptStringTable {
+                        reason: format!("RollbackContiguous deserialization error - invalid region: {}", e),
+                    })?;
+
+                Ok(V2WALRecord::RollbackContiguous { region })
             }
 
             // Implement other record types similarly...

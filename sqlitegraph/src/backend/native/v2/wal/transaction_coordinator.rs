@@ -1495,11 +1495,37 @@ impl TwoPhaseCommitCoordinator {
             | V2WALRecord::LockRelease { .. }
             | V2WALRecord::IndexUpdate { .. }
             | V2WALRecord::StatisticsUpdate { .. }
+            | V2WALRecord::CommitContiguous { .. }
+            | V2WALRecord::RollbackContiguous { .. }
             | V2WALRecord::Checkpoint { .. }
             | V2WALRecord::HeaderUpdate { .. }
             | V2WALRecord::SegmentEnd { .. }
             | V2WALRecord::NodeDelete { .. } => {
                 // NodeDelete and other control records are valid as-is
+            }
+
+            V2WALRecord::AllocateContiguous { region, .. } => {
+                // Validate contiguous allocation records
+                if region.total_size == 0 {
+                    return Err(NativeBackendError::InvalidParameter {
+                        context: format!(
+                            "Pre-commit validation failed: AllocateContiguous record {} has invalid region.total_size {} (must be > 0)",
+                            index, region.total_size
+                        ),
+                        source: None,
+                    });
+                }
+                // Check region alignment
+                const REGION_ALIGNMENT: u64 = 4096; // 4KB alignment
+                if region.start_offset % REGION_ALIGNMENT != 0 {
+                    return Err(NativeBackendError::InvalidParameter {
+                        context: format!(
+                            "Pre-commit validation failed: AllocateContiguous record {} has misaligned region.start_offset {} (not aligned to {} bytes)",
+                            index, region.start_offset, REGION_ALIGNMENT
+                        ),
+                        source: None,
+                    });
+                }
             }
         }
 

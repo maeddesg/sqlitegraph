@@ -393,6 +393,15 @@ impl V2GraphFileReplayer {
                 debug_log!("Metadata update record encountered during replay - handled by recovery coordinator");
                 Ok(())
             }
+
+            // Contiguous allocation records
+            V2WALRecord::AllocateContiguous { .. } |
+            V2WALRecord::CommitContiguous { .. } |
+            V2WALRecord::RollbackContiguous { .. } => {
+                // Contiguous allocation records are handled by the recovery coordinator
+                debug_log!("Contiguous allocation record encountered during replay - handled by recovery coordinator");
+                Ok(())
+            }
         }
     }
 

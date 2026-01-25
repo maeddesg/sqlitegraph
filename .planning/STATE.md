@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** Phase 40 Wave 2 - Allocation-Aware Optimization (3/6 complete)
+**Current focus:** Phase 40 Wave 2 - Allocation-Aware Optimization (4/6 complete)
 
 ## Current Position
 
-Phase: 40 - Allocation-Aware Optimization (Wave 1 COMPLETE: 6/12, Wave 2: 3/12 complete)
+Phase: 40 - Allocation-Aware Optimization (Wave 1 COMPLETE: 6/12, Wave 2: 4/12 complete)
 Previous: Phase 38 - ACID API Fix (INFRASTRUCTURE COMPLETE)
-Status: v1.9 Wave 2 in progress - AdjacencyWriter with hint-based contiguous allocation implemented. Advisory allocation with O(1) hot paths, no read path impact.
-Last activity: 2026-01-25 — Phase 40-09 complete (AdjacencyWriter with write_cluster_with_hint(), 22 tests pass)
+Status: v1.9 Wave 2 in progress - Threshold-gated contiguous allocation activation implemented. ChainAllocationTrigger manages region lifecycle, predicted_chain_length() estimates chain size.
+Last activity: 2026-01-25 — Phase 40-10 complete (Threshold-gated activation, 39 tests pass)
 
-Progress: [█████████░] 99% of planned phases (38 phases complete, 155/158 plans, v0.2-v1.8 complete, v1.9 Wave 1 complete, v1.9 Wave 2: 3/6 complete)
+Progress: [█████████░] 99% of planned phases (38 phases complete, 156/158 plans, v0.2-v1.8 complete, v1.9 Wave 1 complete, v1.9 Wave 2: 4/6 complete)
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -24,12 +24,12 @@ Progress: [█████████░] 99% of planned phases (38 phases comp
 - ✅ Plan 40-05: Delta-aware read paths
 - ✅ Plan 40-06: Regression validation (Chain(500) = 238.00ms, -0.8% change)
 
-**Phase 40 Wave 2 Status (3/6 COMPLETE, 3/6 PENDING):**
+**Phase 40 Wave 2 Status (4/6 COMPLETE, 2/6 PENDING):**
 - ✅ Plan 40-07: FreeSpaceManager contiguous reservation API (15 tests pass)
 - ✅ Plan 40-08: Region accounting (commit/rollback/recovery, 32 tests pass)
 - ✅ Plan 40-09: AdjacencyWriter write_cluster_with_hint() (22 tests pass)
-- ⏸️ Plan 40-10: Threshold-gated activation (NEXT)
-- ⏸️ Plan 40-11: WAL records for contiguous allocation
+- ✅ Plan 40-10: Threshold-gated activation (39 tests pass)
+- ⏸️ Plan 40-11: WAL records for contiguous allocation (NEXT)
 - ⏸️ Plan 40-12: Benchmark gates (IO-12 validation)
 
 **Wave 1 Implementation Summary:**
@@ -42,7 +42,7 @@ Progress: [█████████░] 99% of planned phases (38 phases comp
 - Correctness: All delta_index unit tests pass (7/7)
 - Mmap fast path: Preserved - no WAL scanning on reads
 
-**Wave 2 Implementation Summary (3/6 COMPLETE):**
+**Wave 2 Implementation Summary (4/6 COMPLETE):**
 - Architecture: Advisory contiguous allocation for sequential clusters
 - FreeSpaceManager: BTreeMap-based free block tracking with coalescing
 - Region: Contiguous storage region with start_offset, total_size, cluster_count, stride
@@ -54,9 +54,14 @@ Progress: [█████████░] 99% of planned phases (38 phases comp
 - WrittenOffset: Tracks offset, size, and whether contiguous allocation was used
 - fits_in_region(): Validates cluster size against fixed stride before contiguous write
 - write_to_region(): Calculates offset = region.start_offset + (cluster_index * region.stride)
+- CHAIN_THRESHOLD: Default value of 10 clusters to prevent fragmentation
+- ChainAllocationTrigger: Manages contiguous region lifecycle (threshold check, region tracking, cluster counting)
+- predicted_chain_length(): Added to LinearDetector for chain length estimation
+- write_cluster_with_chain_detection(): Integration helper connecting trigger, writer, and FSM
+- Threshold-gated activation: Only triggers contiguous allocation when chain length >= CHAIN_THRESHOLD
 - O(1) hot paths: No scanning in traversal, allocation-layer only
 - No read path impact: Region metadata doesn't bleed to reads
-- 22 unit tests for AdjacencyWriter covering all paths
+- 39+ unit tests covering all threshold-gated activation scenarios
 
 ## v1.6 Milestone Goals
 
@@ -372,7 +377,7 @@ Next actions:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Phase 40-06 COMPLETE (6/6 plans for Wave 1) - DeltaIndex module created, integrated with V2WALManager, snapshot isolation validated, Chain(500) shows no regression (232.85ms vs 234.79ms baseline). Wave 1 (Delta-Index Filtering) complete.
+Stopped at: Phase 40-10 COMPLETE (4/6 plans for Wave 2) - Threshold-gated activation implemented. CHAIN_THRESHOLD constant (default: 10), ChainAllocationTrigger manages region lifecycle, predicted_chain_length() on LinearDetector, write_cluster_with_chain_detection() integration. 39 new tests pass. Wave 2 progress: 40-07 through 40-10 complete.
 Resume file: None
 
 ### Roadmap Evolution

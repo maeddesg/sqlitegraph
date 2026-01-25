@@ -503,8 +503,11 @@ impl TransactionScanner {
             | V2WALRecord::LockRelease { .. }
             | V2WALRecord::IndexUpdate { .. }
             | V2WALRecord::StatisticsUpdate { .. }
+            | V2WALRecord::RollbackContiguous { .. }
             | V2WALRecord::Checkpoint { .. }
             | V2WALRecord::SegmentEnd { .. } => None,
+            V2WALRecord::AllocateContiguous { txn_id, .. } => Some(*txn_id),
+            V2WALRecord::CommitContiguous { txn_id, .. } => Some(*txn_id),
         }
     }
 

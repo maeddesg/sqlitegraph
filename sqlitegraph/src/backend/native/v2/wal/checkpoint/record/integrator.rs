@@ -329,6 +329,28 @@ impl V2GraphIntegrator {
                 println!("V2 Statistics Update: type {} data_len {} timestamp {:?}", stats_type, stats_data.len(), timestamp);
                 Ok(())
             }
+
+            // Contiguous allocation operations
+            V2WALRecord::AllocateContiguous { txn_id, region, timestamp } => {
+                // Contiguous region allocation - log for checkpoint
+                println!("V2 AllocateContiguous: tx_id {} region offset={} size={} timestamp={}",
+                    txn_id, region.start_offset, region.total_size, timestamp);
+                Ok(())
+            }
+
+            V2WALRecord::CommitContiguous { txn_id, region } => {
+                // Contiguous region commit
+                println!("V2 CommitContiguous: tx_id {} region offset={} size={}",
+                    txn_id, region.start_offset, region.total_size);
+                Ok(())
+            }
+
+            V2WALRecord::RollbackContiguous { region } => {
+                // Contiguous region rollback
+                println!("V2 RollbackContiguous: region offset={} size={}",
+                    region.start_offset, region.total_size);
+                Ok(())
+            }
         }
     }
 
