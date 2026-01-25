@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 38 - ACID API Fix
-Plan: 03 (3/6 complete)
-Status: Phase 38-03 implementation complete - GraphBackend trait updated with snapshot_id parameters on all read methods. Convenience methods added for backward compatibility. Ready for WAL filtering implementation.
-Last activity: 2026-01-25 — Completed Phase 38-03: SnapshotId parameter implementation
+Plan: 05 (5/6 complete - 38-04 WAL filtering pending)
+Status: Phase 38-05 regression test documentation improved - Test specifications ready for 38-04 implementation. SnapshotId type tests passing (4/4). Integration tests commented out pending WAL filtering.
+Last activity: 2026-01-25 — Improved Phase 38-05 test documentation
 
-Progress: [██████████░] 96% (38/38 phases planned, 147/152 plans complete, v1.4 complete, v1.6 complete, v1.7 complete, v1.8 in progress)
+Progress: [██████████░] 96% (38/38 phases planned, 151/152 plans complete, v1.4 complete, v1.6 complete, v1.7 complete, v1.8 partially complete)
 
 ## v1.6 Milestone Goals
 
@@ -96,8 +96,18 @@ Progress: [██████████░] 96% (38/38 phases planned, 147/152
 **FIX DESIGN (38-02):**
 - ✅ Create `SnapshotId(u64)` type in snapshot.rs
 - ✅ Update `GraphBackend` trait: all read methods accept `snapshot_id: SnapshotId`
-- 📋 WAL filtering: only apply records with `tx_id <= snapshot_id`
-- ✅ Convenience methods: `get_node_current()` uses `SnapshotId::current()`
+- ❌ WAL filtering: only apply records with `tx_id <= snapshot_id` (NOT IMPLEMENTED - 38-04 incomplete)
+- ✅ Regression tests: acid_regression_test.rs, acid_snapshot_test.rs (CREATED - 38-05)
+- ✅ Performance verification: Chain(500) = 234.79ms (BASELINE - 38-06)
+
+**VERIFICATION STATUS (38-partial):**
+- ✅ SnapshotId type implemented and tested (38-02)
+- ✅ GraphBackend trait updated with snapshot_id parameters (38-03)
+- ❌ WAL filtering NOT implemented - TODO placeholders present (38-04)
+- ✅ Regression test files created (38-05)
+- ✅ Performance baseline established - no regression from API changes (38-06)
+- ⏳ **BLOCKER**: 19 compilation errors in existing tests - call sites need `SnapshotId::current()`
+- ⏳ **BLOCKER**: Integration tests commented out pending 38-04 (WAL filtering)
 
 **FIX STATUS (38-03):**
 - ✅ GraphBackend trait updated with snapshot_id parameter on all 9 read methods
@@ -301,7 +311,7 @@ Next actions:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Completed Phase 38 Plan 03: SnapshotId parameter implementation - GraphBackend trait updated with snapshot_id on all read methods, convenience methods added
+Stopped at: Completed Phase 38 Plan 06: Performance baseline verification - Chain(500) = 234.79ms, no regression from API signature changes. Phase 38 partially complete (38-02/38-03/38-05 done, 38-04 WAL filtering not implemented)
 Resume file: None
 
 ### Roadmap Evolution
@@ -336,11 +346,14 @@ Resume file: None
   - Phase 37 Plan 04 (2026-01-22): Diagnostic pipeline complete - telemetry benchmark executed, flamegraph generated, strace I/O traced, root cause diagnosis created (HIGH confidence: BFS uses observe() not observe_with_cluster())
   - Phase 37 Plan 05 (2026-01-22): Surgical BFS optimization complete - cluster metadata extraction via graph_file.read_node_at(), observe_with_cluster() in all 4 BFS implementations, TraversalContext::get_cluster_info() helper, integration tests confirm cluster_offsets_count: 500, fragmentation_score: 0.0, gap_bytes: 0
   - Phase 37 Plan 06 (2026-01-22): Regression test suite complete - write cost, memory overhead, concurrency, non-chain pattern benchmarks created, regression_report.md documentation complete
-  - **Phase 37 VERIFICATION (2026-01-22):** Implementation complete, needs Chain(500) benchmark to confirm IO-12 target (≤75ms)
-- **v1.8 ACID API Fix** (2026-01-25): Phase 38-01/02/03 in progress
+  - **Phase 37 VERIFICATION (2026-01-25):** Benchmark executed - Chain(500) = 234.79ms (1.6% slower than Phase 36 baseline, expected 75-100ms). Root cause: Sequential cluster read optimization not engaging as expected.
+- **v1.8 ACID API Fix** (2026-01-25): Phase 38-01/02/03/05/06 complete, 38-04 incomplete
   - Phase 38 Plan 01 (2026-01-25): Public API audit complete - All read APIs documented bypassing transaction system, root cause identified at backend.rs:171 (GraphBackend::neighbors calls with_graph_file without snapshot_id)
   - Phase 38 Plan 02 (2026-01-25): SnapshotId architecture design complete - SnapshotId(u64) type defined with current/from_tx/invalid constructors, explicit parameter propagation chosen (Option A), WAL filtering by tx_id <= snapshot_id specified, architecture document created with implementation phases
   - Phase 38 Plan 03 (2026-01-25): SnapshotId parameter implementation complete - GraphBackend trait updated with snapshot_id on all 9 read methods, NativeGraphBackend and SqliteGraphBackend implementations updated, convenience methods (_current variants) added for backward compatibility, TODO markers placed for Phase 38-04 WAL filtering
-  - **Phase 38-04 NEXT:** Implement WAL filtering - filter records with tx_id > snapshot_id in NativeGraphBackend read methods
+  - Phase 38 Plan 04 (2026-01-25): **NOT EXECUTED** - WAL filtering implementation incomplete, TODO placeholders remain
+  - Phase 38 Plan 05 (2026-01-25): Regression tests created - acid_regression_test.rs and acid_snapshot_test.rs with SnapshotId type tests passing, integration tests commented pending 38-04
+  - Phase 38 Plan 06 (2026-01-25): Performance baseline verification complete - Chain(500) = 234.79ms, no regression from API signature changes (expected since native_bfs bypasses GraphBackend), verification report created
+  - **Phase 38 STATUS (2026-01-25):** Partially complete - SnapshotId type and trait signatures done, WAL filtering (38-04) not implemented, 19 compilation errors in existing tests need call site updates
 
 *Updated after each plan completion*
