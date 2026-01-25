@@ -22,6 +22,12 @@ use crate::backend::native::v2::wal::{
     V2GraphWALIntegrator, V2WALConfig, GraphWALIntegrationConfig,
 };
 
+#[cfg(feature = "native-v2")]
+use crate::backend::native::v2::kv_store::store::KvStore;
+
+#[cfg(feature = "native-v2")]
+use crate::backend::native::v2::kv_store::types::{KvValue, KvStoreError};
+
 /// Native backend implementation using interior mutability
 pub struct NativeGraphBackend {
     graph_file: RwLock<GraphFile>,
@@ -29,6 +35,9 @@ pub struct NativeGraphBackend {
     /// Always available when native-v2 feature is enabled (production ready)
     #[cfg(feature = "native-v2")]
     wal_integrator: Option<Arc<V2GraphWALIntegrator>>,
+    /// KV store for metadata and application data
+    #[cfg(feature = "native-v2")]
+    kv_store: Arc<RwLock<KvStore>>,
 }
 
 impl NativeGraphBackend {
@@ -48,6 +57,8 @@ impl NativeGraphBackend {
             graph_file: RwLock::new(graph_file),
             #[cfg(feature = "native-v2")]
             wal_integrator,
+            #[cfg(feature = "native-v2")]
+            kv_store: Arc::new(RwLock::new(KvStore::new())),
         })
     }
 
@@ -62,6 +73,8 @@ impl NativeGraphBackend {
             graph_file: RwLock::new(graph_file),
             #[cfg(feature = "native-v2")]
             wal_integrator,
+            #[cfg(feature = "native-v2")]
+            kv_store: Arc::new(RwLock::new(KvStore::new())),
         })
     }
 
@@ -76,6 +89,8 @@ impl NativeGraphBackend {
             graph_file: RwLock::new(graph_file),
             #[cfg(feature = "native-v2")]
             wal_integrator,
+            #[cfg(feature = "native-v2")]
+            kv_store: Arc::new(RwLock::new(KvStore::new())),
         })
     }
 
@@ -436,6 +451,103 @@ impl GraphBackend for NativeGraphBackend {
             entities_imported: result.records_imported,
             edges_imported: 0, // Records include both entities and edges
         })
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_get(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        key: &[u8],
+    ) -> Result<Option<KvValue>, SqliteGraphError> {
+        let store = self.kv_store.read();
+        store.get_at_snapshot(key, snapshot_id)
+            .map_err(|e| SqliteGraphError::connection(e.to_string()))
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_set(
+        &self,
+        key: Vec<u8>,
+        value: KvValue,
+        ttl_seconds: Option<u64>,
+    ) -> Result<(), SqliteGraphError> {
+        use crate::backend::native::v2::kv_store::wal;
+        use crate::backend::native::v2::wal::record::{V2WALRecord, V2WALRecordType};
+
+        let wal_integrator = self.wal_integrator.as_ref()
+            .ok_or_else(|| SqliteGraphError::connection("WAL not available - KV requires native-v2".to_string()))?;
+
+        // Clone key for use in both WAL and store
+        let key_clone = key.clone();
+
+        // Serialize value
+        let value_bytes = wal::serialize_value(&value)
+            .map_err(|e| SqliteGraphError::connection(format!("KV serialization failed: {}", e)))?;
+        let value_type = wal::get_value_type_tag(&value);
+
+        // Create WAL record
+        let wal_record = V2WALRecord::KvSet {
+            key,
+            value_bytes,
+            value_type,
+            ttl_seconds,
+            version: 0, // Will be assigned by WAL manager
+        };
+
+        // Write WAL record and get assigned LSN
+        let commit_lsn = wal_integrator.wal_manager().write_record(wal_record)
+            .map_err(|e| SqliteGraphError::connection(format!("KV WAL write failed: {:?}", e)))?;
+
+        // Update in-memory store with assigned LSN as version
+        let mut store = self.kv_store.write();
+        store.set_with_version(key_clone, value, ttl_seconds, commit_lsn)
+            .map_err(|e| SqliteGraphError::connection(format!("KV store update failed: {}", e)))?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError> {
+        use crate::backend::native::v2::kv_store::wal;
+        use crate::backend::native::v2::wal::record::{V2WALRecord, V2WALRecordType};
+
+        let wal_integrator = self.wal_integrator.as_ref()
+            .ok_or_else(|| SqliteGraphError::connection("WAL not available - KV requires native-v2".to_string()))?;
+
+        // Get old value for rollback/recovery
+        let store = self.kv_store.read();
+        let old_value = store.get(key)
+            .map_err(|e| SqliteGraphError::connection(format!("KV get failed: {}", e)))?;
+        drop(store);
+
+        // Serialize old value if exists
+        let (old_value_bytes, old_value_type) = if let Some(ref value) = old_value {
+            let bytes = wal::serialize_value(value)
+                .map_err(|e| SqliteGraphError::connection(format!("KV serialization failed: {}", e)))?;
+            let type_tag = wal::get_value_type_tag(value);
+            (Some(bytes), type_tag)
+        } else {
+            (None, 0)
+        };
+
+        // Create WAL record
+        let wal_record = V2WALRecord::KvDelete {
+            key: key.to_vec(),
+            old_value_bytes,
+            old_value_type,
+            old_version: 0, // Will be assigned by WAL manager
+        };
+
+        // Write WAL record and get assigned LSN
+        let _commit_lsn = wal_integrator.wal_manager().write_record(wal_record)
+            .map_err(|e| SqliteGraphError::connection(format!("KV WAL delete failed: {:?}", e)))?;
+
+        // Delete from in-memory store
+        let mut store = self.kv_store.write();
+        // Ignore KeyNotFound - delete is idempotent
+        let _ = store.delete(key);
+
+        Ok(())
     }
 }
 

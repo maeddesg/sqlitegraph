@@ -463,6 +463,11 @@ impl V2GraphWALIntegrator {
         self.wal_manager.get_active_transaction_count()
     }
 
+    /// Get the WAL manager for direct access (for KV store integration)
+    pub fn wal_manager(&self) -> &Arc<V2WALManager> {
+        &self.wal_manager
+    }
+
     /// Shutdown the integrator gracefully
     pub fn shutdown(self) -> NativeResult<()> {
         // Force checkpoint of any remaining transactions
