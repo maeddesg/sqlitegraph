@@ -135,8 +135,10 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn get_node(&self, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+    fn get_node(&self, snapshot_id: crate::snapshot::SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let mut node_store = NodeStore::new(graph_file);
             let record = node_store.read_node(id as NativeNodeId)?;
             Ok(node_record_to_entity(record))
@@ -168,8 +170,10 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn neighbors(&self, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
+    fn neighbors(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let node_id = node as NativeNodeId;
 
             let neighbors = if let Some(edge_type) = &query.edge_type {
@@ -205,23 +209,29 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn bfs(&self, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
+    fn bfs(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let result = native_bfs(graph_file, start as NativeNodeId, depth)?;
             Ok(result.into_iter().map(|id| id as i64).collect())
         })
     }
 
-    fn shortest_path(&self, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
+    fn shortest_path(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let result =
                 native_shortest_path(graph_file, start as NativeNodeId, end as NativeNodeId)?;
             Ok(result.map(|path| path.into_iter().map(|id| id as i64).collect()))
         })
     }
 
-    fn node_degree(&self, node: i64) -> Result<(usize, usize), SqliteGraphError> {
+    fn node_degree(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64) -> Result<(usize, usize), SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let node_id = node as NativeNodeId;
             let outgoing = AdjacencyHelpers::outgoing_degree(graph_file, node_id)?;
             let incoming = AdjacencyHelpers::incoming_degree(graph_file, node_id)?;
@@ -231,11 +241,14 @@ impl GraphBackend for NativeGraphBackend {
 
     fn k_hop(
         &self,
+        snapshot_id: crate::snapshot::SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
     ) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let result = native_k_hop(
                 graph_file,
                 start as NativeNodeId,
@@ -251,12 +264,15 @@ impl GraphBackend for NativeGraphBackend {
 
     fn k_hop_filtered(
         &self,
+        snapshot_id: crate::snapshot::SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
         allowed_edge_types: &[&str],
     ) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let result = native_k_hop_filtered(
                 graph_file,
                 start as NativeNodeId,
@@ -271,8 +287,10 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn chain_query(&self, start: i64, chain: &[ChainStep]) -> Result<Vec<i64>, SqliteGraphError> {
+    fn chain_query(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, chain: &[ChainStep]) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let result = native_chain_query(graph_file, start as NativeNodeId, chain)?;
             Ok(result.into_iter().map(|id| id as i64).collect())
         })
@@ -280,10 +298,13 @@ impl GraphBackend for NativeGraphBackend {
 
     fn pattern_search(
         &self,
+        snapshot_id: crate::snapshot::SnapshotId,
         start: i64,
         pattern: &PatternQuery,
     ) -> Result<Vec<PatternMatch>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
+            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
+            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             native_pattern_search(graph_file, start as NativeNodeId, pattern)
         })
     }

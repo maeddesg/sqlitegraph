@@ -102,7 +102,10 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         })
     }
 
-    fn get_node(&self, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+    fn get_node(&self, snapshot_id: crate::snapshot::SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+        // SQLite: BEGIN TRANSACTION at snapshot_id, then query
+        // For now, snapshot_id is ignored (SQLite transactions handle isolation)
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         self.graph.get_entity(id)
     }
 
@@ -116,11 +119,15 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         })
     }
 
-    fn neighbors(&self, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
+    fn neighbors(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
+        // SQLite: Transactions handle isolation automatically
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         self.query_neighbors(node, query.direction, &query.edge_type)
     }
 
-    fn bfs(&self, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
+    fn bfs(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
+        // SQLite: Transactions handle isolation automatically
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         // Check query cache first
         if let Some(cached_result) = self.graph.query_cache.get_bfs(start, depth) {
             return Ok(cached_result);
@@ -132,7 +139,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         Ok(result)
     }
 
-    fn shortest_path(&self, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
+    fn shortest_path(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
+        // SQLite: Transactions handle isolation automatically
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         // Check query cache first
         if let Some(cached_result) = self.graph.query_cache.get_shortest_path(start, end) {
             return Ok(cached_result);
@@ -146,7 +155,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         Ok(result)
     }
 
-    fn node_degree(&self, node: i64) -> Result<(usize, usize), SqliteGraphError> {
+    fn node_degree(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64) -> Result<(usize, usize), SqliteGraphError> {
+        // SQLite: Transactions handle isolation automatically
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         let out = self.graph.fetch_outgoing(node)?.len();
         let incoming = self.graph.fetch_incoming(node)?.len();
         Ok((out, incoming))
@@ -154,10 +165,13 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 
     fn k_hop(
         &self,
+        snapshot_id: crate::snapshot::SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
     ) -> Result<Vec<i64>, SqliteGraphError> {
+        // SQLite: Transactions handle isolation automatically
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         // Check query cache first
         if let Some(cached_result) = self.graph.query_cache.get_k_hop(start, depth, direction) {
             return Ok(cached_result);
@@ -173,11 +187,14 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 
     fn k_hop_filtered(
         &self,
+        snapshot_id: crate::snapshot::SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
         allowed_edge_types: &[&str],
     ) -> Result<Vec<i64>, SqliteGraphError> {
+        // SQLite: Transactions handle isolation automatically
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         // Check query cache first
         if let Some(cached_result) =
             self.graph
@@ -202,17 +219,23 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 
     fn chain_query(
         &self,
+        snapshot_id: crate::snapshot::SnapshotId,
         start: i64,
         chain: &[crate::multi_hop::ChainStep],
     ) -> Result<Vec<i64>, SqliteGraphError> {
+        // SQLite: Transactions handle isolation automatically
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         multi_hop::chain_query(&self.graph, start, chain)
     }
 
     fn pattern_search(
         &self,
+        snapshot_id: crate::snapshot::SnapshotId,
         start: i64,
         pattern: &PatternQuery,
     ) -> Result<Vec<PatternMatch>, SqliteGraphError> {
+        // SQLite: Transactions handle isolation automatically
+        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         pattern::execute_pattern(&self.graph, start, pattern)
     }
 

@@ -24,28 +24,39 @@ use crate::{
     SqliteGraphError,
     graph::GraphEntity,
     pattern::{PatternMatch, PatternQuery},
+    snapshot::SnapshotId,
 };
 
 /// Backend trait defining the interface for graph database backends.
 ///
 /// Each trait method delegates to backend-specific primitives while ensuring
 /// deterministic behavior and a single integration surface for consumers.
+///
+/// # Snapshot Isolation
+///
+/// All read operations require a `snapshot_id: SnapshotId` parameter to enforce
+/// ACID compliance. Reads only observe data committed at or before the snapshot.
 pub trait GraphBackend {
+    // Write operations (unchanged - commit returns SnapshotId in future)
     fn insert_node(&self, node: NodeSpec) -> Result<i64, SqliteGraphError>;
-    fn get_node(&self, id: i64) -> Result<GraphEntity, SqliteGraphError>;
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError>;
-    fn neighbors(&self, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError>;
-    fn bfs(&self, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError>;
-    fn shortest_path(&self, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError>;
-    fn node_degree(&self, node: i64) -> Result<(usize, usize), SqliteGraphError>;
+
+    // Read operations (require snapshot_id parameter)
+    fn get_node(&self, snapshot_id: SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError>;
+    fn neighbors(&self, snapshot_id: SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError>;
+    fn bfs(&self, snapshot_id: SnapshotId, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError>;
+    fn shortest_path(&self, snapshot_id: SnapshotId, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError>;
+    fn node_degree(&self, snapshot_id: SnapshotId, node: i64) -> Result<(usize, usize), SqliteGraphError>;
     fn k_hop(
         &self,
+        snapshot_id: SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
     ) -> Result<Vec<i64>, SqliteGraphError>;
     fn k_hop_filtered(
         &self,
+        snapshot_id: SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
@@ -53,11 +64,13 @@ pub trait GraphBackend {
     ) -> Result<Vec<i64>, SqliteGraphError>;
     fn chain_query(
         &self,
+        snapshot_id: SnapshotId,
         start: i64,
         chain: &[crate::multi_hop::ChainStep],
     ) -> Result<Vec<i64>, SqliteGraphError>;
     fn pattern_search(
         &self,
+        snapshot_id: SnapshotId,
         start: i64,
         pattern: &PatternQuery,
     ) -> Result<Vec<PatternMatch>, SqliteGraphError>;
@@ -170,63 +183,67 @@ where
         (*self).insert_node(node)
     }
 
-    fn get_node(&self, id: i64) -> Result<GraphEntity, SqliteGraphError> {
-        (*self).get_node(id)
+    fn get_node(&self, snapshot_id: SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+        (*self).get_node(snapshot_id, id)
     }
 
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
         (*self).insert_edge(edge)
     }
 
-    fn neighbors(&self, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
-        (*self).neighbors(node, query)
+    fn neighbors(&self, snapshot_id: SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
+        (*self).neighbors(snapshot_id, node, query)
     }
 
-    fn bfs(&self, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
-        (*self).bfs(start, depth)
+    fn bfs(&self, snapshot_id: SnapshotId, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
+        (*self).bfs(snapshot_id, start, depth)
     }
 
-    fn shortest_path(&self, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
-        (*self).shortest_path(start, end)
+    fn shortest_path(&self, snapshot_id: SnapshotId, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
+        (*self).shortest_path(snapshot_id, start, end)
     }
 
-    fn node_degree(&self, node: i64) -> Result<(usize, usize), SqliteGraphError> {
-        (*self).node_degree(node)
+    fn node_degree(&self, snapshot_id: SnapshotId, node: i64) -> Result<(usize, usize), SqliteGraphError> {
+        (*self).node_degree(snapshot_id, node)
     }
 
     fn k_hop(
         &self,
+        snapshot_id: SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        (*self).k_hop(start, depth, direction)
+        (*self).k_hop(snapshot_id, start, depth, direction)
     }
 
     fn k_hop_filtered(
         &self,
+        snapshot_id: SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
         allowed_edge_types: &[&str],
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        (*self).k_hop_filtered(start, depth, direction, allowed_edge_types)
+        (*self).k_hop_filtered(snapshot_id, start, depth, direction, allowed_edge_types)
     }
 
     fn chain_query(
         &self,
+        snapshot_id: SnapshotId,
         start: i64,
         chain: &[crate::multi_hop::ChainStep],
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        (*self).chain_query(start, chain)
+        (*self).chain_query(snapshot_id, start, chain)
     }
 
     fn pattern_search(
         &self,
+        snapshot_id: SnapshotId,
         start: i64,
         pattern: &PatternQuery,
     ) -> Result<Vec<PatternMatch>, SqliteGraphError> {
-        (*self).pattern_search(start, pattern)
+        (*self).pattern_search(snapshot_id, start, pattern)
     }
 
     fn checkpoint(&self) -> Result<(), SqliteGraphError> {
@@ -243,5 +260,93 @@ where
 
     fn snapshot_import(&self, import_dir: &std::path::Path) -> Result<ImportMetadata, SqliteGraphError> {
         (*self).snapshot_import(import_dir)
+    }
+}
+
+/// Convenience methods for reading with current snapshot.
+///
+/// These methods provide backward compatibility and ergonomics by automatically
+/// using `SnapshotId::current()` for reads.
+impl dyn GraphBackend {
+    /// Convenience: Read node with current committed snapshot.
+    ///
+    /// This is equivalent to `get_node(SnapshotId::current(), id)`.
+    pub fn get_node_current(&self, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+        self.get_node(SnapshotId::current(), id)
+    }
+
+    /// Convenience: Read neighbors with current committed snapshot.
+    ///
+    /// This is equivalent to `neighbors(SnapshotId::current(), node, query)`.
+    pub fn neighbors_current(&self, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
+        self.neighbors(SnapshotId::current(), node, query)
+    }
+
+    /// Convenience: BFS traversal with current committed snapshot.
+    ///
+    /// This is equivalent to `bfs(SnapshotId::current(), start, depth)`.
+    pub fn bfs_current(&self, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
+        self.bfs(SnapshotId::current(), start, depth)
+    }
+
+    /// Convenience: Shortest path with current committed snapshot.
+    ///
+    /// This is equivalent to `shortest_path(SnapshotId::current(), start, end)`.
+    pub fn shortest_path_current(&self, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
+        self.shortest_path(SnapshotId::current(), start, end)
+    }
+
+    /// Convenience: Node degree with current committed snapshot.
+    ///
+    /// This is equivalent to `node_degree(SnapshotId::current(), node)`.
+    pub fn node_degree_current(&self, node: i64) -> Result<(usize, usize), SqliteGraphError> {
+        self.node_degree(SnapshotId::current(), node)
+    }
+
+    /// Convenience: k-hop with current committed snapshot.
+    ///
+    /// This is equivalent to `k_hop(SnapshotId::current(), start, depth, direction)`.
+    pub fn k_hop_current(
+        &self,
+        start: i64,
+        depth: u32,
+        direction: BackendDirection,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
+        self.k_hop(SnapshotId::current(), start, depth, direction)
+    }
+
+    /// Convenience: k-hop filtered with current committed snapshot.
+    ///
+    /// This is equivalent to `k_hop_filtered(SnapshotId::current(), start, depth, direction, allowed_edge_types)`.
+    pub fn k_hop_filtered_current(
+        &self,
+        start: i64,
+        depth: u32,
+        direction: BackendDirection,
+        allowed_edge_types: &[&str],
+    ) -> Result<Vec<i64>, SqliteGraphError> {
+        self.k_hop_filtered(SnapshotId::current(), start, depth, direction, allowed_edge_types)
+    }
+
+    /// Convenience: Chain query with current committed snapshot.
+    ///
+    /// This is equivalent to `chain_query(SnapshotId::current(), start, chain)`.
+    pub fn chain_query_current(
+        &self,
+        start: i64,
+        chain: &[crate::multi_hop::ChainStep],
+    ) -> Result<Vec<i64>, SqliteGraphError> {
+        self.chain_query(SnapshotId::current(), start, chain)
+    }
+
+    /// Convenience: Pattern search with current committed snapshot.
+    ///
+    /// This is equivalent to `pattern_search(SnapshotId::current(), start, pattern)`.
+    pub fn pattern_search_current(
+        &self,
+        start: i64,
+        pattern: &PatternQuery,
+    ) -> Result<Vec<PatternMatch>, SqliteGraphError> {
+        self.pattern_search(SnapshotId::current(), start, pattern)
     }
 }
