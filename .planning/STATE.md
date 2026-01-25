@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 40 - Allocation-Aware Optimization (3/12 plans complete)
+Phase: 40 - Allocation-Aware Optimization (6/12 plans complete)
 Previous: Phase 38 - ACID API Fix (INFRASTRUCTURE COMPLETE)
-Status: v1.8 milestone infrastructure complete - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, snapshot-aware helpers all implemented. DeltaIndex module added for commit-time delta tracking.
-Last activity: 2026-01-25 — Phase 40-03 complete (DeltaIndex module implemented)
+Status: v1.8 milestone infrastructure complete - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, snapshot-aware helpers all implemented. DeltaIndex module integrated with V2WALManager for commit-time delta tracking.
+Last activity: 2026-01-25 — Phase 40-06 complete (DeltaIndex validation, no performance regression)
 
 Progress: [█████████░] 98% of planned phases (38 phases complete, 148/149 plans, v0.2-v1.8 infrastructure complete, Phase 40 in progress)
 
@@ -20,18 +20,22 @@ Progress: [█████████░] 98% of planned phases (38 phases comp
 - ✅ Plan 40-01: Source of truth functions for WAL visibility (complete)
 - ✅ Plan 40-02: WAL contiguity invariant enforcement (complete)
 - ✅ Plan 40-03: DeltaIndex module for commit-time delta tracking (complete)
-- ⏳ Plans 40-04 through 40-12: Pending
+- ✅ Plan 40-04: DeltaIndex integration with V2WALManager (complete)
+- ✅ Plan 40-05: DeltaIndex read path implementation (complete)
+- ✅ Plan 40-06: Regression gates and validation (complete)
+- ⏳ Plans 40-07 through 40-12: Pending (Wave 2: Allocation-Aware Optimization)
 
-**40-03 Implementation (Complete):**
+**Wave 1 (Delta-Index Filtering) COMPLETE:**
 - DeltaIndex module created with HashMap-based O(1) overlay lookup
 - DeltaRecord stores V2WALRecord with commit_lsn for snapshot filtering
 - apply_commit() builds delta map at transaction commit time
 - get_node_delta() returns most recent visible delta by snapshot_id
 - checkpoint_completed() drops deltas now in base to bound memory
-- SharedDeltaIndex type alias (Arc<RwLock<DeltaIndex>>) for thread-safe access
-- 6 unit tests passing (all visibility scenarios covered)
-- Simplified scope: Node deltas only (edge tracking deferred to later phase)
+- SharedDeltaIndex integrated into V2WALManager
+- Snapshot isolation tests pass (test_snapshot_id_monotonic)
+- Chain(500) performance validated: 232.85ms vs 234.79ms baseline (-0.8% improvement)
 - Preserves mmap fast path - no WAL scanning during reads
+- Expected overhead <1%, actual result shows no regression
 
 ## v1.6 Milestone Goals
 
@@ -342,7 +346,7 @@ Next actions:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Phase 38 COMPLETE (6/6 plans) - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, regression tests, performance baseline all implemented. Full WAL filtering deferred.
+Stopped at: Phase 40-06 COMPLETE (6/6 plans for Wave 1) - DeltaIndex module created, integrated with V2WALManager, snapshot isolation validated, Chain(500) shows no regression (232.85ms vs 234.79ms baseline). Wave 1 (Delta-Index Filtering) complete.
 Resume file: None
 
 ### Roadmap Evolution
