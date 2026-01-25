@@ -75,7 +75,7 @@ static HAS_AVX2: OnceLock<bool> = OnceLock::new();
 /// - Time Complexity: O(n) where n is vector dimension
 /// - Memory Usage: O(1) additional space
 #[inline]
-fn dot_product_scalar(a: &[f32], b: &[f32]) -> f32 {
+pub fn dot_product_scalar(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Vectors must have the same length");
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
 }
@@ -268,7 +268,7 @@ pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
 /// - Time Complexity: O(n) where n is vector dimension
 /// - Memory Usage: O(1) additional space
 #[inline]
-fn compute_norm_squared_scalar(v: &[f32]) -> f32 {
+pub fn compute_norm_squared_scalar(v: &[f32]) -> f32 {
     v.iter().map(|x| x * x).sum()
 }
 
@@ -429,7 +429,7 @@ pub fn compute_norm_squared(v: &[f32]) -> f32 {
 /// - Time Complexity: O(n) where n is vector dimension
 /// - Memory Usage: O(1) additional space
 #[inline]
-fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
+pub fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
     assert!(!a.is_empty(), "Vectors cannot be empty");
 
     let dot = dot_product_scalar(a, b);
@@ -579,7 +579,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 /// - Memory: O(1) additional space
 /// - No SIMD acceleration
 #[inline]
-pub(crate) fn euclidean_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
+pub fn euclidean_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Vectors must have the same length");
     a.iter()
         .zip(b.iter())

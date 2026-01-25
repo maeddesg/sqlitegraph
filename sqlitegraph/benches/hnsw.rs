@@ -5,9 +5,15 @@
 //! - Performance impact of different distance metrics
 //! - Support for various vector dimensions including OpenAI embeddings (1536)
 //! - Scalability analysis across different dataset sizes
+//! - SIMD vs scalar performance comparisons for distance functions
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sqlitegraph::hnsw::DistanceMetric;
+use sqlitegraph::hnsw::simd::{
+    dot_product, euclidean_distance, cosine_similarity, compute_norm_squared,
+    dot_product_scalar, euclidean_distance_scalar, cosine_similarity_scalar,
+    compute_norm_squared_scalar,
+};
 
 mod bench_utils;
 use bench_utils::{MEASURE, WARM_UP};
@@ -263,13 +269,254 @@ fn hnsw_openai_embeddings(criterion: &mut Criterion) {
     group.finish();
 }
 
+// ============================================================================
+// SIMD vs Scalar Benchmarks
+// ============================================================================
+
+/// Generate benchmark vectors for SIMD performance comparison
+///
+/// Creates deterministic vectors with varied values to exercise SIMD paths.
+/// This function is optimized for SIMD vs scalar performance comparisons.
+fn benchmark_vectors(dim: usize) -> (Vec<f32>, Vec<f32>) {
+    let a: Vec<f32> = (0..dim).map(|i| i as f32 * 0.1).collect();
+    let b: Vec<f32> = (dim..dim*2).map(|i| i as f32 * 0.1).collect();
+    (a, b)
+}
+
+/// Benchmark dot product: scalar vs SIMD (multiple vector sizes)
+///
+/// Compares scalar fallback implementation against AVX2-accelerated version
+/// for different vector dimensions. Expected speedup: 4-6x for large vectors.
+fn simd_dot_product_benchmarks(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("simd_dot_product");
+    group.measurement_time(MEASURE);
+    group.warm_up_time(WARM_UP);
+
+    let vector_sizes = vec![128, 768, 1536]; // Common embedding dimensions
+
+    for &size in &vector_sizes {
+        // Scalar implementation
+        group.bench_with_input(
+            BenchmarkId::new("scalar", size),
+            &size,
+            |b, &size| {
+                let (a, b_vec) = benchmark_vectors(size);
+                b.iter(|| dot_product_scalar(&a, &b_vec));
+            },
+        );
+
+        // SIMD implementation (runtime dispatch)
+        group.bench_with_input(
+            BenchmarkId::new("simd", size),
+            &size,
+            |b, &size| {
+                let (a, b_vec) = benchmark_vectors(size);
+                b.iter(|| dot_product(&a, &b_vec));
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark Euclidean distance: scalar vs SIMD
+///
+/// Compares scalar fallback against AVX2 implementation for L2 distance.
+/// Expected speedup: 4-6x for large vectors.
+fn simd_euclidean_distance_benchmarks(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("simd_euclidean_distance");
+    group.measurement_time(MEASURE);
+    group.warm_up_time(WARM_UP);
+
+    let vector_sizes = vec![128, 768, 1536];
+
+    for &size in &vector_sizes {
+        group.bench_with_input(
+            BenchmarkId::new("scalar", size),
+            &size,
+            |b, &size| {
+                let (a, b_vec) = benchmark_vectors(size);
+                b.iter(|| euclidean_distance_scalar(&a, &b_vec));
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("simd", size),
+            &size,
+            |b, &size| {
+                let (a, b_vec) = benchmark_vectors(size);
+                b.iter(|| euclidean_distance(&a, &b_vec));
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark cosine similarity: scalar vs SIMD
+///
+/// Compares scalar fallback against AVX2 implementation for cosine similarity.
+/// Expected speedup: 4-6x for large vectors (includes norm computation).
+fn simd_cosine_similarity_benchmarks(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("simd_cosine_similarity");
+    group.measurement_time(MEASURE);
+    group.warm_up_time(WARM_UP);
+
+    let vector_sizes = vec![128, 768, 1536];
+
+    for &size in &vector_sizes {
+        group.bench_with_input(
+            BenchmarkId::new("scalar", size),
+            &size,
+            |b, &size| {
+                let (a, b_vec) = benchmark_vectors(size);
+                // Normalize vectors for cosine similarity
+                let norm_a = compute_norm_squared_scalar(&a).sqrt();
+                let norm_b = compute_norm_squared_scalar(&b_vec).sqrt();
+                let a_norm: Vec<f32> = a.iter().map(|x| x / norm_a).collect();
+                let b_norm: Vec<f32> = b_vec.iter().map(|x| x / norm_b).collect();
+                b.iter(|| cosine_similarity_scalar(&a_norm, &b_norm));
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("simd", size),
+            &size,
+            |b, &size| {
+                let (a, b_vec) = benchmark_vectors(size);
+                // Normalize vectors for cosine similarity
+                let norm_a = compute_norm_squared(&a).sqrt();
+                let norm_b = compute_norm_squared(&b_vec).sqrt();
+                let a_norm: Vec<f32> = a.iter().map(|x| x / norm_a).collect();
+                let b_norm: Vec<f32> = b_vec.iter().map(|x| x / norm_b).collect();
+                b.iter(|| cosine_similarity(&a_norm, &b_norm));
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark norm computation: scalar vs SIMD
+///
+/// Compares scalar against AVX2 for L2 norm squared computation.
+/// This is a building block for cosine similarity.
+fn simd_norm_squared_benchmarks(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("simd_norm_squared");
+    group.measurement_time(MEASURE);
+    group.warm_up_time(WARM_UP);
+
+    let vector_sizes = vec![128, 768, 1536];
+
+    for &size in &vector_sizes {
+        group.bench_with_input(
+            BenchmarkId::new("scalar", size),
+            &size,
+            |b, &size| {
+                let (a, _) = benchmark_vectors(size);
+                b.iter(|| compute_norm_squared_scalar(&a));
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("simd", size),
+            &size,
+            |b, &size| {
+                let (a, _) = benchmark_vectors(size);
+                b.iter(|| compute_norm_squared(&a));
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark batch filter operations: scalar vs SIMD
+///
+/// Compares HashSet-based scalar filtering against AVX2 implementation.
+/// Expected speedup: 2-3x for large batches.
+fn simd_batch_filter_benchmarks(criterion: &mut Criterion) {
+    use sqlitegraph::hnsw::batch_filter::{filter_batch, filter_allowed_scalar};
+
+    let mut group = criterion.benchmark_group("simd_batch_filter");
+    group.measurement_time(MEASURE);
+    group.warm_up_time(WARM_UP);
+
+    let batch_sizes = vec![100, 1000, 10000];
+
+    for &size in &batch_sizes {
+        let ids: Vec<u64> = (0..size).collect();
+        let allowed: Vec<u64> = (0..size/2).collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("scalar", size),
+            &(ids.clone(), allowed.clone()),
+            |b, (ids, allowed)| {
+                b.iter(|| filter_allowed_scalar(ids, allowed));
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("simd", size),
+            &(ids.clone(), allowed.clone()),
+            |b, (ids, allowed)| {
+                b.iter(|| filter_batch(ids, allowed, true));
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmark delta encoding: scalar vs SIMD
+///
+/// Compares scalar loop against AVX2 parallel delta computation.
+/// Expected speedup: 3-5x for large arrays (> 100 elements).
+fn simd_delta_encode_benchmarks(criterion: &mut Criterion) {
+    use sqlitegraph::hnsw::serialization::{delta_encode, delta_encode_scalar};
+
+    let mut group = criterion.benchmark_group("simd_delta_encode");
+    group.measurement_time(MEASURE);
+    group.warm_up_time(WARM_UP);
+
+    let array_sizes = vec![100, 1000, 10000];
+
+    for &size in &array_sizes {
+        let values: Vec<u32> = (0..size).map(|i| (i * 10) as u32).collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("scalar", size),
+            &values,
+            |b, values| {
+                b.iter(|| delta_encode_scalar(values));
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("simd", size),
+            &values,
+            |b, values| {
+                b.iter(|| delta_encode(values));
+            },
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     hnsw_vector_insertion,
     hnsw_search_performance,
     hnsw_distance_metrics,
     hnsw_end_to_end_performance,
-    hnsw_openai_embeddings
+    hnsw_openai_embeddings,
+    simd_dot_product_benchmarks,
+    simd_euclidean_distance_benchmarks,
+    simd_cosine_similarity_benchmarks,
+    simd_norm_squared_benchmarks,
+    simd_batch_filter_benchmarks,
+    simd_delta_encode_benchmarks
 );
 
 criterion_main!(benches);
