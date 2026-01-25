@@ -172,10 +172,9 @@ impl GraphBackend for NativeGraphBackend {
 
     fn neighbors(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
-            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
-            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let node_id = node as NativeNodeId;
 
+            // Use snapshot-aware helpers for neighbor retrieval
             let neighbors = if let Some(edge_type) = &query.edge_type {
                 let edge_type_ref = edge_type.as_str();
                 match query.direction {
@@ -195,12 +194,21 @@ impl GraphBackend for NativeGraphBackend {
                     }
                 }
             } else {
+                // Phase 38-04: Use snapshot-aware neighbor retrieval
                 match query.direction {
                     BackendDirection::Outgoing => {
-                        AdjacencyHelpers::get_outgoing_neighbors(graph_file, node_id)
+                        AdjacencyHelpers::get_outgoing_neighbors_at_snapshot(
+                            graph_file,
+                            node_id,
+                            snapshot_id,
+                        )
                     }
                     BackendDirection::Incoming => {
-                        AdjacencyHelpers::get_incoming_neighbors(graph_file, node_id)
+                        AdjacencyHelpers::get_incoming_neighbors_at_snapshot(
+                            graph_file,
+                            node_id,
+                            snapshot_id,
+                        )
                     }
                 }
             }?;
