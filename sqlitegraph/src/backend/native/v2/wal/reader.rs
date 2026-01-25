@@ -29,6 +29,9 @@ pub struct V2WALReader {
 
     /// Transaction range index for snapshot isolation
     tx_index: TxRangeIndex,
+
+    /// Active transaction ID during WAL parsing (for contiguity validation)
+    active_tx: Option<u64>,
 }
 
 /// WAL reading iterator for sequential access
@@ -178,6 +181,7 @@ impl V2WALReader {
             current_position: std::mem::size_of::<V2WALHeader>() as u64,
             wal_end: 0,
             tx_index: TxRangeIndex::new(),
+            active_tx: None,
         };
 
         // Read and validate header
@@ -243,6 +247,9 @@ impl V2WALReader {
     /// This scans the entire WAL and builds an index mapping transactions
     /// to their LSN ranges (begin_lsn to commit_lsn). This enables efficient
     /// snapshot isolation filtering.
+    ///
+    /// Note: This does NOT validate WAL contiguity - it only builds the index.
+    /// Contiguity validation happens during normal reads.
     fn build_tx_index(&mut self) -> NativeResult<()> {
         // Save current position
         let original_position = self.current_position;
@@ -250,8 +257,11 @@ impl V2WALReader {
         // Reset to start of records
         self.current_position = std::mem::size_of::<V2WALHeader>() as u64;
 
-        // Scan all records and build index
-        while let Some((lsn, record)) = self.read_next_record()? {
+        // Reset active_tx state for index building
+        self.active_tx = None;
+
+        // Scan all records and build index (without contiguity validation)
+        while let Some((lsn, record)) = self.read_next_record_with_validation(false)? {
             match record {
                 V2WALRecord::TransactionBegin { tx_id, .. } => {
                     self.tx_index.begin_tx(tx_id, lsn);
@@ -269,6 +279,9 @@ impl V2WALReader {
             }
         }
 
+        // Reset active_tx state after index building
+        self.active_tx = None;
+
         // Restore original position
         self.current_position = original_position;
 
@@ -285,8 +298,86 @@ impl V2WALReader {
         &mut self.tx_index
     }
 
+    /// Validate WAL record contiguity invariant
+    ///
+    /// This enforces the WAL contiguity invariant:
+    /// - Data records must have an active transaction
+    /// - Begin records must not have an active transaction
+    /// - Commit tx_id must match the active transaction
+    ///
+    /// Updates active_tx state on Begin/Commit.
+    fn validate_record_contiguity(&mut self, record: &V2WALRecord) -> NativeResult<()> {
+        match record {
+            V2WALRecord::TransactionBegin { tx_id, .. } => {
+                // Invariant: No active transaction when Begin appears
+                if let Some(active) = self.active_tx {
+                    return Err(NativeBackendError::WalContiguityViolation(format!(
+                        "Begin tx_id={} while tx_id={} already active",
+                        tx_id, active
+                    )));
+                }
+                self.active_tx = Some(*tx_id);
+                Ok(())
+            }
+
+            V2WALRecord::TransactionCommit { tx_id, .. } => {
+                // Invariant: Commit tx_id must match active transaction
+                if let Some(active) = self.active_tx {
+                    if active != *tx_id {
+                        return Err(NativeBackendError::WalContiguityViolation(format!(
+                            "Commit tx_id={} but active tx_id={}",
+                            tx_id, active
+                        )));
+                    }
+                    self.active_tx = None; // Transaction complete
+                    Ok(())
+                } else {
+                    return Err(NativeBackendError::WalContiguityViolation(format!(
+                        "Commit tx_id={} with no active transaction",
+                        tx_id
+                    )));
+                }
+            }
+
+            V2WALRecord::TransactionRollback { tx_id, .. } => {
+                // Rollback also ends the transaction (similar to commit)
+                if let Some(active) = self.active_tx {
+                    if active != *tx_id {
+                        return Err(NativeBackendError::WalContiguityViolation(format!(
+                            "Rollback tx_id={} but active tx_id={}",
+                            tx_id, active
+                        )));
+                    }
+                    self.active_tx = None; // Transaction complete
+                    Ok(())
+                } else {
+                    return Err(NativeBackendError::WalContiguityViolation(format!(
+                        "Rollback tx_id={} with no active transaction",
+                        tx_id
+                    )));
+                }
+            }
+
+            // Data records (NodeInsert, NodeUpdate, NodeDelete, EdgeInsert, etc.)
+            _ => {
+                // Invariant: Data records require active transaction
+                if self.active_tx.is_none() {
+                    return Err(NativeBackendError::WalContiguityViolation(
+                        "Data record without active transaction".to_string()
+                    ));
+                }
+                Ok(())
+            }
+        }
+    }
+
     /// Read the next WAL record from current position
     pub fn read_next_record(&mut self) -> NativeResult<Option<(u64, V2WALRecord)>> {
+        self.read_next_record_with_validation(true)
+    }
+
+    /// Read the next WAL record from current position with optional validation
+    fn read_next_record_with_validation(&mut self, validate_contiguity: bool) -> NativeResult<Option<(u64, V2WALRecord)>> {
         if self.current_position >= self.wal_end {
             return Ok(None); // End of WAL
         }
@@ -332,6 +423,14 @@ impl V2WALReader {
         // Deserialize record
         let record = V2WALSerializer::deserialize(&full_record)?;
 
+        // Validate WAL contiguity invariant (if enabled)
+        if validate_contiguity {
+            self.validate_record_contiguity(&record)?;
+        } else {
+            // Update active_tx state without validation (for index building)
+            self.update_active_tx_for_record(&record);
+        }
+
         // Calculate LSN (simplified - in real implementation this would track LSNs)
         let lsn = self.position_to_lsn(self.current_position)?;
 
@@ -339,6 +438,23 @@ impl V2WALReader {
         self.current_position += 5 + record_size as u64;
 
         Ok(Some((lsn, record)))
+    }
+
+    /// Update active_tx state for a record (without validation)
+    fn update_active_tx_for_record(&mut self, record: &V2WALRecord) {
+        match record {
+            V2WALRecord::TransactionBegin { tx_id, .. } => {
+                self.active_tx = Some(*tx_id);
+            }
+            V2WALRecord::TransactionCommit { tx_id, .. } |
+            V2WALRecord::TransactionRollback { tx_id, .. } => {
+                // Only clear if it matches active transaction
+                if self.active_tx == Some(*tx_id) {
+                    self.active_tx = None;
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Read all records matching the given filter
@@ -589,5 +705,242 @@ mod tests {
         assert_eq!(stats.node_inserts, 0);
         assert_eq!(stats.min_lsn, 0);
         assert_eq!(stats.max_lsn, 0);
+    }
+
+    // WAL contiguity validation tests
+
+    /// Helper function to write WAL records to a file
+    fn write_wal_records(wal_path: &std::path::Path, records: Vec<V2WALRecord>) {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(wal_path)
+            .unwrap();
+
+        // Write WAL header
+        let header = crate::backend::native::v2::wal::V2WALHeader::new();
+        let header_bytes = unsafe {
+            std::slice::from_raw_parts(
+                &header as *const _ as *const u8,
+                std::mem::size_of::<crate::backend::native::v2::wal::V2WALHeader>()
+            )
+        };
+        file.write_all(header_bytes).unwrap();
+        file.flush().unwrap();
+
+        // Write test records
+        for record in records {
+            let serialized = crate::backend::native::v2::wal::record::V2WALSerializer::serialize(&record).unwrap();
+            file.write_all(&serialized).unwrap();
+        }
+
+        file.flush().unwrap();
+    }
+
+    #[test]
+    fn test_contiguity_valid_wal() {
+        let temp_dir = tempdir().unwrap();
+        let wal_path = temp_dir.path().join("test_contiguity.wal");
+
+        // Create valid WAL with proper transaction structure
+        write_wal_records(&wal_path, vec![
+            V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 100 },
+            V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 1024,
+                node_data: vec![1, 2, 3],
+            },
+            V2WALRecord::TransactionCommit { tx_id: 1, timestamp: 150 },
+            V2WALRecord::TransactionBegin { tx_id: 2, timestamp: 160 },
+            V2WALRecord::NodeInsert {
+                node_id: 2,
+                slot_offset: 2048,
+                node_data: vec![4, 5, 6],
+            },
+            V2WALRecord::TransactionCommit { tx_id: 2, timestamp: 200 },
+        ]);
+
+        // Open and read WAL - should succeed
+        let mut reader = V2WALReader::open(&wal_path).unwrap();
+
+        // Read all records
+        let mut count = 0;
+        while let Ok(Some(_)) = reader.read_next_record() {
+            count += 1;
+        }
+
+        // Should read all 6 records successfully
+        assert_eq!(count, 6);
+    }
+
+    #[test]
+    fn test_contiguity_data_without_active_tx() {
+        let temp_dir = tempdir().unwrap();
+        let wal_path = temp_dir.path().join("test_contiguity.wal");
+
+        // Create WAL with data record but no Begin
+        write_wal_records(&wal_path, vec![
+            V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 1024,
+                node_data: vec![1, 2, 3],
+            },
+        ]);
+
+        // Open WAL
+        let mut reader = V2WALReader::open(&wal_path).unwrap();
+
+        // First read should fail with contiguity violation
+        let result = reader.read_next_record();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            NativeBackendError::WalContiguityViolation(msg) => {
+                assert!(msg.contains("Data record without active transaction"));
+            }
+            _ => panic!("Expected WalContiguityViolation error"),
+        }
+    }
+
+    #[test]
+    fn test_contiguity_nested_begin() {
+        let temp_dir = tempdir().unwrap();
+        let wal_path = temp_dir.path().join("test_contiguity.wal");
+
+        // Create WAL with Begin while another transaction active
+        write_wal_records(&wal_path, vec![
+            V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 100 },
+            V2WALRecord::TransactionBegin { tx_id: 2, timestamp: 110 }, // ERROR: tx_id 1 still active
+        ]);
+
+        // Open WAL
+        let mut reader = V2WALReader::open(&wal_path).unwrap();
+
+        // First Begin should succeed
+        assert!(reader.read_next_record().is_ok());
+
+        // Second Begin should fail with contiguity violation
+        let result = reader.read_next_record();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            NativeBackendError::WalContiguityViolation(msg) => {
+                assert!(msg.contains("Begin tx_id=2 while tx_id=1 already active"));
+            }
+            _ => panic!("Expected WalContiguityViolation error"),
+        }
+    }
+
+    #[test]
+    fn test_contiguity_commit_wrong_tx() {
+        let temp_dir = tempdir().unwrap();
+        let wal_path = temp_dir.path().join("test_contiguity.wal");
+
+        // Create WAL with Commit for wrong transaction
+        write_wal_records(&wal_path, vec![
+            V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 100 },
+            V2WALRecord::TransactionCommit { tx_id: 2, timestamp: 110 }, // ERROR: committing tx_id=2 but tx_id=1 active
+        ]);
+
+        // Open WAL
+        let mut reader = V2WALReader::open(&wal_path).unwrap();
+
+        // Begin should succeed
+        assert!(reader.read_next_record().is_ok());
+
+        // Commit with wrong tx_id should fail
+        let result = reader.read_next_record();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            NativeBackendError::WalContiguityViolation(msg) => {
+                assert!(msg.contains("Commit tx_id=2 but active tx_id=1"));
+            }
+            _ => panic!("Expected WalContiguityViolation error"),
+        }
+    }
+
+    #[test]
+    fn test_contiguity_commit_without_begin() {
+        let temp_dir = tempdir().unwrap();
+        let wal_path = temp_dir.path().join("test_contiguity.wal");
+
+        // Create WAL with Commit but no Begin
+        write_wal_records(&wal_path, vec![
+            V2WALRecord::TransactionCommit { tx_id: 1, timestamp: 100 },
+        ]);
+
+        // Open WAL
+        let mut reader = V2WALReader::open(&wal_path).unwrap();
+
+        // Commit without Begin should fail
+        let result = reader.read_next_record();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            NativeBackendError::WalContiguityViolation(msg) => {
+                assert!(msg.contains("Commit tx_id=1 with no active transaction"));
+            }
+            _ => panic!("Expected WalContiguityViolation error"),
+        }
+    }
+
+    #[test]
+    fn test_contiguity_rollback_without_begin() {
+        let temp_dir = tempdir().unwrap();
+        let wal_path = temp_dir.path().join("test_contiguity.wal");
+
+        // Create WAL with Rollback but no Begin
+        write_wal_records(&wal_path, vec![
+            V2WALRecord::TransactionRollback { tx_id: 1, timestamp: 100 },
+        ]);
+
+        // Open WAL
+        let mut reader = V2WALReader::open(&wal_path).unwrap();
+
+        // Rollback without Begin should fail
+        let result = reader.read_next_record();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            NativeBackendError::WalContiguityViolation(msg) => {
+                assert!(msg.contains("Rollback tx_id=1 with no active transaction"));
+            }
+            _ => panic!("Expected WalContiguityViolation error"),
+        }
+    }
+
+    #[test]
+    fn test_contiguity_rollback_clears_active_tx() {
+        let temp_dir = tempdir().unwrap();
+        let wal_path = temp_dir.path().join("test_contiguity.wal");
+
+        // Create WAL with Begin, data, Rollback, then new transaction
+        write_wal_records(&wal_path, vec![
+            V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 100 },
+            V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 1024,
+                node_data: vec![1, 2, 3],
+            },
+            V2WALRecord::TransactionRollback { tx_id: 1, timestamp: 150 },
+            V2WALRecord::TransactionBegin { tx_id: 2, timestamp: 160 }, // Should succeed after rollback
+            V2WALRecord::NodeInsert {
+                node_id: 2,
+                slot_offset: 2048,
+                node_data: vec![4, 5, 6],
+            },
+            V2WALRecord::TransactionCommit { tx_id: 2, timestamp: 200 },
+        ]);
+
+        // Open WAL
+        let mut reader = V2WALReader::open(&wal_path).unwrap();
+
+        // All records should succeed
+        let mut count = 0;
+        while let Ok(Some(_)) = reader.read_next_record() {
+            count += 1;
+        }
+
+        assert_eq!(count, 6);
     }
 }

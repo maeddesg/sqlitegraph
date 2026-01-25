@@ -179,6 +179,9 @@ pub enum NativeBackendError {
 
     #[error("Transaction ID exhaustion: current ID {current_id}, {remaining} IDs remaining before wraparound")]
     TransactionIdExhaustion { current_id: u64, remaining: u64 },
+
+    #[error("WAL contiguity violation: {0}")]
+    WalContiguityViolation(String),
 }
 
 // Add conversion from SystemTimeError
