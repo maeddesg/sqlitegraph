@@ -763,6 +763,45 @@ impl V2WALSerializer {
                 buffer.extend_from_slice(&region_bytes);
             }
 
+            V2WALRecord::KvSet { key, value_bytes, value_type, ttl_seconds, version } => {
+                // Serialize KvSet record
+                buffer.extend_from_slice(&(key.len() as u32).to_le_bytes());
+                buffer.extend_from_slice(key);
+                buffer.extend_from_slice(&(value_bytes.len() as u32).to_le_bytes());
+                buffer.extend_from_slice(value_bytes);
+                buffer.push(*value_type);
+                // Serialize TTL option
+                match ttl_seconds {
+                    Some(ttl) => {
+                        buffer.push(1); // Some
+                        buffer.extend_from_slice(&ttl.to_le_bytes());
+                    }
+                    None => {
+                        buffer.push(0); // None
+                    }
+                }
+                buffer.extend_from_slice(&version.to_le_bytes());
+            }
+
+            V2WALRecord::KvDelete { key, old_value_bytes, old_value_type, old_version } => {
+                // Serialize KvDelete record
+                buffer.extend_from_slice(&(key.len() as u32).to_le_bytes());
+                buffer.extend_from_slice(key);
+                buffer.push(*old_value_type);
+                // Serialize old_value option
+                match old_value_bytes {
+                    Some(value) => {
+                        buffer.push(1); // Some
+                        buffer.extend_from_slice(&(value.len() as u32).to_le_bytes());
+                        buffer.extend_from_slice(value);
+                    }
+                    None => {
+                        buffer.push(0); // None
+                    }
+                }
+                buffer.extend_from_slice(&old_version.to_le_bytes());
+            }
+
             // Implement other record types similarly...
             _ => {
                 return Err(NativeBackendError::CorruptStringTable {
@@ -1053,6 +1092,125 @@ impl V2WALSerializer {
                 Ok(V2WALRecord::RollbackContiguous { region })
             }
 
+            V2WALRecordType::KvSet => {
+                // Deserialize KvSet record: key_len(4) + key + value_len(4) + value + type(1) + ttl_flag(1) + [ttl(8)] + version(8)
+                if record_data.len() < 4 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "KvSet deserialization error - insufficient data for key length".to_string(),
+                    });
+                }
+
+                let key_len = u32::from_le_bytes(record_data[0..4].try_into().unwrap()) as usize;
+
+                if record_data.len() < 4 + key_len + 4 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "KvSet deserialization error - insufficient data for key and value length".to_string(),
+                    });
+                }
+
+                let key = record_data[4..4 + key_len].to_vec();
+                let offset = 4 + key_len;
+
+                let value_len = u32::from_le_bytes(record_data[offset..offset + 4].try_into().unwrap()) as usize;
+
+                if record_data.len() < offset + 4 + value_len + 1 + 1 + 8 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "KvSet deserialization error - insufficient data for value and metadata".to_string(),
+                    });
+                }
+
+                let value_bytes = record_data[offset + 4..offset + 4 + value_len].to_vec();
+                let offset = offset + 4 + value_len;
+
+                let value_type = record_data[offset];
+                let offset = offset + 1;
+
+                let ttl_flag = record_data[offset];
+                let ttl_seconds = if ttl_flag == 1 {
+                    if record_data.len() < offset + 1 + 8 {
+                        return Err(NativeBackendError::CorruptStringTable {
+                            reason: "KvSet deserialization error - insufficient data for TTL".to_string(),
+                        });
+                    }
+                    let ttl = u64::from_le_bytes(record_data[offset + 1..offset + 1 + 8].try_into().unwrap());
+                    Some(ttl)
+                } else {
+                    None
+                };
+                let offset = offset + 1 + ttl_seconds.map_or(0, |_| 8);
+
+                if record_data.len() < offset + 8 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "KvSet deserialization error - insufficient data for version".to_string(),
+                    });
+                }
+
+                let version = u64::from_le_bytes(record_data[offset..offset + 8].try_into().unwrap());
+
+                Ok(V2WALRecord::KvSet { key, value_bytes, value_type, ttl_seconds, version })
+            }
+
+            V2WALRecordType::KvDelete => {
+                // Deserialize KvDelete record: key_len(4) + key + type(1) + old_value_flag(1) + [len(4) + old_value] + old_version(8)
+                if record_data.len() < 4 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "KvDelete deserialization error - insufficient data for key length".to_string(),
+                    });
+                }
+
+                let key_len = u32::from_le_bytes(record_data[0..4].try_into().unwrap()) as usize;
+
+                if record_data.len() < 4 + key_len + 1 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "KvDelete deserialization error - insufficient data for key and type".to_string(),
+                    });
+                }
+
+                let key = record_data[4..4 + key_len].to_vec();
+                let offset = 4 + key_len;
+
+                let old_value_type = record_data[offset];
+                let offset = offset + 1;
+
+                if record_data.len() < offset + 1 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "KvDelete deserialization error - insufficient data for old value flag".to_string(),
+                    });
+                }
+
+                let old_value_flag = record_data[offset];
+                let old_value_bytes = if old_value_flag == 1 {
+                    if record_data.len() < offset + 1 + 4 {
+                        return Err(NativeBackendError::CorruptStringTable {
+                            reason: "KvDelete deserialization error - insufficient data for old value length".to_string(),
+                        });
+                    }
+                    let old_value_len = u32::from_le_bytes(record_data[offset + 1..offset + 1 + 4].try_into().unwrap()) as usize;
+
+                    if record_data.len() < offset + 1 + 4 + old_value_len {
+                        return Err(NativeBackendError::CorruptStringTable {
+                            reason: "KvDelete deserialization error - insufficient data for old value".to_string(),
+                        });
+                    }
+
+                    let value = record_data[offset + 1 + 4..offset + 1 + 4 + old_value_len].to_vec();
+                    Some(value)
+                } else {
+                    None
+                };
+                let offset = offset + 1 + old_value_bytes.as_ref().map_or(0, |v| 4 + v.len());
+
+                if record_data.len() < offset + 8 {
+                    return Err(NativeBackendError::CorruptStringTable {
+                        reason: "KvDelete deserialization error - insufficient data for old version".to_string(),
+                    });
+                }
+
+                let old_version = u64::from_le_bytes(record_data[offset..offset + 8].try_into().unwrap());
+
+                Ok(V2WALRecord::KvDelete { key, old_value_bytes, old_value_type, old_version })
+            }
+
             // Implement other record types similarly...
             _ => Err(NativeBackendError::CorruptStringTable {
                 reason: format!("WAL deserialization error - unsupported record type: {:?}", record_type),
@@ -1123,5 +1281,96 @@ mod tests {
 
         // Estimated size should be >= actual serialized size
         assert!(estimated >= serialized.len());
+    }
+
+    #[test]
+    fn test_kv_set_serialization_roundtrip() {
+        let original = V2WALRecord::KvSet {
+            key: b"test_key".to_vec(),
+            value_bytes: b"test_value".to_vec(),
+            value_type: 1,
+            ttl_seconds: Some(3600),
+            version: 12345,
+        };
+
+        let serialized = V2WALSerializer::serialize(&original).unwrap();
+        let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
+
+        match (original, deserialized) {
+            (V2WALRecord::KvSet { key: k1, value_bytes: v1, value_type: t1, ttl_seconds: ttl1, version: ver1 },
+             V2WALRecord::KvSet { key: k2, value_bytes: v2, value_type: t2, ttl_seconds: ttl2, version: ver2 }) => {
+                assert_eq!(k1, k2);
+                assert_eq!(v1, v2);
+                assert_eq!(t1, t2);
+                assert_eq!(ttl1, ttl2);
+                assert_eq!(ver1, ver2);
+            }
+            _ => panic!("Record type mismatch after KV set roundtrip"),
+        }
+    }
+
+    #[test]
+    fn test_kv_delete_serialization_roundtrip() {
+        let original = V2WALRecord::KvDelete {
+            key: b"test_key".to_vec(),
+            old_value_bytes: Some(b"old_value".to_vec()),
+            old_value_type: 1,
+            old_version: 12344,
+        };
+
+        let serialized = V2WALSerializer::serialize(&original).unwrap();
+        let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
+
+        match (original, deserialized) {
+            (V2WALRecord::KvDelete { key: k1, old_value_bytes: v1, old_value_type: t1, old_version: ver1 },
+             V2WALRecord::KvDelete { key: k2, old_value_bytes: v2, old_value_type: t2, old_version: ver2 }) => {
+                assert_eq!(k1, k2);
+                assert_eq!(v1, v2);
+                assert_eq!(t1, t2);
+                assert_eq!(ver1, ver2);
+            }
+            _ => panic!("Record type mismatch after KV delete roundtrip"),
+        }
+    }
+
+    #[test]
+    fn test_kv_set_without_ttl() {
+        let original = V2WALRecord::KvSet {
+            key: b"no_ttl_key".to_vec(),
+            value_bytes: b"value".to_vec(),
+            value_type: 0,
+            ttl_seconds: None,
+            version: 1,
+        };
+
+        let serialized = V2WALSerializer::serialize(&original).unwrap();
+        let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
+
+        match deserialized {
+            V2WALRecord::KvSet { ttl_seconds, .. } => {
+                assert_eq!(ttl_seconds, None);
+            }
+            _ => panic!("Wrong record type"),
+        }
+    }
+
+    #[test]
+    fn test_kv_delete_no_old_value() {
+        let original = V2WALRecord::KvDelete {
+            key: b"no_old_value".to_vec(),
+            old_value_bytes: None,
+            old_value_type: 0,
+            old_version: 0,
+        };
+
+        let serialized = V2WALSerializer::serialize(&original).unwrap();
+        let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
+
+        match deserialized {
+            V2WALRecord::KvDelete { old_value_bytes, .. } => {
+                assert_eq!(old_value_bytes, None);
+            }
+            _ => panic!("Wrong record type"),
+        }
     }
 }
