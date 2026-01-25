@@ -17,6 +17,7 @@
 //! ownership.
 
 use crate::backend::native::NativeResult;
+use crate::snapshot::SnapshotId;
 use std::collections::HashMap;
 
 /// Transaction range tracking LSN boundaries
@@ -159,6 +160,49 @@ impl TxRangeIndex {
     pub fn is_empty(&self) -> bool {
         self.tx_ranges.is_empty()
     }
+
+    /// Check if a transaction is visible from the given snapshot.
+    ///
+    /// A transaction is visible iff:
+    /// 1. It exists in the index
+    /// 2. It has committed (commit_lsn != 0)
+    /// 3. Its commit_lsn <= snapshot_id
+    ///
+    /// # Arguments
+    /// * `tx_id` - Transaction ID to check
+    /// * `snapshot_id` - Snapshot ID (LSN) to check visibility against
+    ///
+    /// # Returns
+    /// * true if transaction is visible from snapshot
+    /// * false if transaction not visible (not committed, not in index, or committed after snapshot)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sqlitegraph::snapshot::SnapshotId;
+    /// use sqlitegraph::backend::native::v2::wal::TxRangeIndex;
+    ///
+    /// let mut index = TxRangeIndex::new();
+    /// index.begin_tx(1, 100);
+    /// index.commit_tx(1, 150);
+    ///
+    /// let snapshot = SnapshotId::from_lsn(200);
+    /// assert!(index.is_tx_visible(1, snapshot));
+    /// ```
+    pub fn is_tx_visible(&self, tx_id: u64, snapshot_id: SnapshotId) -> bool {
+        if let Some(range) = self.tx_ranges.get(&tx_id) {
+            // Transaction must be committed AND commit_lsn <= snapshot_id
+            if let Some(commit_lsn) = range.commit_lsn {
+                commit_lsn != 0 && commit_lsn <= snapshot_id.as_lsn()
+            } else {
+                // Uncommitted transaction (commit_lsn is None)
+                false
+            }
+        } else {
+            // Transaction not found in index - not visible
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -183,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_tx_range_contains_lsn() {
-        let range = TxRange::new(100, 1000);
+        let mut range = TxRange::new(100, 1000);
 
         // Before begin - not contained
         assert!(!range.contains_lsn(999));
@@ -307,5 +351,51 @@ mod tests {
         assert_eq!(index.len(), 0);
         assert!(index.is_empty());
         assert_eq!(index.max_committed_lsn(), 0);
+    }
+
+    #[test]
+    fn test_is_tx_visible_committed_before_snapshot() {
+        let mut index = TxRangeIndex::new();
+        index.begin_tx(1, 100);
+        index.commit_tx(1, 150);
+
+        let snapshot = SnapshotId::from_lsn(200);
+        assert!(index.is_tx_visible(1, snapshot));
+    }
+
+    #[test]
+    fn test_is_tx_visible_committed_after_snapshot() {
+        let mut index = TxRangeIndex::new();
+        index.begin_tx(1, 100);
+        index.commit_tx(1, 250);
+
+        let snapshot = SnapshotId::from_lsn(200);
+        assert!(!index.is_tx_visible(1, snapshot));
+    }
+
+    #[test]
+    fn test_is_tx_visible_uncommitted() {
+        let mut index = TxRangeIndex::new();
+        index.begin_tx(1, 100);
+
+        let snapshot = SnapshotId::from_lsn(200);
+        assert!(!index.is_tx_visible(1, snapshot));
+    }
+
+    #[test]
+    fn test_is_tx_visible_nonexistent() {
+        let index = TxRangeIndex::new();
+        let snapshot = SnapshotId::current();
+        assert!(!index.is_tx_visible(999, snapshot));
+    }
+
+    #[test]
+    fn test_is_tx_visible_at_exact_commit_lsn() {
+        let mut index = TxRangeIndex::new();
+        index.begin_tx(1, 100);
+        index.commit_tx(1, 150);
+
+        let snapshot = SnapshotId::from_lsn(150);
+        assert!(index.is_tx_visible(1, snapshot));
     }
 }

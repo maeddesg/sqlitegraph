@@ -464,7 +464,8 @@ mod tests {
             })
             .unwrap();
 
-        let node = backend.get_node(node_id).unwrap();
+        let snapshot = crate::snapshot::SnapshotId::current();
+        let node = backend.get_node(snapshot, node_id).unwrap();
         assert_eq!(node.name, "node1");
         assert_eq!(node.kind, "Test");
     }

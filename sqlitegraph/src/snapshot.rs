@@ -92,6 +92,28 @@ impl SnapshotId {
         SnapshotId(tx_id)
     }
 
+    /// Create snapshot from explicit LSN (Log Sequence Number)
+    ///
+    /// # Arguments
+    ///
+    /// * `lsn` - A commit LSN representing a committed transaction
+    ///
+    /// # Important
+    ///
+    /// The caller MUST ensure that lsn corresponds to a committed transaction.
+    /// Using an uncommitted LSN violates snapshot isolation guarantees.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use sqlitegraph::snapshot::SnapshotId;
+    /// // Create snapshot at specific LSN
+    /// let snapshot = SnapshotId::from_lsn(12345);
+    /// ```
+    pub fn from_lsn(lsn: u64) -> Self {
+        SnapshotId(lsn)
+    }
+
     /// Invalid snapshot - used for error cases
     ///
     /// This sentinel value indicates that no valid snapshot exists.
@@ -147,6 +169,13 @@ mod tests {
     fn test_snapshot_id_from_tx() {
         let snapshot = SnapshotId::from_tx(999);
         assert_eq!(snapshot.as_u64(), 999);
+    }
+
+    #[test]
+    fn test_snapshot_id_from_lsn() {
+        let snapshot = SnapshotId::from_lsn(12345);
+        assert_eq!(snapshot.as_lsn(), 12345);
+        assert_eq!(snapshot.as_u64(), 12345);
     }
 
     #[test]

@@ -152,6 +152,9 @@ pub fn map_to_graph_error(err: NativeBackendError) -> SqliteGraphError {
                 current_id, remaining
             ))
         }
+        NativeBackendError::WalContiguityViolation(msg) => {
+            SqliteGraphError::connection(format!("WAL contiguity violation: {}", msg))
+        }
     }
 }
 
