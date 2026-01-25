@@ -408,4 +408,185 @@ mod tests {
         let decoded = decode_varint_scalar(buffer.as_slice()).unwrap();
         assert_eq!(decoded, value);
     }
+
+    // -------------------------------------------------------------------------
+    // SIMD CORRECTNESS TESTS
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_simd_matches_scalar_dot_product() {
+        use crate::hnsw::simd::{dot_product, dot_product_scalar};
+
+        let test_cases = vec![
+            (vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]),
+            ((0..100).map(|i| i as f32).collect(),
+             (100..200).map(|i| i as f32).collect()),
+            ((0..1000).map(|i| i as f32).collect(),
+             (1000..2000).map(|i| i as f32).collect()),
+        ];
+
+        for (a, b) in test_cases {
+            let scalar = dot_product_scalar(&a, &b);
+            let simd = dot_product(&a, &b);
+
+            // Use relative error tolerance for large vectors due to floating-point
+            // accumulation order differences in SIMD horizontal sum
+            let abs_diff = (scalar - simd).abs();
+            let rel_error = if scalar.abs() > f32::EPSILON {
+                abs_diff / scalar.abs()
+            } else {
+                abs_diff
+            };
+
+            assert!(
+                rel_error < 1e-5 || abs_diff < f32::EPSILON * 100.0,
+                "Dot product differs for size {}: scalar={}, simd={}, diff={}, rel_error={}",
+                a.len(), scalar, simd, abs_diff, rel_error
+            );
+        }
+    }
+
+    #[test]
+    fn test_simd_matches_scalar_euclidean() {
+        use crate::hnsw::simd::{euclidean_distance, euclidean_distance_scalar};
+
+        let a: Vec<f32> = (0..100).map(|i| i as f32).collect();
+        let b: Vec<f32> = (100..200).map(|i| i as f32).collect();
+
+        let scalar = euclidean_distance_scalar(&a, &b);
+        let simd = euclidean_distance(&a, &b);
+
+        // Use relative tolerance for floating-point precision
+        let abs_diff = (scalar - simd).abs();
+        let rel_error = if scalar.abs() > f32::EPSILON {
+            abs_diff / scalar.abs()
+        } else {
+            abs_diff
+        };
+
+        assert!(
+            rel_error < 1e-5 || abs_diff < f32::EPSILON * 10.0,
+            "Euclidean: scalar={}, simd={}, diff={}, rel_error={}",
+            scalar, simd, abs_diff, rel_error
+        );
+    }
+
+    #[test]
+    fn test_simd_matches_scalar_cosine() {
+        use crate::hnsw::simd::{cosine_similarity, cosine_similarity_scalar};
+
+        // Avoid zero values which cause NaN in recip
+        let a: Vec<f32> = (1..100).map(|i| (i as f32).recip()).collect();
+        let b: Vec<f32> = (101..200).map(|i| (i as f32).recip()).collect();
+
+        let scalar = cosine_similarity_scalar(&a, &b);
+        let simd = cosine_similarity(&a, &b);
+
+        // Allow more tolerance for sqrt operations in cosine
+        let abs_diff = (scalar - simd).abs();
+        let rel_error = if scalar.abs() > f32::EPSILON {
+            abs_diff / scalar.abs()
+        } else {
+            abs_diff
+        };
+
+        assert!(
+            rel_error < 1e-4 || abs_diff < f32::EPSILON * 100.0,
+            "Cosine: scalar={}, simd={}, diff={}, rel_error={}",
+            scalar, simd, abs_diff, rel_error
+        );
+    }
+
+    #[test]
+    fn test_simd_matches_scalar_norm_squared() {
+        use crate::hnsw::simd::{compute_norm_squared, compute_norm_squared_scalar};
+
+        let v: Vec<f32> = (1..=500).map(|i| i as f32 * 0.1).collect();
+
+        let scalar = compute_norm_squared_scalar(&v);
+        let simd = compute_norm_squared(&v);
+
+        // Use relative tolerance for large sums
+        let abs_diff = (scalar - simd).abs();
+        let rel_error = if scalar.abs() > f32::EPSILON {
+            abs_diff / scalar.abs()
+        } else {
+            abs_diff
+        };
+
+        assert!(
+            rel_error < 1e-5 || abs_diff < 0.01,
+            "Norm squared: scalar={}, simd={}, diff={}, rel_error={}",
+            scalar, simd, abs_diff, rel_error
+        );
+    }
+
+    #[test]
+    fn test_simd_correctness_edge_cases() {
+        use crate::hnsw::simd::{dot_product, euclidean_distance, cosine_similarity};
+
+        // Test with small vectors
+        let a = vec![1.0, 2.0];
+        let b = vec![3.0, 4.0];
+
+        let dot = dot_product(&a, &b);
+        assert!((dot - 11.0).abs() < f32::EPSILON);
+
+        let dist = euclidean_distance(&a, &b);
+        assert!((dist - 2.8284271).abs() < 0.0001);
+
+        // Test with non-aligned sizes
+        let c: Vec<f32> = (1..=17).map(|i| i as f32).collect();
+        let d: Vec<f32> = (18..=34).map(|i| i as f32).collect();
+
+        let dot2 = dot_product(&c, &d);
+        let expected: f32 = c.iter().zip(d.iter()).map(|(x, y)| x * y).sum();
+        assert!((dot2 - expected).abs() < f32::EPSILON * 10.0);
+    }
+
+    #[test]
+    fn test_batch_filter_correctness() {
+        use crate::hnsw::batch_filter::{filter_batch, filter_allowed_scalar};
+
+        let ids: Vec<u64> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let allowed: Vec<u64> = vec![2, 4, 6, 8, 10];
+
+        let scalar_result = filter_allowed_scalar(&ids, &allowed);
+        let simd_result = filter_batch(&ids, &allowed, true);
+
+        assert_eq!(scalar_result, simd_result);
+        assert_eq!(simd_result, vec![2, 4, 6, 8, 10]);
+    }
+
+    #[test]
+    fn test_delta_encode_correctness() {
+        use crate::hnsw::serialization::{delta_encode, delta_encode_scalar, delta_decode};
+
+        let values: Vec<u32> = vec![100, 105, 110, 115, 120, 125];
+
+        let scalar_deltas = delta_encode_scalar(&values);
+        let simd_deltas = delta_encode(&values);
+
+        assert_eq!(scalar_deltas, simd_deltas);
+        assert_eq!(simd_deltas, vec![100, 5, 5, 5, 5, 5]);
+
+        // Verify round-trip
+        let restored = delta_decode(&simd_deltas);
+        assert_eq!(restored, values);
+    }
+
+    #[test]
+    fn test_varint_encoding_round_trip() {
+        use crate::hnsw::serialization::{encode_varint_scalar, decode_varint_scalar};
+
+        let test_values = vec![0u32, 1, 127, 128, 300, 16383, 16384, u32::MAX];
+
+        for value in test_values {
+            let mut buffer = Vec::new();
+            encode_varint_scalar(&mut buffer, value).unwrap();
+
+            let decoded = decode_varint_scalar(buffer.as_slice()).unwrap();
+            assert_eq!(decoded, value, "Failed to round-trip value {}", value);
+        }
+    }
 }
