@@ -22,7 +22,7 @@
 //! }
 //! ```
 
-use super::free_space::Region;
+use super::free_space::{ChainAllocationTrigger, FreeSpaceManager, Region};
 use crate::backend::native::v2::edge_cluster::cluster::EdgeCluster;
 use crate::backend::native::{FileOffset, NativeBackendError, NativeResult};
 
@@ -308,6 +308,92 @@ impl AdjacencyWriter {
         }
 
         Ok(results)
+    }
+
+    /// Write cluster with automatic chain detection and contiguous allocation.
+    ///
+    /// This integration helper connects chain detection (via observed chain length)
+    /// with the contiguous allocation trigger and the writer. It automatically
+    /// reserves contiguous regions when chain length exceeds threshold.
+    ///
+    /// # Flow
+    ///
+    /// 1. Check if observed chain length meets threshold
+    /// 2. If yes and no active region: try to reserve contiguous region
+    /// 3. Use region hint if available, otherwise fallback to normal allocation
+    /// 4. Track cluster writes to the region
+    ///
+    /// # Arguments
+    ///
+    /// * `cluster` - The cluster to write
+    /// * `observed_chain_length` - Number of clusters observed in current chain
+    /// * `cluster_stride` - Expected size of each cluster (for region reservation)
+    /// * `trigger` - Chain allocation trigger (manages region lifecycle)
+    /// * `free_space_manager` - Free space manager for reservation
+    ///
+    /// # Returns
+    ///
+    /// `Ok(WrittenOffset)` indicating where and how the cluster was written
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use sqlitegraph::backend::native::v2::storage::{AdjacencyWriter, ChainAllocationTrigger, FreeSpaceManager};
+    /// # use sqlitegraph::backend::native::v2::edge_cluster::cluster::EdgeCluster;
+    /// # let cluster = EdgeCluster::create_from_compact_edges(vec![], 1,
+    /// #     sqlitegraph::backend::native::v2::edge_cluster::cluster_trace::Direction::Outgoing).unwrap();
+    /// let mut writer = AdjacencyWriter::new(1_000_000);
+    /// let mut trigger = ChainAllocationTrigger::new();
+    /// let mut fsm = FreeSpaceManager::new(1_000_000);
+    /// let stride = 4096;
+    ///
+    /// // First 9 writes: below threshold, normal allocation
+    /// for i in 0..9 {
+    ///     writer.write_cluster_with_chain_detection(&cluster, i, stride, &mut trigger, &mut fsm)?;
+    /// }
+    ///
+    /// // 10th write: triggers contiguous allocation
+    /// let result = writer.write_cluster_with_chain_detection(&cluster, 10, stride, &mut trigger, &mut fsm)?;
+    /// # Ok::<(), sqlitegraph::backend::native::NativeBackendError>(())
+    /// ```
+    pub fn write_cluster_with_chain_detection(
+        &mut self,
+        cluster: &EdgeCluster,
+        observed_chain_length: usize,
+        cluster_stride: u32,
+        trigger: &mut ChainAllocationTrigger,
+        free_space_manager: &mut FreeSpaceManager,
+    ) -> NativeResult<WrittenOffset> {
+        // Check if we should trigger contiguous allocation
+        if trigger.should_trigger_with_observed_count(observed_chain_length) {
+            // No active region, try to reserve one
+            if trigger.region_hint().is_none() {
+                // Reserve region for predicted chain length
+                // Use observed_chain_length as prediction for remaining clusters
+                let total_bytes = observed_chain_length as u64 * cluster_stride as u64;
+
+                if let Some(region) = free_space_manager.try_reserve_contiguous(
+                    total_bytes,
+                    cluster_stride as u64,
+                ) {
+                    trigger.set_region(region);
+                }
+                // If reservation fails, we fall through to normal path
+            }
+
+            // Use region hint if available
+            if trigger.has_active_region() {
+                trigger.increment_cluster_count();
+                // Get region after increment (we know it exists)
+                let cluster_index = trigger.cluster_index() - 1; // Already incremented
+                if let Some(region) = trigger.region_hint() {
+                    return self.write_cluster_with_hint(cluster, Some(region), cluster_index);
+                }
+            }
+        }
+
+        // Normal allocation path
+        self.write_cluster_with_hint(cluster, None, 0)
     }
 
     /// Reset the writer to a specific file size.
@@ -742,5 +828,188 @@ mod tests {
         } else {
             assert!(!result.used_contiguous);
         }
+    }
+
+    // === 40-10: Chain Detection Integration Tests ===
+
+    #[test]
+    fn test_write_cluster_with_chain_detection_below_threshold() {
+        let mut writer = AdjacencyWriter::new(1_000_000);
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(1_000_000);
+        let cluster = create_test_cluster_from_edges(1);
+        let stride = 4096;
+
+        // Chain of 5: below threshold, no contiguous allocation
+        for i in 1..=5 {
+            let result = writer
+                .write_cluster_with_chain_detection(&cluster, i, stride, &mut trigger, &mut fsm)
+                .unwrap();
+            assert!(!result.used_contiguous, "Write {} should not use contiguous", i);
+        }
+
+        // No active region
+        assert!(!trigger.has_active_region());
+    }
+
+    #[test]
+    fn test_write_cluster_with_chain_detection_at_threshold() {
+        let mut writer = AdjacencyWriter::new(1_000_000);
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(1_000_000);
+        let cluster = create_test_cluster_from_edges(1);
+        let stride = 4096;
+
+        // First 9 writes: below threshold
+        for i in 1..=9 {
+            let result = writer
+                .write_cluster_with_chain_detection(&cluster, i, stride, &mut trigger, &mut fsm)
+                .unwrap();
+            assert!(!result.used_contiguous);
+        }
+
+        // 10th write: at threshold, should trigger contiguous allocation
+        let result = writer
+            .write_cluster_with_chain_detection(&cluster, 10, stride, &mut trigger, &mut fsm)
+            .unwrap();
+
+        // Should have reserved and used a contiguous region
+        assert!(trigger.has_active_region());
+        // Note: Whether contiguous was actually used depends on cluster size vs stride
+        // If cluster.size_bytes() > stride, it will fall back
+    }
+
+    #[test]
+    fn test_write_cluster_with_chain_detection_fallback_on_insufficient_space() {
+        let mut writer = AdjacencyWriter::new(10_000); // Small file
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(10_000);
+        let cluster = create_test_cluster_from_edges(1);
+        let stride = 4096;
+
+        // Try to reserve a large region that won't fit
+        let result = writer
+            .write_cluster_with_chain_detection(&cluster, 100, stride, &mut trigger, &mut fsm)
+            .unwrap();
+
+        // Should fall back to normal allocation
+        assert!(!result.used_contiguous);
+        // No active region (reservation failed)
+        assert!(!trigger.has_active_region());
+    }
+
+    #[test]
+    fn test_write_cluster_with_chain_detection_uses_region_hint() {
+        let mut writer = AdjacencyWriter::new(1_000_000);
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(1_000_000);
+        let cluster = create_test_cluster_from_edges(1);
+        let stride = 4096;
+
+        // First write at threshold: reserve region
+        let result1 = writer
+            .write_cluster_with_chain_detection(&cluster, 10, stride, &mut trigger, &mut fsm)
+            .unwrap();
+
+        // Should have active region now
+        assert!(trigger.has_active_region());
+
+        // Subsequent writes should use the region hint
+        let cluster_index_before = trigger.cluster_index();
+        let result2 = writer
+            .write_cluster_with_chain_detection(&cluster, 11, stride, &mut trigger, &mut fsm)
+            .unwrap();
+
+        assert_eq!(trigger.cluster_index(), cluster_index_before + 1);
+        assert_eq!(trigger.clusters_written(), 2);
+    }
+
+    #[test]
+    fn test_write_cluster_with_chain_detection_clears_region() {
+        let mut writer = AdjacencyWriter::new(1_000_000);
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(1_000_000);
+        let cluster = create_test_cluster_from_edges(1);
+        let stride = 4096;
+
+        // Trigger contiguous allocation
+        let _ = writer
+            .write_cluster_with_chain_detection(&cluster, 10, stride, &mut trigger, &mut fsm)
+            .unwrap();
+        assert!(trigger.has_active_region());
+
+        // Clear region
+        trigger.clear_region();
+        assert!(!trigger.has_active_region());
+
+        // Next write with chain length BELOW threshold should use normal allocation
+        let result = writer
+            .write_cluster_with_chain_detection(&cluster, 5, stride, &mut trigger, &mut fsm)
+            .unwrap();
+        assert!(!result.used_contiguous);
+        assert!(!trigger.has_active_region());
+    }
+
+    #[test]
+    fn test_write_cluster_with_chain_detection_custom_threshold() {
+        let mut writer = AdjacencyWriter::new(1_000_000);
+        let mut trigger = ChainAllocationTrigger::with_threshold(5);
+        let mut fsm = FreeSpaceManager::new(1_000_000);
+        let cluster = create_test_cluster_from_edges(1);
+        let stride = 4096;
+
+        // First 4 writes: below custom threshold of 5
+        for i in 1..=4 {
+            let result = writer
+                .write_cluster_with_chain_detection(&cluster, i, stride, &mut trigger, &mut fsm)
+                .unwrap();
+            assert!(!result.used_contiguous);
+        }
+
+        // 5th write: at custom threshold, should trigger
+        let _ = writer
+            .write_cluster_with_chain_detection(&cluster, 5, stride, &mut trigger, &mut fsm)
+            .unwrap();
+
+        assert!(trigger.has_active_region());
+    }
+
+    #[test]
+    fn test_write_cluster_with_chain_detection_integration_lifecycle() {
+        let mut writer = AdjacencyWriter::new(1_000_000);
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(1_000_000);
+        let cluster = create_test_cluster_from_edges(1);
+        let stride = 4096;
+
+        // 1. Below threshold: normal allocation
+        for i in 1..=9 {
+            let result = writer
+                .write_cluster_with_chain_detection(&cluster, i, stride, &mut trigger, &mut fsm)
+                .unwrap();
+            assert!(!result.used_contiguous);
+        }
+
+        // 2. At threshold: reserve contiguous region
+        let result = writer
+            .write_cluster_with_chain_detection(&cluster, 10, stride, &mut trigger, &mut fsm)
+            .unwrap();
+        assert!(trigger.has_active_region());
+
+        // 3. Use region for subsequent writes
+        for i in 11..15 {
+            writer
+                .write_cluster_with_chain_detection(&cluster, i, stride, &mut trigger, &mut fsm)
+                .unwrap();
+        }
+        assert_eq!(trigger.clusters_written(), 5); // 10th + 11-14 = 5 clusters
+
+        // 4. Clear and verify normal allocation resumes
+        trigger.clear_region();
+        // After clearing, write with below-threshold count won't trigger
+        let result = writer
+            .write_cluster_with_chain_detection(&cluster, 5, stride, &mut trigger, &mut fsm)
+            .unwrap();
+        assert!(!trigger.has_active_region());
     }
 }
