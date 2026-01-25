@@ -5,6 +5,7 @@
 //! by LSN, and filtered reading based on record types and cluster affinity.
 
 use crate::backend::native::v2::wal::record::V2WALSerializer;
+use crate::backend::native::v2::wal::tx_range_index::TxRangeIndex;
 use crate::backend::native::v2::wal::{V2WALHeader, V2WALRecord, V2WALRecordType};
 use crate::backend::native::{NativeBackendError, NativeResult};
 use std::fs::File;
@@ -25,6 +26,9 @@ pub struct V2WALReader {
 
     /// End of WAL data
     wal_end: u64,
+
+    /// Transaction range index for snapshot isolation
+    tx_index: TxRangeIndex,
 }
 
 /// WAL reading iterator for sequential access
@@ -173,6 +177,7 @@ impl V2WALReader {
             header: V2WALHeader::new(), // Will be read in read_header()
             current_position: std::mem::size_of::<V2WALHeader>() as u64,
             wal_end: 0,
+            tx_index: TxRangeIndex::new(),
         };
 
         // Read and validate header
@@ -180,6 +185,9 @@ impl V2WALReader {
 
         // Determine WAL end position
         reader.determine_wal_end()?;
+
+        // Build transaction index by scanning WAL
+        reader.build_tx_index()?;
 
         Ok(reader)
     }
@@ -228,6 +236,53 @@ impl V2WALReader {
         self.current_position = std::mem::size_of::<V2WALHeader>() as u64;
 
         Ok(())
+    }
+
+    /// Build transaction index by scanning WAL records
+    ///
+    /// This scans the entire WAL and builds an index mapping transactions
+    /// to their LSN ranges (begin_lsn to commit_lsn). This enables efficient
+    /// snapshot isolation filtering.
+    fn build_tx_index(&mut self) -> NativeResult<()> {
+        // Save current position
+        let original_position = self.current_position;
+
+        // Reset to start of records
+        self.current_position = std::mem::size_of::<V2WALHeader>() as u64;
+
+        // Scan all records and build index
+        while let Some((lsn, record)) = self.read_next_record()? {
+            match record {
+                V2WALRecord::TransactionBegin { tx_id, .. } => {
+                    self.tx_index.begin_tx(tx_id, lsn);
+                }
+                V2WALRecord::TransactionCommit { tx_id, .. } => {
+                    self.tx_index.commit_tx(tx_id, lsn);
+                }
+                V2WALRecord::TransactionRollback { tx_id, .. } => {
+                    self.tx_index.rollback_tx(tx_id);
+                }
+                _ => {
+                    // Data records - attribution is implicit by position
+                    // No explicit action needed in tx_index
+                }
+            }
+        }
+
+        // Restore original position
+        self.current_position = original_position;
+
+        Ok(())
+    }
+
+    /// Get reference to transaction index
+    pub fn tx_index(&self) -> &TxRangeIndex {
+        &self.tx_index
+    }
+
+    /// Get mutable reference to transaction index
+    pub fn tx_index_mut(&mut self) -> &mut TxRangeIndex {
+        &mut self.tx_index
     }
 
     /// Read the next WAL record from current position

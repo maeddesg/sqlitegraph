@@ -31,6 +31,7 @@ pub mod reader;
 pub mod record;
 pub mod recovery;
 pub mod transaction_coordinator;
+pub mod tx_range_index;
 pub mod v2_integration;
 pub mod writer;
 
@@ -54,6 +55,7 @@ pub use transaction_coordinator::{
     IsolationLevel, LockType, ResourceId, TransactionContext, TransactionId, TransactionState,
     V2TransactionCoordinator,
 };
+pub use tx_range_index::{TxRange, TxRangeIndex};
 pub use v2_integration::{ChangeTracker, V2IntegrationConfig, V2WALIntegrator};
 pub use writer::V2WALWriter;
 

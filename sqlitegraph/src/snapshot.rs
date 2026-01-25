@@ -123,6 +123,14 @@ impl SnapshotId {
     pub fn as_u64(&self) -> u64 {
         self.0
     }
+
+    /// Get snapshot as LSN (Log Sequence Number)
+    ///
+    /// Since SnapshotId wraps a commit LSN, this returns the LSN directly.
+    /// Used for WAL record visibility checks.
+    pub fn as_lsn(&self) -> u64 {
+        self.0
+    }
 }
 
 #[cfg(test)]
