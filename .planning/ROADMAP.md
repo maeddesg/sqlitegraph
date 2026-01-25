@@ -266,11 +266,11 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 ---
 
-## v1.11 SIMD / AVX Acceleration (Phase 42) - PLANNED
+## v1.11 SIMD / AVX Acceleration (Phase 42) - COMPLETE
 
 **Milestone Goal:** Add feature-gated SIMD/AVX acceleration for HNSW distance computations with runtime CPU feature detection
 
-**Status:** PLANNED
+**Status:** COMPLETE (2026-01-25)
 
 **Problem:** HNSW vector search performs millions of distance calculations during search operations. The current scalar implementations are correct but not optimized for modern CPU SIMD instructions (AVX2/AVX-512). This limits HNSW search performance, especially for high-dimensional vectors (768, 1536 dimensions common in text embeddings).
 
@@ -282,21 +282,27 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 - No changes to HNSW graph structure or persistence format
 
 **Plans:**
-- [ ] 42-01-PLAN.md — SIMD dot product with AVX2 support
-- [ ] 42-02-PLAN.md — SIMD euclidean (L2) distance with AVX2 support
-- [ ] 42-03-PLAN.md — SIMD cosine similarity with AVX2 support
-- [ ] 42-04-PLAN.md — SIMD batch ID filtering for multi-tenant operations
-- [ ] 42-05-PLAN.md — SIMD varint/delta encoding for persistence
-- [ ] 42-06-PLAN.md — Benchmark suite and correctness validation
+- [x] 42-01-PLAN.md — SIMD dot product with AVX2 support
+- [x] 42-02-PLAN.md — SIMD euclidean (L2) distance with AVX2 support
+- [x] 42-03-PLAN.md — SIMD cosine similarity with AVX2 support
+- [x] 42-04-PLAN.md — SIMD batch ID filtering for multi-tenant operations
+- [x] 42-05-PLAN.md — SIMD varint/delta encoding for persistence
+- [x] 42-06-PLAN.md — Benchmark suite and correctness validation
 
-**Success Criteria:**
-- AVX2 implementations for dot_product, euclidean_distance, cosine_similarity
-- Runtime CPU feature detection (is_x86_feature_detected!)
-- Scalar fallback always available (works on non-AVX CPUs)
-- All existing tests pass without modification
-- Correctness tests verify SIMD matches scalar results
-- 4-8x performance improvement on large vectors (768+ dimensions)
-- No API or storage format changes
+**Success Criteria - ALL MET:**
+- AVX2 implementations for dot_product, euclidean_distance, cosine_similarity ✓
+- Runtime CPU feature detection (is_x86_feature_detected!) ✓
+- Scalar fallback always available (works on non-AVX CPUs) ✓
+- All existing tests pass without modification ✓
+- Correctness tests verify SIMD matches scalar results ✓
+- **4-10x performance improvement on large vectors** (exceeded target!) ✓
+- No API or storage format changes ✓
+
+**Benchmark Results (AMD Ryzen 7 7800X3D):**
+- Norm squared: 10.4x speedup
+- Dot product: 9.5x speedup
+- Cosine similarity: 4.6x speedup
+- Euclidean distance: 4.5x speedup
 
 ---
 
@@ -409,8 +415,8 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 38. ACID API Fix | v1.8 | 6/6 | Infrastructure Complete | 2026-01-25 |
 | 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Complete (IO-12 target NOT achieved) | 2026-01-25 |
 | 41. ACID API Completion | v1.10 | 1/1 | Complete | 2026-01-25 |
-| 42. SIMD / AVX Acceleration | v1.11 | 0/6 | Planned | TBD |
+| 42. SIMD / AVX Acceleration | v1.11 | 6/6 | Complete | 2026-01-25 |
 | 43. Transactional KV Store | v1.12 | 0/4 | Planned | TBD |
 | 44. Pub/Sub (Minimal) | v1.13 | 0/5 | Planned | TBD |
 
-**Overall Progress:** 174/174 plans planned (159 complete, 15 planned). v0.2-v1.10 complete, v1.11-v1.13 planned.
+**Overall Progress:** 174/174 plans planned (165 complete, 9 planned). v0.2-v1.11 complete, v1.12-v1.13 planned.
