@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** Phase 40 Wave 2 - Allocation-Aware Optimization (5/6 complete)
+**Current focus:** Phase 40 COMPLETE - Ready for Phase 41 planning
 
 ## Current Position
 
-Phase: 40 - Allocation-Aware Optimization (Wave 1 COMPLETE: 6/12, Wave 2: 5/12 complete)
+Phase: 40 - Allocation-Aware Optimization (COMPLETE)
 Previous: Phase 38 - ACID API Fix (INFRASTRUCTURE COMPLETE)
-Status: v1.9 Wave 2 in progress - WAL records for contiguous allocation implemented with deterministic replay.
-Last activity: 2026-01-25 — Phase 40-11 complete (WAL records for contiguous allocation, 73 tests pass)
+Status: v1.9 COMPLETE - Wave 1 (Delta-index filtering) and Wave 2 (Allocation-aware optimization) both complete.
+Last activity: 2026-01-25 — Phase 40-12 complete (Benchmark gates and IO-12 validation)
 
-Progress: [█████████░] 99% of planned phases (38 phases complete, 157/158 plans, v0.2-v1.8 complete, v1.9 Wave 1 complete, v1.9 Wave 2: 5/6 complete)
+Progress: [█████████░] 99% of planned phases (38 phases complete, 158/158 plans, v0.2-v1.8 complete, v1.9 COMPLETE)
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -24,13 +24,13 @@ Progress: [█████████░] 99% of planned phases (38 phases comp
 - ✅ Plan 40-05: Delta-aware read paths
 - ✅ Plan 40-06: Regression validation (Chain(500) = 238.00ms, -0.8% change)
 
-**Phase 40 Wave 2 Status (5/6 COMPLETE, 1/6 PENDING):**
+**Phase 40 Wave 2 Status (COMPLETE):**
 - ✅ Plan 40-07: FreeSpaceManager contiguous reservation API (15 tests pass)
 - ✅ Plan 40-08: Region accounting (commit/rollback/recovery, 32 tests pass)
 - ✅ Plan 40-09: AdjacencyWriter write_cluster_with_hint() (22 tests pass)
 - ✅ Plan 40-10: Threshold-gated activation (39 tests pass)
 - ✅ Plan 40-11: WAL records for contiguous allocation (73 tests pass)
-- ⏸️ Plan 40-12: Benchmark gates (IO-12 validation)
+- ✅ Plan 40-12: Benchmark gates (IO-12 validation - Chain(500) = 213.24ms, target: <=75ms, NOT achieved)
 
 **Wave 1 Implementation Summary:**
 - Architecture: Commit-built delta index (not WAL overlay per read)
@@ -42,7 +42,11 @@ Progress: [█████████░] 99% of planned phases (38 phases comp
 - Correctness: All delta_index unit tests pass (7/7)
 - Mmap fast path: Preserved - no WAL scanning on reads
 
-**Wave 2 Implementation Summary (4/6 COMPLETE):**
+**Wave 2 Implementation Summary (COMPLETE):**
+- **Status:** Implementation complete but IO-12 target NOT achieved
+- **Benchmark Results:** Chain(500) = 213.24ms (target: <=75ms), Star/Random show 5-8% improvement, Snapshot isolation PASS
+- **Gap:** ~3x slower than target - contiguous allocation optimization not producing expected benefit
+- **Recommendation:** Phase 41 to investigate performance gap or redefine IO-12 target
 - Architecture: Advisory contiguous allocation for sequential clusters
 - FreeSpaceManager: BTreeMap-based free block tracking with coalescing
 - Region: Contiguous storage region with start_offset, total_size, cluster_count, stride
@@ -439,13 +443,13 @@ Resume file: None
   - Phase 40 Plan 09: AdjacencyWriter write_cluster_with_hint() (COMPLETE)
   - Phase 40 Plan 10: Threshold-gated activation (COMPLETE)
   - Phase 40 Plan 11: WAL records for contiguous allocation (COMPLETE)
-  - Phase 40 Plan 12: Benchmark gates - IO-12 validation (PENDING)
+  - Phase 40 Plan 12: Benchmark gates - IO-12 validation (COMPLETE - target NOT achieved)
 
 *Updated after each plan completion*
 
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Phase 40-11 COMPLETE - WAL records for contiguous allocation implemented, 73 tests pass
+Stopped at: Phase 40 COMPLETE - All 12 plans complete. IO-12 target NOT achieved (Chain(500) = 213.24ms vs target of <=75ms). Recommendation: Phase 41 to investigate performance gap.
 Resume file: None
 

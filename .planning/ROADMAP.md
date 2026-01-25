@@ -183,52 +183,59 @@ See milestone archives for complete history.
 
 ---
 
-## v1.9 WAL Filtering & Allocation Optimization (Phase 40) - PLANNED
+## v1.9 WAL Filtering & Allocation Optimization (Phase 40) - COMPLETE
 
 **Milestone Goal:** Complete WAL filtering (Phase 38 deferred work) and achieve IO-12 target (Chain(500) <=75ms) through allocation-aware sequential cluster optimization.
 
-**Status:** PLANNED (12 plans in 2 waves)
+**Status:** COMPLETE (2026-01-25)
+- **Wave 1:** COMPLETE - Delta-index filtering implemented and validated
+- **Wave 2:** COMPLETE - Allocation-aware optimization implemented
+- **IO-12 Target:** NOT ACHIEVED (Chain(500) = 213.24ms vs target of <=75ms, ~3x gap)
 
-**Wave 1 - WAL Filtering Completion (40-01 to 40-06):**
-Complete the WAL filtering deferred from Phase 38. This is required for snapshot isolation correctness before any allocation optimization.
+**Wave 1 - WAL Filtering Completion (40-01 to 40-06):** ✅ COMPLETE
+Implemented commit-delta index for snapshot isolation correctness. The original "WAL overlay per read" design was replaced with "commit-built delta overlay" to preserve the mmap fast path.
 
-- **40-01:** Source of truth functions (is_tx_visible, iter_visible_wal_records)
-- **40-02:** WAL contiguity invariant enforcement
-- **40-03:** Read = Base + Visible WAL overlay
-- **40-04:** Minimal overlay strategy (neighbors, node/edge existence)
-- **40-05:** Enable integration tests
-- **40-06:** Regression gates
+- **40-01:** ✅ Source of truth functions (is_tx_visible, iter_visible_wal_records)
+- **40-02:** ✅ WAL contiguity invariant enforcement
+- **40-03:** ✅ DeltaIndex module (commit-time delta building, not WAL scanning)
+- **40-04:** ✅ Commit-time delta integration with V2WALManager
+- **40-05:** ✅ Delta-aware read paths
+- **40-06:** ✅ Regression validation (Chain(500) = 238.00ms, -0.8% change, <1% overhead target met)
 
-**Wave 2 - Allocation-Aware Optimization (40-07 to 40-12):**
+**Wave 2 - Allocation-Aware Optimization (40-07 to 40-12):** ✅ COMPLETE
 Implement contiguous cluster allocation for linear chains to achieve IO-12 target.
 
-- **40-07:** FreeSpaceManager contiguous reservation API
-- **40-08:** Region accounting (commit/rollback/recovery)
-- **40-09:** AdjacencyWriter write_cluster_with_hint()
-- **40-10:** Threshold-gated activation
-- **40-11:** WAL records for contiguous allocation
-- **40-12:** Benchmark gates (IO-12 validation)
+- **40-07:** ✅ FreeSpaceManager contiguous reservation API (15 tests pass)
+- **40-08:** ✅ Region accounting (commit/rollback/recovery, 32 tests pass)
+- **40-09:** ✅ AdjacencyWriter write_cluster_with_hint() (22 tests pass)
+- **40-10:** ✅ Threshold-gated activation (39 tests pass)
+- **40-11:** ✅ WAL records for contiguous allocation (73 tests pass)
+- **40-12:** ✅ Benchmark gates (IO-12 validation - TARGET NOT ACHIEVED)
 
-**Success Criteria:**
-- Snapshot isolation regression tests MUST pass
-- Chain(500) <= 75ms when contiguous reservation succeeds
-- No regression when contiguous allocation rarely succeeds
-- Star/Random traversals within 110% of baseline
-- Fragmentation increase <= 5%
+**Benchmark Results:**
+- Chain(500): 213.24ms (target: <=75ms, FAIL)
+- Star(100): 23.094us (7.1% improvement, PASS)
+- Random(100): 22.839us (8.2% improvement, PASS)
+- Random(500): 14.856us (4.7% improvement, PASS)
+- Snapshot isolation: 1/1 tests pass (PASS)
+
+**Key Finding:** The contiguous allocation optimization implementation is complete but did NOT produce the expected 3x performance improvement. The IO-12 target remains unmet.
+
+**Recommendation:** Phase 41 to investigate performance gap or redefine IO-12 target based on actual measurements.
 
 **Plans:**
-- [ ] 40-01-PLAN.md — Source of truth functions for WAL visibility
-- [ ] 40-02-PLAN.md — Enforce WAL contiguity invariants
-- [ ] 40-03-PLAN.md — Implement Read = Base + Visible WAL overlay
-- [ ] 40-04-PLAN.md — Minimal overlay strategy for neighbor retrieval
-- [ ] 40-05-PLAN.md — Enable integration tests
-- [ ] 40-06-PLAN.md — Regression gates and validation
-- [ ] 40-07-PLAN.md — FreeSpaceManager contiguous reservation API
-- [ ] 40-08-PLAN.md — Region accounting (commit/rollback/recovery)
-- [ ] 40-09-PLAN.md — AdjacencyWriter write_cluster_with_hint()
-- [ ] 40-10-PLAN.md — Threshold-gated activation
-- [ ] 40-11-PLAN.md — WAL records for contiguous allocation
-- [ ] 40-12-PLAN.md — Benchmark gates and IO-12 validation
+- [x] 40-01-PLAN.md — Source of truth functions for WAL visibility
+- [x] 40-02-PLAN.md — Enforce WAL contiguity invariants
+- [x] 40-03-PLAN.md — Implement DeltaIndex module (commit-time delta building)
+- [x] 40-04-PLAN.md — Commit-time delta integration with V2WALManager
+- [x] 40-05-PLAN.md — Delta-aware read paths
+- [x] 40-06-PLAN.md — Regression gates and validation
+- [x] 40-07-PLAN.md — FreeSpaceManager contiguous reservation API
+- [x] 40-08-PLAN.md — Region accounting (commit/rollback/recovery)
+- [x] 40-09-PLAN.md — AdjacencyWriter write_cluster_with_hint()
+- [x] 40-10-PLAN.md — Threshold-gated activation
+- [x] 40-11-PLAN.md — WAL records for contiguous allocation
+- [x] 40-12-PLAN.md — Benchmark gates and IO-12 validation
 
 ---
 
@@ -246,6 +253,6 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 36. IO-12 Validation | v1.6 | 4/4 | Complete | 2026-01-21 |
 | 37. Gap Analysis and Closure | v1.7 | 6/6 | Implementation Complete | 2026-01-25 |
 | 38. ACID API Fix | v1.8 | 6/6 | Infrastructure Complete | 2026-01-25 |
-| 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Planned | - |
+| 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Complete (IO-12 target NOT achieved) | 2026-01-25 |
 
-**Overall Progress:** 158/158 plans planned (146 complete, 12 planned). v0.2-v1.8 complete, v1.9 planned.
+**Overall Progress:** 158/158 plans planned (158 complete). v0.2-v1.9 complete.
