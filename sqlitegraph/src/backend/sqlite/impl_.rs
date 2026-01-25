@@ -360,4 +360,34 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
             edges_imported: 0, // SQLite load doesn't separate edge count easily
         })
     }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_get(
+        &self,
+        _snapshot_id: crate::snapshot::SnapshotId,
+        _key: &[u8],
+    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, crate::SqliteGraphError> {
+        Err(crate::SqliteGraphError::connection(
+            "KV operations not available on SQLite backend - use Native backend with native-v2 feature".to_string()
+        ))
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_set(
+        &self,
+        _key: Vec<u8>,
+        _value: crate::backend::native::v2::kv_store::types::KvValue,
+        _ttl_seconds: Option<u64>,
+    ) -> Result<(), crate::SqliteGraphError> {
+        Err(crate::SqliteGraphError::connection(
+            "KV operations not available on SQLite backend - use Native backend with native-v2 feature".to_string()
+        ))
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_delete(&self, _key: &[u8]) -> Result<(), crate::SqliteGraphError> {
+        Err(crate::SqliteGraphError::connection(
+            "KV operations not available on SQLite backend - use Native backend with native-v2 feature".to_string()
+        ))
+    }
 }

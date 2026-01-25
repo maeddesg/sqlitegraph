@@ -20,6 +20,10 @@ pub use crate::multi_hop::ChainStep;
 #[allow(unused_imports)] // Backend trait API types for future GraphBackend implementations
 pub use sqlite::types::{BackendDirection, EdgeSpec, NeighborQuery, NodeSpec};
 
+// KV store types (re-exported for public API)
+#[cfg(feature = "native-v2")]
+pub use crate::backend::native::v2::kv_store::types::{KvValue, KvStoreError};
+
 use crate::{
     SqliteGraphError,
     graph::GraphEntity,
@@ -120,6 +124,48 @@ pub trait GraphBackend {
     /// # Returns
     /// Import metadata including number of records imported
     fn snapshot_import(&self, import_dir: &std::path::Path) -> Result<ImportMetadata, SqliteGraphError>;
+
+    /// Get a value from the KV store at the given snapshot
+    ///
+    /// # Arguments
+    /// * `snapshot_id` - Only return data committed at or before this snapshot
+    /// * `key` - Key to retrieve (arbitrary bytes)
+    ///
+    /// # Returns
+    /// The value if found and visible at snapshot, or None if not found
+    #[cfg(feature = "native-v2")]
+    fn kv_get(
+        &self,
+        snapshot_id: SnapshotId,
+        key: &[u8],
+    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, SqliteGraphError>;
+
+    /// Set a value in the KV store
+    ///
+    /// This operation participates in the current transaction and will
+    /// be committed atomically with other graph operations.
+    ///
+    /// # Arguments
+    /// * `key` - Key to set (arbitrary bytes)
+    /// * `value` - Value to store
+    /// * `ttl_seconds` - Optional TTL in seconds (None = no expiration)
+    #[cfg(feature = "native-v2")]
+    fn kv_set(
+        &self,
+        key: Vec<u8>,
+        value: crate::backend::native::v2::kv_store::types::KvValue,
+        ttl_seconds: Option<u64>,
+    ) -> Result<(), SqliteGraphError>;
+
+    /// Delete a value from the KV store
+    ///
+    /// This operation participates in the current transaction and will
+    /// be committed atomically with other graph operations.
+    ///
+    /// # Arguments
+    /// * `key` - Key to delete
+    #[cfg(feature = "native-v2")]
+    fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError>;
 }
 
 /// Metadata returned by snapshot export operations
@@ -260,6 +306,30 @@ where
 
     fn snapshot_import(&self, import_dir: &std::path::Path) -> Result<ImportMetadata, SqliteGraphError> {
         (*self).snapshot_import(import_dir)
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_get(
+        &self,
+        snapshot_id: SnapshotId,
+        key: &[u8],
+    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, SqliteGraphError> {
+        (*self).kv_get(snapshot_id, key)
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_set(
+        &self,
+        key: Vec<u8>,
+        value: crate::backend::native::v2::kv_store::types::KvValue,
+        ttl_seconds: Option<u64>,
+    ) -> Result<(), SqliteGraphError> {
+        (*self).kv_set(key, value, ttl_seconds)
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError> {
+        (*self).kv_delete(key)
     }
 }
 

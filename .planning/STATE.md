@@ -9,16 +9,16 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 43 - Transactional KV Store (1/4 plans complete)
+Phase: 43 - Transactional KV Store (2/4 plans complete)
 Previous: Phase 42 - SIMD / AVX Acceleration (COMPLETE)
-Status: Phase 43-01 COMPLETE - In-memory KV store with HashMap-based storage
-Last activity: 2026-01-25 — Completed 43-01: HashMap-based KV store (18 tests pass)
+Status: Phase 43-02 COMPLETE - WAL integration for KV operations
+Last activity: 2026-01-25 — Completed 43-02: WAL integration (42 tests pass)
 
-Progress: [█████████░] 95% of planned phases (42 phases complete, 166/169 plans)
+Progress: [█████████░] 95% of planned phases (42 phases complete, 167/169 plans)
 
 **Phase 43 Wave 1 Status (IN PROGRESS):**
 - ✅ Plan 43-01: In-memory KV store with HashMap-based storage (18 tests pass)
-- ⏳ Plan 43-02: WAL integration for KV operations
+- ✅ Plan 43-02: WAL integration for KV operations (42 tests pass)
 - ⏳ Plan 43-03: Snapshot isolation API
 - ⏳ Plan 43-04: TTL cleanup and testing
 
@@ -382,6 +382,20 @@ Recent decisions affecting current work:
 - **v1.9.5: Correct approach for snapshot isolation - frequent checkpointing (recommended) OR WAL-aware cache layer (complex), NOT per-read WAL scanning (Phase 40-03)**
 - **v1.9.6: DECISION REQUIRED - Is visibility of committed-but-not-checkpointed data a hard requirement? If NO, current mmap-only reads are correct. If YES, architecture redesign needed. (Phase 40-03)**
 - **v1.9.7: AdjacencyWriter struct-based design (not trait) - simpler API, easier to extend with FreeSpaceManager integration later (Phase 40-09)**
+- **Phase 43-01: Byte keys (Vec<u8>)** - Maximum flexibility for strings, hashes, composite keys without encoding decisions
+- **Phase 43-01: NO internal version counter** - Versions come from WAL commit LSN (plan 02), matching DeltaIndex pattern
+- **Phase 43-01: KvValue enum with 6 types** - Bytes/String/Integer/Float/Boolean/Json covers 95% of graph database use cases
+- **Phase 43-01: get() returns cloned value** - Avoids lifetime complexity with RwLock guard, trades slight allocation for simpler API
+- **Phase 43-01: HashMap storage pattern** - Same as DeltaIndex, parking_lot::RwLock for thread-safe access
+- **v1.11 Phase 42-05: Integer SIMD intrinsics (_mm256_sub_epi32)** - Correct type-safe arithmetic for u32 delta encoding
+- **v1.11 Phase 42-05: Wrapping arithmetic for unsigned integers** - Predictable underflow behavior for edge cases
+- **v1.11 Phase 42-05: SIMD threshold at 16 elements** - Avoids overhead on small arrays, targets ~3-5x speedup for large data
+- **Phase 43-02: Vec<u8> for value_bytes in WAL** - Avoids circular dependency with KvValue enum, keeps WAL format stable
+- **Phase 43-02: Type-tagged value serialization** - u8 tags (0=Bytes, 1=String, 2=Integer, 3=Float, 4=Boolean, 5=Json) for WAL compatibility
+- **Phase 43-02: apply_set/apply_delete bypass WAL** - Recovery helpers avoid infinite recursion during WAL replay
+- **Phase 43-02: KvStore in DefaultReplayOperations** - Added kv_store field for KV record replay during crash recovery
+- **Phase 43-02: RollbackOperation variants added** - KvSet/KvDelete for future transaction rollback support (placeholders in plan 02)
+- **v1.6: Next action required** - Profile Chain(500) to identify bottleneck before gap closure
 - **v1.9.8: WrittenOffset.used_contiguous flag embedded in result - eliminates need for separate metrics tracking, enables introspection (Phase 40-09)**
 - **v1.9.9: Fixed stride enforcement in fits_in_region() - clusters must fit stride to use contiguous region, critical for single-I/O traversal (Phase 40-09)**
 - **v1.9.10: Zero-stride regions have no size constraint - allows flexible region usage when fixed cluster size isn't required (Phase 40-09)**
@@ -517,8 +531,8 @@ Resume file: None
 
 ## Session Continuity
 
-Last session: 2026-01-25 22:43:03 UTC
-Stopped at: Completed Phase 43-01 (In-memory KV store with HashMap-based storage)
+Last session: 2026-01-25 23:05:49 UTC
+Stopped at: Completed Phase 43-02 (WAL integration for KV operations)
 Resume file: None
 
 
