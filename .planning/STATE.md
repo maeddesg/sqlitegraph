@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 37 - Gap Analysis Closure
-Plan: Complete (6/6)
-Status: Phase 37 implementation complete - BFS observe_with_cluster() fix implemented, regression tests created. Benchmark pending to verify IO-12 target.
-Last activity: 2026-01-25 — Executed /gsd:execute-phase 37, verified 6/6 plans complete
+Phase: 38 - ACID API Fix
+Plan: 03 (3/6 complete)
+Status: Phase 38-03 implementation complete - GraphBackend trait updated with snapshot_id parameters on all read methods. Convenience methods added for backward compatibility. Ready for WAL filtering implementation.
+Last activity: 2026-01-25 — Completed Phase 38-03: SnapshotId parameter implementation
 
-Progress: [██████████░] 96% (38/38 phases planned, 146/146 plans complete, v1.4 complete, v1.6 complete, v1.7 implementation complete, v1.8 planned)
+Progress: [██████████░] 96% (38/38 phases planned, 147/152 plans complete, v1.4 complete, v1.6 complete, v1.7 complete, v1.8 in progress)
 
 ## v1.6 Milestone Goals
 
@@ -94,14 +94,21 @@ Progress: [██████████░] 96% (38/38 phases planned, 146/146
 - Transaction system exists in isolation (TransactionId, commit_transaction) but reads ignore it
 
 **FIX DESIGN (38-02):**
-- 📋 Create `SnapshotId(u64)` type in snapshot.rs
-- 📋 Update `GraphBackend` trait: all read methods accept `snapshot_id: SnapshotId`
+- ✅ Create `SnapshotId(u64)` type in snapshot.rs
+- ✅ Update `GraphBackend` trait: all read methods accept `snapshot_id: SnapshotId`
 - 📋 WAL filtering: only apply records with `tx_id <= snapshot_id`
-- 📋 Convenience methods: `get_node_current()` uses `SnapshotId::current()`
+- ✅ Convenience methods: `get_node_current()` uses `SnapshotId::current()`
 
-**VERIFICATION STATUS (38-pending):**
-- ⏳ 38-01: Audit all public read APIs for snapshot_id violations
-- ⏳ 38-02: Design snapshot_id architecture
+**FIX STATUS (38-03):**
+- ✅ GraphBackend trait updated with snapshot_id parameter on all 9 read methods
+- ✅ NativeGraphBackend implementation updated with snapshot_id parameters (TODO markers for WAL filtering)
+- ✅ SqliteGraphBackend implementation updated with snapshot_id parameters (SQLite has implicit isolation)
+- ✅ Convenience methods added: get_node_current, neighbors_current, bfs_current, etc.
+- 📋 WAL filtering deferred to Phase 38-04
+
+**VERIFICATION STATUS (38-in-progress):**
+- ✅ 38-01: Audit all public read APIs for snapshot_id violations (complete)
+- ✅ 38-02: Design snapshot_id architecture (complete)
 - ⏳ 38-03: Implement snapshot_id in GraphBackend trait
 - ⏳ 38-04: Implement WAL filtering
 - ⏳ 38-05: Add regression tests
@@ -226,8 +233,29 @@ Recent decisions affecting current work:
 - **v1.6.17: Test success criteria: cluster_offsets_count > 0 (cluster metadata tracked) not chains_detected > 0 (only incremented by explicit record_chain()) (Phase 37-05)**
 - **v1.6.17: Graceful fallback to (0, 0) cluster metadata on node read failure - allows traversal to continue (Phase 37-05)**
 - **v1.6.17: Cluster offset tracking now ENABLED - sequential cluster read optimization can engage (Phase 37-05)**
+- **v1.8.1: SnapshotId wraps TransactionId (u64) for zero-cost type safety (Phase 38-02)**
+- **v1.8.2: Explicit parameter propagation (Option A) chosen over context object for compiler enforcement (Phase 38-02)**
+- **v1.8.3: WAL filtering at read time by tx_id <= snapshot_id for committed-only visibility (Phase 38-02)**
+- **v1.8.4: Current snapshot returns 0 initially (all committed data visible), future enhancement will track max committed tx_id (Phase 38-02)**
+- **v1.8.5: snapshot_id parameter added as first parameter to all read methods in GraphBackend trait (Phase 38-03)**
+- **v1.8.6: Convenience methods (_current variants) use SnapshotId::current() for backward compatibility (Phase 38-03)**
+- **v1.8.7: TODO markers placed in NativeGraphBackend read methods for Phase 38-04 WAL filtering implementation (Phase 38-03)**
+- **v1.8.8: SQLite backend accepts snapshot_id parameter but ignores it (SQLite has implicit transaction isolation) (Phase 38-03)**
 
 ### Pending Todos
+
+v1.8 ACID API Fix:
+- [x] Phase 38-01: Audit all public read APIs for snapshot_id violations (complete)
+- [x] Phase 38-02: Design snapshot_id architecture (complete)
+- [x] Phase 38-03: Implement snapshot_id parameter in GraphBackend trait (complete)
+- [ ] Phase 38-04: Implement WAL filtering (pending)
+- [ ] Phase 38-05: Add regression tests (pending)
+- [ ] Phase 38-06: Run performance validation (pending)
+
+Next actions:
+- [ ] Implement WAL filtering in NativeGraphBackend read methods (filter records with tx_id > snapshot_id)
+- [ ] Add regression test for snapshot isolation bug
+- [ ] Run Phase 37 benchmarks to verify no performance regression (< 5% overhead)
 
 v1.6 Chain Locality:
 - [x] Phase 33 Plan 01: Cluster offset tracking (completed)
@@ -272,8 +300,8 @@ Next actions:
 
 ## Session Continuity
 
-Last session: 2026-01-22
-Stopped at: Completed Phase 37 Plan 06: Regression test suite created - write cost, memory overhead, concurrency, non-chain pattern benchmarks ready for validation
+Last session: 2026-01-25
+Stopped at: Completed Phase 38 Plan 03: SnapshotId parameter implementation - GraphBackend trait updated with snapshot_id on all read methods, convenience methods added
 Resume file: None
 
 ### Roadmap Evolution
@@ -309,5 +337,10 @@ Resume file: None
   - Phase 37 Plan 05 (2026-01-22): Surgical BFS optimization complete - cluster metadata extraction via graph_file.read_node_at(), observe_with_cluster() in all 4 BFS implementations, TraversalContext::get_cluster_info() helper, integration tests confirm cluster_offsets_count: 500, fragmentation_score: 0.0, gap_bytes: 0
   - Phase 37 Plan 06 (2026-01-22): Regression test suite complete - write cost, memory overhead, concurrency, non-chain pattern benchmarks created, regression_report.md documentation complete
   - **Phase 37 VERIFICATION (2026-01-22):** Implementation complete, needs Chain(500) benchmark to confirm IO-12 target (≤75ms)
+- **v1.8 ACID API Fix** (2026-01-25): Phase 38-01/02/03 in progress
+  - Phase 38 Plan 01 (2026-01-25): Public API audit complete - All read APIs documented bypassing transaction system, root cause identified at backend.rs:171 (GraphBackend::neighbors calls with_graph_file without snapshot_id)
+  - Phase 38 Plan 02 (2026-01-25): SnapshotId architecture design complete - SnapshotId(u64) type defined with current/from_tx/invalid constructors, explicit parameter propagation chosen (Option A), WAL filtering by tx_id <= snapshot_id specified, architecture document created with implementation phases
+  - Phase 38 Plan 03 (2026-01-25): SnapshotId parameter implementation complete - GraphBackend trait updated with snapshot_id on all 9 read methods, NativeGraphBackend and SqliteGraphBackend implementations updated, convenience methods (_current variants) added for backward compatibility, TODO markers placed for Phase 38-04 WAL filtering
+  - **Phase 38-04 NEXT:** Implement WAL filtering - filter records with tx_id > snapshot_id in NativeGraphBackend read methods
 
 *Updated after each plan completion*

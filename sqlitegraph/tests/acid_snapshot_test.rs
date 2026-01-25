@@ -41,6 +41,13 @@ fn test_snapshot_id_monotonic() {
 // Snapshot Isolation Test Specifications (Blocked until 38-04 complete)
 // ============================================================================
 
+// Note: The following test specifications are documented but commented out
+// because the GraphBackend implementations haven't been updated to match
+// the new trait signature (with snapshot_id parameters).
+//
+// Once 38-04 is complete, uncomment these tests to verify snapshot isolation.
+
+/*
 /// **SNAPSHOT ISOLATION TEST**: Multiple snapshots see different, consistent views
 ///
 /// # Expected Behavior
@@ -60,9 +67,6 @@ fn test_snapshot_id_monotonic() {
 /// - [ ] WAL filtering by tx_id
 /// - [ ] Snapshot monotonicity tracking
 /// - [ ] count_nodes() method with snapshot_id parameter
-///
-/// # Test Code (uncomment after 38-04 complete)
-/*
 #[test]
 fn test_multiple_snapshots_isolated() {
     use sqlitegraph::{open_graph, GraphConfig, BackendKind, snapshot::SnapshotId};
@@ -107,7 +111,6 @@ fn test_multiple_snapshots_isolated() {
     let count_3 = graph.count_nodes(snapshot_3).unwrap();
     assert_eq!(count_3, 10, "snapshot_3 should see 10 nodes");
 }
-*/
 
 /// **WAL FILTERING TEST**: WAL records filtered by snapshot_id
 ///
@@ -124,9 +127,6 @@ fn test_multiple_snapshots_isolated() {
 /// - [ ] WAL stores tx_id with each record
 /// - [ ] Read path filters records by tx_id <= snapshot_id
 /// - [ ] SnapshotId tracking returns max committed tx_id
-///
-/// # Test Code (uncomment after 38-04 complete)
-/*
 #[test]
 fn test_wal_records_filtered_by_snapshot() {
     use sqlitegraph::{open_graph, GraphConfig, BackendKind, snapshot::SnapshotId};
@@ -166,7 +166,6 @@ fn test_wal_records_filtered_by_snapshot() {
     let node_10_current = graph.get_node(snapshot_at_10, 10);
     assert!(node_10_current.is_ok(), "Snapshot at 10 should see node 10");
 }
-*/
 
 /// **CONCURRENT READER TEST**: Multiple readers see consistent state
 ///
@@ -186,9 +185,6 @@ fn test_wal_records_filtered_by_snapshot() {
 /// - [ ] Snapshot isolation in read path
 /// - [ ] WAL filtering by snapshot_id
 /// - [ ] No cross-snapshot pollution
-///
-/// # Test Code (uncomment after 38-04 complete)
-/*
 #[test]
 fn test_concurrent_readers_see_consistent_state() {
     use sqlitegraph::{open_graph, GraphConfig, BackendKind, snapshot::SnapshotId};
@@ -233,7 +229,6 @@ fn test_concurrent_readers_see_consistent_state() {
     let count2 = graph.count_nodes(reader2_snapshot).unwrap();
     assert_eq!(count2, 10, "Reader 2 should see all committed nodes");
 }
-*/
 
 /// **TRANSACTION INTEGRATION TEST**: Commit returns usable SnapshotId
 ///
@@ -249,9 +244,6 @@ fn test_concurrent_readers_see_consistent_state() {
 /// - [ ] insert_node() returns node_id AND new snapshot_id
 /// - [ ] commit_transaction() tracks and returns SnapshotId
 /// - [ ] SnapshotId reflects committed transaction ID
-///
-/// # Test Code (uncomment after 38-04 complete)
-/*
 #[test]
 fn test_commit_returns_snapshot_id() {
     use sqlitegraph::{open_graph, GraphConfig, BackendKind, snapshot::SnapshotId};
@@ -277,7 +269,6 @@ fn test_commit_returns_snapshot_id() {
     let node = graph.get_node(snapshot_after, node_id).unwrap();
     assert_eq!(node.name, "test_node");
 }
-*/
 
 /// **FULL ACID WORKFLOW TEST**: Complete ACID compliance verification
 ///
@@ -306,9 +297,6 @@ fn test_commit_returns_snapshot_id() {
 /// - [ ] Snapshot isolation for all reads
 /// - [ ] WAL filtering by tx_id
 /// - [ ] Uncommitted data not visible in any snapshot
-///
-/// # Test Code (uncomment after 38-04 complete)
-/*
 #[test]
 fn test_full_acid_workflow() {
     use sqlitegraph::{open_graph, GraphConfig, BackendKind, snapshot::SnapshotId};
