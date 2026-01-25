@@ -1,11 +1,10 @@
-//! JSON input validation for memory safety and DoS prevention.
+//! Storage module for V2 backend
 //!
-//! This module provides configurable limits for JSON parsing to prevent:
-//! - Memory exhaustion from unbounded payload sizes
-//! - Stack overflow from deeply nested structures
-//! - CPU exhaustion from complex JSON documents
+//! This module provides:
+//! - Delta index for committed-but-not-checkpointed changes
+//! - JSON input validation for memory safety and DoS prevention
 //!
-//! # Usage
+//! # JSON Validation
 //!
 //! ```rust
 //! use sqlitegraph::backend::native::v2::storage::{JsonLimits, parse_and_validate_json};
@@ -15,32 +14,45 @@
 //! let json = parse_and_validate_json(input, &limits)?;
 //! ```
 //!
-//! # Security
+//! # Delta Index
 //!
-//! All JSON parsing should go through `parse_and_validate_json` to enforce
-//! size and depth limits before serde_json processes the data.
+//! ```rust
+//! use sqlitegraph::backend::native::v2::storage::{SharedDeltaIndex, DeltaIndex};
+//!
+//! let delta_index = SharedDeltaIndex::new();
+//! // Use delta_index.apply_commit() at commit time
+//! // Use delta_index.checkpoint_completed() after checkpoint
+//! ```
 
-use serde_json::Value;
+pub mod delta_index;
 
-/// Default maximum JSON payload size (10MB)
-const DEFAULT_MAX_JSON_SIZE: usize = 10 * 1024 * 1024;
+pub use delta_index::{DeltaIndex, DeltaRecord, SharedDeltaIndex};
 
-/// Default maximum JSON nesting depth (128 levels)
-const DEFAULT_MAX_JSON_DEPTH: usize = 128;
+// JSON validation exports
+pub use self::json_validation::{JsonLimits, JsonValidationError, parse_and_validate_json, parse_and_validate_json_str};
 
-/// Configurable limits for JSON input validation
-///
-/// These limits prevent DoS attacks through:
-/// - Large payloads that exhaust memory
-/// - Deeply nested structures that cause stack overflow
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct JsonLimits {
-    /// Maximum JSON payload size in bytes
-    pub max_size: usize,
+mod json_validation {
+    use serde_json::Value;
 
-    /// Maximum nesting depth of JSON structures
-    pub max_depth: usize,
-}
+    /// Default maximum JSON payload size (10MB)
+    const DEFAULT_MAX_JSON_SIZE: usize = 10 * 1024 * 1024;
+
+    /// Default maximum JSON nesting depth (128 levels)
+    const DEFAULT_MAX_JSON_DEPTH: usize = 128;
+
+    /// Configurable limits for JSON input validation
+    ///
+    /// These limits prevent DoS attacks through:
+    /// - Large payloads that exhaust memory
+    /// - Deeply nested structures that cause stack overflow
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct JsonLimits {
+        /// Maximum JSON payload size in bytes
+        pub max_size: usize,
+
+        /// Maximum nesting depth of JSON structures
+        pub max_depth: usize,
+    }
 
 impl Default for JsonLimits {
     fn default() -> Self {
@@ -345,4 +357,5 @@ mod tests {
         let result = parse_and_validate_json(b"", &limits);
         assert!(matches!(result, Err(JsonValidationError::ParseError(_))));
     }
-}
+} // mod json_validation
+} // mod storage
