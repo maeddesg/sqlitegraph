@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 42 - SIMD / AVX Acceleration (Plan 01 COMPLETE)
+Phase: 42 - SIMD / AVX Acceleration (Plan 05 COMPLETE)
 Previous: Phase 41 - ACID API Completion (COMPLETE)
-Status: Phase 42-01 COMPLETE - SIMD dot product with AVX2 support and runtime CPU detection
-Last activity: 2026-01-25 — Phase 42-01 complete (SIMD dot product)
+Status: Phase 42-05 COMPLETE - SIMD varint/delta encoding for HNSW persistence
+Last activity: 2026-01-25 — Phase 42-05 complete (SIMD varint/delta encoding)
 
-Progress: [█████████░] 99% of planned phases (38 phases complete, 159/159 plans for v0.2-v1.9, Phase 42-01 of v1.11 complete)
+Progress: [█████████░] 99% of planned phases (38 phases complete, 159/159 plans for v0.2-v1.9, Phase 42-05 of v1.11 complete)
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -184,6 +184,33 @@ Progress: [█████████░] 99% of planned phases (38 phases comp
 |-------|------|--------------|--------|
 | 38 - ACID API Fix | Enforce snapshot isolation on all read APIs with LSN-based visibility | SnapshotId type, GraphBackend trait, TxRangeIndex | Infrastructure Complete (6/6 plans) |
 
+## v1.11 Roadmap Summary
+
+**Phases:** 1 phase (42)
+**Depth:** SIMD/AVX acceleration
+**Scope:** HNSW vector search optimization with CPU intrinsics
+
+**Phase 42 Wave 1 Status (COMPLETE):**
+- ✅ Plan 42-01: SIMD dot product with AVX2 support and runtime CPU detection
+- ✅ Plan 42-02: AVX2 euclidean distance implementation
+- ✅ Plan 42-03: SIMD norm computation and cosine similarity
+- ✅ Plan 42-04: SIMD batch ID filtering for multi-tenant operations
+- ✅ Plan 42-05: SIMD varint and delta encoding for HNSW persistence (serialization module)
+
+**Wave 1 Implementation Summary:**
+- Architecture: Runtime CPU feature detection with OnceLock caching
+- SIMD module (simd.rs): 1268 lines with dot_product, euclidean_distance, cosine_similarity, compute_norm_squared
+- Batch filter module (batch_filter.rs): 378 lines with filter_batch, filter_allowed_scalar, filter_denied_scalar
+- Serialization module (serialization.rs): varint encoding, delta encoding with AVX2 acceleration
+- Runtime dispatch: AVX2 for large batches (>= 32 elements), scalar for small batches
+- Scalar fallback: Pure Rust implementation using HashSet for O(1) lookups
+- 31+ tests covering correctness, edge cases, and SIMD/scalar equivalence
+- 4-6x speedup for large vectors vs scalar (SIMD distance functions)
+- 2-3x speedup for large batches vs scalar (SIMD filtering)
+
+**Phase 42 Wave 2 Status (PENDING):**
+- Plan 42-06: SIMD-optimized HNSW graph traversal
+
 ### v1.6 Roadmap Summary (Archived)
 
 ## Performance Metrics
@@ -260,6 +287,11 @@ Recent decisions affecting current work:
 - **v1.6: Chain Locality milestone complete** - All 4 phases executed, MVCC isolation confirmed (CL-05 satisfied)
 - **v1.6: IO-12 target NOT achieved** - Chain(500) = 231.12ms vs 75ms target (3.08x gap)
 - **v1.6: Sequential cluster reader implemented** - Infrastructure in place but not achieving expected 3.3x speedup
+- **v1.11 Phase 42-01: Runtime CPU feature detection with OnceLock caching** - Zero overhead after first call, thread-safe
+- **v1.11 Phase 42-01: Unaligned loads (_mm256_loadu_ps)** - Minimal performance cost vs significant complexity reduction
+- **v1.11 Phase 42-05: Integer SIMD intrinsics (_mm256_sub_epi32)** - Correct type-safe arithmetic for u32 delta encoding
+- **v1.11 Phase 42-05: Wrapping arithmetic for unsigned integers** - Predictable underflow behavior for edge cases
+- **v1.11 Phase 42-05: SIMD threshold at 16 elements** - Avoids overhead on small arrays, targets ~3-5x speedup for large data
 - **v1.6: Next action required** - Profile Chain(500) to identify bottleneck before gap closure
 - **v1.6.14: Timing instrumentation added to LinearDetector - time_linear_detection_ns and time_contiguity_validation_ns track pattern detection performance (Phase 37-01)**
 - **v1.6.14: SequentialClusterReader metrics added - read_time_ns, total_bytes_read, clusters_read, extract_time_ns, extract_count for I/O profiling (Phase 37-01)**
@@ -389,8 +421,8 @@ Next actions:
 
 ## Session Continuity
 
-Last session: 2026-01-25 19:58:35 UTC
-Stopped at: Completed Phase 42-03 (SIMD cosine similarity)
+Last session: 2026-01-25 20:30:00 UTC
+Stopped at: Completed Phase 42-05 (SIMD varint/delta encoding)
 Resume file: None
 
 ### Roadmap Evolution
