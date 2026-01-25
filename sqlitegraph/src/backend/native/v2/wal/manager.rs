@@ -517,7 +517,7 @@ impl V2WALManager {
 
     /// Notification callback when checkpoint completes
     ///
-    /// Resets transaction counter and updates checkpointed LSN.
+    /// Resets transaction counter, updates checkpointed LSN, and cleans up delta index.
     /// Called by checkpoint manager after successful checkpoint to ensure
     /// counter synchronization between components.
     ///
@@ -539,6 +539,13 @@ impl V2WALManager {
         {
             let mut header = self.header.write();
             header.checkpointed_lsn = checkpointed_lsn;
+        }
+
+        // Clean up delta index - drop all deltas with commit_lsn <= checkpointed_lsn
+        // These changes are now in the checkpointed base, so we don't need them in delta
+        {
+            let mut delta_index = self.delta_index.write();
+            delta_index.checkpoint_completed(checkpointed_lsn);
         }
 
         // Update checkpoint count
