@@ -21,6 +21,7 @@ None — No specialized domain expertise directories available. Relying on codeb
 - **v1.8 ACID API Fix** — Phase 38 (complete)
 - **v1.9 WAL Filtering & Allocation Optimization** — Phase 40 (complete)
 - **v1.10 ACID API Completion** — Phase 41 (planned)
+- **v1.11 SIMD / AVX Acceleration** — Phase 42 (planned)
 
 ---
 
@@ -263,10 +264,44 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 ---
 
+## v1.11 SIMD / AVX Acceleration (Phase 42) - PLANNED
+
+**Milestone Goal:** Add feature-gated SIMD/AVX acceleration for HNSW distance computations with runtime CPU feature detection
+
+**Status:** PLANNED
+
+**Problem:** HNSW vector search performs millions of distance calculations during search operations. The current scalar implementations are correct but not optimized for modern CPU SIMD instructions (AVX2/AVX-512). This limits HNSW search performance, especially for high-dimensional vectors (768, 1536 dimensions common in text embeddings).
+
+**Solution:** Add feature-gated SIMD modules using Rust `cfg(target_feature)` and `std::arch::x86_64` intrinsics. Runtime CPU feature detection dispatches to AVX2, AVX-512, or scalar fallback. No API changes - transparent acceleration.
+
+**NON-GOALS (explicitly out of scope):**
+- No API changes to HNSW distance functions
+- No storage semantic changes
+- No changes to HNSW graph structure or persistence format
+
+**Plans:**
+- [ ] 42-01-PLAN.md — SIMD dot product with AVX2 support
+- [ ] 42-02-PLAN.md — SIMD euclidean (L2) distance with AVX2 support
+- [ ] 42-03-PLAN.md — SIMD cosine similarity with AVX2 support
+- [ ] 42-04-PLAN.md — SIMD batch ID filtering for multi-tenant operations
+- [ ] 42-05-PLAN.md — SIMD varint/delta encoding for persistence
+- [ ] 42-06-PLAN.md — Benchmark suite and correctness validation
+
+**Success Criteria:**
+- AVX2 implementations for dot_product, euclidean_distance, cosine_similarity
+- Runtime CPU feature detection (is_x86_feature_detected!)
+- Scalar fallback always available (works on non-AVX CPUs)
+- All existing tests pass without modification
+- Correctness tests verify SIMD matches scalar results
+- 4-8x performance improvement on large vectors (768+ dimensions)
+- No API or storage format changes
+
+---
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 40 → 41
+Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 40 → 41 → 42
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -279,5 +314,6 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 38. ACID API Fix | v1.8 | 6/6 | Infrastructure Complete | 2026-01-25 |
 | 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Complete (IO-12 target NOT achieved) | 2026-01-25 |
 | 41. ACID API Completion | v1.10 | 0/1 | Planned | TBD |
+| 42. SIMD / AVX Acceleration | v1.11 | 0/6 | Planned | TBD |
 
-**Overall Progress:** 159/160 plans planned (158 complete, 1 planned). v0.2-v1.9 complete, v1.10 planned.
+**Overall Progress:** 165/165 plans planned (158 complete, 7 planned). v0.2-v1.9 complete, v1.10-v1.11 planned.
