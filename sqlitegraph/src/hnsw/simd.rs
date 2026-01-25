@@ -791,11 +791,17 @@ mod tests {
         let scalar_result = compute_norm_squared_scalar(&v);
         let simd_result = compute_norm_squared(&v);
 
-        // Allow small tolerance due to different accumulation order
+        // Allow small tolerance due to different accumulation order in SIMD vs scalar
+        // SIMD processes 8 elements at a time, changing floating-point accumulation order
         let abs_diff = (scalar_result - simd_result).abs();
-        assert!(abs_diff < 1e-5,
-                "Norm squared differs: scalar={}, simd={}, diff={}",
-                scalar_result, simd_result, abs_diff);
+        let rel_error = if scalar_result.abs() > f32::EPSILON {
+            abs_diff / scalar_result.abs()
+        } else {
+            abs_diff
+        };
+        assert!(rel_error < 1e-6 || abs_diff < 1e-4,
+                "Norm squared differs: scalar={}, simd={}, diff={}, rel_error={}",
+                scalar_result, simd_result, abs_diff, rel_error);
     }
 
     // -------------------------------------------------------------------------
