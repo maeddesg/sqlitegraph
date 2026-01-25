@@ -18,6 +18,7 @@
 
 use crate::backend::native::NativeResult;
 use crate::snapshot::SnapshotId;
+use super::record::V2WALRecord;
 use std::collections::HashMap;
 
 /// Transaction range tracking LSN boundaries
@@ -203,6 +204,52 @@ impl TxRangeIndex {
             false
         }
     }
+}
+
+/// Iterate over WAL records, yielding only those visible from the snapshot.
+///
+/// This function respects the WAL contiguity invariant: records are processed
+/// in transaction order, and entire transactions are either visible or not.
+///
+/// # Arguments
+/// * `tx_index` - Transaction index to check visibility against
+/// * `wal_records` - Iterator over (tx_id, WalRecord) pairs
+/// * `snapshot_id` - Snapshot ID for visibility filtering
+///
+/// # Yields
+/// WalRecords from transactions where is_tx_visible(tx_id, snapshot_id) == true
+///
+/// # Examples
+///
+/// ```
+/// use sqlitegraph::snapshot::SnapshotId;
+/// use sqlitegraph::backend::native::v2::wal::{TxRangeIndex, iter_visible_wal_records};
+/// use sqlitegraph::backend::native::v2::wal::record::V2WALRecord;
+///
+/// let mut index = TxRangeIndex::new();
+/// index.begin_tx(1, 100);
+/// index.commit_tx(1, 150);
+///
+/// let records = vec![
+///     (1, V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 0 }),
+///     (1, V2WALRecord::TransactionCommit { tx_id: 1, timestamp: 100 }),
+/// ];
+///
+/// let snapshot = SnapshotId::from_lsn(200);
+/// let visible: Vec<_> = iter_visible_wal_records(&index, records.into_iter(), snapshot).collect();
+/// assert_eq!(visible.len(), 2);
+/// ```
+pub fn iter_visible_wal_records<'a, I>(
+    tx_index: &'a TxRangeIndex,
+    wal_records: I,
+    snapshot_id: SnapshotId,
+) -> impl Iterator<Item = (u64, V2WALRecord)> + 'a
+where
+    I: Iterator<Item = (u64, V2WALRecord)> + 'a,
+{
+    wal_records.filter(move |(tx_id, _record)| {
+        tx_index.is_tx_visible(*tx_id, snapshot_id)
+    })
 }
 
 #[cfg(test)]
@@ -397,5 +444,92 @@ mod tests {
 
         let snapshot = SnapshotId::from_lsn(150);
         assert!(index.is_tx_visible(1, snapshot));
+    }
+
+    #[test]
+    fn test_iter_visible_wal_records_filters_correctly() {
+        use V2WALRecord::*;
+
+        let mut index = TxRangeIndex::new();
+        index.begin_tx(1, 100);
+        index.commit_tx(1, 150); // visible from snapshot 200
+
+        index.begin_tx(2, 160);
+        // tx2 not committed - not visible
+
+        index.begin_tx(3, 170);
+        index.commit_tx(3, 250); // committed after snapshot 200 - not visible
+
+        let wal_records = vec![
+            (1, TransactionBegin { tx_id: 1, timestamp: 100 }),
+            (1, TransactionCommit { tx_id: 1, timestamp: 150 }),
+            (2, TransactionBegin { tx_id: 2, timestamp: 160 }),
+            (3, TransactionBegin { tx_id: 3, timestamp: 170 }),
+            (3, TransactionCommit { tx_id: 3, timestamp: 250 }),
+        ];
+
+        let snapshot = SnapshotId::from_lsn(200);
+        let visible: Vec<_> = iter_visible_wal_records(
+            &index,
+            wal_records.into_iter(),
+            snapshot
+        ).collect();
+
+        // Only tx1 records should be visible
+        assert_eq!(visible.len(), 2);
+        assert_eq!(visible[0].0, 1);
+        assert_eq!(visible[1].0, 1);
+
+        // Verify the record types
+        match &visible[0].1 {
+            TransactionBegin { tx_id, .. } => assert_eq!(*tx_id, 1),
+            _ => panic!("Expected TransactionBegin"),
+        }
+        match &visible[1].1 {
+            TransactionCommit { tx_id, .. } => assert_eq!(*tx_id, 1),
+            _ => panic!("Expected TransactionCommit"),
+        }
+    }
+
+    #[test]
+    fn test_iter_visible_wal_records_empty_iterator() {
+        let index = TxRangeIndex::new();
+        let wal_records = vec![];
+        let snapshot = SnapshotId::current();
+
+        let visible: Vec<_> = iter_visible_wal_records(
+            &index,
+            wal_records.into_iter(),
+            snapshot
+        ).collect();
+
+        assert_eq!(visible.len(), 0);
+    }
+
+    #[test]
+    fn test_iter_visible_wal_records_all_invisible() {
+        use V2WALRecord::*;
+
+        let mut index = TxRangeIndex::new();
+        index.begin_tx(1, 100);
+        // tx1 not committed - all records invisible
+
+        let wal_records = vec![
+            (1, TransactionBegin { tx_id: 1, timestamp: 100 }),
+            (1, NodeInsert {
+                node_id: 1,
+                slot_offset: 0,
+                node_data: vec![],
+            }),
+        ];
+
+        let snapshot = SnapshotId::from_lsn(200);
+        let visible: Vec<_> = iter_visible_wal_records(
+            &index,
+            wal_records.into_iter(),
+            snapshot
+        ).collect();
+
+        assert_eq!(visible.len(), 0);
     }
 }

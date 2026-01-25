@@ -55,7 +55,7 @@ pub use transaction_coordinator::{
     IsolationLevel, LockType, ResourceId, TransactionContext, TransactionId, TransactionState,
     V2TransactionCoordinator,
 };
-pub use tx_range_index::{TxRange, TxRangeIndex};
+pub use tx_range_index::{TxRange, TxRangeIndex, iter_visible_wal_records};
 pub use v2_integration::{ChangeTracker, V2IntegrationConfig, V2WALIntegrator};
 pub use writer::V2WALWriter;
 
