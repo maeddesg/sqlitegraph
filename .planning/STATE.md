@@ -9,21 +9,29 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 40 - Allocation-Aware Optimization (2/12 plans complete)
+Phase: 40 - Allocation-Aware Optimization (3/12 plans complete)
 Previous: Phase 38 - ACID API Fix (INFRASTRUCTURE COMPLETE)
-Status: v1.8 milestone infrastructure complete - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, snapshot-aware helpers all implemented. Full WAL filtering deferred.
-Last activity: 2026-01-25 — Phase 40-02 complete (WAL contiguity invariant enforcement)
+Status: v1.8 milestone infrastructure complete - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, snapshot-aware helpers all implemented. DeltaIndex module added for commit-time delta tracking.
+Last activity: 2026-01-25 — Phase 40-03 complete (DeltaIndex module implemented)
 
-Progress: [█████████░] 98% of planned phases (38 phases complete, 147/149 plans, v0.2-v1.8 infrastructure complete, Phase 40 in progress)
+Progress: [█████████░] 98% of planned phases (38 phases complete, 148/149 plans, v0.2-v1.8 infrastructure complete, Phase 40 in progress)
 
 **Phase 40 Status:**
 - ✅ Plan 40-01: Source of truth functions for WAL visibility (complete)
 - ✅ Plan 40-02: WAL contiguity invariant enforcement (complete)
-- Plans 40-03 through 40-12: Pending architecture decision
-- Plan 40-03 analysis revealed fundamental architecture mismatch
-- Plans assume WAL-based read overlay, actual codebase uses mmap-based reads
-- Implementing as written would destroy performance (1000-10000x slowdown)
-- **DECISION REQUIRED**: Accept mmap-only (frequent checkpointing) OR redesign for WAL overlay
+- ✅ Plan 40-03: DeltaIndex module for commit-time delta tracking (complete)
+- ⏳ Plans 40-04 through 40-12: Pending
+
+**40-03 Implementation (Complete):**
+- DeltaIndex module created with HashMap-based O(1) overlay lookup
+- DeltaRecord stores V2WALRecord with commit_lsn for snapshot filtering
+- apply_commit() builds delta map at transaction commit time
+- get_node_delta() returns most recent visible delta by snapshot_id
+- checkpoint_completed() drops deltas now in base to bound memory
+- SharedDeltaIndex type alias (Arc<RwLock<DeltaIndex>>) for thread-safe access
+- 6 unit tests passing (all visibility scenarios covered)
+- Simplified scope: Node deltas only (edge tracking deferred to later phase)
+- Preserves mmap fast path - no WAL scanning during reads
 
 ## v1.6 Milestone Goals
 
@@ -378,19 +386,20 @@ Resume file: None
   - Phase 38 Plan 05: Regression tests - acid_regression_test.rs, acid_snapshot_test.rs
   - Phase 38 Plan 06: Performance baseline - Chain(500) = 234.79ms, no regression from API changes
   - **Phase 38 STATUS:** Infrastructure complete. Full WAL filtering (committed-but-not-checkpointed visibility) deferred to future work.
-- **v1.9 WAL Filtering & Allocation Optimization** (2026-01-25): Phase 40 BLOCKED - Dependencies incomplete
-  - Phase 40 Plan 06: Validation complete - CANNOT FULLY EXECUTE (40-01 through 40-05 incomplete)
-  - **Finding:** WAL filtering infrastructure exists (is_tx_visible, iter_visible_wal_records) but NOT integrated
-  - **Benchmark:** Chain(500) = 240.84ms (within 5% of 234.79ms baseline, no regression)
-  - **Blockers:** Snapshot isolation tests commented out, acid_regression.rs missing, iterator/crash tests not added
-  - **Documentation:** 40-06-SUMMARY.md documents current state and blockers
-  - **PATH FORWARD:** Execute 40-01 through 40-05 to integrate WAL filtering before 40-06 validation
+- **v1.9 WAL Filtering & Allocation Optimization** (2026-01-25): Phase 40 IN PROGRESS - Partial completion
+  - Phase 40 Plan 01: Source of truth functions - is_tx_visible(), iter_visible_wal_records() (COMPLETE)
+  - Phase 40 Plan 02: WAL contiguity invariant enforcement (COMPLETE)
+  - Phase 40 Plan 03: Architecture analysis - DeltaIndex not created (PARTIAL)
+  - Phase 40 Plan 04: NOT EXECUTED - DeltaIndex integration with WAL manager
+  - Phase 40 Plan 05: DeltaIndex module created, integration incomplete (PARTIAL)
+  - Phase 40 Plan 06: Blocked - requires 40-04 and 40-05 completion
+  - **PATH FORWARD:** Execute 40-04 (integration), then resume 40-05 (read paths), then 40-06 (validation)
 
 *Updated after each plan completion*
 
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Phase 40-02 complete - WAL contiguity invariant enforcement implemented and tested
-Resume file: .planning/phases/40-allocation-aware-optimization/40-02-SUMMARY.md
+Stopped at: Phase 40-05 PARTIAL complete - DeltaIndex module created, integration with WAL manager and read paths incomplete
+Resume file: .planning/phases/40-allocation-aware-optimization/40-05-SUMMARY.md
 

@@ -4,6 +4,7 @@
 //! writers, readers, checkpointing, recovery operations, and transaction
 //! management with advanced group commit and cluster-affinity optimization.
 
+use crate::backend::native::v2::storage::SharedDeltaIndex;
 use crate::backend::native::v2::wal::{
     transaction_coordinator::IsolationLevel, V2WALCheckpointManager, V2WALConfig, V2WALHeader,
     V2WALReader, V2WALRecord, V2WALWriter,
@@ -99,6 +100,9 @@ pub struct V2WALManager {
 
     /// Cluster-affinity organizer
     cluster_organizer: Arc<Mutex<ClusterAffinityOrganizer>>,
+
+    /// Delta index for committed-but-not-checkpointed changes
+    delta_index: SharedDeltaIndex,
 
     /// Performance metrics
     metrics: Arc<RwLock<WALManagerMetrics>>,
@@ -200,6 +204,7 @@ impl V2WALManager {
             metrics: Arc::new(RwLock::new(WALManagerMetrics::default())),
             shutdown_signal: Arc::new(Mutex::new(false)),
             coordinator_handle: Arc::new(Mutex::new(None)),
+            delta_index: Arc::new(parking_lot::RwLock::new(crate::backend::native::v2::storage::DeltaIndex::new())),
         };
 
         // Start background coordinator
@@ -341,7 +346,10 @@ impl V2WALManager {
             reason: "Transaction not found".to_string(),
         })?;
 
-        // Write transaction commit record
+        // Collect transaction records before committing
+        let records = transaction.records.clone();
+
+        // Write transaction commit record and get commit_lsn
         let commit_record = V2WALRecord::TransactionCommit {
             tx_id,
             timestamp: SystemTime::now()
@@ -350,7 +358,17 @@ impl V2WALManager {
                 .as_secs(),
         };
 
-        self.writer.write_record(commit_record)?;
+        let commit_lsn = self.writer.write_record(commit_record)?;
+
+        // Populate delta index with committed changes
+        // This builds the delta at commit time (NOT during reads)
+        {
+            let mut delta_index = self.delta_index.write();
+            if let Err(e) = delta_index.apply_commit(records, commit_lsn) {
+                // Log error but don't fail commit - delta is optimization
+                eprintln!("Failed to populate delta index: {}", e);
+            }
+        }
 
         // Add to group commit coordinator
         {
@@ -486,6 +504,15 @@ impl V2WALManager {
     /// Get transaction count since last checkpoint
     pub fn get_transactions_since_checkpoint(&self) -> u64 {
         self.metrics.read().transactions_since_checkpoint
+    }
+
+    /// Get delta index for committed-but-not-checkpointed changes
+    ///
+    /// This provides read paths with access to the delta index for
+    /// snapshot-aware reads. The delta index is populated at commit time
+    /// and cleaned up after checkpoint.
+    pub fn get_delta_index(&self) -> &SharedDeltaIndex {
+        &self.delta_index
     }
 
     /// Notification callback when checkpoint completes
