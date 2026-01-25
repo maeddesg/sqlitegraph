@@ -24,9 +24,18 @@ impl KvStore {
     ///
     /// For tests only - production code should use get_at_snapshot()
     /// Returns most recent committed value (no version filtering)
+    /// TTL is checked lazily: expired entries return None
     pub fn get(&self, key: &[u8]) -> Result<Option<KvValue>, KvStoreError> {
         let entries = self.entries.read();
-        Ok(entries.get(key).map(|entry| entry.value.clone()))
+        if let Some(entry) = entries.get(key) {
+            // Check TTL before returning value
+            if ttl::is_expired(entry) {
+                return Ok(None);
+            }
+            Ok(Some(entry.value.clone()))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Get a value at a specific snapshot
@@ -70,9 +79,12 @@ impl KvStore {
     /// Entry is visible if version <= snapshot_id.as_lsn()
     /// This matches the Phase 38 architecture where SnapshotId wraps CommitLSN
     fn is_visible_at_snapshot(&self, version: u64, snapshot_id: SnapshotId) -> bool {
-        // Entry is visible if version <= snapshot_id.as_lsn()
+        // Entry is visible if:
+        // - snapshot_id is 0 (current/committed snapshot - all data visible)
+        // - version <= snapshot_id.as_lsn() (entry committed at or before snapshot)
         // Phase 38: SnapshotId = CommitLSN
-        version <= snapshot_id.as_lsn()
+        let snapshot_lsn = snapshot_id.as_lsn();
+        snapshot_lsn == 0 || version <= snapshot_lsn
     }
 
     /// Set a value with optional TTL

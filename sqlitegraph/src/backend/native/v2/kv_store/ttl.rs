@@ -25,6 +25,11 @@ use std::time::SystemTime;
 /// `current_time > created_at + ttl_seconds`
 pub fn is_expired(entry: &KvEntry) -> bool {
     if let Some(ttl) = entry.metadata.ttl_seconds {
+        // TTL of 0 means "already expired"
+        if ttl == 0 {
+            return true;
+        }
+
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -57,6 +62,11 @@ pub fn is_expired(entry: &KvEntry) -> bool {
 /// ```
 pub fn seconds_until_expiration(entry: &KvEntry) -> Option<u64> {
     if let Some(ttl) = entry.metadata.ttl_seconds {
+        // TTL of 0 means "already expired"
+        if ttl == 0 {
+            return Some(0);
+        }
+
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs())
