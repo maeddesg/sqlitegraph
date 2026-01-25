@@ -45,6 +45,26 @@ impl SqliteGraphBackend {
         self.graph.all_entity_ids()
     }
 
+    /// Ensure the kv_store table exists
+    fn ensure_kv_table(&self) -> Result<(), SqliteGraphError> {
+        let conn = self.graph.connection();
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS kv_store (
+                key TEXT PRIMARY KEY,
+                value_json TEXT NOT NULL,
+                ttl_seconds INTEGER,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+            .map_err(|e| SqliteGraphError::connection(format!("Failed to create kv_store table: {}", e)))?;
+
+        Ok(())
+    }
+
     /// Execute optimized neighbor queries based on direction and edge type filtering.
     fn query_neighbors(
         &self,
@@ -365,29 +385,251 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
     fn kv_get(
         &self,
         _snapshot_id: crate::snapshot::SnapshotId,
-        _key: &[u8],
+        key: &[u8],
     ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, crate::SqliteGraphError> {
-        Err(crate::SqliteGraphError::connection(
-            "KV operations not available on SQLite backend - use Native backend with native-v2 feature".to_string()
-        ))
+        use crate::backend::native::v2::kv_store::types::KvValue;
+        use std::time::SystemTime;
+
+        // Initialize KV table if needed
+        self.ensure_kv_table()?;
+
+        // Convert key to string for storage (comma-separated bytes)
+        let key_str = bytes_to_string(key);
+
+        let conn = self.graph.connection();
+
+        // Query the kv_store table
+        let result = conn
+            .query_row(
+                "SELECT value_json, ttl_seconds, created_at FROM kv_store WHERE key = ?1",
+                params![key_str],
+                |row| {
+                    let value_json: String = row.get(0)?;
+                    let ttl_seconds: Option<u64> = row.get(1)?;
+                    let created_at: u64 = row.get(2)?;
+
+                    Ok((value_json, ttl_seconds, created_at))
+                },
+            );
+
+        match result {
+            Ok((value_json, ttl_seconds, created_at)) => {
+                // Check TTL expiration
+                if let Some(ttl) = ttl_seconds {
+                    let now = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+
+                    if now.saturating_sub(created_at) > ttl {
+                        // Entry expired
+                        return Ok(None);
+                    }
+                }
+
+                // Parse JSON value back to KvValue
+                let json_value: serde_json::Value = serde_json::from_str(&value_json)
+                    .map_err(|e| SqliteGraphError::connection(format!("Failed to parse KV value JSON: {}", e)))?;
+
+                let kv_value = json_to_kv_value(json_value)?;
+                Ok(Some(kv_value))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(SqliteGraphError::query(format!("Failed to query KV store: {}", e))),
+        }
     }
 
     #[cfg(feature = "native-v2")]
     fn kv_set(
         &self,
-        _key: Vec<u8>,
-        _value: crate::backend::native::v2::kv_store::types::KvValue,
-        _ttl_seconds: Option<u64>,
+        key: Vec<u8>,
+        value: crate::backend::native::v2::kv_store::types::KvValue,
+        ttl_seconds: Option<u64>,
     ) -> Result<(), crate::SqliteGraphError> {
-        Err(crate::SqliteGraphError::connection(
-            "KV operations not available on SQLite backend - use Native backend with native-v2 feature".to_string()
-        ))
+        use std::time::SystemTime;
+
+        // Initialize KV table if needed
+        self.ensure_kv_table()?;
+
+        // Convert key to string for storage
+        let key_str = bytes_to_string(&key);
+
+        // Serialize KvValue to JSON
+        let json_value = kv_value_to_json(&value);
+        let value_json = serde_json::to_string(&json_value)
+            .map_err(|e| SqliteGraphError::connection(format!("Failed to serialize KV value: {}", e)))?;
+
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        let conn = self.graph.connection();
+
+        // Check if key exists
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM kv_store WHERE key = ?1",
+                params![key_str],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        if count > 0 {
+            // Update existing entry
+            conn.execute(
+                "UPDATE kv_store SET value_json = ?1, ttl_seconds = ?2, updated_at = ?3, version = version + 1 WHERE key = ?4",
+                params![value_json, ttl_seconds, now, key_str],
+            )
+                .map_err(|e| SqliteGraphError::query(format!("Failed to update KV entry: {}", e)))?;
+        } else {
+            // Insert new entry
+            conn.execute(
+                "INSERT INTO kv_store (key, value_json, ttl_seconds, created_at, updated_at, version) VALUES (?1, ?2, ?3, ?4, ?4, 1)",
+                params![key_str, value_json, ttl_seconds, now],
+            )
+                .map_err(|e| SqliteGraphError::query(format!("Failed to insert KV entry: {}", e)))?;
+        }
+
+        Ok(())
     }
 
     #[cfg(feature = "native-v2")]
-    fn kv_delete(&self, _key: &[u8]) -> Result<(), crate::SqliteGraphError> {
-        Err(crate::SqliteGraphError::connection(
-            "KV operations not available on SQLite backend - use Native backend with native-v2 feature".to_string()
-        ))
+    fn kv_delete(&self, key: &[u8]) -> Result<(), crate::SqliteGraphError> {
+        // Initialize KV table if needed
+        self.ensure_kv_table()?;
+
+        // Convert key to string for storage
+        let key_str = bytes_to_string(key);
+
+        let conn = self.graph.connection();
+
+        // Delete the entry (ignore if not found - idempotent)
+        conn.execute(
+            "DELETE FROM kv_store WHERE key = ?1",
+            params![key_str],
+        )
+            .map_err(|e| SqliteGraphError::query(format!("Failed to delete KV entry: {}", e)))?;
+
+        Ok(())
+    }
+}
+
+/// Convert KvValue to serde_json::Value for serialization
+#[cfg(feature = "native-v2")]
+fn kv_value_to_json(value: &crate::backend::native::v2::kv_store::types::KvValue) -> serde_json::Value {
+    use crate::backend::native::v2::kv_store::types::KvValue;
+
+    match value {
+        KvValue::Bytes(bytes) => {
+            serde_json::json!({
+                "type": "bytes",
+                "data": bytes_to_string(bytes),
+            })
+        }
+        KvValue::String(s) => {
+            serde_json::json!({
+                "type": "string",
+                "data": s,
+            })
+        }
+        KvValue::Integer(n) => {
+            serde_json::json!({
+                "type": "integer",
+                "data": n,
+            })
+        }
+        KvValue::Float(f) => {
+            serde_json::json!({
+                "type": "float",
+                "data": f,
+            })
+        }
+        KvValue::Boolean(b) => {
+            serde_json::json!({
+                "type": "boolean",
+                "data": b,
+            })
+        }
+        KvValue::Json(j) => {
+            serde_json::json!({
+                "type": "json",
+                "data": j,
+            })
+        }
+    }
+}
+
+/// Convert bytes to comma-separated string for storage
+#[cfg(feature = "native-v2")]
+fn bytes_to_string(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut result = String::new();
+    for (i, byte) in bytes.iter().enumerate() {
+        if i > 0 {
+            result.push(',');
+        }
+        write!(result, "{}", byte).unwrap();
+    }
+    result
+}
+
+/// Convert comma-separated string back to bytes
+#[cfg(feature = "native-v2")]
+fn string_to_bytes(s: &str) -> Result<Vec<u8>, SqliteGraphError> {
+    s.split(',')
+        .map(|part| {
+            part.trim().parse::<u8>()
+                .map_err(|_| SqliteGraphError::connection(format!("Invalid byte string: {}", s)))
+        })
+        .collect()
+}
+
+
+/// Convert serde_json::Value back to KvValue after deserialization
+#[cfg(feature = "native-v2")]
+fn json_to_kv_value(json_value: serde_json::Value) -> Result<crate::backend::native::v2::kv_store::types::KvValue, SqliteGraphError> {
+    use crate::backend::native::v2::kv_store::types::KvValue;
+
+    let type_str = json_value
+        .get("type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| SqliteGraphError::connection("Missing type field in KV value JSON".to_string()))?;
+
+    let data = json_value
+        .get("data")
+        .ok_or_else(|| SqliteGraphError::connection("Missing data field in KV value JSON".to_string()))?;
+
+    match type_str {
+        "bytes" => {
+            let bytes_str = data.as_str()
+                .ok_or_else(|| SqliteGraphError::connection("Invalid bytes data in KV value".to_string()))?;
+            let bytes = string_to_bytes(bytes_str)?;
+            Ok(KvValue::Bytes(bytes))
+        }
+        "string" => {
+            let s = data.as_str()
+                .ok_or_else(|| SqliteGraphError::connection("Invalid string data in KV value".to_string()))?;
+            Ok(KvValue::String(s.to_string()))
+        }
+        "integer" => {
+            let n = data.as_i64()
+                .ok_or_else(|| SqliteGraphError::connection("Invalid integer data in KV value".to_string()))?;
+            Ok(KvValue::Integer(n))
+        }
+        "float" => {
+            let f = data.as_f64()
+                .ok_or_else(|| SqliteGraphError::connection("Invalid float data in KV value".to_string()))?;
+            Ok(KvValue::Float(f))
+        }
+        "boolean" => {
+            let b = data.as_bool()
+                .ok_or_else(|| SqliteGraphError::connection("Invalid boolean data in KV value".to_string()))?;
+            Ok(KvValue::Boolean(b))
+        }
+        "json" => {
+            Ok(KvValue::Json(data.clone()))
+        }
+        _ => Err(SqliteGraphError::connection(format!("Unknown KV value type: {}", type_str))),
     }
 }

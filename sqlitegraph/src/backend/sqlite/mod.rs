@@ -8,6 +8,9 @@
 mod impl_;
 pub mod types;
 
+#[cfg(test)]
+mod kv_tests;
+
 // Re-export the main backend implementation
 pub use impl_::SqliteGraphBackend;
 
