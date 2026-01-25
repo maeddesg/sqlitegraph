@@ -31,7 +31,9 @@
 //! - [`wal_tests`]: WAL integration tests (serialization, recovery, edge cases)
 //! - [`tests`]: Unit tests for KV store operations
 //! - [`ttl`]: TTL helpers and lazy cleanup utilities
+//! - [`integration_tests`]: Comprehensive integration test suite
 
+pub mod integration_tests;
 pub mod store;
 pub mod tests;
 pub mod types;
