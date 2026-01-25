@@ -173,6 +173,10 @@ fn bfs_generic_scalar_with_telemetry(
 
         let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
+        // Populate node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
+        let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
+        ctx.node_cluster_index.insert(current_node, cluster_index);
+
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
             ctx.buffer.prefetch_clusters_from(graph_file, current_node)?;
         }

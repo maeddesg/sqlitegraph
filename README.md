@@ -263,6 +263,15 @@ cargo bench
 cargo test --doc
 ```
 
+## Grounded Tool Scripts
+
+Keep every change truth-based by running the Magellan stack before touching files:
+
+- `scripts/watch-magellan.sh` — starts `magellan watch --root sqlitegraph/src` with `.codemcp/codegraph.db` scoped to the Rust sources.
+- `scripts/toolchain-ready.sh [symbol]` — runs `magellan status` + `llmgrep search` (defaults to `ToolRegistry`) so you can verify tool readiness and capture execution IDs before editing.
+
+Run these before any reading/editing steps so the CLI and LLM focus on deterministic spans instead of guessing through `rg`.
+
 ## Documentation
 
 - **[Operator Manual](MANUAL.md)** - Comprehensive usage guide

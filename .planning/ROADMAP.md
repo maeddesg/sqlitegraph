@@ -17,7 +17,8 @@ None — No specialized domain expertise directories available. Relying on codeb
 - **v1.3 Chain Traversal Performance** — Phases 25-28 (shipped 2026-01-21)
 - **v1.4 Sequential I/O Optimization** — Phases 29-32 (shipped 2026-01-21)
 - **v1.6 Chain Locality** — Phases 33-36 (shipped 2026-01-21)
-- **v1.7 Gap Closure** — Phase 37 (current)
+- **v1.7 Gap Closure** — Phase 37 (implementation complete)
+- **v1.8 ACID API Fix** — Phase 38 (current)
 
 ---
 
@@ -111,14 +112,16 @@ See milestone archives for complete history.
 
 ---
 
-## v1.7 Gap Closure (Phase 37) - IN PLANNING
+## v1.7 Gap Closure (Phase 37) - IMPLEMENTATION COMPLETE
 
 **Milestone Goal:** Close the 156.12ms gap to achieve IO-12 target (Chain(500) <=75ms)
 
-**Status:** IN PLANNING (2026-01-21)
-- Gap: 156.12ms remaining (231.12ms actual vs 75ms target)
-- Speedup achieved: 1.07x vs baseline (expected 3.3x)
-- Root cause: Unknown (requires profiling)
+**Status:** IMPLEMENTATION COMPLETE (2026-01-25)
+- Gap: 156.12ms remaining (231.12ms actual vs 75ms target) - from v1.6 baseline
+- Root cause: IDENTIFIED - BFS used observe() instead of observe_with_cluster()
+- Fix: IMPLEMENTED - All 4 BFS implementations now call observe_with_cluster()
+- Verification: INTEGRATION TESTS PASS - cluster_offsets_count: 500, fragmentation_score: 0.0
+- **BENCHMARK REQUIRED** - Fix implemented but Chain(500) benchmark needs to run to confirm target achieved
 
 **Approach:** Diagnostic investigation first, then surgical optimization:
 1. Add internal instrumentation to LinearDetector, SequentialClusterReader, TraversalContext
@@ -136,19 +139,60 @@ See milestone archives for complete history.
 - Star/Random traversals within 10% of v1.6 baseline
 
 **Plans:**
-- [ ] 37-01-PLAN.md — Internal instrumentation (LinearDetector, SequentialClusterReader, TraversalContext telemetry)
-- [ ] 37-02-PLAN.md — External profiling scripts (perf flamegraphs, strace I/O tracing)
-- [ ] 37-03-PLAN.md — Microbenchmark suite (cluster population, LinearDetector overhead, fragmentation)
-- [ ] 37-04-PLAN.md — Root cause analysis (run Chain(500) with instrumentation, interpret data, generate diagnosis)
-- [ ] 37-05-PLAN.md — Surgical optimization (write-time allocation OR cluster compaction based on diagnosis)
-- [ ] 37-06-PLAN.md — Regression testing (write cost, memory, concurrency, non-chain patterns)
+- [x] 37-01-PLAN.md — Internal instrumentation (LinearDetector, SequentialClusterReader, TraversalContext telemetry)
+- [x] 37-02-PLAN.md — External profiling scripts (perf flamegraphs, strace I/O tracing)
+- [x] 37-03-PLAN.md — Microbenchmark suite (cluster population, LinearDetector overhead, fragmentation)
+- [x] 37-04-PLAN.md — Root cause analysis (run Chain(500) with instrumentation, interpret data, generate diagnosis)
+- [x] 37-05-PLAN.md — Surgical optimization (BFS observe_with_cluster() fix based on diagnosis)
+- [x] 37-06-PLAN.md — Regression testing (write cost, memory, concurrency, non-chain patterns)
+
+---
+
+## v1.8 ACID API Fix (Phase 38) - PLANNED
+
+**Milestone Goal:** Fix public read APIs to enforce snapshot isolation - no API may observe state not bound to a committed snapshot_id
+
+**Status:** PLANNED (2026-01-25)
+- **Root Cause Identified:** Public read APIs bypass transaction system, can observe uncommitted WAL state
+- **Transaction System Exists:** `TransactionId`, `IsolationLevel::Snapshot`, `commit_transaction()` all present but unused by reads
+- **Hard Rule:** No API may observe state not bound to a committed snapshot_id
+- **Next:** Execute 38-01 through 38-06 plans
+
+**Problem:**
+- `GraphBackend::neighbors()`, `get_node()`, etc. call `with_graph_file()` directly
+- No `snapshot_id` parameter or filtering
+- `acquire_snapshot()` opens `:memory:` connection, not real database
+- Reads can see partially committed WAL state
+
+**Approach:**
+1. Audit all public read APIs for snapshot_id violations
+2. Design `SnapshotId(u64)` type and propagation strategy
+3. Update `GraphBackend` trait with `snapshot_id` parameter on all reads
+4. Implement WAL filtering (`tx_id <= snapshot_id`)
+5. Add regression tests for the bug
+6. Verify no performance regression (run Phase 37 benchmark)
+
+**Success Criteria:**
+- Every public read API accepts/infers `snapshot_id: SnapshotId`
+- Reads filter WAL records to only show data ≤ snapshot_id
+- Regression test reproduces and verifies fix for original bug
+- Phase 37 benchmarks pass (no performance regression)
+- Overhead < 5%
+
+**Plans:**
+- [ ] 38-01-PLAN.md — Audit all public read APIs for snapshot_id violations
+- [ ] 38-02-PLAN.md — Design snapshot_id architecture
+- [ ] 38-03-PLAN.md — Implement snapshot_id parameter in GraphBackend trait
+- [ ] 38-04-PLAN.md — Implement WAL filtering by snapshot_id
+- [ ] 38-05-PLAN.md — Add regression tests for ACID snapshot isolation
+- [ ] 38-06-PLAN.md — Verify no performance regression
 
 ---
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37
+Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37 → 38
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -157,6 +201,7 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 34. Sequential Cluster Reader | v1.6 | 3/3 | Complete | 2026-01-21 |
 | 35. Neighbor Extraction and Fallback | v1.6 | 4/4 | Complete | 2026-01-21 |
 | 36. IO-12 Validation | v1.6 | 4/4 | Complete | 2026-01-21 |
-| 37. Gap Analysis and Closure | v1.7 | 0/6 | In Planning | - |
+| 37. Gap Analysis and Closure | v1.7 | 6/6 | Implementation Complete | 2026-01-25 |
+| 38. ACID API Fix | v1.8 | 0/6 | Planned | - |
 
-**Overall Progress:** 129/135 plans planned (129 complete, 6 planned). v1.4 complete, v1.6 complete, v1.7 in planning.
+**Overall Progress:** 146/146 plans planned (140 complete, 6 planned). v1.4 complete, v1.6 complete, v1.7 implementation complete (benchmark pending), v1.8 planned.

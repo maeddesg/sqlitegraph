@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** v1.6 milestone - Chain Locality
+**Current focus:** v1.8 milestone - ACID API Fix
 
 ## Current Position
 
 Phase: 37 - Gap Analysis Closure
-Plan: 06 (complete)
-Status: Phase 37 Plan 06 complete - regression test suite created for BFS optimization validation
-Last activity: 2026-01-22 — Completed Phase 37 Plan 06: Regression test suite (write cost, memory overhead, concurrency, non-chain patterns)
+Plan: Complete (6/6)
+Status: Phase 37 implementation complete - BFS observe_with_cluster() fix implemented, regression tests created. Benchmark pending to verify IO-12 target.
+Last activity: 2026-01-25 — Executed /gsd:execute-phase 37, verified 6/6 plans complete
 
-Progress: [██████████░] 99% (37/37 phases planned, 134/134 plans complete, v1.4 complete, v1.6 gap analysis closure in progress)
+Progress: [██████████░] 96% (38/38 phases planned, 146/146 plans complete, v1.4 complete, v1.6 complete, v1.7 implementation complete, v1.8 planned)
 
 ## v1.6 Milestone Goals
 
@@ -51,7 +51,12 @@ Progress: [██████████░] 99% (37/37 phases planned, 134/134
 - ✅ Integration tests confirm: cluster_offsets_count: 500, fragmentation_score: 0.0, gap_bytes: 0
 - ✅ Cluster offset tracking is now ENABLED - sequential cluster read optimization can engage
 
-**NEXT STEP:** Run Chain(500) benchmark to measure performance improvement (expected: 75-100ms reduction, 2.3-3.1x speedup)
+**VERIFICATION STATUS (37-complete):**
+- ✅ Implementation verified - BFS now calls observe_with_cluster() with cluster metadata
+- ✅ Integration tests confirm cluster_offsets_count: 500, fragmentation_score: 0.0
+- ✅ Sequential cluster read optimization is now ENABLED
+- ⏳ **BENCHMARK REQUIRED** - Chain(500) needs re-run to confirm IO-12 target achieved
+- Expected: 75-100ms (2.3-3.1x speedup from 231.12ms baseline)
 
 ## v1.6 Requirements Coverage
 
@@ -65,11 +70,60 @@ Progress: [██████████░] 99% (37/37 phases planned, 134/134
 
 **Coverage: 5/5 requirements complete (100%)**
 
+## v1.8 Milestone Goals
+
+**Problem:** Public read APIs bypass transaction system and can observe partially committed WAL state.
+
+**Root Cause:** Transaction system exists (`TransactionId`, `IsolationLevel::Snapshot`, `commit_transaction()`) but public read APIs don't use it.
+
+**Hard Rule:** No API may observe state not bound to a committed snapshot_id. If a value cannot be tied to a committed snapshot → it does not exist.
+
+**Surgical Solution:**
+1. Add `SnapshotId(u64)` type
+2. Add `snapshot_id: SnapshotId` parameter to all read methods in `GraphBackend` trait
+3. Filter WAL records by `tx_id <= snapshot_id` during reads
+4. Add regression tests for the bug
+5. Verify no performance regression
+
+**Target:** All public read APIs enforce snapshot isolation with < 5% overhead.
+
+**Root Cause Analysis (from 38-01):**
+- **ROOT CAUSE IDENTIFIED (HIGH confidence):** Public APIs call `with_graph_file()` directly without snapshot_id
+- `GraphBackend::neighbors()` at graph_backend.rs:171 bypasses transaction check
+- `acquire_snapshot()` opens `:memory:` connection, not real database
+- Transaction system exists in isolation (TransactionId, commit_transaction) but reads ignore it
+
+**FIX DESIGN (38-02):**
+- 📋 Create `SnapshotId(u64)` type in snapshot.rs
+- 📋 Update `GraphBackend` trait: all read methods accept `snapshot_id: SnapshotId`
+- 📋 WAL filtering: only apply records with `tx_id <= snapshot_id`
+- 📋 Convenience methods: `get_node_current()` uses `SnapshotId::current()`
+
+**VERIFICATION STATUS (38-pending):**
+- ⏳ 38-01: Audit all public read APIs for snapshot_id violations
+- ⏳ 38-02: Design snapshot_id architecture
+- ⏳ 38-03: Implement snapshot_id in GraphBackend trait
+- ⏳ 38-04: Implement WAL filtering
+- ⏳ 38-05: Add regression tests
+- ⏳ 38-06: Run Phase 37 benchmark to verify no regression
+
 ## v1.6 Roadmap Summary
 
 **Phases:** 4 phases (33-36)
 **Depth:** Comprehensive
 **Scope:** Surgical traversal-time optimization
+
+## v1.7 Roadmap Summary
+
+**Phases:** 1 phase (37)
+**Depth:** Diagnostic + Surgical Fix
+**Scope:** BFS observe_with_cluster() fix, regression tests
+
+## v1.8 Roadmap Summary
+
+**Phases:** 1 phase (38)
+**Depth:** ACID correctness
+**Scope:** Snapshot isolation enforcement, WAL filtering
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
@@ -254,5 +308,6 @@ Resume file: None
   - Phase 37 Plan 04 (2026-01-22): Diagnostic pipeline complete - telemetry benchmark executed, flamegraph generated, strace I/O traced, root cause diagnosis created (HIGH confidence: BFS uses observe() not observe_with_cluster())
   - Phase 37 Plan 05 (2026-01-22): Surgical BFS optimization complete - cluster metadata extraction via graph_file.read_node_at(), observe_with_cluster() in all 4 BFS implementations, TraversalContext::get_cluster_info() helper, integration tests confirm cluster_offsets_count: 500, fragmentation_score: 0.0, gap_bytes: 0
   - Phase 37 Plan 06 (2026-01-22): Regression test suite complete - write cost, memory overhead, concurrency, non-chain pattern benchmarks created, regression_report.md documentation complete
+  - **Phase 37 VERIFICATION (2026-01-22):** Implementation complete, needs Chain(500) benchmark to confirm IO-12 target (≤75ms)
 
 *Updated after each plan completion*

@@ -50,6 +50,10 @@ pub fn bfs_generic_scalar(
         // Observe for pattern detection with cluster metadata
         let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
+        // Populate node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
+        let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
+        ctx.node_cluster_index.insert(current_node, cluster_index);
+
         // Trigger prefetch if linear confirmed and node not in buffer
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
             ctx.buffer.prefetch_clusters_from(graph_file, current_node)?;
@@ -123,6 +127,10 @@ pub fn bfs_pointer_table_optimized(
         };
 
         let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
+
+        // Populate node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
+        let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
+        ctx.node_cluster_index.insert(current_node, cluster_index);
 
         // Trigger prefetch if linear confirmed
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
@@ -212,6 +220,10 @@ pub fn bfs_fully_optimized(
         };
 
         let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
+
+        // Populate node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
+        let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
+        ctx.node_cluster_index.insert(current_node, cluster_index);
 
         // Trigger prefetch if linear confirmed
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
