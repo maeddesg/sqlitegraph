@@ -30,6 +30,8 @@
 //! - **distance_metric**: SIMD-ready vector distance calculations
 //! - **distance_functions**: Low-level distance functions with SIMD optimization
 //! - **simd**: SIMD-accelerated distance functions with runtime CPU detection
+//! - **batch_filter**: SIMD-accelerated batch ID filtering for multi-tenant operations
+//! - **serialization**: SIMD-accelerated varint and delta encoding for HNSW persistence
 //! - **errors**: Comprehensive error handling for all HNSW operations
 //! - **multilayer**: Multi-layer graph construction and management
 //! - **neighborhood**: Neighbor selection and heuristics for graph connectivity
@@ -229,6 +231,7 @@ pub use storage::{
 pub use multilayer::{LayerMappings, LevelDistributor, MultiLayerNodeManager};
 
 // Module organization
+pub mod batch_filter;
 pub mod builder;
 pub mod config;
 pub mod distance_functions;
@@ -238,8 +241,18 @@ pub mod index;
 pub mod layer;
 pub mod multilayer;
 pub mod neighborhood;
+pub mod serialization;
 pub mod simd;
 pub mod storage;
+
+// Re-export batch_filter public API
+pub use batch_filter::{filter_batch, filter_allowed_scalar, filter_denied_scalar};
+
+// Re-export serialization public API
+pub use serialization::{
+    encode_varint_scalar, decode_varint_scalar,
+    delta_encode, delta_decode,
+};
 
 #[cfg(test)]
 mod tests {
@@ -374,5 +387,25 @@ mod tests {
         assert_eq!(config.ef_search, 20);
         assert_eq!(config.distance_metric, DistanceMetric::Euclidean);
         assert!(!config.enable_multilayer);
+    }
+
+    #[test]
+    fn test_batch_filter_module() {
+        let ids = vec![1, 2, 3, 4, 5];
+        let allowed = vec![2, 3, 4];
+        let filtered = crate::hnsw::batch_filter::filter_allowed_scalar(&ids, &allowed);
+        assert_eq!(filtered, vec![2, 3, 4]);
+    }
+
+    #[test]
+    fn test_serialization_module() {
+        use crate::hnsw::serialization::{encode_varint_scalar, decode_varint_scalar};
+
+        let value = 300u32;
+        let mut buffer = Vec::new();
+        encode_varint_scalar(&mut buffer, value).unwrap();
+
+        let decoded = decode_varint_scalar(buffer.as_slice()).unwrap();
+        assert_eq!(decoded, value);
     }
 }

@@ -319,27 +319,16 @@ pub unsafe fn delta_encode_avx2(values: &[u32]) -> Vec<u32> {
 
     let mut i = 1;
     for _ in 0..chunks {
-        // Load 8 consecutive values as f32 (for subtraction)
-        // Note: We use f32 operations but the bit pattern is identical for integer subtraction
-        // when values are within the range where f32 has exact integer representation
-        let v1 = _mm256_loadu_ps(std::slice::from_raw_parts(
-            values.as_ptr().add(i) as *const f32,
-            8,
-        ));
-        let v2 = _mm256_loadu_ps(std::slice::from_raw_parts(
-            values.as_ptr().add(i - 1) as *const f32,
-            8,
-        ));
+        // Load 8 consecutive u32 values using AVX2 integer load
+        let v1 = _mm256_loadu_si256(values.as_ptr().add(i) as *const __m256i);
+        let v2 = _mm256_loadu_si256(values.as_ptr().add(i - 1) as *const __m256i);
 
-        // Compute differences
-        let diff = _mm256_sub_ps(v1, v2);
+        // Compute differences using AVX2 integer subtraction
+        let diff = _mm256_sub_epi32(v1, v2);
 
         // Extract results
         let mut tmp = [0u32; 8];
-        _mm256_storeu_ps(
-            std::slice::from_raw_parts_mut(tmp.as_mut_ptr() as *mut f32, 8),
-            diff,
-        );
+        _mm256_storeu_si256(tmp.as_mut_ptr() as *mut __m256i, diff);
 
         for &val in &tmp {
             deltas.push(val);
@@ -544,7 +533,7 @@ mod tests {
         let values: Vec<u32> = vec![];
         let deltas = delta_encode_scalar(&values);
 
-        assert_eq!(deltas, vec![]);
+        assert_eq!(deltas, Vec::<u32>::new());
     }
 
     #[test]
@@ -587,7 +576,7 @@ mod tests {
         let deltas: Vec<u32> = vec![];
         let values = delta_decode(&deltas);
 
-        assert_eq!(values, vec![]);
+        assert_eq!(values, Vec::<u32>::new());
     }
 
     #[test]
