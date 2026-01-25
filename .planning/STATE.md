@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** Phase 40 COMPLETE - Ready for Phase 41 planning
+**Current focus:** Phase 41 ACID API Completion - Plan 01 COMPLETE
 
 ## Current Position
 
-Phase: 40 - Allocation-Aware Optimization (COMPLETE)
-Previous: Phase 38 - ACID API Fix (INFRASTRUCTURE COMPLETE)
-Status: v1.9 COMPLETE - Wave 1 (Delta-index filtering) and Wave 2 (Allocation-aware optimization) both complete.
-Last activity: 2026-01-25 — Phase 40-12 complete (Benchmark gates and IO-12 validation)
+Phase: 41 - ACID API Completion (Plan 01 COMPLETE)
+Previous: Phase 40 - Allocation-Aware Optimization (COMPLETE)
+Status: Phase 41-01 COMPLETE - Removed *_current() convenience methods to enforce 100% explicit snapshot_id requirement
+Last activity: 2026-01-25 — Phase 41-01 complete (ACID API completion)
 
-Progress: [█████████░] 99% of planned phases (38 phases complete, 158/158 plans, v0.2-v1.8 complete, v1.9 COMPLETE)
+Progress: [█████████░] 99% of planned phases (38 phases complete, 159/159 plans, v0.2-v1.9 complete, Phase 41-01 in progress)
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -321,6 +321,9 @@ Recent decisions affecting current work:
 - **v1.9.9: Fixed stride enforcement in fits_in_region() - clusters must fit stride to use contiguous region, critical for single-I/O traversal (Phase 40-09)**
 - **v1.9.10: Zero-stride regions have no size constraint - allows flexible region usage when fixed cluster size isn't required (Phase 40-09)**
 - **v1.9.11: Batch write API validates all clusters fit before any writes - prevents partial writes on failure, maintains atomicity (Phase 40-09)**
+- **v1.10.1: Removed *_current() convenience methods from GraphBackend trait - Hard rule enforcement: No API may observe state not bound to a committed snapshot_id (Phase 41-01)**
+- **v1.10.2: Compiler-enforced snapshot passing - All read operations require explicit snapshot_id parameter, no implicit shortcuts (Phase 41-01)**
+- **v1.10.3: Correctness over ergonomics - API requires explicit snapshot_id on all reads, breaking change preferred over ACID violation (Phase 41-01)**
 
 ### Pending Todos
 
@@ -450,6 +453,6 @@ Resume file: None
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Phase 40 COMPLETE - All 12 plans complete. IO-12 target NOT achieved (Chain(500) = 213.24ms vs target of <=75ms). Recommendation: Phase 41 to investigate performance gap.
+Stopped at: Phase 41-01 COMPLETE - Removed *_current() convenience methods from GraphBackend trait. All read operations now require explicit snapshot_id parameter. Architectural decision logged.
 Resume file: None
 
