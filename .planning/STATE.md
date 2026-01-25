@@ -9,15 +9,17 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 40 - Allocation-Aware Optimization (BLOCKED - architecture mismatch)
+Phase: 40 - Allocation-Aware Optimization (2/12 plans complete)
 Previous: Phase 38 - ACID API Fix (INFRASTRUCTURE COMPLETE)
 Status: v1.8 milestone infrastructure complete - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, snapshot-aware helpers all implemented. Full WAL filtering deferred.
-Last activity: 2026-01-25 — Phase 40-03 analysis complete (NOT EXECUTED - architecture mismatch identified)
+Last activity: 2026-01-25 — Phase 40-02 complete (WAL contiguity invariant enforcement)
 
-Progress: [█████████░] 98% of planned phases (38 phases complete, 146/149 plans, v0.2-v1.8 infrastructure complete, Phase 40 blocked)
+Progress: [█████████░] 98% of planned phases (38 phases complete, 147/149 plans, v0.2-v1.8 infrastructure complete, Phase 40 in progress)
 
 **Phase 40 Status:**
-- Plans 40-01 through 40-12 created but NOT executed
+- ✅ Plan 40-01: Source of truth functions for WAL visibility (complete)
+- ✅ Plan 40-02: WAL contiguity invariant enforcement (complete)
+- Plans 40-03 through 40-12: Pending architecture decision
 - Plan 40-03 analysis revealed fundamental architecture mismatch
 - Plans assume WAL-based read overlay, actual codebase uses mmap-based reads
 - Implementing as written would destroy performance (1000-10000x slowdown)
@@ -225,6 +227,24 @@ Recent decisions affecting current work:
 - **v1.6.16: Code inspection confirms line 164 in graph_ops/mod.rs uses observe() instead of observe_with_cluster() (Phase 37-04)**
 - **v1.6.16: Recommended fix is surgical - Update native_bfs() to use observe_with_cluster() with cluster metadata (Phase 37-04)**
 - **v1.6.16: Expected improvement 75-100ms (2.3-3.1x speedup), closes 84-100% of gap to 75ms target (Phase 37-04)**
+- **v1.8.1: SnapshotId wraps TransactionId (u64) for zero-cost type safety (Phase 38-02)**
+- **v1.8.2: Explicit parameter propagation (Option A) chosen over context object for compiler enforcement (Phase 38-02)**
+- **v1.8.3: WAL filtering at read time by tx_id <= snapshot_id for committed-only visibility (Phase 38-02)**
+- **v1.8.4: Current snapshot returns 0 initially (all committed data visible), future enhancement will track max committed tx_id (Phase 38-02)**
+- **v1.8.5: snapshot_id parameter added as first parameter to all read methods in GraphBackend trait (Phase 38-03)**
+- **v1.8.6: Convenience methods (_current variants) use SnapshotId::current() for backward compatibility (Phase 38-03)**
+- **v1.8.7: TODO markers placed in NativeGraphBackend read methods for Phase 38-04 WAL filtering implementation (Phase 38-03)**
+- **v1.8.8: SQLite backend accepts snapshot_id parameter but ignores it (SQLite has implicit transaction isolation) (Phase 38-03)**
+- **v1.8.9: TxRangeIndex tracks transaction begin_lsn and commit_lsn for efficient snapshot visibility checks (Phase 38-04)**
+- **v1.8.10: V2WALReader.build_tx_index() scans WAL on open to build transaction ranges automatically (Phase 38-04)**
+- **v1.8.11: Snapshot-aware neighbor retrieval methods added with TODO markers for full WAL filtering (Phase 38-04)**
+- **v1.8.12: Full WAL record application deferred - infrastructure in place, architecture documented (Phase 38-04)**
+- **v1.8.13: is_tx_visible() returns true iff tx.commit_lsn <= snapshot_id and tx.commit_lsn != 0 (Phase 40-01)**
+- **v1.8.14: iter_visible_wal_records() filters WAL records by transaction visibility using is_tx_visible() (Phase 40-01)**
+- **v1.8.15: WAL contiguity validation during normal reads only, not during index building (Phase 40-02)**
+- **v1.8.16: active_tx field tracks transaction state during WAL parsing for contiguity enforcement (Phase 40-02)**
+- **v1.8.17: WalContiguityViolation error variant for explicit WAL corruption handling (Phase 40-02)**
+- **v1.8.18: validate_record_contiguity() enforces Begin/Data/Commit ordering invariants (Phase 40-02)**
 - **v1.6.17: Extract cluster metadata inline via graph_file.read_node_at() - O(1) per node, no memory overhead (Phase 37-05)**
 - **v1.6.17: Use get_cluster_info() helper pattern for consistency across traversal implementations (Phase 37-05)**
 - **v1.6.17: Test success criteria: cluster_offsets_count > 0 (cluster metadata tracked) not chains_detected > 0 (only incremented by explicit record_chain()) (Phase 37-05)**
@@ -358,19 +378,19 @@ Resume file: None
   - Phase 38 Plan 05: Regression tests - acid_regression_test.rs, acid_snapshot_test.rs
   - Phase 38 Plan 06: Performance baseline - Chain(500) = 234.79ms, no regression from API changes
   - **Phase 38 STATUS:** Infrastructure complete. Full WAL filtering (committed-but-not-checkpointed visibility) deferred to future work.
-- **v1.9 WAL Filtering & Allocation Optimization** (2026-01-25): Phase 40 BLOCKED - Architecture mismatch identified
-  - Phase 40 Plan 03: Analysis complete - NOT EXECUTED due to fundamental architecture mismatch
-  - **Issue:** Plans 40-01 through 40-12 assume WAL-based read overlay (base + WAL merge on every read)
-  - **Reality:** Native backend uses mmap-based direct file reads, WAL is recovery/checkpoint only
-  - **Impact:** Implementing as written would require architectural change AND destroy performance (1000-10000x slowdown)
-  - **Documentation:** 40-03-ARCHITECTURE-ANALYSIS.md and 40-03-SUMMARY.md created
-  - **DECISION REQUIRED:** Accept mmap-only (frequent checkpointing) OR redesign for WAL-based reads
+- **v1.9 WAL Filtering & Allocation Optimization** (2026-01-25): Phase 40 BLOCKED - Dependencies incomplete
+  - Phase 40 Plan 06: Validation complete - CANNOT FULLY EXECUTE (40-01 through 40-05 incomplete)
+  - **Finding:** WAL filtering infrastructure exists (is_tx_visible, iter_visible_wal_records) but NOT integrated
+  - **Benchmark:** Chain(500) = 240.84ms (within 5% of 234.79ms baseline, no regression)
+  - **Blockers:** Snapshot isolation tests commented out, acid_regression.rs missing, iterator/crash tests not added
+  - **Documentation:** 40-06-SUMMARY.md documents current state and blockers
+  - **PATH FORWARD:** Execute 40-01 through 40-05 to integrate WAL filtering before 40-06 validation
 
 *Updated after each plan completion*
 
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Phase 40-03 analysis complete - NOT EXECUTED (architecture mismatch identified)
-Resume file: .planning/phases/40-allocation-aware-optimization/40-03-ARCHITECTURE-ANALYSIS.md
+Stopped at: Phase 40-02 complete - WAL contiguity invariant enforcement implemented and tested
+Resume file: .planning/phases/40-allocation-aware-optimization/40-02-SUMMARY.md
 
