@@ -99,6 +99,12 @@ pub enum V2WALRecordType {
 
     /// Contiguous region rollback
     RollbackContiguous = 30,
+
+    /// KV key-value set operation
+    KvSet = 31,
+
+    /// KV key delete operation
+    KvDelete = 32,
 }
 
 impl V2WALRecordType {
@@ -119,6 +125,8 @@ impl V2WALRecordType {
             Self::AllocateContiguous,
             Self::CommitContiguous,
             Self::RollbackContiguous,
+            Self::KvSet,
+            Self::KvDelete,
         ]
     }
 
@@ -177,6 +185,8 @@ impl TryFrom<u8> for V2WALRecordType {
             28 => Ok(Self::AllocateContiguous),
             29 => Ok(Self::CommitContiguous),
             30 => Ok(Self::RollbackContiguous),
+            31 => Ok(Self::KvSet),
+            32 => Ok(Self::KvDelete),
             _ => Err(NativeBackendError::CorruptStringTable {
                 reason: format!("unknown WAL record type: {}", value),
             }),
@@ -398,6 +408,23 @@ pub enum V2WALRecord {
     RollbackContiguous {
         region: ContiguousRegion,
     },
+
+    /// KV key-value set operation
+    KvSet {
+        key: Vec<u8>,
+        value_bytes: Vec<u8>,
+        value_type: u8,
+        ttl_seconds: Option<u64>,
+        version: u64,
+    },
+
+    /// KV key delete operation
+    KvDelete {
+        key: Vec<u8>,
+        old_value_bytes: Option<Vec<u8>>,
+        old_value_type: u8,
+        old_version: u64,
+    },
 }
 
 /// Contiguous region descriptor for WAL records
@@ -505,6 +532,8 @@ impl V2WALRecord {
             Self::AllocateContiguous { .. } => V2WALRecordType::AllocateContiguous,
             Self::CommitContiguous { .. } => V2WALRecordType::CommitContiguous,
             Self::RollbackContiguous { .. } => V2WALRecordType::RollbackContiguous,
+            Self::KvSet { .. } => V2WALRecordType::KvSet,
+            Self::KvDelete { .. } => V2WALRecordType::KvDelete,
         }
     }
 
@@ -564,6 +593,12 @@ impl V2WALRecord {
             Self::AllocateContiguous { .. } => base_size + 8 + 24 + 8, // txn_id + region + timestamp
             Self::CommitContiguous { .. } => base_size + 8 + 24, // txn_id + region
             Self::RollbackContiguous { .. } => base_size + 24, // region
+            Self::KvSet { key, value_bytes, ttl_seconds, .. } => {
+                base_size + 4 + key.len() + 4 + value_bytes.len() + 1 + 1 + (if ttl_seconds.is_some() { 8 } else { 0 }) + 8
+            }
+            Self::KvDelete { key, old_value_bytes, .. } => {
+                base_size + 4 + key.len() + 1 + old_value_bytes.as_ref().map(|v| 4 + v.len()).unwrap_or(0) + 8
+            }
         }
     }
 

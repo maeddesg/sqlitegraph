@@ -9,12 +9,18 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 43 - Transactional KV Store (NOT STARTED)
+Phase: 43 - Transactional KV Store (1/4 plans complete)
 Previous: Phase 42 - SIMD / AVX Acceleration (COMPLETE)
-Status: Phase 42 COMPLETE - SIMD/AVX acceleration for HNSW distance functions achieved 4-10x speedup
-Last activity: 2026-01-25 — Phase 42 complete (all 6 plans, SIMD benchmarks show 4-10x speedup)
+Status: Phase 43-01 COMPLETE - In-memory KV store with HashMap-based storage
+Last activity: 2026-01-25 — Completed 43-01: HashMap-based KV store (18 tests pass)
 
-Progress: [█████████░] 95% of planned phases (42 phases complete, 165/165 plans for v0.2-v1.11)
+Progress: [█████████░] 95% of planned phases (42 phases complete, 166/169 plans)
+
+**Phase 43 Wave 1 Status (IN PROGRESS):**
+- ✅ Plan 43-01: In-memory KV store with HashMap-based storage (18 tests pass)
+- ⏳ Plan 43-02: WAL integration for KV operations
+- ⏳ Plan 43-03: Snapshot isolation API
+- ⏳ Plan 43-04: TTL cleanup and testing
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -311,6 +317,11 @@ Recent decisions affecting current work:
 - **v1.6: Sequential cluster reader implemented** - Infrastructure in place but not achieving expected 3.3x speedup
 - **v1.11 Phase 42-01: Runtime CPU feature detection with OnceLock caching** - Zero overhead after first call, thread-safe
 - **v1.11 Phase 42-01: Unaligned loads (_mm256_loadu_ps)** - Minimal performance cost vs significant complexity reduction
+- **Phase 43-01: Byte keys (Vec<u8>)** - Maximum flexibility for strings, hashes, composite keys without encoding decisions
+- **Phase 43-01: NO internal version counter** - Versions come from WAL commit LSN (plan 02), matching DeltaIndex pattern
+- **Phase 43-01: KvValue enum with 6 types** - Bytes/String/Integer/Float/Boolean/Json covers 95% of graph database use cases
+- **Phase 43-01: get() returns cloned value** - Avoids lifetime complexity with RwLock guard, trades slight allocation for simpler API
+- **Phase 43-01: HashMap storage pattern** - Same as DeltaIndex, parking_lot::RwLock for thread-safe access
 - **v1.11 Phase 42-05: Integer SIMD intrinsics (_mm256_sub_epi32)** - Correct type-safe arithmetic for u32 delta encoding
 - **v1.11 Phase 42-05: Wrapping arithmetic for unsigned integers** - Predictable underflow behavior for edge cases
 - **v1.11 Phase 42-05: SIMD threshold at 16 elements** - Avoids overhead on small arrays, targets ~3-5x speedup for large data
@@ -506,8 +517,8 @@ Resume file: None
 
 ## Session Continuity
 
-Last session: 2026-01-25 20:31:59 UTC
-Stopped at: Completed Phase 42-06 (SIMD benchmark suite and correctness validation)
+Last session: 2026-01-25 22:43:03 UTC
+Stopped at: Completed Phase 43-01 (In-memory KV store with HashMap-based storage)
 Resume file: None
 
 
