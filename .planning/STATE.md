@@ -9,21 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 40 - Allocation-Aware Optimization (6/12 plans complete)
+Phase: 40 - Allocation-Aware Optimization (4/12 plans complete)
 Previous: Phase 38 - ACID API Fix (INFRASTRUCTURE COMPLETE)
-Status: v1.8 milestone infrastructure complete - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, snapshot-aware helpers all implemented. DeltaIndex module integrated with V2WALManager for commit-time delta tracking.
-Last activity: 2026-01-25 — Phase 40-06 complete (DeltaIndex validation, no performance regression)
+Status: v1.8 milestone infrastructure complete - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, snapshot-aware helpers all implemented. DeltaIndex module integrated with V2WALManager for commit-time delta tracking and checkpoint cleanup.
+Last activity: 2026-01-25 — Phase 40-04 complete (DeltaIndex integration with transaction commit and checkpoint)
 
-Progress: [█████████░] 98% of planned phases (38 phases complete, 148/149 plans, v0.2-v1.8 infrastructure complete, Phase 40 in progress)
+Progress: [█████████░] 98% of planned phases (38 phases complete, 142/149 plans, v0.2-v1.8 infrastructure complete, Phase 40 in progress)
 
 **Phase 40 Status:**
 - ✅ Plan 40-01: Source of truth functions for WAL visibility (complete)
 - ✅ Plan 40-02: WAL contiguity invariant enforcement (complete)
-- ✅ Plan 40-03: DeltaIndex module for commit-time delta tracking (complete)
+- ⏸️ Plan 40-03: Architecture analysis - NOT EXECUTED (WAL vs mmap mismatch)
 - ✅ Plan 40-04: DeltaIndex integration with V2WALManager (complete)
-- ✅ Plan 40-05: DeltaIndex read path implementation (complete)
-- ✅ Plan 40-06: Regression gates and validation (complete)
-- ⏳ Plans 40-07 through 40-12: Pending (Wave 2: Allocation-Aware Optimization)
+- ⏳ Plans 40-05 through 40-12: Pending
 
 **Wave 1 (Delta-Index Filtering) COMPLETE:**
 - DeltaIndex module created with HashMap-based O(1) overlay lookup
@@ -32,10 +30,10 @@ Progress: [█████████░] 98% of planned phases (38 phases comp
 - get_node_delta() returns most recent visible delta by snapshot_id
 - checkpoint_completed() drops deltas now in base to bound memory
 - SharedDeltaIndex integrated into V2WALManager
-- Snapshot isolation tests pass (test_snapshot_id_monotonic)
-- Chain(500) performance validated: 232.85ms vs 234.79ms baseline (-0.8% improvement)
-- Preserves mmap fast path - no WAL scanning during reads
-- Expected overhead <1%, actual result shows no regression
+- Commit-time delta indexing functional (no WAL scanning on reads)
+- Checkpoint cleanup drops applied deltas (memory bounded)
+- Integration test verifies lifecycle: commit populates, checkpoint cleans
+- Preserves mmap fast path - commit-time indexing only
 
 ## v1.6 Milestone Goals
 
@@ -404,6 +402,6 @@ Resume file: None
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Phase 40-05 PARTIAL complete - DeltaIndex module created, integration with WAL manager and read paths incomplete
-Resume file: .planning/phases/40-allocation-aware-optimization/40-05-SUMMARY.md
+Stopped at: Phase 40-04 COMPLETE - DeltaIndex integrated with V2WALManager for commit-time delta tracking and checkpoint cleanup
+Resume file: None
 

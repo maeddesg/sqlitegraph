@@ -3,6 +3,7 @@
 //! This module provides:
 //! - Delta index for committed-but-not-checkpointed changes
 //! - JSON input validation for memory safety and DoS prevention
+//! - Free space manager for contiguous region allocation (advisory, allocation-aware optimization)
 //!
 //! # JSON Validation
 //!
@@ -27,10 +28,35 @@
 //! // Use shared_index.apply_commit() at commit time
 //! // Use shared_index.checkpoint_completed() after checkpoint
 //! ```
+//!
+//! # Free Space Manager (Allocation-Aware Optimization)
+//!
+//! ```rust
+//! use sqlitegraph::backend::native::v2::storage::{FreeSpaceManager, Region};
+//!
+//! let mut fsm = FreeSpaceManager::new(1024 * 1024); // 1MB file
+//!
+//! // Try to reserve contiguous space for sequential clusters
+//! if let Some(region) = fsm.try_reserve_contiguous(10 * 4096, 4096) {
+//!     // Use region for sequential cluster writes
+//!     fsm.commit_contiguous(&region, tx_id)?;
+//! } else {
+//!     // Fall back to normal allocation
+//! }
+//! ```
+//!
+//! The free space manager is **advisory only** - failures gracefully fall back
+//! to normal allocation without affecting correctness. It's used for allocation-aware
+//! sequential cluster optimization to achieve IO-12 target (Chain(500) <= 75ms).
+//! ```
 
+pub mod adjacency_writer;
 pub mod delta_index;
+pub mod free_space;
 
+pub use adjacency_writer::{AdjacencyWriter, WrittenOffset};
 pub use delta_index::{DeltaIndex, DeltaRecord, SharedDeltaIndex};
+pub use free_space::{ContiguousAllocation, FreeSpaceError, FreeSpaceManager, Region, WalRecoveryState};
 
 // JSON validation exports
 pub use self::json_validation::{JsonLimits, JsonValidationError, parse_and_validate_json, parse_and_validate_json_str};
