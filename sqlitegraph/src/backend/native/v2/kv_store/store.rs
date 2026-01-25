@@ -67,7 +67,9 @@ impl KvStore {
     }
 
     /// Internal method for WAL replay - set with explicit version
-    #[cfg(test)]
+    ///
+    /// This is used during WAL recovery to restore entries with their original versions.
+    /// Normal set() operations should use version 0 (the WAL system assigns the real version).
     pub fn set_with_version(&mut self, key: Vec<u8>, value: KvValue, ttl: Option<u64>, version: u64) -> Result<(), KvStoreError> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)

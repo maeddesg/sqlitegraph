@@ -27,11 +27,13 @@
 //!
 //! - [`types`]: Core data structures (KvEntry, KvMetadata, KvValue, KvStoreError)
 //! - [`store`]: KvStore implementation with HashMap storage
+//! - [`wal`]: WAL integration helpers for KV persistence and recovery
 //! - [`tests`]: Unit tests for KV store operations
 
 pub mod store;
 pub mod tests;
 pub mod types;
+pub mod wal;
 
 // Re-export public API
 pub use store::KvStore;
