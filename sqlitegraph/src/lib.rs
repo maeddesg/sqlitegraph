@@ -252,6 +252,7 @@ pub mod debug;
 pub mod errors;
 pub mod graph;
 pub mod introspection;
+pub mod snapshot;
 
 // Re-export core utilities that are stable public APIs
 pub use api_ergonomics::{Label, NodeId, PropertyKey, PropertyValue};
@@ -264,6 +265,7 @@ pub use pattern_engine::{PatternTriple, TripleMatch, match_triples};
 pub use pattern_engine_cache::match_triples_fast;
 pub use query::GraphQuery;
 pub use recovery::{dump_graph_to_path, load_graph_from_path, load_graph_from_reader};
+pub use snapshot::SnapshotId;
 
 // Re-export backend implementations
 pub use backend::{BackendDirection, ChainStep, GraphBackend};
