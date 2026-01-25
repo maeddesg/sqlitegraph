@@ -1184,4 +1184,139 @@ mod tests {
         // No active region
         assert!(!trigger.has_active_region());
     }
+
+    // === 40-10: Additional Threshold-Gated Activation Tests ===
+
+    #[test]
+    fn test_threshold_gated_activation_exactly_at_boundary() {
+        let trigger = ChainAllocationTrigger::new();
+
+        // Exactly at threshold (10) should trigger
+        assert!(trigger.should_trigger_with_observed_count(10));
+
+        // One below threshold (9) should not trigger
+        assert!(!trigger.should_trigger_with_observed_count(9));
+    }
+
+    #[test]
+    fn test_threshold_gated_activation_with_chain_threshold_constant() {
+        // Verify the constant matches the default trigger threshold
+        let trigger = ChainAllocationTrigger::new();
+        assert_eq!(trigger.threshold(), CHAIN_THRESHOLD);
+        assert_eq!(CHAIN_THRESHOLD, 10);
+    }
+
+    #[test]
+    fn test_threshold_gated_activation_multiple_thresholds() {
+        // Test various threshold values
+        for threshold in [1, 5, 10, 20, 50, 100] {
+            let trigger = ChainAllocationTrigger::with_threshold(threshold);
+
+            // At threshold should trigger
+            assert!(trigger.should_trigger_with_observed_count(threshold));
+
+            // Below threshold should not trigger
+            if threshold > 1 {
+                assert!(!trigger.should_trigger_with_observed_count(threshold - 1));
+            }
+
+            // Above threshold should trigger
+            assert!(trigger.should_trigger_with_observed_count(threshold + 1));
+        }
+    }
+
+    #[test]
+    fn test_threshold_gated_activation_with_zero_threshold() {
+        // Threshold of 0 means always trigger (edge case)
+        let trigger = ChainAllocationTrigger::with_threshold(0);
+
+        // Should trigger even for chain length of 0
+        assert!(trigger.should_trigger_with_observed_count(0));
+        assert!(trigger.should_trigger_with_observed_count(1));
+    }
+
+    #[test]
+    fn test_threshold_gated_activation_large_threshold() {
+        // Large threshold to prevent accidental triggering
+        let trigger = ChainAllocationTrigger::with_threshold(1000);
+
+        // Normal chain lengths should not trigger
+        assert!(!trigger.should_trigger_with_observed_count(100));
+        assert!(!trigger.should_trigger_with_observed_count(500));
+
+        // Only very long chains trigger
+        assert!(trigger.should_trigger_with_observed_count(1000));
+        assert!(trigger.should_trigger_with_observed_count(2000));
+    }
+
+    #[test]
+    fn test_threshold_gated_activation_with_free_space_manager() {
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(1_000_000);
+
+        // Below threshold: no reservation attempted
+        let observed_count = 5;
+        if trigger.should_trigger_with_observed_count(observed_count) {
+            let total_bytes = observed_count as u64 * 4096;
+            if let Some(region) = fsm.try_reserve_contiguous(total_bytes, 4096) {
+                trigger.set_region(region);
+            }
+        }
+        assert!(!trigger.has_active_region());
+
+        // At threshold: reservation attempted
+        let observed_count = 10;
+        if trigger.should_trigger_with_observed_count(observed_count) {
+            let total_bytes = observed_count as u64 * 4096;
+            if let Some(region) = fsm.try_reserve_contiguous(total_bytes, 4096) {
+                trigger.set_region(region);
+            }
+        }
+        assert!(trigger.has_active_region());
+    }
+
+    #[test]
+    fn test_threshold_gated_activation_conserves_free_space() {
+        // Verify that threshold gating prevents unnecessary reservations
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(100_000); // Limited space
+
+        let initial_free = fsm.largest_contiguous_free();
+
+        // Write 9 clusters: below threshold, no reservations
+        for i in 1..=9 {
+            if trigger.should_trigger_with_observed_count(i) {
+                let total_bytes = i as u64 * 4096;
+                if let Some(region) = fsm.try_reserve_contiguous(total_bytes, 4096) {
+                    trigger.set_region(region);
+                }
+            }
+        }
+
+        // Free space should be conserved (no reservations made)
+        assert_eq!(fsm.largest_contiguous_free(), initial_free);
+        assert!(!trigger.has_active_region());
+    }
+
+    #[test]
+    fn test_threshold_gated_activation_prevents_fragmentation() {
+        // Verify threshold prevents many small reservations
+        let mut trigger = ChainAllocationTrigger::new();
+        let mut fsm = FreeSpaceManager::new(1_000_000);
+
+        let initial_block_count = fsm.free_block_count();
+
+        // Simulate 9 chains of length 5: none should trigger
+        for _chain_num in 0..9 {
+            let chain_len = 5;
+            if trigger.should_trigger_with_observed_count(chain_len) {
+                // This block should never execute for chain_len=5
+                panic!("Should not trigger for chain length 5");
+            }
+        }
+
+        // No new reserved regions, no fragmentation
+        assert_eq!(fsm.free_block_count(), initial_block_count);
+        assert_eq!(fsm.reserved_regions().len(), 0);
+    }
 }

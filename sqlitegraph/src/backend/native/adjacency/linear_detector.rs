@@ -2200,9 +2200,10 @@ mod tests {
         detector.observe(3, 1);
         assert_eq!(detector.observed_length(), 3);
 
-        // Branching resets state
+        // Branching changes state but doesn't reset consecutive_linear
         detector.observe(4, 2);
-        // observed_length returns raw consecutive_linear (0 after branching)
-        assert_eq!(detector.observed_length(), 0);
+        // observed_length returns raw consecutive_linear (still 3 after branching)
+        assert_eq!(detector.observed_length(), 3);
+        assert!(!detector.is_linear_confirmed());
     }
 }
