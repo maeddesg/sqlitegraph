@@ -290,3 +290,286 @@ mod backend_integration_tests {
         assert_eq!(kv_value, Some(KvValue::Integer(node_id)));
     }
 }
+
+#[cfg(test)]
+mod compatibility_tests {
+    use super::*;
+    use crate::backend::SqliteGraphBackend;
+
+    #[test]
+    fn test_both_backends_same_api() {
+        // Verify both backends accept same input types
+        let native_backend = NativeGraphBackend::new_temp().unwrap();
+        let sqlite_backend = SqliteGraphBackend::in_memory().unwrap();
+
+        let key = b"api_test_key".to_vec();
+        let value = KvValue::String("test_value".to_string());
+
+        // Both backends accept same types
+        native_backend.kv_set(key.clone(), value.clone(), None).unwrap();
+        sqlite_backend.kv_set(key, value, None).unwrap();
+
+        let snapshot = SnapshotId::current();
+
+        let native_value = native_backend.kv_get(snapshot, b"api_test_key").unwrap();
+        let sqlite_value = sqlite_backend.kv_get(snapshot, b"api_test_key").unwrap();
+
+        assert_eq!(native_value, sqlite_value);
+    }
+
+    #[test]
+    fn test_both_backends_same_errors() {
+        // Verify error types match (both return None for missing keys)
+        let native_backend = NativeGraphBackend::new_temp().unwrap();
+        let sqlite_backend = SqliteGraphBackend::in_memory().unwrap();
+
+        let snapshot = SnapshotId::current();
+
+        // Both return None for missing keys
+        let native_result = native_backend.kv_get(snapshot, b"missing_key");
+        let sqlite_result = sqlite_backend.kv_get(snapshot, b"missing_key");
+
+        assert!(native_result.is_ok());
+        assert!(sqlite_result.is_ok());
+        assert_eq!(native_result.unwrap(), None);
+        assert_eq!(sqlite_result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_value_types_work_both_backends() {
+        // All KvValue variants work on both backends
+        let native_backend = NativeGraphBackend::new_temp().unwrap();
+        let sqlite_backend = SqliteGraphBackend::in_memory().unwrap();
+
+        // Test all KvValue variants
+        let test_cases = vec![
+            (b"bytes_key".as_ref(), KvValue::Bytes(vec![1, 2, 3])),
+            (b"string_key".as_ref(), KvValue::String("hello".to_string())),
+            (b"integer_key".as_ref(), KvValue::Integer(42)),
+            (b"float_key".as_ref(), KvValue::Float(3.14)),
+            (b"boolean_key".as_ref(), KvValue::Boolean(true)),
+            (
+                b"json_key".as_ref(),
+                KvValue::Json(serde_json::json!({"test": "data"})),
+            ),
+        ];
+
+        for (key, value) in test_cases {
+            // Native backend
+            native_backend.kv_set(key.to_vec(), value.clone(), None).unwrap();
+            let snapshot = SnapshotId::current();
+            let native_result = native_backend.kv_get(snapshot, key).unwrap();
+
+            // SQLite backend
+            sqlite_backend.kv_set(key.to_vec(), value.clone(), None).unwrap();
+            let snapshot = SnapshotId::current();
+            let sqlite_result = sqlite_backend.kv_get(snapshot, key).unwrap();
+
+            assert_eq!(native_result, sqlite_result);
+            assert_eq!(native_result, Some(value));
+        }
+    }
+
+    #[test]
+    fn test_native_and_sqlite_same_behavior() {
+        // Same operations produce same results
+        let native_backend = NativeGraphBackend::new_temp().unwrap();
+        let sqlite_backend = SqliteGraphBackend::in_memory().unwrap();
+
+        // Set, get, delete sequence
+        let key = b"behavior_test_key".to_vec();
+        let value1 = KvValue::Integer(100);
+        let value2 = KvValue::Integer(200);
+
+        // Set initial value
+        native_backend.kv_set(key.clone(), value1.clone(), None).unwrap();
+        sqlite_backend.kv_set(key.clone(), value1.clone(), None).unwrap();
+
+        let snapshot = SnapshotId::current();
+        let native_result = native_backend.kv_get(snapshot, &key).unwrap();
+        let sqlite_result = sqlite_backend.kv_get(snapshot, &key).unwrap();
+
+        assert_eq!(native_result, sqlite_result);
+        assert_eq!(native_result, Some(value1));
+
+        // Update value
+        native_backend.kv_set(key.clone(), value2.clone(), None).unwrap();
+        sqlite_backend.kv_set(key.clone(), value2.clone(), None).unwrap();
+
+        let snapshot = SnapshotId::current();
+        let native_result = native_backend.kv_get(snapshot, &key).unwrap();
+        let sqlite_result = sqlite_backend.kv_get(snapshot, &key).unwrap();
+
+        assert_eq!(native_result, sqlite_result);
+        assert_eq!(native_result, Some(value2));
+
+        // Delete
+        native_backend.kv_delete(&key).unwrap();
+        sqlite_backend.kv_delete(&key).unwrap();
+
+        let snapshot = SnapshotId::current();
+        let native_result = native_backend.kv_get(snapshot, &key).unwrap();
+        let sqlite_result = sqlite_backend.kv_get(snapshot, &key).unwrap();
+
+        assert_eq!(native_result, sqlite_result);
+        assert_eq!(native_result, None);
+    }
+
+    #[test]
+    fn test_ttl_both_backends() {
+        // TTL works on both backends
+        let native_backend = NativeGraphBackend::new_temp().unwrap();
+        let sqlite_backend = SqliteGraphBackend::in_memory().unwrap();
+
+        let key = b"ttl_test_key".to_vec();
+        let value = KvValue::String("expires".to_string());
+
+        // Set with 2 second TTL
+        native_backend
+            .kv_set(key.clone(), value.clone(), Some(2))
+            .unwrap();
+        sqlite_backend
+            .kv_set(key.clone(), value.clone(), Some(2))
+            .unwrap();
+
+        // Both should be visible immediately
+        let snapshot = SnapshotId::current();
+        let native_result = native_backend.kv_get(snapshot, &key).unwrap();
+        let sqlite_result = sqlite_backend.kv_get(snapshot, &key).unwrap();
+
+        assert_eq!(native_result, sqlite_result);
+        assert_eq!(native_result, Some(value.clone()));
+
+        // Wait for expiration
+        std::thread::sleep(std::time::Duration::from_secs(3));
+
+        // Both should return None after expiration
+        let snapshot = SnapshotId::current();
+        let native_result = native_backend.kv_get(snapshot, &key).unwrap();
+        let sqlite_result = sqlite_backend.kv_get(snapshot, &key).unwrap();
+
+        assert_eq!(native_result, sqlite_result);
+        assert_eq!(native_result, None);
+    }
+
+    #[test]
+    fn test_delete_both_backends() {
+        // Delete behavior matches
+        let native_backend = NativeGraphBackend::new_temp().unwrap();
+        let sqlite_backend = SqliteGraphBackend::in_memory().unwrap();
+
+        let key = b"delete_test_key".to_vec();
+        let value = KvValue::String("delete_me".to_string());
+
+        // Set values
+        native_backend.kv_set(key.clone(), value.clone(), None).unwrap();
+        sqlite_backend.kv_set(key.clone(), value.clone(), None).unwrap();
+
+        // Verify they exist
+        let snapshot = SnapshotId::current();
+        let native_result = native_backend.kv_get(snapshot, &key).unwrap();
+        let sqlite_result = sqlite_backend.kv_get(snapshot, &key).unwrap();
+
+        assert_eq!(native_result, Some(value.clone()));
+        assert_eq!(sqlite_result, Some(value.clone()));
+
+        // Delete from both
+        native_backend.kv_delete(&key).unwrap();
+        sqlite_backend.kv_delete(&key).unwrap();
+
+        // Verify both return None
+        let snapshot = SnapshotId::current();
+        let native_result = native_backend.kv_get(snapshot, &key).unwrap();
+        let sqlite_result = sqlite_backend.kv_get(snapshot, &key).unwrap();
+
+        assert_eq!(native_result, None);
+        assert_eq!(sqlite_result, None);
+    }
+
+    #[test]
+    fn test_mixed_backend_operations() {
+        // Switch between backends in same test
+        let native_backend = NativeGraphBackend::new_temp().unwrap();
+        let sqlite_backend = SqliteGraphBackend::in_memory().unwrap();
+
+        // Write to Native
+        native_backend
+            .kv_set(
+                b"mixed_native_key".to_vec(),
+                KvValue::String("native".to_string()),
+                None,
+            )
+            .unwrap();
+
+        // Write to SQLite
+        sqlite_backend
+            .kv_set(
+                b"mixed_sqlite_key".to_vec(),
+                KvValue::String("sqlite".to_string()),
+                None,
+            )
+            .unwrap();
+
+        // Read from both
+        let snapshot = SnapshotId::current();
+        let native_value = native_backend
+            .kv_get(snapshot, b"mixed_native_key")
+            .unwrap();
+        let sqlite_value = sqlite_backend
+            .kv_get(snapshot, b"mixed_sqlite_key")
+            .unwrap();
+
+        assert_eq!(native_value, Some(KvValue::String("native".to_string())));
+        assert_eq!(
+            sqlite_value,
+            Some(KvValue::String("sqlite".to_string()))
+        );
+
+        // Verify isolation (Native doesn't see SQLite data and vice versa)
+        let native_cross = native_backend
+            .kv_get(snapshot, b"mixed_sqlite_key")
+            .unwrap();
+        let sqlite_cross = sqlite_backend
+            .kv_get(snapshot, b"mixed_native_key")
+            .unwrap();
+
+        assert_eq!(native_cross, None);
+        assert_eq!(sqlite_cross, None);
+    }
+
+    #[test]
+    fn test_binary_keys_both_backends() {
+        // Binary keys work on both backends
+        let native_backend = NativeGraphBackend::new_temp().unwrap();
+        let sqlite_backend = SqliteGraphBackend::in_memory().unwrap();
+
+        let key1: Vec<u8> = vec![0x00, 0x01, 0x02, 0xFF];
+        let key2: Vec<u8> = vec![0xDE, 0xAD, 0xBE, 0xEF];
+
+        native_backend
+            .kv_set(key1.clone(), KvValue::Integer(1), None)
+            .unwrap();
+        native_backend
+            .kv_set(key2.clone(), KvValue::Integer(2), None)
+            .unwrap();
+
+        sqlite_backend
+            .kv_set(key1.clone(), KvValue::Integer(1), None)
+            .unwrap();
+        sqlite_backend
+            .kv_set(key2.clone(), KvValue::Integer(2), None)
+            .unwrap();
+
+        let snapshot = SnapshotId::current();
+
+        let native_result1 = native_backend.kv_get(snapshot, &key1).unwrap();
+        let sqlite_result1 = sqlite_backend.kv_get(snapshot, &key1).unwrap();
+        assert_eq!(native_result1, sqlite_result1);
+        assert_eq!(native_result1, Some(KvValue::Integer(1)));
+
+        let native_result2 = native_backend.kv_get(snapshot, &key2).unwrap();
+        let sqlite_result2 = sqlite_backend.kv_get(snapshot, &key2).unwrap();
+        assert_eq!(native_result2, sqlite_result2);
+        assert_eq!(native_result2, Some(KvValue::Integer(2)));
+    }
+}
