@@ -3,12 +3,10 @@
 //! Validates that Star, Random, and Tree graph traversals stay within 10% of v1.6 baseline.
 //! This ensures the observe_with_cluster() optimization doesn't regress non-chain patterns.
 
-use std::time::Duration;
-
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
 use rand::Rng;
 use rand::SeedableRng;
-use sqlitegraph::{open_graph, GraphConfig, NodeSpec, EdgeSpec};
+use sqlitegraph::{open_graph, GraphConfig, NodeSpec, EdgeSpec, snapshot::SnapshotId};
 
 mod bench_utils;
 use bench_utils::{MEASURE, WARM_UP, create_benchmark_temp_dir};
@@ -88,7 +86,7 @@ fn create_random_graph(size: usize, edge_count: usize) -> (tempfile::TempDir, st
             from: node_ids[from_idx],
             to: node_ids[to_idx],
             edge_type: "random".to_string(),
-            data: serde_json::json!({"random_id": rng.gen::<u64>()}),
+            data: serde_json::json!({"random_id": rng.r#gen::<u64>()}),
         });
     }
 
@@ -160,7 +158,7 @@ fn bench_star_graph(criterion: &mut Criterion) {
                 let graph = open_graph(&db_path, &GraphConfig::native())
                     .expect("Failed to open graph");
 
-                let _result = graph.bfs(start_node, size as u32);
+                let _result = graph.bfs(SnapshotId::current(), start_node, size as u32);
 
                 std::mem::forget(_temp_dir);
             });
@@ -191,7 +189,7 @@ fn bench_random_graph(criterion: &mut Criterion) {
                 let graph = open_graph(&db_path, &GraphConfig::native())
                     .expect("Failed to open graph");
 
-                let _result = graph.bfs(start_node, size as u32);
+                let _result = graph.bfs(SnapshotId::current(), start_node, size as u32);
 
                 std::mem::forget(_temp_dir);
             });
@@ -220,7 +218,7 @@ fn bench_tree_graph(criterion: &mut Criterion) {
                 let graph = open_graph(&db_path, &GraphConfig::native())
                     .expect("Failed to open graph");
 
-                let _result = graph.bfs(start_node, size as u32);
+                let _result = graph.bfs(SnapshotId::current(), start_node, size as u32);
 
                 std::mem::forget(_temp_dir);
             });
