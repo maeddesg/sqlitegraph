@@ -233,7 +233,8 @@ pub fn delta_encode_scalar(values: &[u32]) -> Vec<u32> {
     deltas.push(values[0]); // First value stored as-is
 
     for i in 1..values.len() {
-        deltas.push(values[i] - values[i - 1]);
+        // Use wrapping_sub to handle decreasing values (wraps around on underflow)
+        deltas.push(values[i].wrapping_sub(values[i - 1]));
     }
 
     deltas
@@ -554,12 +555,15 @@ mod tests {
 
     #[test]
     fn test_delta_encode_decreasing() {
-        // Delta encoding should work with decreasing values too
-        let values = vec![100, 95, 90, 85, 80];
+        // Delta encoding with decreasing values uses wrapping subtraction
+        let values = vec![100u32, 95, 90, 85, 80];
         let deltas = delta_encode_scalar(&values);
 
+        // Expected: 100, wrapping_sub(95), wrapping_sub(90), wrapping_sub(85), wrapping_sub(80)
+        // 95 - 100 = 4294967291 (u32::MAX - 4)
+        // 90 - 95 = 4294967291
+        // etc.
         assert_eq!(deltas, vec![100, 4294967291, 4294967291, 4294967291, 4294967291]);
-        // Note: Negative differences wrap around (u32 underflow)
     }
 
     #[test]
