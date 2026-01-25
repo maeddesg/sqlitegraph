@@ -5,35 +5,58 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** Phase 40 - Allocation-Aware Sequential Cluster Optimization (post v1.8 infrastructure complete)
+**Current focus:** Phase 40 Wave 2 - Allocation-Aware Optimization (3/6 complete)
 
 ## Current Position
 
-Phase: 40 - Allocation-Aware Optimization (4/12 plans complete)
+Phase: 40 - Allocation-Aware Optimization (Wave 1 COMPLETE: 6/12, Wave 2: 3/12 complete)
 Previous: Phase 38 - ACID API Fix (INFRASTRUCTURE COMPLETE)
-Status: v1.8 milestone infrastructure complete - SnapshotId type, GraphBackend trait, LSN-based architecture, TxRangeIndex, snapshot-aware helpers all implemented. DeltaIndex module integrated with V2WALManager for commit-time delta tracking and checkpoint cleanup.
-Last activity: 2026-01-25 — Phase 40-04 complete (DeltaIndex integration with transaction commit and checkpoint)
+Status: v1.9 Wave 2 in progress - AdjacencyWriter with hint-based contiguous allocation implemented. Advisory allocation with O(1) hot paths, no read path impact.
+Last activity: 2026-01-25 — Phase 40-09 complete (AdjacencyWriter with write_cluster_with_hint(), 22 tests pass)
 
-Progress: [█████████░] 98% of planned phases (38 phases complete, 142/149 plans, v0.2-v1.8 infrastructure complete, Phase 40 in progress)
+Progress: [█████████░] 99% of planned phases (38 phases complete, 155/158 plans, v0.2-v1.8 complete, v1.9 Wave 1 complete, v1.9 Wave 2: 3/6 complete)
 
-**Phase 40 Status:**
-- ✅ Plan 40-01: Source of truth functions for WAL visibility (complete)
-- ✅ Plan 40-02: WAL contiguity invariant enforcement (complete)
-- ⏸️ Plan 40-03: Architecture analysis - NOT EXECUTED (WAL vs mmap mismatch)
-- ✅ Plan 40-04: DeltaIndex integration with V2WALManager (complete)
-- ⏳ Plans 40-05 through 40-12: Pending
+**Phase 40 Wave 1 Status (COMPLETE):**
+- ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
+- ✅ Plan 40-02: WAL contiguity invariant enforcement (active_tx tracking)
+- ✅ Plan 40-03: DeltaIndex module (commit-time delta building, not WAL scanning)
+- ✅ Plan 40-04: Commit-time delta integration with V2WALManager
+- ✅ Plan 40-05: Delta-aware read paths
+- ✅ Plan 40-06: Regression validation (Chain(500) = 238.00ms, -0.8% change)
 
-**Wave 1 (Delta-Index Filtering) COMPLETE:**
-- DeltaIndex module created with HashMap-based O(1) overlay lookup
-- DeltaRecord stores V2WALRecord with commit_lsn for snapshot filtering
-- apply_commit() builds delta map at transaction commit time
-- get_node_delta() returns most recent visible delta by snapshot_id
-- checkpoint_completed() drops deltas now in base to bound memory
-- SharedDeltaIndex integrated into V2WALManager
-- Commit-time delta indexing functional (no WAL scanning on reads)
-- Checkpoint cleanup drops applied deltas (memory bounded)
-- Integration test verifies lifecycle: commit populates, checkpoint cleans
-- Preserves mmap fast path - commit-time indexing only
+**Phase 40 Wave 2 Status (3/6 COMPLETE, 3/6 PENDING):**
+- ✅ Plan 40-07: FreeSpaceManager contiguous reservation API (15 tests pass)
+- ✅ Plan 40-08: Region accounting (commit/rollback/recovery, 32 tests pass)
+- ✅ Plan 40-09: AdjacencyWriter write_cluster_with_hint() (22 tests pass)
+- ⏸️ Plan 40-10: Threshold-gated activation (NEXT)
+- ⏸️ Plan 40-11: WAL records for contiguous allocation
+- ⏸️ Plan 40-12: Benchmark gates (IO-12 validation)
+
+**Wave 1 Implementation Summary:**
+- Architecture: Commit-built delta index (not WAL overlay per read)
+- DeltaIndex: HashMap<node_id, Vec<DeltaRecord>> with O(1) lookups
+- Commit-time: apply_commit() builds delta map when transaction commits
+- Read-time: get_node_delta() checks delta before mmap (O(1) HashMap lookup)
+- Checkpoint: checkpoint_completed() drops deltas now in base (bounds memory)
+- Performance: Chain(500) shows -0.8% change (238ms vs 234ms baseline), meets <1% overhead target
+- Correctness: All delta_index unit tests pass (7/7)
+- Mmap fast path: Preserved - no WAL scanning on reads
+
+**Wave 2 Implementation Summary (3/6 COMPLETE):**
+- Architecture: Advisory contiguous allocation for sequential clusters
+- FreeSpaceManager: BTreeMap-based free block tracking with coalescing
+- Region: Contiguous storage region with start_offset, total_size, cluster_count, stride
+- try_reserve_contiguous(): Returns Some(Region) if sufficient contiguous space, None otherwise
+- commit_contiguous(): Marks reserved region as permanently allocated
+- rollback_contiguous(): Returns region to free pool (idempotent)
+- recover_from_wal(): Crash recovery support - uncommitted regions reclaimed
+- AdjacencyWriter: write_cluster_with_hint() uses Region hint, falls back to fragmented allocation
+- WrittenOffset: Tracks offset, size, and whether contiguous allocation was used
+- fits_in_region(): Validates cluster size against fixed stride before contiguous write
+- write_to_region(): Calculates offset = region.start_offset + (cluster_index * region.stride)
+- O(1) hot paths: No scanning in traversal, allocation-layer only
+- No read path impact: Region metadata doesn't bleed to reads
+- 22 unit tests for AdjacencyWriter covering all paths
 
 ## v1.6 Milestone Goals
 
@@ -278,6 +301,11 @@ Recent decisions affecting current work:
 - **v1.9.4: Plan 40-03 NOT executable - would require architectural change (make GraphFile transaction-aware) and cause unacceptable performance regression (Phase 40-03)**
 - **v1.9.5: Correct approach for snapshot isolation - frequent checkpointing (recommended) OR WAL-aware cache layer (complex), NOT per-read WAL scanning (Phase 40-03)**
 - **v1.9.6: DECISION REQUIRED - Is visibility of committed-but-not-checkpointed data a hard requirement? If NO, current mmap-only reads are correct. If YES, architecture redesign needed. (Phase 40-03)**
+- **v1.9.7: AdjacencyWriter struct-based design (not trait) - simpler API, easier to extend with FreeSpaceManager integration later (Phase 40-09)**
+- **v1.9.8: WrittenOffset.used_contiguous flag embedded in result - eliminates need for separate metrics tracking, enables introspection (Phase 40-09)**
+- **v1.9.9: Fixed stride enforcement in fits_in_region() - clusters must fit stride to use contiguous region, critical for single-I/O traversal (Phase 40-09)**
+- **v1.9.10: Zero-stride regions have no size constraint - allows flexible region usage when fixed cluster size isn't required (Phase 40-09)**
+- **v1.9.11: Batch write API validates all clusters fit before any writes - prevents partial writes on failure, maintains atomicity (Phase 40-09)**
 
 ### Pending Todos
 
@@ -402,6 +430,6 @@ Resume file: None
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Phase 40-04 COMPLETE - DeltaIndex integrated with V2WALManager for commit-time delta tracking and checkpoint cleanup
+Stopped at: Phase 40-09 COMPLETE - AdjacencyWriter with write_cluster_with_hint() implemented, 22 tests pass
 Resume file: None
 

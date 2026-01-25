@@ -56,7 +56,10 @@ pub mod free_space;
 
 pub use adjacency_writer::{AdjacencyWriter, WrittenOffset};
 pub use delta_index::{DeltaIndex, DeltaRecord, SharedDeltaIndex};
-pub use free_space::{ContiguousAllocation, FreeSpaceError, FreeSpaceManager, Region, WalRecoveryState};
+pub use free_space::{
+    ChainAllocationTrigger, ContiguousAllocation, FreeSpaceError, FreeSpaceManager,
+    Region, WalRecoveryState, CHAIN_THRESHOLD,
+};
 
 // JSON validation exports
 pub use self::json_validation::{JsonLimits, JsonValidationError, parse_and_validate_json, parse_and_validate_json_str};
