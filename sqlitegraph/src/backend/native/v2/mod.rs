@@ -8,6 +8,7 @@ pub mod edge_cluster;
 pub mod export;
 pub mod free_space;
 pub mod import;
+pub mod kv_store;
 pub mod migration;
 pub mod node_record_v2;
 pub mod planner;
@@ -28,6 +29,7 @@ pub use import::{
     ImportFactory, ImportMode, ImportValidator, PostImportValidator, V2Importer, V2ImportConfig,
     ImportResult, ImportValidationReport, SnapshotImporter, SnapshotImportConfig, SnapshotImportResult, SnapshotImportValidationReport,
 };
+pub use kv_store::{KvEntry, KvMetadata, KvStore, KvStoreError, KvValue};
 pub use restore::{RestoreConfig, RestoreResult, restore_backup, restore};
 pub use migration::{detect_format_version, migrate_file, FormatVersion, MigrationResult};
 pub use node_record_v2::{NodeRecordV2, NodeRecordV2Ext};
