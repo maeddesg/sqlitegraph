@@ -5,22 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** Phase 43 - Transactional KV Store
+**Current focus:** Phase 44 - Pub/Sub (Minimal, In-Process)
 
 ## Current Position
 
-Phase: 43 - Transactional KV Store (3/4 plans complete)
-Previous: Phase 42 - SIMD / AVX Acceleration (COMPLETE)
-Status: Phase 43-03 COMPLETE - Snapshot isolation API for KV operations
-Last activity: 2026-01-26 — Completed 43-03: Snapshot isolation API (48 tests pass)
+Phase: 44 - Pub/Sub (Minimal, In-Process) (0/5 plans complete)
+Previous: Phase 43 - Transactional KV Store (COMPLETE)
+Status: Phase 43 COMPLETE - Transactional KV Store milestone
+Last activity: 2026-01-26 — Completed 43-04: TTL cleanup and integration tests (89 tests pass)
 
-Progress: [█████████░] 95% of planned phases (42 phases complete, 168/169 plans)
+Progress: [█████████░] 96% of planned phases (43 phases complete, 169/178 plans)
 
-**Phase 43 Wave 1 Status (IN PROGRESS):**
+**Phase 43 Status (COMPLETE):**
 - ✅ Plan 43-01: In-memory KV store with HashMap-based storage (18 tests pass)
 - ✅ Plan 43-02: WAL integration for KV operations (42 tests pass)
 - ✅ Plan 43-03: Snapshot isolation API (48 tests pass)
-- ⏳ Plan 43-04: TTL cleanup and testing
+- ✅ Plan 43-04: TTL cleanup and integration tests (89 tests pass)
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -239,15 +239,63 @@ Progress: [█████████░] 95% of planned phases (42 phases comp
 **Phase 42 Wave 3 Status (PENDING):**
 - Plan 42-07: SIMD-optimized HNSW graph traversal (if needed)
 
+## v1.12 Roadmap Summary
+
+**Phases:** 1 phase (43)
+**Depth:** Transactional KV Store
+**Scope:** In-memory key-value storage with snapshot isolation and WAL persistence
+
+**Phase 43 Wave 1 Status (COMPLETE):**
+- ✅ Plan 43-01: In-memory KV store with HashMap-based storage
+- ✅ Plan 43-02: WAL integration for KV operations
+- ✅ Plan 43-03: Snapshot-aware read/write API (GraphBackend trait integration)
+- ✅ Plan 43-04: TTL lazy cleanup and integration tests
+
+**Wave 1 Implementation Summary:**
+- Architecture: KV store as VIEW over Native V2 storage (not separate system)
+- HashMap-based storage with O(1) lookups (matches DeltaIndex pattern)
+- Snapshot isolation: Version-based filtering (version <= snapshot_id.as_lsn())
+- TTL: Lazy cleanup on read (no background threads)
+- WAL integration: KvSet (type 31) and KvDelete (type 32) record types
+- Recovery: V2WALRecovery orchestrator replays KV records during crash recovery
+- Public API: GraphBackend trait methods (kv_get, kv_set, kv_delete) feature-gated to native-v2
+- Test coverage: 89 tests (17 unit + 7 snapshot + 9 TTL + 10 WAL + 14 WAL integration + 32 comprehensive integration)
+
+**Files Created:**
+- kv_store/mod.rs: Module architecture with VIEW documentation
+- kv_store/types.rs: KvValue enum (6 types), KvMetadata, KvEntry, KvStoreError
+- kv_store/store.rs: KvStore implementation with HashMap storage and snapshot-aware operations
+- kv_store/ttl.rs: TTL helpers (is_expired, seconds_until_expiration, cleanup_expired_entries)
+- kv_store/wal.rs: WAL integration helpers (serialize/deserialize, apply_set/apply_delete)
+- kv_store/tests.rs: Unit tests for basic operations
+- kv_store/wal_tests.rs: WAL integration and recovery tests
+- kv_store/integration_tests.rs: Comprehensive integration test suite
+
+**Key Design Decisions:**
+- Byte keys (Vec<u8>) for maximum flexibility
+- NO internal version counter - versions come from WAL commit LSN
+- get() returns cloned value (not reference) to avoid lifetime issues with RwLock
+- TTL precision: Second-level with graceful overflow handling
+- Cleanup strategy: Lazy on read (correctness) + optional manual (optimization)
+
+**Success Criteria (all met):**
+- [x] KvStore module with snapshot-aware get/set/delete operations
+- [x] KV operations write WAL records (KvSet, KvDelete) for persistence
+- [x] WAL recovery replays KV records correctly
+- [x] GraphBackend trait has kv_get, kv_set, kv_delete methods requiring snapshot_id
+- [x] TTL lazy cleanup implemented (checked on read, no background threads)
+- [x] Integration tests cover: basic ops, TTL, snapshot isolation, transactions, WAL recovery
+- [x] All 89 tests pass
+
 ### v1.6 Roadmap Summary (Archived)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 133
-- Total plans planned: 133
+- Total plans completed: 169
+- Total plans planned: 178
 - Average duration: 7 min
-- Total execution time: ~15.5 hours
+- Total execution time: ~19.7 hours
 
 **By Phase:**
 
@@ -260,6 +308,11 @@ Progress: [█████████░] 95% of planned phases (42 phases comp
 | v1.4 (29-32) | 12 | ~13 min | ~3 min |
 | v1.6 (33-36) | 11 | ~15 min | ~2 min |
 | 37 - Gap Analysis | 5 | ~1h 30min | ~18 min |
+| 38 - ACID API Fix | 6 | ~42 min | ~7 min |
+| 40 - WAL & Allocation | 12 | ~2h | ~10 min |
+| 41 - ACID Completion | 1 | ~7 min | ~7 min |
+| 42 - SIMD / AVX | 6 | ~1h | ~10 min |
+| 43 - Transactional KV | 4 | ~35 min | ~9 min |
 
 **Recent Trend:**
 - Last 5 plans: ~7 min each

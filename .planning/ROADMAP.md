@@ -306,11 +306,11 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 ---
 
-## v1.12 Transactional KV Store (Phase 43) - PLANNED
+## v1.12 Transactional KV Store (Phase 43) - COMPLETE
 
 **Milestone Goal:** Implement transactional KV store as a VIEW over Native V2 storage with snapshot_id versioning and lazy TTL cleanup
 
-**Status:** PLANNED
+**Status:** COMPLETE (2026-01-26)
 
 **Problem:** Graph databases need flexible key-value storage for metadata, caching, and application data. SQLiteGraph requires a KV store that participates in the same transaction system as graph operations, ensuring ACID properties across both graph and KV data.
 
@@ -335,13 +335,20 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 - [x] 43-04-PLAN.md — TTL lazy cleanup and integration tests
 
 **Success Criteria:**
-- KvStore module with snapshot-aware get/set/delete operations
-- KV operations write WAL records (KvSet, KvDelete) for persistence
-- WAL recovery replays KV records correctly
-- GraphBackend trait has kv_get, kv_set, kv_delete methods requiring snapshot_id
-- TTL lazy cleanup implemented (checked on read, no background threads)
-- Integration tests cover: basic ops, TTL, snapshot isolation, transactions, WAL recovery
-- All tests pass
+- [x] KvStore module with snapshot-aware get/set/delete operations
+- [x] KV operations write WAL records (KvSet, KvDelete) for persistence
+- [x] WAL recovery replays KV records correctly
+- [x] GraphBackend trait has kv_get, kv_set, kv_delete methods requiring snapshot_id
+- [x] TTL lazy cleanup implemented (checked on read, no background threads)
+- [x] Integration tests cover: basic ops, TTL, snapshot isolation, transactions, WAL recovery
+- [x] All tests pass (89 tests: 17 unit + 7 snapshot + 9 TTL + 10 WAL + 14 WAL integration + 32 comprehensive integration)
+
+**Implementation Metrics:**
+- Files created: 7 (mod.rs, types.rs, store.rs, tests.rs, wal.rs, wal_tests.rs, ttl.rs, integration_tests.rs)
+- Lines of code: ~1,800 lines
+- Test coverage: 89 tests passing
+- API methods: 8 public methods (new, get, get_at_snapshot, set, delete, exists, len, cleanup_expired)
+- WAL record types: 2 (KvSet=31, KvDelete=32)
 
 ---
 
@@ -416,7 +423,7 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Complete (IO-12 target NOT achieved) | 2026-01-25 |
 | 41. ACID API Completion | v1.10 | 1/1 | Complete | 2026-01-25 |
 | 42. SIMD / AVX Acceleration | v1.11 | 6/6 | Complete | 2026-01-25 |
-| 43. Transactional KV Store | v1.12 | 4/4 | Planned | TBD |
+| 43. Transactional KV Store | v1.12 | 4/4 | Complete | 2026-01-26 |
 | 44. Pub/Sub (Minimal) | v1.13 | 0/5 | Planned | TBD |
 
-**Overall Progress:** 178/178 plans planned (165 complete, 13 planned). v0.2-v1.11 complete, v1.12-v1.13 planned.
+**Overall Progress:** 178/178 plans planned (166 complete, 12 planned). v0.2-v1.12 complete, v1.13 planned.

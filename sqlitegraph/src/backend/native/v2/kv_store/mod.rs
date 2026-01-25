@@ -34,6 +34,7 @@
 //! - [`integration_tests`]: Comprehensive integration test suite
 
 pub mod integration_tests;
+pub mod snapshot_tests;
 pub mod store;
 pub mod tests;
 pub mod types;
