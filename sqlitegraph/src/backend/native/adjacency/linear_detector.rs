@@ -950,6 +950,82 @@ impl LinearDetector {
             result
         }
     }
+
+    /// Predict the total chain length based on current observations.
+    ///
+    /// This method provides an estimate of the final chain length for allocation-aware
+    /// optimization (Phase 40). The prediction is used to determine whether to trigger
+    /// contiguous allocation during writes.
+    ///
+    /// # Prediction Strategy
+    ///
+    /// - **Linear confirmed**: Returns the max of cluster_offsets.len() and consecutive_linear
+    ///   (handles both `observe()` and `observe_with_cluster()` usage)
+    /// - **Accumulating**: Returns the current consecutive linear count
+    /// - **Unknown/Branching**: Returns 0 (no chain detected)
+    ///
+    /// # Integration with Write-Path Optimization
+    ///
+    /// When writing clusters, this method can be called to predict the chain length:
+    /// - If predicted >= CHAIN_THRESHOLD, trigger contiguous allocation
+    /// - Otherwise, use normal fragmented allocation
+    ///
+    /// # Returns
+    ///
+    /// Predicted chain length as `usize` (number of clusters/nodes in the chain).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use crate::backend::native::adjacency::LinearDetector;
+    ///
+    /// let mut detector = LinearDetector::new();
+    ///
+    /// // Initial state: no prediction
+    /// assert_eq!(detector.predicted_chain_length(), 0);
+    ///
+    /// // Observing linear pattern
+    /// detector.observe(1, 1);
+    /// assert_eq!(detector.predicted_chain_length(), 1);
+    ///
+    /// detector.observe(2, 1);
+    /// assert_eq!(detector.predicted_chain_length(), 2);
+    ///
+    /// // After threshold: prediction uses cluster_offsets
+    /// detector.observe_with_cluster(3, 1, 9216, 4096);
+    /// assert_eq!(detector.predicted_chain_length(), 3);
+    /// ```
+    #[inline]
+    pub fn predicted_chain_length(&self) -> usize {
+        match self.state {
+            DetectorState::Linear => {
+                // Linear confirmed: use max of cluster count and consecutive count
+                // This handles both observe() and observe_with_cluster() usage
+                self.cluster_offsets.len().max(self.consecutive_linear as usize)
+            }
+            DetectorState::Accumulating => {
+                // Accumulating: use consecutive linear count
+                self.consecutive_linear as usize
+            }
+            DetectorState::Unknown | DetectorState::Branching => {
+                // No linear pattern detected
+                0
+            }
+        }
+    }
+
+    /// Get the current observed chain length (number of linear steps observed).
+    ///
+    /// This is a helper for accessing the raw consecutive linear count.
+    /// For most use cases, `predicted_chain_length()` is preferred.
+    ///
+    /// # Returns
+    ///
+    /// Number of consecutive linear steps observed so far.
+    #[inline]
+    pub fn observed_length(&self) -> usize {
+        self.consecutive_linear as usize
+    }
 }
 
 impl Default for LinearDetector {
@@ -1950,5 +2026,183 @@ mod tests {
 
         // Therefore, should NOT use sequential read
         assert!(!detector.should_use_sequential_read());
+    }
+
+    // === 40-10: predicted_chain_length() Tests ===
+
+    #[test]
+    fn test_predicted_chain_length_initial_state() {
+        let detector = LinearDetector::new();
+        assert_eq!(detector.predicted_chain_length(), 0);
+        assert_eq!(detector.observed_length(), 0);
+    }
+
+    #[test]
+    fn test_predicted_chain_length_accumulating() {
+        let mut detector = LinearDetector::new();
+
+        // First observation: Unknown -> Accumulating
+        detector.observe(1, 1);
+        assert_eq!(detector.predicted_chain_length(), 1);
+
+        // Second observation: still Accumulating
+        detector.observe(2, 1);
+        assert_eq!(detector.predicted_chain_length(), 2);
+    }
+
+    #[test]
+    fn test_predicted_chain_length_linear_confirmed() {
+        let mut detector = LinearDetector::new();
+
+        // Reach threshold (3 for default)
+        detector.observe(1, 1);
+        detector.observe(2, 1);
+        detector.observe(3, 1);
+
+        assert!(detector.is_linear_confirmed());
+        // With observe() (not observe_with_cluster), cluster_offsets is empty
+        // So predicted uses consecutive_linear
+        assert_eq!(detector.predicted_chain_length(), 3);
+    }
+
+    #[test]
+    fn test_predicted_chain_length_with_clusters() {
+        let mut detector = LinearDetector::new();
+
+        // Use observe_with_cluster to populate cluster_offsets
+        detector.observe_with_cluster(1, 1, 0, 4096);
+        detector.observe_with_cluster(2, 1, 4096, 4096);
+        detector.observe_with_cluster(3, 1, 8192, 4096);
+
+        assert!(detector.is_linear_confirmed());
+        // With cluster_offsets populated, uses cluster_offsets.len()
+        assert_eq!(detector.predicted_chain_length(), 3);
+        assert_eq!(detector.cluster_offsets().len(), 3);
+    }
+
+    #[test]
+    fn test_predicted_chain_length_branching() {
+        let mut detector = LinearDetector::new();
+
+        // Immediate branching
+        detector.observe(1, 2);
+
+        assert_eq!(detector.predicted_chain_length(), 0);
+        assert!(!detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_predicted_chain_length_dead_end() {
+        let mut detector = LinearDetector::new();
+
+        // Dead end (degree 0) stays in Unknown
+        detector.observe(1, 0);
+
+        assert_eq!(detector.predicted_chain_length(), 0);
+        assert!(!detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_predicted_chain_length_long_chain() {
+        let mut detector = LinearDetector::new();
+
+        // Simulate a long linear chain using observe_with_cluster
+        // to populate cluster_offsets for accurate prediction
+        for i in 0..15 {
+            let offset = (i * 4096) as u64;
+            detector.observe_with_cluster(i, 1, offset, 4096);
+        }
+
+        // With observe_with_cluster, cluster_offsets.len() gives accurate count
+        assert_eq!(detector.predicted_chain_length(), 15);
+        assert!(detector.is_linear_confirmed());
+        assert_eq!(detector.cluster_offsets().len(), 15);
+    }
+
+    #[test]
+    fn test_predicted_chain_length_long_chain_with_observe_only() {
+        let mut detector = LinearDetector::new();
+
+        // When using observe() (not observe_with_cluster), consecutive_linear
+        // stops incrementing at threshold, so prediction is conservative
+        for i in 0..15 {
+            detector.observe(i, 1);
+        }
+
+        // observe() doesn't populate cluster_offsets, so prediction
+        // uses consecutive_linear which stops at threshold
+        assert_eq!(detector.predicted_chain_length(), 3); // threshold value
+        assert!(detector.is_linear_confirmed());
+        assert_eq!(detector.cluster_offsets().len(), 0); // no clusters recorded
+    }
+
+    #[test]
+    fn test_predicted_chain_length_linear_then_branching() {
+        let mut detector = LinearDetector::new();
+
+        // Build linear chain
+        detector.observe(1, 1);
+        detector.observe(2, 1);
+        detector.observe(3, 1);
+        assert_eq!(detector.predicted_chain_length(), 3);
+
+        // Branch
+        detector.observe(4, 2);
+
+        // After branching, prediction returns 0
+        assert_eq!(detector.predicted_chain_length(), 0);
+        assert!(!detector.is_linear_confirmed());
+    }
+
+    #[test]
+    fn test_predicted_chain_length_reset() {
+        let mut detector = LinearDetector::new();
+
+        detector.observe(1, 1);
+        detector.observe(2, 1);
+        assert_eq!(detector.predicted_chain_length(), 2);
+
+        detector.reset();
+        assert_eq!(detector.predicted_chain_length(), 0);
+    }
+
+    #[test]
+    fn test_predicted_chain_length_with_custom_threshold() {
+        let mut detector = LinearDetector::with_threshold(5);
+
+        // Below custom threshold
+        for i in 0..3 {
+            detector.observe(i, 1);
+        }
+        // Still accumulating, returns consecutive_linear
+        assert_eq!(detector.predicted_chain_length(), 3);
+        assert!(!detector.is_linear_confirmed());
+
+        // Reach custom threshold
+        detector.observe(3, 1);
+        detector.observe(4, 1);
+        assert!(detector.is_linear_confirmed());
+        assert_eq!(detector.predicted_chain_length(), 5);
+    }
+
+    #[test]
+    fn test_observed_length_helper() {
+        let mut detector = LinearDetector::new();
+
+        assert_eq!(detector.observed_length(), 0);
+
+        detector.observe(1, 1);
+        assert_eq!(detector.observed_length(), 1);
+
+        detector.observe(2, 1);
+        assert_eq!(detector.observed_length(), 2);
+
+        detector.observe(3, 1);
+        assert_eq!(detector.observed_length(), 3);
+
+        // Branching resets state
+        detector.observe(4, 2);
+        // observed_length returns raw consecutive_linear (0 after branching)
+        assert_eq!(detector.observed_length(), 0);
     }
 }
