@@ -351,6 +351,21 @@ impl V2GraphIntegrator {
                     region.start_offset, region.total_size);
                 Ok(())
             }
+
+            // KV operations - handled by KV store during recovery
+            V2WALRecord::KvSet { key, version, .. } => {
+                // KV set operations are handled by the KV store during recovery
+                // Log for checkpoint awareness
+                println!("V2 KvSet: key_len={} version={}", key.len(), version);
+                Ok(())
+            }
+
+            V2WALRecord::KvDelete { key, old_version, .. } => {
+                // KV delete operations are handled by the KV store during recovery
+                // Log for checkpoint awareness
+                println!("V2 KvDelete: key_len={} old_version={}", key.len(), old_version);
+                Ok(())
+            }
         }
     }
 

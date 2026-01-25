@@ -361,6 +361,37 @@ impl TransactionValidator {
             | V2WALRecord::Checkpoint { .. }
             | V2WALRecord::HeaderUpdate { .. }
             | V2WALRecord::SegmentEnd { .. } => Ok(ValidationResult::Valid),
+            // KV operations - basic validation
+            V2WALRecord::KvSet { key, value_bytes, version, .. } => {
+                if key.is_empty() {
+                    Ok(ValidationResult::Invalid {
+                        errors: vec!["KvSet key cannot be empty".to_string()],
+                        critical_error: format!("KvSet at LSN {} has empty key", lsn),
+                    })
+                } else if *version == 0 {
+                    Ok(ValidationResult::Invalid {
+                        errors: vec!["KvSet version cannot be zero".to_string()],
+                        critical_error: format!("KvSet at LSN {} has invalid version", lsn),
+                    })
+                } else {
+                    Ok(ValidationResult::Valid)
+                }
+            }
+            V2WALRecord::KvDelete { key, old_version, .. } => {
+                if key.is_empty() {
+                    Ok(ValidationResult::Invalid {
+                        errors: vec!["KvDelete key cannot be empty".to_string()],
+                        critical_error: format!("KvDelete at LSN {} has empty key", lsn),
+                    })
+                } else if *old_version == 0 {
+                    Ok(ValidationResult::Invalid {
+                        errors: vec!["KvDelete old_version cannot be zero".to_string()],
+                        critical_error: format!("KvDelete at LSN {} has invalid version", lsn),
+                    })
+                } else {
+                    Ok(ValidationResult::Valid)
+                }
+            }
         }
     }
 

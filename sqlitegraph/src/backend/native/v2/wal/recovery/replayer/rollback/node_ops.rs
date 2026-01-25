@@ -28,6 +28,8 @@ pub struct RollbackSummary {
     pub cluster_create_count: u32,
     pub free_space_allocate_count: u32,
     pub free_space_deallocate_count: u32,
+    pub kv_set_count: u32,
+    pub kv_delete_count: u32,
 }
 
 impl RollbackSummary {
@@ -54,6 +56,11 @@ impl RollbackSummary {
     /// Get the total number of data operations (node + string)
     pub fn data_operations_count(&self) -> usize {
         (self.node_insert_count + self.node_update_count + self.node_delete_count + self.string_insert_count) as usize
+    }
+
+    /// Check if there are any KV operations to rollback
+    pub fn has_kv_operations(&self) -> bool {
+        self.kv_set_count + self.kv_delete_count > 0
     }
 }
 

@@ -67,6 +67,8 @@ pub struct ReplayStatistics {
     pub string_operations: AtomicU64,
     /// Number of free space operations
     pub free_space_operations: AtomicU64,
+    /// Number of KV operations
+    pub kv_operations: AtomicU64,
     /// Maximum operation time in milliseconds
     pub max_operation_time_ms: AtomicU64,
     /// Bytes written to graph file
@@ -90,6 +92,7 @@ impl ReplayStatistics {
             edge_operations: AtomicU64::new(0),
             string_operations: AtomicU64::new(0),
             free_space_operations: AtomicU64::new(0),
+            kv_operations: AtomicU64::new(0),
             max_operation_time_ms: AtomicU64::new(0),
             bytes_written: AtomicU64::new(0),
             avg_operation_time_ms_cache: 0.0,
@@ -122,6 +125,11 @@ impl ReplayStatistics {
     /// Record a free space operation (lock-free)
     pub fn record_free_space_operation(&self) {
         self.free_space_operations.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a KV operation (lock-free)
+    pub fn record_kv_operation(&self) {
+        self.kv_operations.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Record bytes written to graph file (lock-free)
@@ -287,6 +295,21 @@ pub enum RollbackOperation {
         block_size: u64,
         block_type: u8,
     },
+    /// Rollback KV set operation
+    KvSet {
+        key: Vec<u8>,
+        value_bytes: Vec<u8>,
+        value_type: u8,
+        ttl_seconds: Option<u64>,
+        version: u64,
+    },
+    /// Rollback KV delete operation
+    KvDelete {
+        key: Vec<u8>,
+        old_value_bytes: Option<Vec<u8>>,
+        old_value_type: u8,
+        version: u64,
+    },
 }
 
 impl RollbackOperation {
@@ -304,6 +327,8 @@ impl RollbackOperation {
             RollbackOperation::ClusterCreate { .. } => "ClusterCreate",
             RollbackOperation::FreeSpaceAllocate { .. } => "FreeSpaceAllocate",
             RollbackOperation::FreeSpaceDeallocate { .. } => "FreeSpaceDeallocate",
+            RollbackOperation::KvSet { .. } => "KvSet",
+            RollbackOperation::KvDelete { .. } => "KvDelete",
         }
     }
 
@@ -325,6 +350,11 @@ impl RollbackOperation {
     /// Check if this operation affects edge data
     pub fn affects_edges(&self) -> bool {
         matches!(self, RollbackOperation::EdgeInsert { .. } | RollbackOperation::EdgeUpdate { .. } | RollbackOperation::EdgeDelete { .. })
+    }
+
+    /// Check if this operation affects KV data
+    pub fn affects_kv(&self) -> bool {
+        matches!(self, RollbackOperation::KvSet { .. } | RollbackOperation::KvDelete { .. })
     }
 }
 

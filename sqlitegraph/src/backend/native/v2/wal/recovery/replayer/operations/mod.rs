@@ -7,7 +7,7 @@ use crate::backend::native::{
     GraphFile, NodeStore, EdgeStore,
 };
 use crate::backend::native::v2::{
-    StringTable, FreeSpaceManager,
+    StringTable, FreeSpaceManager, KvStore,
 };
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex, RwLock};
 mod node_ops;
 mod edge_ops;
 mod transaction_ops;
+mod kv_ops;
 
 /// Production-grade replay operations handler
 ///
@@ -25,6 +26,7 @@ mod transaction_ops;
 /// - `node_ops`: Node insertion, update, deletion
 /// - `edge_ops`: Edge insertion, update, deletion
 /// - `transaction_ops`: String insertion, cluster creation, free space management, header updates
+/// - `kv_ops`: KV store set/delete operations
 pub struct DefaultReplayOperations {
     /// Graph file reference
     pub(in crate::backend::native::v2::wal::recovery::replayer) graph_file: Arc<RwLock<GraphFile>>,
@@ -36,6 +38,8 @@ pub struct DefaultReplayOperations {
     pub(in crate::backend::native::v2::wal::recovery::replayer) string_table: Arc<Mutex<StringTable>>,
     /// Free space manager for slot deallocation
     pub(in crate::backend::native::v2::wal::recovery::replayer) free_space_manager: Arc<Mutex<Option<FreeSpaceManager>>>,
+    /// KV store for key-value operations
+    pub(in crate::backend::native::v2::wal::recovery::replayer) kv_store: Arc<Mutex<KvStore>>,
     /// Statistics tracking (lock-free atomic counters)
     pub(in crate::backend::native::v2::wal::recovery::replayer) statistics: Arc<crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics>,
 }
@@ -48,6 +52,7 @@ impl DefaultReplayOperations {
         edge_store: Arc<Mutex<Option<EdgeStore<'static>>>>,
         string_table: Arc<Mutex<StringTable>>,
         free_space_manager: Arc<Mutex<Option<FreeSpaceManager>>>,
+        kv_store: Arc<Mutex<KvStore>>,
         statistics: Arc<crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics>,
     ) -> Self {
         Self {
@@ -56,6 +61,7 @@ impl DefaultReplayOperations {
             edge_store,
             string_table,
             free_space_manager,
+            kv_store,
             statistics,
         }
     }
@@ -85,6 +91,7 @@ impl DefaultReplayOperations {
         free_space_mgr.add_free_block(2048, 1024 * 1024); // 1MB of free space starting at offset 2048
 
         let free_space_manager = Arc::new(Mutex::new(Some(free_space_mgr)));
+        let kv_store = Arc::new(Mutex::new(KvStore::new()));
         let statistics = Arc::new(crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new());
 
         DefaultReplayOperations {
@@ -93,6 +100,7 @@ impl DefaultReplayOperations {
             edge_store,
             string_table,
             free_space_manager,
+            kv_store,
             statistics,
         }
     }
@@ -120,6 +128,7 @@ mod tests {
         let edge_store: Arc<Mutex<Option<EdgeStore<'static>>>> = Arc::new(Mutex::new(None));
         let string_table = Arc::new(Mutex::new(StringTable::new()));
         let free_space_manager = Arc::new(Mutex::new(None));
+        let kv_store = Arc::new(Mutex::new(KvStore::new()));
         let statistics = Arc::new(crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new());
 
         let ops = DefaultReplayOperations::new(
@@ -128,6 +137,7 @@ mod tests {
             edge_store,
             string_table,
             free_space_manager,
+            kv_store,
             statistics,
         );
 

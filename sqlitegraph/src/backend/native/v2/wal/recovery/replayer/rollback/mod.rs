@@ -143,6 +143,15 @@ impl RollbackSystem {
             RollbackOperation::FreeSpaceDeallocate { block_offset, block_size, block_type } => {
                 free_space_ops::rollback_free_space_deallocate(self, *block_offset, *block_size, *block_type)?;
             }
+            // KV rollback operations - placeholder for future transaction rollback support
+            RollbackOperation::KvSet { .. } => {
+                debug_log!("KV set rollback not yet implemented - skipping");
+                // TODO: Implement KV rollback by restoring previous value or deleting
+            }
+            RollbackOperation::KvDelete { .. } => {
+                debug_log!("KV delete rollback not yet implemented - skipping");
+                // TODO: Implement KV rollback by restoring deleted value
+            }
         }
         Ok(())
     }
@@ -160,6 +169,8 @@ impl RollbackSystem {
         let mut cluster_create_count = 0;
         let mut free_space_allocate_count = 0;
         let mut free_space_deallocate_count = 0;
+        let mut kv_set_count = 0;
+        let mut kv_delete_count = 0;
 
         for operation in &self.operations {
             match operation {
@@ -174,6 +185,8 @@ impl RollbackSystem {
                 RollbackOperation::ClusterCreate { .. } => cluster_create_count += 1,
                 RollbackOperation::FreeSpaceAllocate { .. } => free_space_allocate_count += 1,
                 RollbackOperation::FreeSpaceDeallocate { .. } => free_space_deallocate_count += 1,
+                RollbackOperation::KvSet { .. } => kv_set_count += 1,
+                RollbackOperation::KvDelete { .. } => kv_delete_count += 1,
             }
         }
 
@@ -190,6 +203,8 @@ impl RollbackSystem {
             cluster_create_count,
             free_space_allocate_count,
             free_space_deallocate_count,
+            kv_set_count,
+            kv_delete_count,
         }
     }
 

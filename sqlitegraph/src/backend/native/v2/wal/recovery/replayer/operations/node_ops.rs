@@ -619,6 +619,7 @@ mod tests {
         let free_space_manager = Arc::new(Mutex::new(Some(free_space_mgr)));
 
         let statistics = Arc::new(crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new());
+        let kv_store = Arc::new(Mutex::new(crate::backend::native::v2::KvStore::new()));
 
         // Create operations handler
         let operations = super::super::DefaultReplayOperations::new(
@@ -627,6 +628,7 @@ mod tests {
             edge_store,
             string_table,
             free_space_manager,
+            kv_store,
             statistics,
         );
 

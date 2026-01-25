@@ -1527,6 +1527,50 @@ impl TwoPhaseCommitCoordinator {
                     });
                 }
             }
+
+            V2WALRecord::KvSet { key, version, .. } => {
+                // Validate KV set records
+                if key.is_empty() {
+                    return Err(NativeBackendError::InvalidParameter {
+                        context: format!(
+                            "Pre-commit validation failed: KvSet record {} has empty key",
+                            index
+                        ),
+                        source: None,
+                    });
+                }
+                if *version == 0 {
+                    return Err(NativeBackendError::InvalidParameter {
+                        context: format!(
+                            "Pre-commit validation failed: KvSet record {} has invalid version {} (must be > 0)",
+                            index, version
+                        ),
+                        source: None,
+                    });
+                }
+            }
+
+            V2WALRecord::KvDelete { key, old_version, .. } => {
+                // Validate KV delete records
+                if key.is_empty() {
+                    return Err(NativeBackendError::InvalidParameter {
+                        context: format!(
+                            "Pre-commit validation failed: KvDelete record {} has empty key",
+                            index
+                        ),
+                        source: None,
+                    });
+                }
+                if *old_version == 0 {
+                    return Err(NativeBackendError::InvalidParameter {
+                        context: format!(
+                            "Pre-commit validation failed: KvDelete record {} has invalid old_version {} (must be > 0)",
+                            index, old_version
+                        ),
+                        source: None,
+                    });
+                }
+            }
         }
 
         Ok(())

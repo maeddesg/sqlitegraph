@@ -80,6 +80,7 @@ impl V2GraphFileReplayer {
         let edge_store: Arc<Mutex<Option<EdgeStore<'static>>>> = Arc::new(Mutex::new(None));
         let string_table = Arc::new(Mutex::new(StringTable::new()));
         let free_space_manager = Arc::new(Mutex::new(None));
+        let kv_store = Arc::new(Mutex::new(crate::backend::native::v2::KvStore::new()));
         let statistics = Arc::new(ReplayStatistics::new());
 
         // Create rollback system
@@ -97,6 +98,7 @@ impl V2GraphFileReplayer {
             edge_store.clone(),
             string_table.clone(),
             free_space_manager.clone(),
+            kv_store.clone(),
             statistics.clone(),
         );
 
@@ -401,6 +403,15 @@ impl V2GraphFileReplayer {
                 // Contiguous allocation records are handled by the recovery coordinator
                 debug_log!("Contiguous allocation record encountered during replay - handled by recovery coordinator");
                 Ok(())
+            }
+
+            // KV operations - handle via KV operations module
+            V2WALRecord::KvSet { key, value_bytes, value_type, ttl_seconds, version } => {
+                self.operations.handle_kv_set(key.clone(), value_bytes.clone(), *value_type, *ttl_seconds, *version, rollback_data)
+            }
+
+            V2WALRecord::KvDelete { key, old_value_bytes, old_value_type, old_version } => {
+                self.operations.handle_kv_delete(key.clone(), old_value_bytes.clone(), *old_value_type, *old_version, rollback_data)
             }
         }
     }

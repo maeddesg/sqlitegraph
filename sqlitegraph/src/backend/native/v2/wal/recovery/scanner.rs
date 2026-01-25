@@ -508,6 +508,9 @@ impl TransactionScanner {
             | V2WALRecord::SegmentEnd { .. } => None,
             V2WALRecord::AllocateContiguous { txn_id, .. } => Some(*txn_id),
             V2WALRecord::CommitContiguous { txn_id, .. } => Some(*txn_id),
+            // KV operations - generate pseudo transaction IDs for tracking
+            V2WALRecord::KvSet { version, .. } => Some(*version),
+            V2WALRecord::KvDelete { old_version, .. } => Some(*old_version),
         }
     }
 
