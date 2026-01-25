@@ -19,7 +19,8 @@ None — No specialized domain expertise directories available. Relying on codeb
 - **v1.6 Chain Locality** — Phases 33-36 (shipped 2026-01-21)
 - **v1.7 Gap Closure** — Phase 37 (implementation complete)
 - **v1.8 ACID API Fix** — Phase 38 (complete)
-- **v1.9 WAL Filtering & Allocation Optimization** — Phase 40 (planned)
+- **v1.9 WAL Filtering & Allocation Optimization** — Phase 40 (complete)
+- **v1.10 ACID API Completion** — Phase 41 (planned)
 
 ---
 
@@ -221,8 +222,6 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 **Key Finding:** The contiguous allocation optimization implementation is complete but did NOT produce the expected 3x performance improvement. The IO-12 target remains unmet.
 
-**Recommendation:** Phase 41 to investigate performance gap or redefine IO-12 target based on actual measurements.
-
 **Plans:**
 - [x] 40-01-PLAN.md — Source of truth functions for WAL visibility
 - [x] 40-02-PLAN.md — Enforce WAL contiguity invariants
@@ -239,10 +238,35 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 ---
 
+## v1.10 ACID API Completion (Phase 41) - PLANNED
+
+**Milestone Goal:** Complete the ACID API fix by removing `*_current()` convenience methods that allow implicit snapshot usage
+
+**Status:** PLANNED
+
+**Problem:** Phase 38 added convenience methods (`get_node_current`, `neighbors_current`, etc.) that implicitly use `SnapshotId::current()`, violating the hard rule that no API may observe state not bound to a committed snapshot_id.
+
+**Hard Rule (NON-NEGOTIABLE):**
+> No API may observe state not bound to a committed snapshot_id.
+> If a value cannot be tied to a committed snapshot → it does not exist.
+
+**Solution:** Remove the `impl dyn GraphBackend` block containing all 9 `*_current()` convenience methods (backend.rs:266-352). These methods are currently unused in the codebase, making this a clean removal.
+
+**Plans:**
+- [ ] 41-01-PLAN.md — Remove `*_current()` convenience methods from GraphBackend
+
+**Success Criteria:**
+- All public read APIs require explicit snapshot_id parameter
+- No convenience shortcut exists for implicit snapshot usage
+- Compiler enforces snapshot passing at all call sites
+- Architectural decision logged documenting hard rule enforcement
+
+---
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37 → 38
+Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 40 → 41
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -254,5 +278,6 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 37. Gap Analysis and Closure | v1.7 | 6/6 | Implementation Complete | 2026-01-25 |
 | 38. ACID API Fix | v1.8 | 6/6 | Infrastructure Complete | 2026-01-25 |
 | 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Complete (IO-12 target NOT achieved) | 2026-01-25 |
+| 41. ACID API Completion | v1.10 | 0/1 | Planned | TBD |
 
-**Overall Progress:** 158/158 plans planned (158 complete). v0.2-v1.9 complete.
+**Overall Progress:** 159/160 plans planned (158 complete, 1 planned). v0.2-v1.9 complete, v1.10 planned.
