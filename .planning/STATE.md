@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** Phase 41 ACID API Completion - Plan 01 COMPLETE
+**Current focus:** Phase 42 - SIMD / AVX Acceleration
 
 ## Current Position
 
-Phase: 42 - SIMD / AVX Acceleration (Plan 03 COMPLETE)
+Phase: 42 - SIMD / AVX Acceleration (Plan 01 COMPLETE)
 Previous: Phase 41 - ACID API Completion (COMPLETE)
-Status: Phase 42-03 COMPLETE - SIMD-accelerated cosine similarity with AVX2 support
-Last activity: 2026-01-25 — Phase 42-03 complete (SIMD cosine similarity)
+Status: Phase 42-01 COMPLETE - SIMD dot product with AVX2 support and runtime CPU detection
+Last activity: 2026-01-25 — Phase 42-01 complete (SIMD dot product)
 
-Progress: [█████████░] 99% of planned phases (38 phases complete, 159/159 plans, v0.2-v1.9 complete, Phase 41-01 in progress)
+Progress: [█████████░] 99% of planned phases (38 phases complete, 159/159 plans for v0.2-v1.9, Phase 42-01 of v1.11 complete)
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -452,15 +452,15 @@ Resume file: None
 
 ## Session Continuity
 
-Last session: 2026-01-25 19:58:35 UTC
-Stopped at: Completed Phase 42-03 (SIMD cosine similarity)
+Last session: 2026-01-25 20:09:17 UTC
+Stopped at: Completed Phase 42-01 (SIMD dot product)
 Resume file: None
 
 
 **Phase 42 Wave 1 Status (IN PROGRESS):**
-- ✅ Plan 42-01: SIMD dot_product with AVX2 (8 tests pass)
-- ✅ Plan 42-02: AVX2 euclidean distance (11 tests pass)
-- ✅ Plan 42-03: SIMD cosine similarity (46 tests pass)
+- ✅ Plan 42-01: SIMD dot_product with AVX2 (31 tests pass, includes bonus euclidean/cosine)
+- 🔄 Plan 42-02: AVX2 euclidean distance (already implemented in simd.rs, needs integration)
+- 🔄 Plan 42-03: SIMD cosine similarity (already implemented in simd.rs, needs integration)
 - 🔄 Plan 42-04: SIMD manhattan distance (pending)
 - 🔄 Plan 42-05: AVX-512 optimizations (pending)
 - 🔄 Plan 42-06: Benchmark gates (pending)
@@ -473,3 +473,4 @@ Resume file: None
 - Binary correctness: SIMD produces identical results to scalar (within tolerance)
 - Performance: 4-6x speedup for large vectors on AVX2 hardware
 - No API changes: Function signatures and results identical to scalar versions
+- Bonus implementations: euclidean_distance and cosine_similarity also added to simd.rs
