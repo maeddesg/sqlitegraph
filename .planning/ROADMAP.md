@@ -329,10 +329,10 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 - Performance shortcuts that weaken determinism
 
 **Plans:**
-- [ ] 43-01-PLAN.md — KV store module (data structures and in-memory storage)
-- [ ] 43-02-PLAN.md — WAL integration (KV records and transaction participation)
-- [ ] 43-03-PLAN.md — Snapshot-aware read/write API (GraphBackend trait integration)
-- [ ] 43-04-PLAN.md — TTL lazy cleanup and integration tests
+- [x] 43-01-PLAN.md — KV store module (data structures and in-memory storage)
+- [x] 43-02-PLAN.md — WAL integration (KV records and transaction participation)
+- [x] 43-03-PLAN.md — Snapshot-aware read/write API (GraphBackend trait integration)
+- [x] 43-04-PLAN.md — TTL lazy cleanup and integration tests
 
 **Success Criteria:**
 - KvStore module with snapshot-aware get/set/delete operations
@@ -416,7 +416,7 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Complete (IO-12 target NOT achieved) | 2026-01-25 |
 | 41. ACID API Completion | v1.10 | 1/1 | Complete | 2026-01-25 |
 | 42. SIMD / AVX Acceleration | v1.11 | 6/6 | Complete | 2026-01-25 |
-| 43. Transactional KV Store | v1.12 | 0/4 | Planned | TBD |
+| 43. Transactional KV Store | v1.12 | 4/4 | Planned | TBD |
 | 44. Pub/Sub (Minimal) | v1.13 | 0/5 | Planned | TBD |
 
-**Overall Progress:** 174/174 plans planned (165 complete, 9 planned). v0.2-v1.11 complete, v1.12-v1.13 planned.
+**Overall Progress:** 178/178 plans planned (165 complete, 13 planned). v0.2-v1.11 complete, v1.12-v1.13 planned.
