@@ -555,6 +555,46 @@ impl V2WALWriter {
 
         Ok(())
     }
+
+    /// Log a contiguous region allocation to WAL
+    pub fn log_allocate_contiguous(&self, txn_id: u64, region: crate::backend::native::v2::wal::ContiguousRegion) -> NativeResult<u64> {
+        use crate::backend::native::v2::storage::free_space::Region;
+        // Convert from ContiguousRegion (WAL) to Region (free_space)
+        let fs_region = Region::new(region.start_offset, region.total_size)
+            .with_clusters(region.cluster_count, region.stride);
+
+        let record = V2WALRecord::AllocateContiguous {
+            txn_id,
+            region,
+            timestamp: self.current_timestamp(),
+        };
+        self.write_record(record)
+    }
+
+    /// Log a contiguous region commit to WAL
+    pub fn log_commit_contiguous(&self, txn_id: u64, region: crate::backend::native::v2::wal::ContiguousRegion) -> NativeResult<u64> {
+        let record = V2WALRecord::CommitContiguous {
+            txn_id,
+            region,
+        };
+        self.write_record(record)
+    }
+
+    /// Log a contiguous region rollback to WAL
+    pub fn log_rollback_contiguous(&self, region: crate::backend::native::v2::wal::ContiguousRegion) -> NativeResult<u64> {
+        let record = V2WALRecord::RollbackContiguous {
+            region,
+        };
+        self.write_record(record)
+    }
+
+    /// Get current timestamp for WAL records
+    fn current_timestamp(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+    }
 }
 
 #[cfg(test)]
