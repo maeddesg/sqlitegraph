@@ -360,18 +360,21 @@ mod tests {
     fn test_tx_index_is_visible_at() {
         let mut index = TxRangeIndex::new();
 
-        // Transaction 1: LSN 100-200
+        // Transaction 1: LSN 100-200, commits at LSN 200
         index.begin_tx(1, 100);
         index.commit_tx(1, 200);
 
-        // Transaction 2: LSN 300-400
+        // Transaction 2: LSN 300-400, commits at LSN 400
         index.begin_tx(2, 300);
         index.commit_tx(2, 400);
 
-        // Snapshot at 150 should see tx 1's data at LSN 150
-        assert!(index.is_visible_at(150, 150));
+        // Snapshot at 150 should NOT see tx 1's data (tx1 commits at 200, after snapshot 150)
+        assert!(!index.is_visible_at(150, 150));
 
-        // Snapshot at 150 should NOT see tx 2's data (not committed yet)
+        // Snapshot at 200 SHOULD see tx 1's data (tx1 commits at 200, snapshot at 200)
+        assert!(index.is_visible_at(150, 200));
+
+        // Snapshot at 150 should NOT see tx 2's data (tx2 commits at 400, after snapshot 150)
         assert!(!index.is_visible_at(350, 150));
 
         // Snapshot at 400 should see both transactions
