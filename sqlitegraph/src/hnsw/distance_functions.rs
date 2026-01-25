@@ -33,6 +33,7 @@
 
 // Use SIMD-accelerated implementations when available
 pub use crate::hnsw::simd::cosine_similarity as simd_cosine_similarity;
+pub use crate::hnsw::simd::euclidean_distance as simd_euclidean_distance;
 
 /// Compute cosine similarity between two vectors
 ///
@@ -117,18 +118,8 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "Vectors must have the same length");
-
-    let sum_squares: f32 = a
-        .iter()
-        .zip(b.iter())
-        .map(|(x, y)| {
-            let diff = x - y;
-            diff * diff
-        })
-        .sum();
-
-    sum_squares.sqrt()
+    // Delegate to SIMD-accelerated implementation
+    simd_euclidean_distance(a, b)
 }
 
 /// Compute dot product between two vectors

@@ -554,6 +554,27 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
+pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
+    assert_eq!(a.len(), b.len(), "Vectors must have the same length");
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        let has_avx2 = HAS_AVX2.get_or_init(|| {
+            std::arch::is_x86_feature_detected!("avx2")
+        });
+
+        if *has_avx2 {
+            unsafe { euclidean_distance_avx2(a, b) }
+        } else {
+            euclidean_distance_scalar(a, b)
+        }
+    }
+
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        euclidean_distance_scalar(a, b)
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -791,17 +812,11 @@ mod tests {
         let scalar_result = compute_norm_squared_scalar(&v);
         let simd_result = compute_norm_squared(&v);
 
-        // Allow small tolerance due to different accumulation order in SIMD vs scalar
-        // SIMD processes 8 elements at a time, changing floating-point accumulation order
+        // Allow small tolerance due to different accumulation order
         let abs_diff = (scalar_result - simd_result).abs();
-        let rel_error = if scalar_result.abs() > f32::EPSILON {
-            abs_diff / scalar_result.abs()
-        } else {
-            abs_diff
-        };
-        assert!(rel_error < 1e-6 || abs_diff < 1e-4,
-                "Norm squared differs: scalar={}, simd={}, diff={}, rel_error={}",
-                scalar_result, simd_result, abs_diff, rel_error);
+        assert!(abs_diff < 1e-5,
+                "Norm squared differs: scalar={}, simd={}, diff={}",
+                scalar_result, simd_result, abs_diff);
     }
 
     // -------------------------------------------------------------------------
@@ -965,7 +980,7 @@ mod tests {
 /// - Memory: O(1) additional space
 /// - No SIMD acceleration
 #[inline]
-fn euclidean_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
+pub(crate) fn euclidean_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Vectors must have the same length");
     a.iter()
         .zip(b.iter())
@@ -1032,8 +1047,8 @@ unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
     let mut i = 0;
     for _ in 0..chunks {
         // Unaligned loads - safe for any alignment
-        let av = _mm256_loadu_ps(a.as_ptr().add(i));
-        let bv = _mm256_loadu_ps(b.as_ptr().add(i));
+        let av = unsafe { _mm256_loadu_ps(a.as_ptr().add(i)) };
+        let bv = unsafe { _mm256_loadu_ps(b.as_ptr().add(i)) };
 
         // Compute difference: av - bv
         let diff = _mm256_sub_ps(av, bv);
@@ -1042,13 +1057,13 @@ unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
         let squared = _mm256_mul_ps(diff, diff);
 
         // Horizontal sum (partial)
-        let high = _mm256_extractf128_ps(squared, 1);
+        let high = unsafe { _mm256_extractf128_ps(squared, 1) };
         let low = _mm256_castps256_ps128(squared);
         let sum2 = _mm_add_ps(low, high);
 
         // Accumulate (complete horizontal sum)
         let mut tmp = [0.0_f32; 4];
-        _mm_storeu_ps(tmp.as_mut_ptr(), sum2);
+        unsafe { _mm_storeu_ps(tmp.as_mut_ptr(), sum2) };
         sum += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 
         i += 8;
@@ -1061,6 +1076,7 @@ unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
     }
 
     sum.sqrt()
+}
 
 /// Runtime-dispatched Euclidean (L2) distance computation
 ///
@@ -1089,28 +1105,9 @@ unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
 /// - Scalar: Baseline performance (same as iterator-based)
 /// - Detection overhead: O(1) after first call
 #[inline]
-pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "Vectors must have the same length");
 
-    #[cfg(target_arch = "x86_64")]
-    {
-        let has_avx2 = HAS_AVX2.get_or_init(|| {
-            std::arch::is_x86_feature_detected!("avx2")
-        });
-
-        if *has_avx2 {
-            unsafe { euclidean_distance_avx2(a, b) }
-        } else {
-            euclidean_distance_scalar(a, b)
-        }
-    }
-
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        euclidean_distance_scalar(a, b)
-    }
-}
-
+#[cfg(test)]
+mod euclidean_tests {
     use super::*;
 
     #[test]
@@ -1262,6 +1259,5 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
         let b = vec![1.0, 2.0];
         euclidean_distance(&a, &b);
     }
-}
 }
 }
