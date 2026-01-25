@@ -28,6 +28,8 @@
 //! - **index**: [`HnswIndex`] - Main HNSW index implementation with search/insert
 //! - **storage**: [`VectorStorage`] trait - Pluggable vector persistence (in-memory/SQLite)
 //! - **distance_metric**: SIMD-ready vector distance calculations
+//! - **distance_functions**: Low-level distance functions with SIMD optimization
+//! - **simd**: SIMD-accelerated distance functions with runtime CPU detection
 //! - **errors**: Comprehensive error handling for all HNSW operations
 //! - **multilayer**: Multi-layer graph construction and management
 //! - **neighborhood**: Neighbor selection and heuristics for graph connectivity
@@ -236,6 +238,7 @@ pub mod index;
 pub mod layer;
 pub mod multilayer;
 pub mod neighborhood;
+pub mod simd;
 pub mod storage;
 
 #[cfg(test)]
