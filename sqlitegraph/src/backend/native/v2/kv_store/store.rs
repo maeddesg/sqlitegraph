@@ -1,6 +1,7 @@
 //! In-memory HashMap-based KV store implementation
 
 use crate::backend::native::v2::kv_store::types::{KvEntry, KvMetadata, KvStoreError, KvValue};
+use crate::backend::native::v2::kv_store::ttl;
 use crate::snapshot::SnapshotId;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -9,7 +10,8 @@ use std::time::SystemTime;
 /// In-memory key-value store with HashMap-based storage
 #[derive(Debug, Default)]
 pub struct KvStore {
-    entries: RwLock<HashMap<Vec<u8>, KvEntry>>,
+    /// Visible to kv_store modules for WAL recovery and TTL cleanup
+    pub(crate) entries: RwLock<HashMap<Vec<u8>, KvEntry>>,
 }
 
 impl KvStore {
@@ -32,6 +34,8 @@ impl KvStore {
     /// This enforces snapshot isolation: only data committed at or before
     /// the given snapshot_id is visible.
     ///
+    /// TTL is checked lazily: expired entries are filtered on read.
+    ///
     /// # Arguments
     /// * `key` - Key to retrieve
     /// * `snapshot_id` - Only return data committed at or before this snapshot
@@ -48,8 +52,8 @@ impl KvStore {
                 return Ok(None);
             }
 
-            // Check if entry is expired
-            if self.is_expired(entry) {
+            // Check if entry is expired (lazy TTL cleanup)
+            if ttl::is_expired(entry) {
                 return Ok(None);
             }
 
@@ -103,15 +107,34 @@ impl KvStore {
     }
 
     /// Check if a key exists
+    ///
+    /// Note: This checks TTL lazily - expired keys return false even if present in storage.
     pub fn exists(&self, key: &[u8]) -> bool {
         let entries = self.entries.read();
-        entries.contains_key(key)
+        if let Some(entry) = entries.get(key) {
+            // Key exists, but check if expired
+            !ttl::is_expired(entry)
+        } else {
+            false
+        }
     }
 
     /// Get the number of entries
     pub fn len(&self) -> usize {
         let entries = self.entries.read();
         entries.len()
+    }
+
+    /// Explicit cleanup of all expired entries
+    ///
+    /// This is a manual cleanup operation - NOT called automatically.
+    /// Lazy cleanup on read is sufficient for correctness.
+    /// This method is only for space reclamation optimization.
+    ///
+    /// # Returns
+    /// The number of entries removed
+    pub fn cleanup_expired(&mut self) -> usize {
+        ttl::cleanup_expired_entries(self)
     }
 
     /// Internal method for WAL replay - set with explicit version
@@ -140,19 +163,6 @@ impl KvStore {
         let mut entries = self.entries.write();
         entries.insert(key, entry);
         Ok(())
-    }
-
-    /// Check if an entry is expired (TTL exceeded)
-    pub fn is_expired(&self, entry: &KvEntry) -> bool {
-        if let Some(ttl) = entry.metadata.ttl_seconds {
-            let now = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            now.saturating_sub(entry.metadata.created_at) > ttl
-        } else {
-            false
-        }
     }
 }
 

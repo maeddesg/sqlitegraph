@@ -30,10 +30,12 @@
 //! - [`wal`]: WAL integration helpers for KV persistence and recovery
 //! - [`wal_tests`]: WAL integration tests (serialization, recovery, edge cases)
 //! - [`tests`]: Unit tests for KV store operations
+//! - [`ttl`]: TTL helpers and lazy cleanup utilities
 
 pub mod store;
 pub mod tests;
 pub mod types;
+pub mod ttl;
 pub mod wal;
 pub mod wal_tests;
 
