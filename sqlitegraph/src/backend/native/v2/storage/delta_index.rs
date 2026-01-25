@@ -81,3 +81,118 @@ impl DeltaIndex {
         self.node_deltas.clear();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_delta_index_new() {
+        let index = DeltaIndex::new();
+        assert_eq!(index.delta_count(), 0);
+    }
+
+    #[test]
+    fn test_apply_commit() {
+        let mut index = DeltaIndex::new();
+        let records = vec![
+            V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 100,
+                node_data: vec![1, 2, 3],
+            },
+        ];
+        let result = index.apply_commit(records, 100);
+        assert!(result.is_ok());
+        assert_eq!(index.delta_count(), 1);
+    }
+
+    #[test]
+    fn test_get_node_delta_visible() {
+        let mut index = DeltaIndex::new();
+        let records = vec![
+            V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 100,
+                node_data: vec![1, 2, 3],
+            },
+        ];
+        index.apply_commit(records, 100).unwrap();
+
+        let snapshot = SnapshotId::from_lsn(150);
+        let delta = index.get_node_delta(1, snapshot);
+        assert!(delta.is_some());
+        assert_eq!(delta.unwrap().commit_lsn, 100);
+    }
+
+    #[test]
+    fn test_get_node_delta_not_visible() {
+        let mut index = DeltaIndex::new();
+        let records = vec![
+            V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 100,
+                node_data: vec![1, 2, 3],
+            },
+        ];
+        index.apply_commit(records, 200).unwrap();
+
+        let snapshot = SnapshotId::from_lsn(150);
+        let delta = index.get_node_delta(1, snapshot);
+        assert!(delta.is_none());
+    }
+
+    #[test]
+    fn test_checkpoint_completed() {
+        let mut index = DeltaIndex::new();
+        let records = vec![
+            V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 100,
+                node_data: vec![1, 2, 3],
+            },
+        ];
+        index.apply_commit(records, 100).unwrap();
+        assert_eq!(index.delta_count(), 1);
+
+        let dropped = index.checkpoint_completed(150);
+        assert_eq!(dropped, 1);
+        assert_eq!(index.delta_count(), 0);
+    }
+
+    #[test]
+    fn test_multiple_deltas_same_entity() {
+        let mut index = DeltaIndex::new();
+
+        let records1 = vec![
+            V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 100,
+                node_data: vec![1, 2, 3],
+            },
+        ];
+        index.apply_commit(records1, 100).unwrap();
+
+        let records2 = vec![
+            V2WALRecord::NodeDelete {
+                node_id: 1,
+                slot_offset: 100,
+                old_data: vec![1, 2, 3],
+                outgoing_edges: vec![],
+                incoming_edges: vec![],
+            },
+        ];
+        index.apply_commit(records2, 200).unwrap();
+
+        let snapshot1 = SnapshotId::from_lsn(150);
+        let delta1 = index.get_node_delta(1, snapshot1);
+        assert!(delta1.is_some());
+        assert!(matches!(delta1.unwrap().record, V2WALRecord::NodeInsert { .. }));
+
+        let snapshot2 = SnapshotId::from_lsn(250);
+        let delta2 = index.get_node_delta(1, snapshot2);
+        assert!(delta2.is_some());
+        assert!(matches!(delta2.unwrap().record, V2WALRecord::NodeDelete { .. }));
+    }
+}
+

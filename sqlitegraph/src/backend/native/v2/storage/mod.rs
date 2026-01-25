@@ -18,10 +18,14 @@
 //!
 //! ```rust
 //! use sqlitegraph::backend::native::v2::storage::{SharedDeltaIndex, DeltaIndex};
+//! use std::sync::Arc;
 //!
-//! let delta_index = SharedDeltaIndex::new();
-//! // Use delta_index.apply_commit() at commit time
-//! // Use delta_index.checkpoint_completed() after checkpoint
+//! // Create a new delta index
+//! let delta_index = DeltaIndex::new();
+//! // For thread-safe sharing across backend
+//! let shared_index: SharedDeltaIndex = Arc::new(delta_index.into());
+//! // Use shared_index.apply_commit() at commit time
+//! // Use shared_index.checkpoint_completed() after checkpoint
 //! ```
 
 pub mod delta_index;

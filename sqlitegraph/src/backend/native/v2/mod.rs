@@ -32,7 +32,10 @@ pub use restore::{RestoreConfig, RestoreResult, restore_backup, restore};
 pub use migration::{detect_format_version, migrate_file, FormatVersion, MigrationResult};
 pub use node_record_v2::{NodeRecordV2, NodeRecordV2Ext};
 pub use planner::{ExportPlanner, PlannerDecision, DecisionReason, WalAnalysis};
-pub use storage::{JsonLimits, JsonValidationError, parse_and_validate_json, parse_and_validate_json_str};
+pub use storage::{
+    JsonLimits, JsonValidationError, parse_and_validate_json, parse_and_validate_json_str,
+    DeltaIndex, DeltaRecord, SharedDeltaIndex,
+};
 pub use string_table::StringTable;
 pub use wal::{
     GraphOperationResult, GraphWALIntegrationConfig, NodeRecordV2WALExt, OperationMetrics,
