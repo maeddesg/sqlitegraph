@@ -32,6 +32,18 @@ impl SubscriberId {
     pub fn value(&self) -> u64 {
         self.0
     }
+
+    /// Create a SubscriberId from a raw value
+    ///
+    /// This is used internally by the Publisher to generate sequential IDs.
+    pub fn from_raw(id: u64) -> Self {
+        Self(id)
+    }
+
+    /// Get the raw ID value (alias for value())
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 /// Filter for which events a subscriber receives
