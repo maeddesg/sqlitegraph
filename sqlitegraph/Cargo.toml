@@ -1,6 +1,6 @@
 [package]
 name = "sqlitegraph"
-version = "1.2.5"
+version = "1.2.6"
 edition = "2024"
 description = "Embedded graph database with full ACID transactions, HNSW vector search, and dual backend support"
 license = "GPL-3.0-or-later"
