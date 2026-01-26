@@ -5,7 +5,7 @@
 
 **Embedded Graph Database with Native V2 Backend**
 
-## What's New in v1.2.6
+## What's New in v1.2.7
 
 **Pub/Sub Event System** - In-process event notification for graph changes
 - Four event types: `NodeChanged`, `EdgeChanged`, `KVChanged`, `SnapshotCommitted`
@@ -138,7 +138,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.2.6"
+sqlitegraph = "1.2.7"
 ```
 
 ### SQLite Backend (Default)
@@ -168,7 +168,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.2.4", features = ["native-v2"] }
+sqlitegraph = { version = "1.2.7", features = ["native-v2"] }
 ```
 
 ```rust
@@ -198,7 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.2.4", features = ["native-v2"] }
+sqlitegraph = { version = "1.2.7", features = ["native-v2"] }
 ```
 
 ```rust
@@ -239,13 +239,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.2.4"
+sqlitegraph = "1.2.7"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.2.4", features = ["native-v2"] }
+sqlitegraph = { version = "1.2.7", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.2.4", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.2.7", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
@@ -296,7 +296,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (v1.2.6):**
+**Test Coverage (v1.2.7):**
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
@@ -362,7 +362,7 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 
 ## Compiler Warnings
 
-SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.2.6:
+SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.2.7:
 
 | Category | Count | Description |
 |----------|-------|-------------|
@@ -401,13 +401,6 @@ SQLiteGraph was developed using the following grounded development tools:
 | **[Magellan](https://github.com/oldnordic/magellan)** ([crates.io](https://crates.io/crates/magellan)) | Code graph navigation and symbol analysis |
 | **[Splice](https://github.com/oldnordic/splice)** ([crates.io](https://crates.io/crates/splice)) | Safe code editing with span-based operations |
 | **[llmgrep](https://github.com/oldnordic/llmgrep)** ([crates.io](https://crates.io/crates/llmgrep)) | Semantic code search powered by embeddings |
-
-## Production Usage
-
-SQLiteGraph is actively used in production at [The Root Company](https://root.com) for:
-- Graph-based knowledge representation
-- Vector similarity search with HNSW
-- Transactional graph operations with WAL recovery
 
 ## License
 
