@@ -5,10 +5,7 @@
 
 use crate::backend::native::v2::kv_store::store::KvStore;
 use crate::backend::native::v2::kv_store::types::{KvStoreError, KvValue};
-use crate::backend::native::v2::wal::record::V2WALRecord;
-use crate::backend::native::NativeBackendError;
 use serde_json;
-use std::sync::Arc;
 
 /// Value type tags for WAL serialization
 pub const VALUE_TYPE_BYTES: u8 = 0;

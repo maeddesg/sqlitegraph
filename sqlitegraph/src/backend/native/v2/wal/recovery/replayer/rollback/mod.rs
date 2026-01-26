@@ -13,11 +13,11 @@
 //! - **header_ops**: Header rollback operations (update)
 //! - **free_space_ops**: Free space rollback operations (allocate, deallocate)
 
-use crate::backend::native::{GraphFile, NodeStore, NativeNodeId};
+use crate::backend::native::{GraphFile, NodeStore};
 use crate::backend::native::v2::{StringTable, FreeSpaceManager};
 use super::types::RollbackOperation;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryError;
-use crate::debug::{debug_log, warn_log, error_log};
+use crate::debug::{debug_log, error_log};
 use std::sync::{Arc, Mutex, RwLock};
 
 // Re-export rollback operation modules
@@ -93,7 +93,7 @@ impl RollbackSystem {
         debug_log!("Executing rollback with {} operations", self.operations.len());
 
         // Apply rollback operations in reverse order (LIFO)
-        for (index, operation) in self.operations.iter().rev().enumerate() {
+        for (_index, operation) in self.operations.iter().rev().enumerate() {
             debug_log!("Applying rollback operation {}/{}: {}",
                    index + 1, self.operations.len(), operation.operation_name());
 

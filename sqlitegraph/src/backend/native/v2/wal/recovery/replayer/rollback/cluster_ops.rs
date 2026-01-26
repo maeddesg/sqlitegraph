@@ -3,8 +3,8 @@
 //! This module provides rollback operations for cluster-related WAL records:
 //! - ClusterCreate: Deallocate cluster and remove node reference
 
-use crate::backend::native::{GraphFile, NodeStore, NativeNodeId};
-use crate::backend::native::v2::{EdgeCluster, Direction};
+use crate::backend::native::NativeNodeId;
+use crate::backend::native::v2::Direction;
 use super::super::RollbackSystem;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryError;
 use crate::backend::native::v2::wal::recovery::store_helpers;

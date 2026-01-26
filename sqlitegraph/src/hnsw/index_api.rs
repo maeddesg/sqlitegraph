@@ -412,8 +412,8 @@ impl crate::SqliteGraph {
         name: &str,
         config: crate::hnsw::config::HnswConfig,
     ) -> Result<std::sync::RwLockWriteGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
-        use std::sync::RwLock;
-        use std::collections::HashMap;
+        
+        
 
         // Check if index already exists
         {
@@ -472,8 +472,8 @@ impl crate::SqliteGraph {
         name: &str,
         config: crate::hnsw::config::HnswConfig,
     ) -> Result<std::sync::RwLockWriteGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
-        use std::sync::RwLock;
-        use std::collections::HashMap;
+        
+        
 
         // Check if index already exists
         {
@@ -546,8 +546,8 @@ impl crate::SqliteGraph {
         &self,
         name: &str,
     ) -> Result<Option<std::sync::RwLockWriteGuard<'_, std::collections::HashMap<String, HnswIndex>>>, crate::SqliteGraphError> {
-        use std::sync::RwLock;
-        use std::collections::HashMap;
+        
+        
 
         let indexes = self.hnsw_indexes.write().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
 
@@ -567,7 +567,7 @@ impl crate::SqliteGraph {
     where
         F: FnOnce(&HnswIndex) -> R,
     {
-        use std::sync::RwLock;
+        
 
         let indexes = self.hnsw_indexes.read().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
 
@@ -587,7 +587,7 @@ impl crate::SqliteGraph {
     where
         F: FnOnce(&mut HnswIndex) -> R,
     {
-        use std::sync::RwLock;
+        
 
         let mut indexes = self.hnsw_indexes.write().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
 
@@ -600,7 +600,7 @@ impl crate::SqliteGraph {
 
     /// List all HNSW index names
     pub fn list_hnsw_indexes(&self) -> Result<Vec<String>, crate::SqliteGraphError> {
-        use std::sync::RwLock;
+        
 
         let indexes = self.hnsw_indexes.read().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
         Ok(indexes.keys().cloned().collect())

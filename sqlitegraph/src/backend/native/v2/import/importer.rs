@@ -196,6 +196,7 @@ impl V2Importer {
     }
 
     /// Validate that all required export files exist
+    #[allow(unused_assignments)]
     fn validate_export_files(&self, warnings: &mut Vec<String>, errors: &mut Vec<String>) -> bool {
         let export_path = &self.config.export_dir_path;
         let mut all_files_exist = true;

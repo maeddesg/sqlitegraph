@@ -89,7 +89,7 @@ impl FileLifecycleManager {
         match detect_format_version(path) {
             Ok(FormatVersion::V2) => {
                 // Migrate V2 to V3 format
-                #[cfg(feature = "logging")]
+                #[cfg(feature = "debug")]
                 eprintln!("Auto-migrating V2 format file to V3: {:?}", path);
                 migrate_file(path)?;
             }

@@ -23,7 +23,6 @@
 //! - ✅ Production-grade error handling and resource management
 
 use crate::backend::native::v2::Direction;
-use crate::backend::native::v2::edge_cluster::EdgeCluster;
 use crate::backend::native::v2::free_space::FreeSpaceManager;
 use crate::backend::native::v2::node_record_v2::NodeRecordV2;
 use crate::backend::native::v2::string_table::StringTable;
@@ -123,7 +122,7 @@ impl ValidationStatistics {
 
 /// Metadata for tracking cluster consistency
 #[derive(Debug, Clone)]
-struct ClusterMetadata {
+pub(crate) struct ClusterMetadata {
     offset: u64,
     size: u32,
     edge_count: u32,
@@ -224,6 +223,8 @@ impl TransactionValidator {
     }
 
     /// Validate a complete transaction with real V2 consistency checks
+    #[allow(unused_assignments)]
+    #[allow(unused_variables)]
     pub fn validate_transaction(
         &mut self,
         transaction: &TransactionState,
@@ -362,7 +363,7 @@ impl TransactionValidator {
             | V2WALRecord::HeaderUpdate { .. }
             | V2WALRecord::SegmentEnd { .. } => Ok(ValidationResult::Valid),
             // KV operations - basic validation
-            V2WALRecord::KvSet { key, value_bytes, version, .. } => {
+            V2WALRecord::KvSet { key, value_bytes: _, version, .. } => {
                 if key.is_empty() {
                     Ok(ValidationResult::Invalid {
                         errors: vec!["KvSet key cannot be empty".to_string()],
@@ -488,11 +489,11 @@ impl RecoveryValidator {
 
     /// Validate database-level integrity with comprehensive graph file checks
     pub fn validate_database_integrity(&self) -> RecoveryResult<ValidationResult> {
-        let mut issues = Vec::new();
+        let issues = Vec::new();
         let mut errors = Vec::new();
 
         // Open and validate the graph file
-        let mut graph_file = GraphFile::open(&self.graph_file_path).map_err(|e| {
+        let graph_file = GraphFile::open(&self.graph_file_path).map_err(|e| {
             RecoveryError::validation(format!("Failed to open graph file for integrity check: {}", e))
         })?;
 
@@ -560,6 +561,7 @@ impl RecoveryValidator {
     }
 
     /// Validate recovery sequence with comprehensive V2 consistency checks
+    #[allow(unused_assignments)]
     pub fn validate_recovery_sequence(
         &mut self,
         transactions: &[TransactionState],

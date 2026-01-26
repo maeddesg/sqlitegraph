@@ -5,13 +5,12 @@
 //! - NodeUpdate: Restore the old node data
 //! - NodeDelete: Reinsert the deleted node with all edges
 
-use crate::backend::native::{GraphFile, NodeStore, NativeNodeId, NodeRecordV2};
-use crate::backend::native::v2::{EdgeCluster, Direction, FreeSpaceManager};
+use crate::backend::native::{NativeNodeId, NodeRecordV2};
+use crate::backend::native::v2::{EdgeCluster, Direction};
 use super::super::RollbackSystem;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryError;
 use crate::backend::native::v2::wal::recovery::store_helpers;
-use crate::debug::{debug_log, warn_log, error_log};
-use std::sync::{Arc, Mutex, RwLock};
+use crate::debug::debug_log;
 
 /// Summary of pending rollback operations
 #[derive(Debug, Clone, Default)]
@@ -104,7 +103,7 @@ pub fn rollback_node_insert(
 /// Rollback node update by restoring old data
 pub fn rollback_node_update(
     system: &RollbackSystem,
-    node_id: NativeNodeId,
+    _node_id: NativeNodeId,
     old_data: &[u8],
 ) -> Result<(), RecoveryError> {
     debug_log!("Rolling back node update: node_id={}, data_size={}", node_id, old_data.len());

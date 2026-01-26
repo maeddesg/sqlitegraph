@@ -57,6 +57,7 @@ impl<'a> MemoryResourceManager<'a> {
             return MemoryIOMode::ExclusiveStd;
         }
 
+        #[allow(unreachable_code)]
         MemoryIOMode::Standard
     }
 

@@ -79,7 +79,7 @@ impl GraphFile {
         let mut coordinator =
             GraphFileCoordinator::new(&mut self.persistent_header, &mut self.transaction_state);
 
-        coordinator.begin_transaction(tx_id);
+        let _ = coordinator.begin_transaction(tx_id);
         Ok(tx_id)
     }
 

@@ -1,6 +1,6 @@
 //! Core SqliteGraph struct and construction functionality.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -85,7 +85,7 @@ impl SqliteGraph {
         // Get pool size from config (default: 5)
         let pool_size = cfg.pool_size.unwrap_or(5) as u32;
 
-        let mut pool = PoolManager::with_max_size(path, pool_size)
+        let pool = PoolManager::with_max_size(path, pool_size)
             .map_err(|e| SqliteGraphError::connection(e.to_string()))?;
 
         // Initialize schema using first connection from pool
@@ -441,7 +441,7 @@ impl SqliteGraph {
             .map_err(|e| SqliteGraphError::query(e.to_string()))?;
 
         // Calculate confidence interval (95% confidence, ~2% margin of error)
-        let ratio = sample_count as f64 / sample_size as f64;
+        let _ratio = sample_count as f64 / sample_size as f64;
         let margin = estimate as f64 * 0.02; // 2% margin of error
 
         Ok(EdgeCount::Estimate {

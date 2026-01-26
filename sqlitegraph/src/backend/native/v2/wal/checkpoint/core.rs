@@ -1159,7 +1159,7 @@ impl DirtyBlockTracker {
     /// dirty blocks to cluster-specific tracking.
     pub fn promote_to_hierarchical(&mut self) -> CheckpointResult<()> {
         // Collect blocks that have cluster metadata
-        let mut blocks_to_promote: Vec<(u64, i64)> = self
+        let blocks_to_promote: Vec<(u64, i64)> = self
             .global_dirty_blocks
             .iter()
             .filter_map(|&block| {
@@ -1286,21 +1286,17 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let v2_graph_path = temp_dir.path().join("test.v2");
 
-        // Create a minimal V2 graph file for testing (same as working test)
+        // Create a minimal V2 graph file for testing
         let _graph_file = GraphFile::create(&v2_graph_path).map_err(|e| {
             CheckpointError::v2_integration(format!("Failed to create test graph file: {}", e))
         })?;
 
-        let wal_path = temp_dir.path().join("test.wal");
-        let config = V2WALConfig {
-            wal_path,
-            checkpoint_path: temp_dir.path().join("test.checkpoint"),
-            max_wal_size: 64 * 1024 * 1024, // 64MB
-            buffer_size: 1024 * 1024,       // 1MB
-            checkpoint_interval: 100,
-            enable_compression: false,
-            ..Default::default()
-        };
+        // Use for_graph_file to set correct graph_path, then customize
+        let mut config = V2WALConfig::for_graph_file(&v2_graph_path);
+        config.max_wal_size = 64 * 1024 * 1024; // 64MB
+        config.buffer_size = 1024 * 1024;       // 1MB
+        config.checkpoint_interval = 100;
+        config.enable_compression = false;
 
         let strategy = CheckpointStrategy::TimeInterval(Duration::from_secs(60));
 

@@ -307,7 +307,6 @@ impl<'a> EdgeStore<'a> {
     /// Direct edge iteration with IDs, returning (edge_id, neighbor_id) tuples
     /// Similar to iter_neighbors_direct but includes edge IDs for operations like cascade cleanup
     fn iter_edges_with_ids_direct(&mut self, node_id: crate::backend::native::types::NativeNodeId, direction: crate::backend::native::adjacency::Direction) -> crate::backend::native::types::NativeResult<Vec<(crate::backend::native::types::NativeEdgeId, crate::backend::native::types::NativeNodeId)>> {
-        use crate::backend::native::v2::node_record_v2::NodeRecordV2Ext;
         use crate::backend::native::node_store::NodeStore;
 
         // Read V2 node to get edge count information

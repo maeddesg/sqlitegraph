@@ -1,3 +1,10 @@
+//! Fault injection for testing failure scenarios
+//!
+//! This module provides controlled fault injection for testing resilience
+//! of various operations against failures.
+
+#![allow(dead_code)]
+
 use std::{
     collections::HashMap,
     sync::{Mutex, OnceLock},

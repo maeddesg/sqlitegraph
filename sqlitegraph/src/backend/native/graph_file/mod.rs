@@ -39,9 +39,10 @@ pub mod transaction_auditor;
 pub mod validation;
 
 use std::fs::File;
-use std::io::{Read, Seek, Write};
 #[allow(unused_imports)]
-use std::path::Path; // Used in file_path() return type - compiler false positive
+use std::io::Read;
+#[allow(unused_imports)]
+use std::path::Path; // May be used in feature-gated code or re-exports
 
 use crate::backend::native::{
     persistent_header::PersistentHeaderV2,

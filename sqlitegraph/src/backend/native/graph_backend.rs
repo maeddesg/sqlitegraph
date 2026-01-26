@@ -26,7 +26,7 @@ use crate::backend::native::v2::wal::{
 use crate::backend::native::v2::kv_store::store::KvStore;
 
 #[cfg(feature = "native-v2")]
-use crate::backend::native::v2::kv_store::types::{KvValue, KvStoreError};
+use crate::backend::native::v2::kv_store::types::KvValue;
 
 /// Native backend implementation using interior mutability
 pub struct NativeGraphBackend {
@@ -472,7 +472,7 @@ impl GraphBackend for NativeGraphBackend {
         ttl_seconds: Option<u64>,
     ) -> Result<(), SqliteGraphError> {
         use crate::backend::native::v2::kv_store::wal;
-        use crate::backend::native::v2::wal::record::{V2WALRecord, V2WALRecordType};
+        use crate::backend::native::v2::wal::record::V2WALRecord;
 
         let wal_integrator = self.wal_integrator.as_ref()
             .ok_or_else(|| SqliteGraphError::connection("WAL not available - KV requires native-v2".to_string()))?;
@@ -509,7 +509,7 @@ impl GraphBackend for NativeGraphBackend {
     #[cfg(feature = "native-v2")]
     fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError> {
         use crate::backend::native::v2::kv_store::wal;
-        use crate::backend::native::v2::wal::record::{V2WALRecord, V2WALRecordType};
+        use crate::backend::native::v2::wal::record::V2WALRecord;
 
         let wal_integrator = self.wal_integrator.as_ref()
             .ok_or_else(|| SqliteGraphError::connection("WAL not available - KV requires native-v2".to_string()))?;
@@ -555,7 +555,7 @@ impl GraphBackend for NativeGraphBackend {
         &self,
         filter: crate::backend::SubscriptionFilter,
     ) -> Result<(u64, std::sync::mpsc::Receiver<crate::backend::PubSubEvent>), SqliteGraphError> {
-        use crate::backend::native::v2::pubsub::SubscriberId;
+        
 
         let wal_integrator = self.wal_integrator.as_ref()
             .ok_or_else(|| SqliteGraphError::connection("WAL not available - pub/sub requires native-v2".to_string()))?;

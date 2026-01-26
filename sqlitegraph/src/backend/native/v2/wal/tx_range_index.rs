@@ -16,7 +16,6 @@
 //! by WAL contiguity. We don't need explicit tx_id on each record - position determines
 //! ownership.
 
-use crate::backend::native::NativeResult;
 use crate::snapshot::SnapshotId;
 use super::record::V2WALRecord;
 use std::collections::HashMap;

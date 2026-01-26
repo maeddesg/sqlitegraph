@@ -5,7 +5,7 @@
 
 use crate::backend::native::types::{NativeResult, NativeBackendError};
 use crate::backend::native::v2::{
-    export::snapshot::{SnapshotExporter, SnapshotExportConfig, SnapshotExportResult},
+    export::snapshot::{SnapshotExporter, SnapshotExportConfig},
     wal::{V2WALManager, V2WALConfig},
 };
 use std::path::{Path, PathBuf};

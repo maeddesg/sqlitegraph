@@ -315,7 +315,7 @@ impl V2WALIntegrator {
         }
 
         // Apply to in-memory V2 structures
-        self.node_coordinator
+        let _ = self.node_coordinator
             .apply_insert(node_id, node_data.clone())
 ;
 
@@ -435,7 +435,7 @@ impl V2WALIntegrator {
         // Acquire locks for all edges and clusters
         for (cluster_id, cluster_edges) in &cluster_groups {
             // Lock cluster
-            self.tx_coordinator
+            let _ = self.tx_coordinator
                 .acquire_lock(
                     tx_id,
                     crate::backend::native::v2::wal::transaction_coordinator::ResourceId::Cluster(
@@ -486,14 +486,15 @@ impl V2WALIntegrator {
             }
 
             // Apply to in-memory structures
-            self.edge_coordinator
+            let _ = self.edge_coordinator
                 .apply_insert(*edge_id, edge_data.clone())
     ;
-            self.cluster_coordinator
+            let _ = self.cluster_coordinator
                 .apply_edge_insert(*cluster_id, edge_data.clone())
     ;
-            self.edge_coordinator
+            let _ = self.edge_coordinator
                 .update_cluster_mapping(*edge_id, *cluster_id)
+            ;
     
         }
 
@@ -667,7 +668,7 @@ impl V2WALIntegrator {
             node.kind = format!("Type{}", new_type);
         }
 
-        if let Some(new_label) = updates.label {
+        if let Some(_new_label) = updates.label {
             // node doesn't have label_offset field, ignore for now
         }
 

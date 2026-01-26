@@ -363,7 +363,7 @@ impl LinearDetector {
     /// assert_eq!(detector.observe(4, 1), TraversalPattern::Linear);  // stays Linear
     /// ```
     #[inline]
-    pub fn observe(&mut self, node_id: NativeNodeId, degree: u32) -> TraversalPattern {
+    pub fn observe(&mut self, _node_id: NativeNodeId, degree: u32) -> TraversalPattern {
         let start = Instant::now();
         let result = match self.state {
             DetectorState::Branching => {

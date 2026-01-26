@@ -577,7 +577,7 @@ impl V2WALRecord {
             Self::Checkpoint { .. } => base_size + 8 + 8,
             Self::HeaderUpdate { old_data, new_data, .. } => base_size + 8 + old_data.len() + new_data.len(),
             Self::SegmentEnd { .. } => base_size + 8 + 4,
-            Self::TransactionPrepare { record_count, .. } => base_size + 8 + 8 + 8,
+            Self::TransactionPrepare { record_count: _, .. } => base_size + 8 + 8 + 8,
             Self::TransactionAbort { abort_reason, .. } => base_size + 8 + abort_reason.len(),
             Self::SavepointCreate { savepoint_id, .. } => base_size + 8 + savepoint_id.len(),
             Self::SavepointRollback { savepoint_id, .. } => base_size + 8 + savepoint_id.len(),

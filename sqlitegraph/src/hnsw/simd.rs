@@ -128,22 +128,22 @@ unsafe fn dot_product_avx2(a: &[f32], b: &[f32]) -> f32 {
     let mut i = 0;
 
     if simd_len > 0 {
-        let mut sum0 = _mm256_setzero_ps();
+        let mut sum0 = unsafe { _mm256_setzero_ps() };
 
         while i < simd_len {
             // Load 8 floats from each vector
-            let a_vec = _mm256_loadu_ps(a.as_ptr().add(i));
-            let b_vec = _mm256_loadu_ps(b.as_ptr().add(i));
+            let a_vec = unsafe { _mm256_loadu_ps(a.as_ptr().add(i)) };
+            let b_vec = unsafe { _mm256_loadu_ps(b.as_ptr().add(i)) };
 
             // Multiply and accumulate using FMA if available, otherwise mul + add
             #[cfg(target_feature = "fma")]
             {
-                sum0 = _mm256_fmadd_ps(a_vec, b_vec, sum0);
+                sum0 = unsafe { _mm256_fmadd_ps(a_vec, b_vec, sum0) };
             }
             #[cfg(not(target_feature = "fma"))]
             {
-                let mul = _mm256_mul_ps(a_vec, b_vec);
-                sum0 = _mm256_add_ps(mul, sum0);
+                let mul = unsafe { _mm256_mul_ps(a_vec, b_vec) };
+                sum0 = unsafe { _mm256_add_ps(mul, sum0) };
             }
 
             i += 8;
@@ -153,19 +153,19 @@ unsafe fn dot_product_avx2(a: &[f32], b: &[f32]) -> f32 {
         // _mm256_extractf128_ps: Extract 128 bits from 256-bit vector
         // _mm_add_ps: Add two 128-bit vectors element-wise
         // _mm_cvtss_f32: Extract first scalar from 128-bit vector
-        let high = _mm256_extractf128_ps(sum0, 1); // Extract upper 128 bits
+        let high = unsafe { _mm256_extractf128_ps(sum0, 1) }; // Extract upper 128 bits
         let low = _mm256_castps256_ps128(sum0);   // Extract lower 128 bits
-        let sum128 = _mm_add_ps(high, low);       // Add the two 128-bit vectors
+        let sum128 = unsafe { _mm_add_ps(high, low) };       // Add the two 128-bit vectors
 
         // Horizontal sum of 128-bit vector: shuffle and add
         // [x0, x1, x2, x3] -> shuffle to [x1, x0, x3, x2], add to get [x0+x1, x0+x1, x2+x3, x2+x3]
-        let shuffle = _mm_shuffle_ps(sum128, sum128, 0b01_00_11_10);
-        let sum2 = _mm_add_ps(sum128, shuffle);
+        let shuffle = unsafe { _mm_shuffle_ps(sum128, sum128, 0b01_00_11_10) };
+        let sum2 = unsafe { _mm_add_ps(sum128, shuffle) };
         // Shuffle again to get high part duplicated: [x2+x3, x2+x3, x2+x3, x2+x3]
-        let shuffle2 = _mm_shuffle_ps(sum2, sum2, 0b00_00_11_11);
-        let sum3 = _mm_add_ps(sum2, shuffle2);
+        let shuffle2 = unsafe { _mm_shuffle_ps(sum2, sum2, 0b00_00_11_11) };
+        let sum3 = unsafe { _mm_add_ps(sum2, shuffle2) };
 
-        result = _mm_cvtss_f32(sum3);
+        result = unsafe { _mm_cvtss_f32(sum3) };
     }
 
     // Handle remaining elements with scalar loop
@@ -301,7 +301,7 @@ pub fn compute_norm_squared_scalar(v: &[f32]) -> f32 {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn compute_norm_squared_avx2(v: &[f32]) -> f32 {
+unsafe fn compute_norm_squared_avx2(v: &[f32]) -> f32 { unsafe {
     use std::arch::x86_64::*;
 
     let len = v.len();
@@ -312,7 +312,7 @@ unsafe fn compute_norm_squared_avx2(v: &[f32]) -> f32 {
     let mut i = 0;
 
     if simd_len > 0 {
-        let mut sum0 = _mm256_setzero_ps();
+        let mut sum0 = unsafe { _mm256_setzero_ps() };
 
         while i < simd_len {
             // Load 8 floats
@@ -328,17 +328,17 @@ unsafe fn compute_norm_squared_avx2(v: &[f32]) -> f32 {
         }
 
         // Horizontal sum: extract high and low 128-bit lanes, add them
-        let high = _mm256_extractf128_ps(sum0, 1);
+        let high = unsafe { _mm256_extractf128_ps(sum0, 1) };
         let low = _mm256_castps256_ps128(sum0);
-        let sum128 = _mm_add_ps(high, low);
+        let sum128 = unsafe { _mm_add_ps(high, low) };
 
         // Horizontal sum of 128-bit vector
-        let shuffle = _mm_shuffle_ps(sum128, sum128, 0b01_00_11_10);
-        let sum2 = _mm_add_ps(sum128, shuffle);
-        let shuffle2 = _mm_shuffle_ps(sum2, sum2, 0b00_00_11_11);
-        let sum3 = _mm_add_ps(sum2, shuffle2);
+        let shuffle = unsafe { _mm_shuffle_ps(sum128, sum128, 0b01_00_11_10) };
+        let sum2 = unsafe { _mm_add_ps(sum128, shuffle) };
+        let shuffle2 = unsafe { _mm_shuffle_ps(sum2, sum2, 0b00_00_11_11) };
+        let sum3 = unsafe { _mm_add_ps(sum2, shuffle2) };
 
-        result = _mm_cvtss_f32(sum3);
+        result = unsafe { _mm_cvtss_f32(sum3) };
     }
 
     // Handle remaining elements with scalar loop
@@ -349,7 +349,7 @@ unsafe fn compute_norm_squared_avx2(v: &[f32]) -> f32 {
     }
 
     result
-}
+}}
 
 /// Runtime-dispatched squared norm computation with AVX2 acceleration
 ///
@@ -475,7 +475,7 @@ pub fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn cosine_similarity_avx2(a: &[f32], b: &[f32]) -> f32 {
+unsafe fn cosine_similarity_avx2(a: &[f32], b: &[f32]) -> f32 { unsafe {
     assert!(!a.is_empty(), "Vectors cannot be empty");
 
     let dot = dot_product_avx2(a, b);
@@ -486,7 +486,7 @@ unsafe fn cosine_similarity_avx2(a: &[f32], b: &[f32]) -> f32 {
     assert!(norm_b > f32::EPSILON, "Second vector has zero magnitude");
 
     dot / (norm_a * norm_b)
-}
+}}
 
 /// Runtime-dispatched cosine similarity with AVX2 acceleration
 ///
@@ -631,7 +631,7 @@ pub fn euclidean_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
+unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 { unsafe {
     use std::arch::x86_64::*;
 
     assert_eq!(a.len(), b.len(), "Vectors must have the same length");
@@ -675,7 +675,7 @@ unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
     }
 
     sum.sqrt()
-}
+}}
 
 /// Runtime-dispatched Euclidean (L2) distance computation
 ///

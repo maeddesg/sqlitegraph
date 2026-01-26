@@ -270,6 +270,7 @@ impl LatencyHistogram {
 
         let target = (total as f64 * percentile / 100.0) as u64;
         let mut cumulative = 0;
+        #[allow(unused_assignments)]
         let mut prev_cumulative = 0;
         let mut prev_boundary = 0;
 

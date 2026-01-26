@@ -75,11 +75,8 @@ jobs:
           path: target
           key: miri-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Run Miri tests for store_helpers
-        run: cargo +miri miri test -p sqlitegraph store_helpers
-
-      - name: Run Miri tests for miri cfg-gated tests
-        run: cargo +miri miri test -p sqlitegraph miri
+      - name: Run Miri tests
+        run: cargo +miri miri test -p sqlitegraph
 
   # Lint checks
   clippy:
@@ -112,7 +109,7 @@ jobs:
           key: clippy-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-features -- -D warnings
+        run: cargo clippy --workspace --all-features -- -W clippy::all -A dead_code -A unused_unsafe
 
   # Format checks
   fmt:

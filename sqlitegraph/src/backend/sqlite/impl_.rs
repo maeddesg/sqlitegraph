@@ -387,7 +387,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         _snapshot_id: crate::snapshot::SnapshotId,
         key: &[u8],
     ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, crate::SqliteGraphError> {
-        use crate::backend::native::v2::kv_store::types::KvValue;
+        
         use std::time::SystemTime;
 
         // Initialize KV table if needed

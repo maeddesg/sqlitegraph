@@ -222,8 +222,11 @@ impl NodeEdgeAccessManager {
     }
 
     /// Validate node record structure
+    #[allow(unused_comparisons)]
     pub fn validate_node_record(node: &NodeRecord) -> bool {
         // Basic validation checks
+        // Note: These comparisons are documented for clarity even though
+        // unsigned types are always >= 0
         node.id >= 0
             && node.outgoing_cluster_offset >= 0
             && node.incoming_cluster_offset >= 0
@@ -232,8 +235,11 @@ impl NodeEdgeAccessManager {
     }
 
     /// Validate edge record structure
+    #[allow(unused_comparisons)]
     pub fn validate_edge_record(edge: &EdgeRecord) -> bool {
         // Basic validation checks
+        // Note: These comparisons are documented for clarity even though
+        // signed IDs may be negative in error cases
         edge.id >= 0 && edge.from_id >= 0 && edge.to_id >= 0
     }
 

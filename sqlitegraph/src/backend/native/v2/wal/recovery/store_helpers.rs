@@ -9,7 +9,6 @@
 //! A future refactor could remove the need for transmute by changing those APIs.
 
 use std::mem;
-use std::sync::Arc;
 use crate::backend::native::{NodeStore, EdgeStore, GraphFile};
 
 /// # Safety
@@ -20,9 +19,9 @@ use crate::backend::native::{NodeStore, EdgeStore, GraphFile};
 /// - graph_file is owned by the Arc<RwLock<>> stored in the parent struct
 /// - The Arc ensures graph_file lives as long as any store reference exists
 /// - Stores are accessed through Mutex/RwLock guards, preventing use-after-free
-pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static> {
+pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static> { unsafe {
     NodeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file))
-}
+}}
 
 /// # Safety
 /// Caller must ensure the returned EdgeStore does not outlive the GraphFile reference.
@@ -32,9 +31,9 @@ pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static
 /// - graph_file is owned by the Arc<RwLock<>> stored in the parent struct
 /// - The Arc ensures graph_file lives as long as any store reference exists
 /// - Stores are accessed through Mutex/RwLock guards, preventing use-after-free
-pub unsafe fn create_edge_store(graph_file: &mut GraphFile) -> EdgeStore<'static> {
+pub unsafe fn create_edge_store(graph_file: &mut GraphFile) -> EdgeStore<'static> { unsafe {
     EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file))
-}
+}}
 
 #[cfg(test)]
 mod tests {

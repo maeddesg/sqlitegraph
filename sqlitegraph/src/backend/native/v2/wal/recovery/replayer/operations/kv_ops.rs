@@ -2,11 +2,10 @@
 //!
 //! This module handles replay of KV store WAL records during crash recovery.
 
-use crate::backend::native::v2::kv_store::{KvStore, wal};
+use crate::backend::native::v2::kv_store::wal;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryError;
 use crate::backend::native::v2::wal::recovery::replayer::types::RollbackOperation;
-use crate::debug::{debug_log, warn_log};
-use std::sync::{Arc, Mutex};
+use crate::debug::debug_log;
 
 impl super::DefaultReplayOperations {
     /// Handle KvSet record during WAL replay

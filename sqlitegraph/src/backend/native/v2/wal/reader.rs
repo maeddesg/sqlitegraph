@@ -395,7 +395,7 @@ impl V2WALReader {
         file.read_exact(&mut header_bytes)
             .map_err(NativeBackendError::Io)?;
 
-        let record_type = V2WALRecordType::try_from(header_bytes[0])?;
+        let _record_type = V2WALRecordType::try_from(header_bytes[0])?;
         let record_size = u32::from_le_bytes([
             header_bytes[1],
             header_bytes[2],
@@ -550,7 +550,7 @@ impl V2WALReader {
     }
 
     /// Create an iterator over all WAL records
-    pub fn iter(&mut self) -> WALRecordIterator {
+    pub fn iter(&mut self) -> WALRecordIterator<'_> {
         WALRecordIterator {
             reader: self,
             end_lsn: None,
@@ -558,7 +558,7 @@ impl V2WALReader {
     }
 
     /// Create an iterator up to a specific LSN
-    pub fn iter_until(&mut self, end_lsn: u64) -> WALRecordIterator {
+    pub fn iter_until(&mut self, end_lsn: u64) -> WALRecordIterator<'_> {
         WALRecordIterator {
             reader: self,
             end_lsn: Some(end_lsn),

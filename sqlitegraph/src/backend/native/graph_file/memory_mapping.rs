@@ -11,7 +11,6 @@ use crate::backend::native::{
 
 #[cfg(feature = "v2_experimental")]
 use memmap2::{MmapMut, MmapOptions};
-use std::io::{Seek, SeekFrom, Write, Read};
 
 /// Memory mapping management utilities for GraphFile
 pub struct MemoryMappingManager;

@@ -5,7 +5,7 @@ use super::cluster_serialization::{
     deserialize_cluster, serialize_cluster, verify_serialized_layout,
 };
 use super::cluster_trace::Direction;
-use super::compact_record::{CompactEdgeRecord, DeltaEncodedEdge, PackedEdgeHeader};
+use super::compact_record::CompactEdgeRecord;
 use crate::backend::native::v2::string_table::StringTable;
 use crate::backend::native::{EdgeRecord, FileOffset, NativeBackendError, NativeResult};
 use std::sync::Arc;
@@ -253,7 +253,7 @@ impl EdgeCluster {
     /// A `DecompressEdgeIterator` that yields edges on-demand
     pub fn decompress_from_bytes(
         bytes: &[u8],
-    ) -> NativeResult<DecompressEdgeIterator> {
+    ) -> NativeResult<DecompressEdgeIterator<'_>> {
         DecompressEdgeIterator::new(bytes)
     }
 

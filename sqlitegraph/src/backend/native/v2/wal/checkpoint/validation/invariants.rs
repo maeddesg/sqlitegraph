@@ -175,7 +175,7 @@ impl V2InvariantValidator {
         &self,
         _dirty_blocks: &DirtyBlockTracker,
     ) -> CheckpointResult<V2InvariantResult> {
-        let mut violations = Vec::new();
+        let violations = Vec::new();
         let start_time = SystemTime::now();
 
         // Check that all dirty block offsets are properly aligned
@@ -459,6 +459,7 @@ impl V2InvariantValidator {
         manager_state: &CheckpointManagerState,
     ) -> CheckpointResult<V2InvariantResult> {
         let mut all_violations = Vec::new();
+        #[allow(unused_assignments)]
         let mut v2_version = None;
 
         // Validate V2 metadata

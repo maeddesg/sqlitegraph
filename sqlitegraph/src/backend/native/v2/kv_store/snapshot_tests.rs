@@ -5,10 +5,6 @@
 
 #![cfg(feature = "native-v2")]
 
-use crate::backend::GraphBackend;
-use crate::backend::native::v2::kv_store::types::{KvValue, KvStoreError};
-use crate::snapshot::SnapshotId;
-use crate::backend::NativeGraphBackend;
 
 #[cfg(test)]
 mod basic_visibility_tests {

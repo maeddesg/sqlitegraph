@@ -1,7 +1,5 @@
 //! Unit tests for KV store operations
 
-use crate::backend::native::v2::kv_store::store::KvStore;
-use crate::backend::native::v2::kv_store::types::{KvStoreError, KvValue};
 
 #[test]
 fn test_new_store() {

@@ -14,15 +14,11 @@ mod operations;
 mod rollback;
 
 use crate::backend::native::{
-    GraphFile, NodeStore, EdgeStore, NativeNodeId,
-    graph_file::TransactionManager,
+    GraphFile, NodeStore, EdgeStore,
 };
-use crate::backend::native::v2::{
-    StringTable, EdgeCluster, FreeSpaceManager,
-    edge_cluster::{CompactEdgeRecord, Direction},
-};
+use crate::backend::native::v2::StringTable;
 use crate::backend::native::v2::wal::V2WALRecord;
-use super::{errors::RecoveryError, core::TransactionState, constants::*};
+use super::{errors::RecoveryError, core::TransactionState};
 use crate::debug::{info_log, debug_log, warn_log, error_log};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
@@ -220,8 +216,8 @@ impl V2GraphFileReplayer {
     fn replay_transaction(
         &self,
         transaction: &TransactionState,
-        tx_index: usize,
-        total_txs: usize,
+        _tx_index: usize,
+        _total_txs: usize,
     ) -> Result<ReplayResult, RecoveryError> {
         let start_time = Instant::now();
         let mut successful_operations = 0;
@@ -272,7 +268,7 @@ impl V2GraphFileReplayer {
             }
         }
 
-        let duration = start_time.elapsed();
+        let _duration = start_time.elapsed();
         debug_log!("Transaction TX {} replayed in {:?}: {} success, {} failed",
                transaction.tx_id, duration, successful_operations, failed_operations.len());
 
@@ -453,7 +449,7 @@ impl V2GraphFileReplayer {
 
     /// Report replay progress
     fn report_progress(&self, completed: usize, total: usize) {
-        let percentage = (completed as f64 / total as f64) * 100.0;
+        let _percentage = (completed as f64 / total as f64) * 100.0;
         info_log!("Replay progress: {}/{} transactions ({:.1}%)", completed, total, percentage);
     }
 

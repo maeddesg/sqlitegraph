@@ -3,9 +3,6 @@
 //! This module provides edge-specific replay operations including
 //! edge insertion, update, and deletion with proper rollback support.
 
-use crate::backend::native::{
-    NativeNodeId,
-};
 use crate::backend::native::v2::{
     EdgeCluster,
     edge_cluster::{CompactEdgeRecord, Direction},
@@ -43,7 +40,7 @@ impl super::DefaultReplayOperations {
         }
 
         // Step 2: Convert direction value to Direction enum following patterns from mod.rs:296-302
-        let direction_enum = match direction {
+        let _direction_enum = match direction {
             0 => crate::backend::native::v2::edge_cluster::Direction::Outgoing,
             1 => crate::backend::native::v2::edge_cluster::Direction::Incoming,
             _ => return Err(RecoveryError::validation(
@@ -693,7 +690,7 @@ impl super::DefaultReplayOperations {
             if existing_edges.is_empty() {
                 debug_log!("Cluster became empty after deleting last edge for node {:?} direction {:?}", node_id, direction);
                 // Create empty cluster following established patterns
-                let empty_cluster = EdgeCluster::create_from_compact_edges(
+                let _empty_cluster = EdgeCluster::create_from_compact_edges(
                     existing_edges, // empty vector
                     node_id,
                     direction

@@ -4,7 +4,7 @@
 //! to subscribers. Events are emitted only for committed transactions.
 
 use crate::backend::native::v2::edge_cluster::CompactEdgeRecord;
-use crate::backend::native::v2::pubsub::{PubSubEvent, PubSubEventType};
+use crate::backend::native::v2::pubsub::PubSubEvent;
 use crate::backend::native::v2::wal::V2WALRecord;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

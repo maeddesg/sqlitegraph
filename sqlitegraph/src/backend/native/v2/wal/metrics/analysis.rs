@@ -750,7 +750,7 @@ impl PerformanceAnalyzer {
         _counters: &WALPerformanceCounters,
         latency_histogram: &LatencyHistogram,
         resource_tracker: &ResourceTracker,
-        error_tracker: &ErrorTracker,
+        _error_tracker: &ErrorTracker,
     ) -> Vec<PerformanceIssue> {
         let mut issues = Vec::new();
 
@@ -822,7 +822,7 @@ impl PerformanceAnalyzer {
         &self,
         counters: &WALPerformanceCounters,
         cluster_metrics: &ClusterPerformanceMetrics,
-        throughput_tracker: &ThroughputTracker,
+        _throughput_tracker: &ThroughputTracker,
     ) -> Vec<OptimizationOpportunity> {
         let mut opportunities = Vec::new();
 

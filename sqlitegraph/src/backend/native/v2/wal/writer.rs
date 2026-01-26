@@ -326,7 +326,7 @@ impl V2WALWriter {
 
     /// Flush write buffer to disk
     pub fn flush_buffer(&self) -> NativeResult<()> {
-        let start_time = Instant::now();
+        let _start_time = Instant::now();
 
         let (buffer_data, record_count) = {
             let mut write_buffer = self.write_buffer.lock();
@@ -367,7 +367,7 @@ impl V2WALWriter {
 
     /// Commit a group of records atomically
     fn commit_group_batch(&self, records: Vec<BufferedRecord>) -> NativeResult<()> {
-        let start_time = Instant::now();
+        let _start_time = Instant::now();
         let mut total_bytes = 0;
 
         // Serialize and write all records
@@ -560,7 +560,7 @@ impl V2WALWriter {
     pub fn log_allocate_contiguous(&self, txn_id: u64, region: crate::backend::native::v2::wal::ContiguousRegion) -> NativeResult<u64> {
         use crate::backend::native::v2::storage::free_space::Region;
         // Convert from ContiguousRegion (WAL) to Region (free_space)
-        let fs_region = Region::new(region.start_offset, region.total_size)
+        let _fs_region = Region::new(region.start_offset, region.total_size)
             .with_clusters(region.cluster_count, region.stride);
 
         let record = V2WALRecord::AllocateContiguous {

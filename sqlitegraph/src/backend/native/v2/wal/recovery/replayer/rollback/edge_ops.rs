@@ -5,7 +5,7 @@
 //! - EdgeUpdate: Restore the old edge at the specified position
 //! - EdgeDelete: Reinsert the deleted edge at the specified position
 
-use crate::backend::native::{GraphFile, NodeStore, NativeNodeId};
+use crate::backend::native::NativeNodeId;
 use crate::backend::native::v2::{EdgeCluster, Direction};
 use crate::backend::native::v2::edge_cluster::CompactEdgeRecord;
 use super::super::RollbackSystem;
@@ -430,7 +430,7 @@ pub fn rollback_edge_delete(
     // Step 5: Insert the deleted edge back at the specified position
     existing_edges.insert(position as usize, old_edge_record);
 
-    let restored_edge_count = existing_edges.len();
+    let _restored_edge_count = existing_edges.len();
 
     debug_log!("Inserted deleted edge at position {} in cluster for node {} direction {:?} - {} edges total",
            position, node_id, direction, restored_edge_count);

@@ -656,7 +656,7 @@ impl V2WALRecoveryEngine {
                 }
                 ValidationResult::Invalid { errors, critical_error } => {
                     error_log!("Database integrity validation failed: {}", critical_error);
-                    for error in &errors {
+                    for _error in &errors {
                         debug_log!("Integrity error: {}", error);
                     }
                     return Err(RecoveryError::validation(format!(
@@ -672,7 +672,7 @@ impl V2WALRecoveryEngine {
             info_log!("Post-recovery validation passed with no warnings");
         } else {
             warn_log!("Post-recovery validation passed with {} warnings", all_warnings.len());
-            for warning in &all_warnings {
+            for _warning in &all_warnings {
                 debug_log!("Validation warning: {}", warning);
             }
         }
@@ -695,7 +695,7 @@ impl V2WALRecoveryEngine {
         let mut warnings = Vec::new();
 
         // Open the graph file
-        let mut graph_file = GraphFile::open(&self.database_path)
+        let graph_file = GraphFile::open(&self.database_path)
             .map_err(|e| RecoveryError::validation(format!("Cannot open graph file for integrity check: {}", e)))?;
 
         // Get persistent header

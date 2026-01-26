@@ -304,7 +304,7 @@ pub fn delta_decode(deltas: &[u32]) -> Vec<u32> {
 /// - **Overhead**: Falls back to scalar for < 16 elements
 #[target_feature(enable = "avx2")]
 #[inline]
-pub unsafe fn delta_encode_avx2(values: &[u32]) -> Vec<u32> {
+pub unsafe fn delta_encode_avx2(values: &[u32]) -> Vec<u32> { unsafe {
     use std::arch::x86_64::*;
 
     if values.len() < 16 {
@@ -345,7 +345,7 @@ pub unsafe fn delta_encode_avx2(values: &[u32]) -> Vec<u32> {
     }
 
     deltas
-}
+}}
 
 //=============================================================================
 // Runtime Dispatch

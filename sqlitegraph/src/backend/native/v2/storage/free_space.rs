@@ -701,7 +701,7 @@ impl FreeSpaceManager {
         };
 
         // Log to WAL via callback
-        if let Err(e) = log_wal(wal_record) {
+        if let Err(_e) = log_wal(wal_record) {
             // WAL logging failed - rollback the reservation
             self.rollback_contiguous(&region);
             return None;

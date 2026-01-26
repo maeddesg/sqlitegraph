@@ -108,9 +108,6 @@ impl DefaultReplayOperations {
 
 // Include operation handler implementations from each module
 // These are defined as impl blocks in their respective modules
-use node_ops::*;
-use edge_ops::*;
-use transaction_ops::*;
 
 #[cfg(test)]
 mod tests {

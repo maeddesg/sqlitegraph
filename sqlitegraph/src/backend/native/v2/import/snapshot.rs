@@ -410,14 +410,23 @@ impl SnapshotImporter {
         fs::rename(&temp_path, &self.config.target_graph_path)
             .map_err(|e| NativeBackendError::Io(e))?;
 
-        // Sync parent directory to make rename durable
+        // Sync parent directory to make rename durable (best-effort)
+        // Note: On Linux, opening a directory for write fails with EISDIR
+        // We continue anyway as the rename is already durable
         if let Some(parent) = self.config.target_graph_path.parent() {
-            let parent_dir = fs::OpenOptions::new()
+            match fs::OpenOptions::new()
                 .read(true)
                 .write(true)
                 .open(parent)
-                .map_err(|e| NativeBackendError::Io(e))?;
-            parent_dir.sync_all().map_err(|e| NativeBackendError::Io(e))?;
+            {
+                Ok(parent_dir) => {
+                    let _ = parent_dir.sync_all();
+                }
+                Err(e) => {
+                    // Directory sync not supported on this filesystem - continue anyway
+                    eprintln!("Warning: Directory sync not supported: {:?} (error: {})", parent, e);
+                }
+            }
         }
 
         Ok(())

@@ -3,16 +3,14 @@ use std::{env, fs, path::PathBuf, process};
 use serde_json::json;
 use sqlitegraph::{
     algo::{pagerank_with_progress, betweenness_centrality_with_progress, louvain_communities_with_progress},
-    backend::{BackendDirection, GraphBackend, SqliteGraphBackend},
+    backend::{BackendDirection, SqliteGraphBackend},
     bfs::{bfs_neighbors, shortest_path},
     graph_opt::{bulk_insert_entities, bulk_insert_edges, GraphEntityCreate, GraphEdgeCreate},
     hnsw::{HnswConfigBuilder, DistanceMetric},
     multi_hop::k_hop,
     pattern_engine::PatternTriple,
     progress::{ConsoleProgress, ProgressCallback},
-    query::GraphQuery,
-    recovery::{dump_graph_to_path, load_graph_from_path},
-    GraphConfig, SqliteGraph, SqliteGraphError,
+    recovery::{dump_graph_to_path, load_graph_from_path}, SqliteGraph, SqliteGraphError,
 };
 use sqlitegraph_cli::{cli::CommandLineConfig, client::BackendClient, reasoning};
 
@@ -620,7 +618,7 @@ fn run_hnsw_delete(client: &BackendClient, args: &[String]) -> Result<(), Sqlite
 
     // Remove from in-memory registry
     {
-        use std::sync::RwLock;
+        
         let mut indexes = graph.hnsw_indexes.write()
             .map_err(|e| SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
         indexes.remove(index_name);
@@ -1126,7 +1124,7 @@ fn run_wal_metrics(_client: &BackendClient, _args: &[String]) -> Result<(), Sqli
 }
 
 #[cfg(feature = "native-v2")]
-fn run_wal_config(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+fn run_wal_config(_client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
     use sqlitegraph::V2WALConfig;
 
     // Get database path from args or use a default

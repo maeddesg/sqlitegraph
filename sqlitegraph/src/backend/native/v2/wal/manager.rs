@@ -430,7 +430,7 @@ impl V2WALManager {
             active.remove(&tx_id)
         };
 
-        let transaction = transaction.ok_or_else(|| NativeBackendError::InvalidTransaction {
+        let _transaction = transaction.ok_or_else(|| NativeBackendError::InvalidTransaction {
             tx_id,
             reason: "Transaction not found".to_string(),
         })?;
@@ -679,7 +679,7 @@ impl V2WALManager {
 
         if org.last_cluster_flush.elapsed() >= org.cluster_flush_timeout {
             // Flush cluster groups
-            for (cluster_key, records) in org.cluster_groups.drain() {
+            for (_cluster_key, records) in org.cluster_groups.drain() {
                 if !records.is_empty() {
                     // Process cluster-affinity records
                     let _ = writer.flush_buffer(); // Ensure records are written

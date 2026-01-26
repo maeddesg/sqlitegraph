@@ -6,10 +6,10 @@
 use crate::backend::native::{
     types::{NativeResult, NativeBackendError},
     v2::{
-        export::manifest::{ExportManifest, ManifestSerializer},
+        export::manifest::ManifestSerializer,
         export::ExportMode,
         import::{ImportMode},
-        import::snapshot::{SnapshotImporter, SnapshotImportConfig, SnapshotImportResult},
+        import::snapshot::{SnapshotImporter, SnapshotImportConfig},
     },
 };
 use std::path::{Path, PathBuf};
@@ -143,7 +143,7 @@ pub struct RestoreResult {
 /// # Ok::<(), sqlitegraph::backend::native::NativeBackendError>(())
 /// ```
 pub fn restore_backup(config: RestoreConfig) -> NativeResult<RestoreResult> {
-    use std::time::SystemTime;
+    
 
     // Step 1: Validate backup directory exists
     if !config.backup_dir.exists() {

@@ -134,7 +134,7 @@ pub trait BulkIngestExt {
     /// - Flush operations are deferred to reduce I/O overhead
     /// - Checkpoint boundaries are optimized for bulk operations
     /// - All crash recovery semantics are preserved
-    fn begin_bulk_ingest(&self, config: BulkIngestConfig) -> NativeResult<BulkIngestGuard>;
+    fn begin_bulk_ingest(&self, config: BulkIngestConfig) -> NativeResult<BulkIngestGuard<'_>>;
 
     /// Check if bulk ingest mode is currently active
     fn is_bulk_ingest_active(&self) -> bool;
@@ -163,7 +163,7 @@ pub struct BulkIngestMetrics {
 }
 
 impl BulkIngestExt for V2WALManager {
-    fn begin_bulk_ingest(&self, config: BulkIngestConfig) -> NativeResult<BulkIngestGuard> {
+    fn begin_bulk_ingest(&self, config: BulkIngestConfig) -> NativeResult<BulkIngestGuard<'_>> {
         BulkIngestGuard::new(self, config)
     }
 

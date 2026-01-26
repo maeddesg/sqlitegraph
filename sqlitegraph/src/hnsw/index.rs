@@ -46,26 +46,18 @@
 //! }
 //! ```
 
-use serde_json::Value;
-use std::collections::HashMap;
-use std::sync::RwLock;
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::OptionalExtension;
 
-use crate::{
-    SqliteGraph,
-    errors::SqliteGraphError,
-    hnsw::{
+use crate::hnsw::{
         config::HnswConfig,
         distance_metric::DistanceMetric,
-        errors::{HnswError, HnswIndexError},
-        hnsw_config,
+        errors::HnswError,
         layer::HnswLayer,
         multilayer::{LevelDistributor, MultiLayerNodeManager},
         neighborhood::NeighborhoodSearch,
-        storage::{InMemoryVectorStorage, VectorStorage, VectorStorageStats},
-    },
-};
+        storage::{VectorStorage, VectorStorageStats},
+    };
 
 /// Main HNSW vector search index
 ///

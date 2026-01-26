@@ -20,7 +20,7 @@ impl super::DefaultReplayOperations {
     pub fn handle_node_insert(
         &self,
         node_id: u64,
-        slot_offset: u64,
+        _slot_offset: u64,
         node_data: &[u8],
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
@@ -231,7 +231,7 @@ impl super::DefaultReplayOperations {
                         )
                         .collect();
 
-                    let outgoing_count = outgoing_edges.len();
+                    let _outgoing_count = outgoing_edges.len();
                     for (edge_id, neighbor_id) in outgoing_edges {
                         // Mark edge as deleted (soft deletion)
                         if let Err(e) = edge_store.delete_edge(edge_id) {
@@ -254,7 +254,7 @@ impl super::DefaultReplayOperations {
                         )
                         .collect();
 
-                    let incoming_count = incoming_edges.len();
+                    let _incoming_count = incoming_edges.len();
                     for (edge_id, neighbor_id) in incoming_edges {
                         // Mark edge as deleted (soft deletion)
                         if let Err(e) = edge_store.delete_edge(edge_id) {

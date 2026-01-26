@@ -98,7 +98,7 @@ pub fn label_propagation(
             }
 
             // Find most frequent label (deterministic tiebreak: smallest label)
-            if let Some((&most_frequent_label, _)) = label_counts
+            if let Some((&_most_frequent_label, _)) = label_counts
                 .iter()
                 .max_by_key(|(_, count)| *count)
                 .map(|(label, count)| (label, *count))

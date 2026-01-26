@@ -116,7 +116,7 @@ impl HnswIndex {
     ///
     /// Returns HnswError on database failure or if index not found
     pub fn load_metadata(conn: &rusqlite::Connection, name: &str) -> Result<Self, crate::hnsw::errors::HnswError> {
-        use crate::hnsw::{distance_metric::DistanceMetric, layer::HnswLayer, multilayer::LevelDistributor, neighborhood::NeighborhoodSearch, storage::InMemoryVectorStorage};
+        use crate::hnsw::{layer::HnswLayer, neighborhood::NeighborhoodSearch, storage::InMemoryVectorStorage};
 
         // Query index metadata
         let (dimension, m, ef_construction, distance_metric_str, vector_count) = conn
