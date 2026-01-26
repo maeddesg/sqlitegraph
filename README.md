@@ -304,9 +304,22 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 
 ## Documentation
 
-- **[Operator Manual](MANUAL.md)** - Comprehensive usage guide
+### User Documentation
+- **[Operator Manual](MANUAL.md)** - Comprehensive usage guide (14 sections)
 - **[API Docs](API.md)** - Quick API reference
 - **[CHANGELOG](CHANGELOG.md)** - Version history
+
+### Developer Documentation
+- **[Documentation Index](docs/INDEX.md)** - Navigation for all docs
+- **[Architecture](docs/ARCHITECTURE.md)** - System architecture and design
+- **[Testing Guide](docs/TESTING.md)** - Testing patterns and utilities
+- **[Debugging Guide](docs/DEBUGGING.md)** - Debugging and profiling
+- **[Contributing](docs/CONTRIBUTING.md)** - Contribution guidelines
+
+### Development Guides
+- **[Adding a Graph Algorithm](docs/DEVELOPMENT_GUIDES/adding-a-graph-algorithm.md)**
+- **[Adding a Distance Metric](docs/DEVELOPMENT_GUIDES/adding-a-distance-metric.md)**
+- **[Adding a CLI Command](docs/DEVELOPMENT_GUIDES/adding-a-cli-command.md)**
 
 ## Architecture
 
@@ -329,8 +342,9 @@ GPL-3.0-or-later - see [LICENSE](LICENSE) for details.
 ## Contributing
 
 Contributions welcome. Please:
-1. Read the [Operator Manual](MANUAL.md)
-2. Run tests to verify setup
-3. Follow TDD methodology
-4. Keep modules under 300 LOC
-5. Add tests for new features
+1. Read the [Contributing Guide](docs/CONTRIBUTING.md)
+2. Read the [Architecture](docs/ARCHITECTURE.md) for system understanding
+3. Run tests to verify setup
+4. Follow TDD methodology
+5. Keep modules under 300 LOC
+6. Add tests for new features

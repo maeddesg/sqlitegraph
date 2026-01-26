@@ -57,24 +57,9 @@ quick_comparison_results.json
 scripts/
 
 # Internal documentation and reports (development artifacts)
+# Note: Internal docs are now tracked in docs/internal/
 V1_LEGACY_PURGE_MISSION_REPORT.md
 V2_REGRESSION_GATES_*.md
-docs/V1_*.md
-docs/V2_BENCHMARK_*.md
-docs/V2_BENCH_*.md
-docs/V2_COMPARATIVE_*.md
-docs/V2_FIELD_*.md
-docs/V2_INVARIANTS_*.md
-docs/V2_PERFORMANCE_*.md
-docs/V2_PROOF_*.md
-docs/V2_TEST_*.md
-docs/*REPORT*.md
-docs/*RESEARCH*.md
-docs/*PLAN*.md
-docs/*INVESTIGATION*.md
-docs/*PROGRESS*.md
-docs/*ANALYSIS*.md
-docs/*COMPLETION*.md
 Archive.zip
 
 # Project development files (internal use)
