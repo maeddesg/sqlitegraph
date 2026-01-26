@@ -21,9 +21,9 @@ None — No specialized domain expertise directories available. Relying on codeb
 - **v1.8 ACID API Fix** — Phase 38 (complete)
 - **v1.9 WAL Filtering & Allocation Optimization** — Phase 40 (complete)
 - **v1.10 ACID API Completion** — Phase 41 (planned)
-- **v1.11 SIMD / AVX Acceleration** — Phase 42 (planned)
-- **v1.12 Transactional KV Store** — Phase 43 (planned)
-- **v1.13 Pub/Sub (Minimal)** — Phase 44 (planned)
+- **v1.11 SIMD / AVX Acceleration** — Phase 42 (complete)
+- **v1.12 Transactional KV Store** — Phase 43 (complete)
+- **v1.13 Pub/Sub (Minimal)** — Phase 44 (complete) → [Archive](milestones/v1.13-ROADMAP.md)
 
 ---
 
@@ -354,57 +354,14 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 ---
 
-## v1.13 Pub/Sub (Minimal, In-Process) (Phase 44) - PLANNED
+## v1.13 Pub/Sub (Minimal, In-Process) (Phase 44) - COMPLETE
 
-**Milestone Goal:** Implement minimal in-process pub/sub system with events emitted on commit only (no payloads, no networking)
+**Status:** COMPLETE (2026-01-26)
+**Plans:** 5/5 complete
+**Tests:** 59/59 passing
+**Archive:** [milestones/v1.13-ROADMAP.md](milestones/v1.13-ROADMAP.md)
 
-**Status:** PLANNED
-
-**Problem:** Applications need to react to graph changes (cache invalidation, UI updates, triggers). SQLiteGraph requires a pub/sub system that notifies subscribers of data changes without introducing cross-process complexity.
-
-**Architecture:**
-- In-process only: no networking, IPC, or cross-process communication
-- Events emitted on commit only: not on every write, only when transaction commits
-- No payloads: events carry IDs only, consumers read actual data from snapshot
-- Channel-based: uses Rust channels (mpsc) for in-process delivery
-- Snapshot-aware: events include snapshot_id so consumers know what changed
-- Best-effort: no delivery guarantees, no persistence of events
-
-**NON-GOALS (explicitly out of scope):**
-- Redis-style pub/sub
-- Networked pub/sub
-- Background threads
-- Realtime delivery guarantees
-- Message queuing or persistence
-
-**Event Types:**
-- `NodeChanged(node_id, snapshot_id)` — node created/modified
-- `EdgeChanged(edge_id, snapshot_id)` — edge created/modified
-- `KVChanged(key_hash, snapshot_id)` — KV entry created/modified/deleted
-- `SnapshotCommitted(snapshot_id)` — transaction committed
-
-**API Design:**
-- `subscribe(filter) -> (id, receiver)` — returns subscription ID and event receiver
-- `unsubscribe(id)` — cancels subscription
-- Events are structs with event type, IDs, and snapshot_id
-- No payload data — consumers call graph/KV APIs with snapshot_id
-
-**Plans:**
-- [ ] 44-01-PLAN.md — PubSub module with event types and subscriber data structures
-- [ ] 44-02-PLAN.md — Publisher with channel-based event broadcasting
-- [ ] 44-03-PLAN.md — WAL integration (emit events on commit)
-- [ ] 44-04-PLAN.md — Public API (GraphBackend trait integration)
-- [ ] 44-05-PLAN.md — Integration test suite
-
-**Success Criteria:**
-- PubSub module with PubSubEvent enum (4 variants)
-- Publisher broadcasts events via mpsc channels
-- V2WALManager emits events on commit (not rollback)
-- GraphBackend trait has subscribe() and unsubscribe() methods
-- Subscription filtering by event type and entity IDs
-- Best-effort delivery (no panic on dropped receiver)
-- Integration tests cover all event types and filter behavior
-- All tests pass
+Implemented minimal in-process pub/sub system with ID-only events, channel-based delivery, and emission on commit only.
 
 ---
 
@@ -426,6 +383,6 @@ Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 
 | 41. ACID API Completion | v1.10 | 1/1 | Complete | 2026-01-25 |
 | 42. SIMD / AVX Acceleration | v1.11 | 6/6 | Complete | 2026-01-25 |
 | 43. Transactional KV Store | v1.12 | 4/4 | Complete | 2026-01-26 |
-| 44. Pub/Sub (Minimal) | v1.13 | 0/5 | Planned | TBD |
+| 44. Pub/Sub (Minimal) | v1.13 | 5/5 | Complete | 2026-01-26 |
 
-**Overall Progress:** 178/178 plans planned (166 complete, 12 planned). v0.2-v1.12 complete, v1.13 planned.
+**Overall Progress:** 178/178 plans planned (171 complete, 7 planned). v0.2-v1.13 complete.
