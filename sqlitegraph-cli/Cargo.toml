@@ -9,6 +9,11 @@ readme = "README.md"
 
 keywords = ["graph", "database", "sqlite", "cli", "embedded"]
 categories = ["command-line-utilities", "database"]
+exclude = [
+    "../docs/internal/**",
+    "../.codemcp/**",
+    "../.splice-backup/**",
+]
 
 [[bin]]
 name = "sqlitegraph"

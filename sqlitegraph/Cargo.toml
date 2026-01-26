@@ -9,6 +9,13 @@ documentation = "https://docs.rs/sqlitegraph"
 readme = "README.md"
 keywords = ["graph", "database", "sqlite", "embedded", "vector"]
 categories = ["database", "data-structures"]
+exclude = [
+    "docs/internal/**",
+    ".codemcp/**",
+    ".splice-backup/**",
+    "benches/*.json",
+    "benches/*.txt",
+]
 
 [lib]
 name = "sqlitegraph"
