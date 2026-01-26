@@ -5,9 +5,31 @@
 
 **Embedded Graph Database with Native V2 Backend**
 
-SQLiteGraph is an embedded graph database in Rust featuring a dual backend architecture. It provides SQLite and Native V2 storage options with graph algorithms, HNSW vector search, and MVCC snapshots.
+## What's New in v1.2
 
-**Current Status: v1.2.0 - Pub/Sub Event System**
+**Pub/Sub Event System** - In-process event notification for graph changes
+- Four event types: `NodeChanged`, `EdgeChanged`, `KVChanged`, `SnapshotCommitted`
+- ID-only design for decoupled event schemas
+- Channel-based delivery with filtering by event type and entity IDs
+- Native V2 backend only
+
+**Full ACID Transactions** - Complete transaction correctness
+- Atomicity with full rollback support
+- Consistency validation at runtime
+- Isolation via MVCC snapshots
+- Durability with WAL recovery
+
+**Developer Documentation** - Comprehensive guides for contributors
+- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
+- [Testing Guide](docs/TESTING.md) - Test patterns and utilities
+- [Debugging Guide](docs/DEBUGGING.md) - Profiling and troubleshooting
+- [Contributing](docs/CONTRIBUTING.md) - Development workflow
+
+**Test Coverage**: 380+ tests passing (59 pubsub + 42 WAL + 53 MVCC + 27 algorithms + 134 HNSW + 65 others)
+
+---
+
+SQLiteGraph is an embedded graph database in Rust featuring a dual backend architecture. It provides SQLite and Native V2 storage options with graph algorithms, HNSW vector search, and MVCC snapshots.
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
