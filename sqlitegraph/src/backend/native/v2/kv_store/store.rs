@@ -7,11 +7,15 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::time::SystemTime;
 
-/// In-memory key-value store with HashMap-based storage
+/// In-memory key-value store with multi-version storage
+///
+/// Each key retains a version history (Vec<KvEntry> ordered by LSN ascending).
+/// This enables true MVCC snapshot isolation where older snapshots see older versions.
 #[derive(Debug, Default)]
 pub struct KvStore {
     /// Visible to kv_store modules for WAL recovery and TTL cleanup
-    pub(crate) entries: RwLock<HashMap<Vec<u8>, KvEntry>>,
+    /// Each key maps to a version history Vec<KvEntry>, sorted by version (ascending LSN)
+    pub(crate) entries: RwLock<HashMap<Vec<u8>, Vec<KvEntry>>>,
 }
 
 impl KvStore {
@@ -23,16 +27,21 @@ impl KvStore {
     /// Get a value by key
     ///
     /// For tests only - production code should use get_at_snapshot()
-    /// Returns most recent committed value (no version filtering)
+    /// Returns most recent committed value (latest version in history)
     /// TTL is checked lazily: expired entries return None
     pub fn get(&self, key: &[u8]) -> Result<Option<KvValue>, KvStoreError> {
         let entries = self.entries.read();
-        if let Some(entry) = entries.get(key) {
-            // Check TTL before returning value
-            if ttl::is_expired(entry) {
-                return Ok(None);
+        if let Some(versions) = entries.get(key) {
+            // Get latest version (last element in Vec)
+            if let Some(entry) = versions.last() {
+                // Check TTL before returning value
+                if ttl::is_expired(entry) {
+                    return Ok(None);
+                }
+                Ok(Some(entry.value.clone()))
+            } else {
+                Ok(None)
             }
-            Ok(Some(entry.value.clone()))
         } else {
             Ok(None)
         }
@@ -40,8 +49,10 @@ impl KvStore {
 
     /// Get a value at a specific snapshot
     ///
-    /// This enforces snapshot isolation: only data committed at or before
-    /// the given snapshot_id is visible.
+    /// This enforces true MVCC snapshot isolation: finds the latest version
+    /// committed at or before the given snapshot_id.
+    ///
+    /// Uses binary search (O(log n)) to find the correct version in the history.
     ///
     /// TTL is checked lazily: expired entries are filtered on read.
     ///
@@ -53,13 +64,32 @@ impl KvStore {
     /// The value if found and visible at snapshot, or None if not found or not visible
     pub fn get_at_snapshot(&self, key: &[u8], snapshot_id: SnapshotId) -> Result<Option<KvValue>, KvStoreError> {
         let entries = self.entries.read();
+        let snapshot_lsn = snapshot_id.as_lsn();
 
-        if let Some(entry) = entries.get(key) {
-            // Check if entry is visible at this snapshot
-            if !self.is_visible_at_snapshot(entry.metadata.version, snapshot_id) {
-                // Entry version is newer than snapshot - not visible yet
+        if let Some(versions) = entries.get(key) {
+            // Snapshot at 0 means "see all data" - return latest version
+            if snapshot_lsn == 0 {
+                if let Some(entry) = versions.last() {
+                    if ttl::is_expired(entry) {
+                        return Ok(None);
+                    }
+                    return Ok(Some(entry.value.clone()));
+                }
                 return Ok(None);
             }
+
+            // Binary search for the latest version with version <= snapshot_lsn
+            // partition_point returns index of first element where predicate is false
+            // We want: entry.version <= snapshot_lsn
+            let idx = versions.partition_point(|e| e.metadata.version <= snapshot_lsn);
+
+            if idx == 0 {
+                // All versions are newer than snapshot (all version > snapshot_lsn)
+                return Ok(None);
+            }
+
+            // versions[idx - 1] is the latest version with version <= snapshot_lsn
+            let entry = &versions[idx - 1];
 
             // Check if entry is expired (lazy TTL cleanup)
             if ttl::is_expired(entry) {
@@ -74,45 +104,47 @@ impl KvStore {
         }
     }
 
-    /// Check if an entry version is visible at a given snapshot
-    ///
-    /// Entry is visible if version <= snapshot_id.as_lsn()
-    /// This matches the Phase 38 architecture where SnapshotId wraps CommitLSN
-    fn is_visible_at_snapshot(&self, version: u64, snapshot_id: SnapshotId) -> bool {
-        // Entry is visible if:
-        // - snapshot_id is 0 (current/committed snapshot - all data visible)
-        // - version <= snapshot_id.as_lsn() (entry committed at or before snapshot)
-        // Phase 38: SnapshotId = CommitLSN
-        let snapshot_lsn = snapshot_id.as_lsn();
-        snapshot_lsn == 0 || version <= snapshot_lsn
-    }
-
     /// Set a value with optional TTL
+    ///
+    /// Appends a new version to the key's version history.
+    /// The version number is set to 0 and will be updated by the WAL system.
     pub fn set(&mut self, key: Vec<u8>, value: KvValue, ttl: Option<u64>) -> Result<(), KvStoreError> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
 
-        let entries = self.entries.write();
-        let is_new = !entries.contains_key(&key);
+        let mut entries = self.entries.write();
+
+        // Get created_at from existing versions (if any)
+        let created_at = if let Some(versions) = entries.get(&key) {
+            if let Some(latest) = versions.last() {
+                latest.metadata.created_at
+            } else {
+                now
+            }
+        } else {
+            now
+        };
 
         let metadata = KvMetadata {
-            created_at: if is_new { now } else { entries[&key].metadata.created_at },
+            created_at,
             updated_at: now,
             ttl_seconds: ttl,
             version: 0, // Will be set by WAL in plan 02
         };
 
         let entry = KvEntry { key: key.clone(), value, metadata };
-        drop(entries); // Release lock before insert
 
-        let mut entries = self.entries.write();
-        entries.insert(key, entry);
+        // Append new version to history (maintains sorted order since LSNs are monotonic)
+        entries.entry(key).or_default().push(entry);
+
         Ok(())
     }
 
     /// Delete a key
+    ///
+    /// Removes the entire version history for the key.
     pub fn delete(&mut self, key: &[u8]) -> Result<(), KvStoreError> {
         let mut entries = self.entries.write();
         entries.remove(key).map(|_| ()).ok_or_else(|| KvStoreError::KeyNotFound(key.to_vec()))
@@ -121,11 +153,17 @@ impl KvStore {
     /// Check if a key exists
     ///
     /// Note: This checks TTL lazily - expired keys return false even if present in storage.
+    /// Only the latest version is checked.
     pub fn exists(&self, key: &[u8]) -> bool {
         let entries = self.entries.read();
-        if let Some(entry) = entries.get(key) {
-            // Key exists, but check if expired
-            !ttl::is_expired(entry)
+        if let Some(versions) = entries.get(key) {
+            // Check latest version
+            if let Some(entry) = versions.last() {
+                // Key exists, but check if expired
+                !ttl::is_expired(entry)
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -153,27 +191,45 @@ impl KvStore {
     ///
     /// This is used during WAL recovery to restore entries with their original versions.
     /// Normal set() operations should use version 0 (the WAL system assigns the real version).
+    ///
+    /// Maintains version history in sorted order by LSN.
     pub fn set_with_version(&mut self, key: Vec<u8>, value: KvValue, ttl: Option<u64>, version: u64) -> Result<(), KvStoreError> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
 
-        let entries = self.entries.write();
-        let is_new = !entries.contains_key(&key);
+        let mut entries = self.entries.write();
+
+        // Get created_at from existing versions (if any)
+        let created_at = if let Some(versions) = entries.get(&key) {
+            if let Some(latest) = versions.last() {
+                latest.metadata.created_at
+            } else {
+                now
+            }
+        } else {
+            now
+        };
 
         let metadata = KvMetadata {
-            created_at: if is_new { now } else { entries[&key].metadata.created_at },
+            created_at,
             updated_at: now,
             ttl_seconds: ttl,
             version,
         };
 
         let entry = KvEntry { key: key.clone(), value, metadata };
-        drop(entries);
 
-        let mut entries = self.entries.write();
-        entries.insert(key, entry);
+        // Insert into version history, maintaining sorted order by version
+        let versions = entries.entry(key).or_default();
+
+        // Find insertion point to maintain sorted order
+        let pos = versions.partition_point(|e| e.metadata.version < version);
+
+        // Insert at correct position
+        versions.insert(pos, entry);
+
         Ok(())
     }
 }
@@ -259,25 +315,8 @@ mod tests {
     }
 
     #[test]
-    fn test_is_visible_at_snapshot() {
-        let store = KvStore::new();
-
-        // Snapshot at LSN 100
-        let snapshot = SnapshotId::from_lsn(100);
-
-        // Version 50 <= 100: visible
-        assert!(store.is_visible_at_snapshot(50, snapshot));
-
-        // Version 100 <= 100: visible
-        assert!(store.is_visible_at_snapshot(100, snapshot));
-
-        // Version 150 > 100: NOT visible
-        assert!(!store.is_visible_at_snapshot(150, snapshot));
-    }
-
-    #[test]
     fn test_snapshot_isolation_multiple_versions() {
-        // Test that snapshot isolation filters by version
+        // Test true MVCC: multiple versions retained, snapshots see correct version
         let mut store = KvStore::new();
 
         // Create key with version 100
@@ -288,7 +327,7 @@ mod tests {
             100
         ).unwrap();
 
-        // Update same key with version 200 (overwrites version 100)
+        // Update same key with version 200 (MVCC: retains version 100)
         store.set_with_version(
             b"key".to_vec(),
             KvValue::Integer(200),
@@ -296,17 +335,17 @@ mod tests {
             200
         ).unwrap();
 
-        // Snapshot at 250 should see version 200 (200 <= 250)
+        // Snapshot at 250 should see version 200 (latest version <= 250)
         let snapshot_250 = SnapshotId::from_lsn(250);
         let result = store.get_at_snapshot(b"key", snapshot_250).unwrap();
         assert_eq!(result, Some(KvValue::Integer(200)));
 
-        // Snapshot at 150 should NOT see version 200 (200 > 150)
+        // Snapshot at 150 should see version 100 (version history retained!)
         let snapshot_150 = SnapshotId::from_lsn(150);
         let result = store.get_at_snapshot(b"key", snapshot_150).unwrap();
-        assert_eq!(result, None);
+        assert_eq!(result, Some(KvValue::Integer(100)));  // TRUE MVCC!
 
-        // Snapshot at 50 should see nothing (version 200 > 50)
+        // Snapshot at 50 should see nothing (all versions > 50)
         let snapshot_50 = SnapshotId::from_lsn(50);
         let result = store.get_at_snapshot(b"key", snapshot_50).unwrap();
         assert_eq!(result, None);

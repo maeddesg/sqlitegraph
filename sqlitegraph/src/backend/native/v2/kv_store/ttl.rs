@@ -89,9 +89,13 @@ pub fn seconds_until_expiration(entry: &KvEntry) -> Option<u64> {
 
 /// Explicit cleanup of all expired entries
 ///
-/// This is a manual cleanup operation that removes ALL expired entries
+/// This is a manual cleanup operation that removes expired entries
 /// from the store. It is NOT called automatically - users must call it
 /// explicitly if they want to reclaim space from expired entries.
+///
+/// With multi-version storage, this selectively removes only expired versions,
+/// keeping unexpired versions intact. If all versions for a key are expired,
+/// the key is removed entirely.
 ///
 /// NOTE: This is NOT needed for correctness - lazy cleanup on read is
 /// sufficient. This is purely an optimization for space reclamation.
@@ -100,36 +104,48 @@ pub fn seconds_until_expiration(entry: &KvEntry) -> Option<u64> {
 /// * `store` - The KV store to clean
 ///
 /// # Returns
-/// The number of entries removed
+/// The number of versions removed
 ///
 /// # Examples
 /// ```ignore
 /// let mut store = KvStore::new();
 /// // ... add entries with TTL ...
 /// let removed = cleanup_expired_entries(&mut store);
-/// println!("Removed {} expired entries", removed);
+/// println!("Removed {} expired versions", removed);
 /// ```
 pub fn cleanup_expired_entries(store: &mut KvStore) -> usize {
     use parking_lot::RwLockWriteGuard;
     use std::collections::HashMap;
 
     // Get write access to entries
-    let mut entries: RwLockWriteGuard<'_, HashMap<Vec<u8>, KvEntry>> = store.entries.write();
+    let mut entries: RwLockWriteGuard<'_, HashMap<Vec<u8>, Vec<KvEntry>>> = store.entries.write();
 
-    // Collect expired keys
-    let expired_keys: Vec<Vec<u8>> = entries
+    let mut total_removed = 0;
+
+    // Process each key's version history
+    let keys_to_remove: Vec<Vec<u8>> = entries
         .iter()
-        .filter(|(_, entry)| is_expired(entry))
+        .filter(|(_, versions)| {
+            // Check if ALL versions are expired
+            versions.iter().all(|v| is_expired(v))
+        })
         .map(|(key, _)| key.clone())
         .collect();
 
-    // Remove expired entries
-    let count = expired_keys.len();
-    for key in expired_keys {
-        entries.remove(&key);
+    // Remove keys where all versions are expired
+    for key in keys_to_remove {
+        let count = entries.remove(&key).map_or(0, |v| v.len());
+        total_removed += count;
     }
 
-    count
+    // For keys with some expired versions, filter them out
+    for versions in entries.values_mut() {
+        let original_len = versions.len();
+        versions.retain(|v| !is_expired(v));
+        total_removed += original_len - versions.len();
+    }
+
+    total_removed
 }
 
 #[cfg(test)]
@@ -233,7 +249,6 @@ mod tests {
 
         // Add expired entry by manually manipulating metadata
         {
-            let entries = store.entries.write();
             let old_created_at = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .map(|d| d.as_secs().saturating_sub(10))
@@ -251,10 +266,8 @@ mod tests {
                 },
             };
 
-            // We need to drop the read lock before getting write lock
-            drop(entries);
             let mut entries = store.entries.write();
-            entries.insert(b"key3".to_vec(), expired_entry);
+            entries.insert(b"key3".to_vec(), vec![expired_entry]);
         }
 
         // Before cleanup: 3 entries

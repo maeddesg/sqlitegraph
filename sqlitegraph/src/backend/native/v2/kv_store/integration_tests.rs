@@ -163,7 +163,7 @@ fn test_ttl_checked_on_get() {
 
     {
         let mut entries = store.entries.write();
-        entries.insert(b"expired_key".to_vec(), expired_entry);
+        entries.insert(b"expired_key".to_vec(), vec![expired_entry]);
     }
 
     // Entry exists in storage
@@ -204,7 +204,7 @@ fn test_manual_cleanup() {
 
     {
         let mut entries = store.entries.write();
-        entries.insert(b"expired".to_vec(), expired_entry);
+        entries.insert(b"expired".to_vec(), vec![expired_entry]);
     }
 
     // Before cleanup: 2 entries in storage
@@ -276,8 +276,7 @@ fn test_version_filtering() {
     let mut store = KvStore::new();
 
     // Create multiple versions of same key
-    // Note: Current implementation uses single-version storage (latest wins)
-    // Full MVCC multi-version support requires additional work
+    // Full MVCC: all versions retained in history
     store.set_with_version(b"key".to_vec(), KvValue::Integer(100), None, 100).unwrap();
     store.set_with_version(b"key".to_vec(), KvValue::Integer(200), None, 200).unwrap();
     store.set_with_version(b"key".to_vec(), KvValue::Integer(300), None, 300).unwrap();
@@ -290,15 +289,17 @@ fn test_version_filtering() {
     let snapshot_350 = SnapshotId::from_lsn(350);
     assert_eq!(store.get_at_snapshot(b"key", snapshot_350).unwrap(), Some(KvValue::Integer(300)));
 
-    // Snapshot at 50 should see nothing (version > snapshot LSN)
+    // Snapshot at 250 should see version 200 (TRUE MVCC - version history retained!)
+    let snapshot_250 = SnapshotId::from_lsn(250);
+    assert_eq!(store.get_at_snapshot(b"key", snapshot_250).unwrap(), Some(KvValue::Integer(200)));
+
+    // Snapshot at 150 should see version 100
+    let snapshot_150 = SnapshotId::from_lsn(150);
+    assert_eq!(store.get_at_snapshot(b"key", snapshot_150).unwrap(), Some(KvValue::Integer(100)));
+
+    // Snapshot at 50 should see nothing (all versions > snapshot LSN)
     let snapshot_50 = SnapshotId::from_lsn(50);
     assert_eq!(store.get_at_snapshot(b"key", snapshot_50).unwrap(), None);
-
-    // Snapshot at 250 should see version 300 (latest, since we only keep one version)
-    // Note: In full MVCC, this would see version 200. Current impl keeps latest.
-    let snapshot_250 = SnapshotId::from_lsn(250);
-    // With single-version storage, version 300 > snapshot 250, so not visible
-    assert_eq!(store.get_at_snapshot(b"key", snapshot_250).unwrap(), None);
 }
 
 #[test]
@@ -422,9 +423,11 @@ fn test_wal_recovery_with_ttl() {
     // Manually check metadata
     {
         let entries = store.entries.read();
-        if let Some(entry) = entries.get(&b"temp_key".to_vec()) {
-            assert_eq!(entry.metadata.ttl_seconds, Some(3600));
-            assert_eq!(entry.metadata.version, 100);
+        if let Some(versions) = entries.get(&b"temp_key".to_vec()) {
+            if let Some(entry) = versions.last() {
+                assert_eq!(entry.metadata.ttl_seconds, Some(3600));
+                assert_eq!(entry.metadata.version, 100);
+            }
         }
     }
 }
@@ -623,7 +626,7 @@ fn test_exists_with_expired_entry() {
 
     {
         let mut entries = store.entries.write();
-        entries.insert(b"expired".to_vec(), expired_entry);
+        entries.insert(b"expired".to_vec(), vec![expired_entry]);
     }
 
     // exists() should return false for expired entry

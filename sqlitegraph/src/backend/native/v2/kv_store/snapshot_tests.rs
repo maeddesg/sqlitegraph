@@ -3,6 +3,8 @@
 //! These tests verify that snapshot isolation works correctly for both
 //! Native and SQLite backends, ensuring feature parity.
 
+#![cfg(feature = "native-v2")]
+
 use crate::backend::GraphBackend;
 use crate::backend::native::v2::kv_store::types::{KvValue, KvStoreError};
 use crate::snapshot::SnapshotId;
