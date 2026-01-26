@@ -98,4 +98,4 @@ test_instrumentation.sh
 test_wal_api
 main
 test_*_api
-*.sqlitegraph-*
+*.sqlitegraph-*insert_bench_fixed.txt
