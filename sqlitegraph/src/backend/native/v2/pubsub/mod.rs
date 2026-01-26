@@ -21,7 +21,9 @@
 pub mod event;
 pub mod subscriber;
 pub mod publisher;
+pub mod emit;
 
 pub use event::{PubSubEvent, PubSubEventType};
 pub use subscriber::{Subscriber, SubscriberId, SubscriptionFilter};
 pub use publisher::Publisher;
+pub use emit::{records_to_events, should_emit_event};

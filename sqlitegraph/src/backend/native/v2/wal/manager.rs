@@ -4,6 +4,7 @@
 //! writers, readers, checkpointing, recovery operations, and transaction
 //! management with advanced group commit and cluster-affinity optimization.
 
+use crate::backend::native::v2::pubsub::Publisher;
 use crate::backend::native::v2::storage::SharedDeltaIndex;
 use crate::backend::native::v2::wal::{
     transaction_coordinator::IsolationLevel, V2WALCheckpointManager, V2WALConfig, V2WALHeader,
@@ -112,6 +113,9 @@ pub struct V2WALManager {
 
     /// Background coordinator thread handle
     coordinator_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
+
+    /// Pub/Sub event publisher
+    publisher: Arc<Publisher>,
 }
 
 /// Transaction coordinator for group commit and optimization
@@ -192,6 +196,9 @@ impl V2WALManager {
             last_cluster_flush: Instant::now(),
         }));
 
+        // Initialize pub/sub publisher
+        let publisher = Arc::new(Publisher::new());
+
         let manager = Self {
             config,
             writer,
@@ -205,6 +212,7 @@ impl V2WALManager {
             shutdown_signal: Arc::new(Mutex::new(false)),
             coordinator_handle: Arc::new(Mutex::new(None)),
             delta_index: Arc::new(parking_lot::RwLock::new(crate::backend::native::v2::storage::DeltaIndex::new())),
+            publisher,
         };
 
         // Start background coordinator
@@ -360,6 +368,15 @@ impl V2WALManager {
 
         let commit_lsn = self.writer.write_record(commit_record)?;
 
+        // Emit pub/sub events for committed changes
+        {
+            use crate::backend::native::v2::pubsub::emit;
+            let events = emit::records_to_events(&records, commit_lsn);
+            for event in events {
+                self.publisher.emit(event);
+            }
+        }
+
         // Populate delta index with committed changes
         // This builds the delta at commit time (NOT during reads)
         {
@@ -494,6 +511,26 @@ impl V2WALManager {
     /// Get performance metrics
     pub fn get_metrics(&self) -> WALManagerMetrics {
         self.metrics.read().clone()
+    }
+
+    /// Get the pub/sub publisher for subscribing to events
+    ///
+    /// Returns a reference to the publisher that can be used to subscribe
+    /// to pub/sub events emitted on transaction commits.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use sqlitegraph::backend::native::v2::wal::{V2WALManager, V2WALConfig};
+    /// # use sqlitegraph::backend::native::v2::pubsub::SubscriptionFilter;
+    /// # let manager = V2WALManager::create(V2WALConfig::in_memory()).unwrap();
+    /// use sqlitegraph::backend::native::v2::pubsub::SubscriptionFilter;
+    ///
+    /// let publisher = manager.get_publisher();
+    /// let (_id, rx) = publisher.subscribe(SubscriptionFilter::all());
+    /// ```
+    pub fn get_publisher(&self) -> &Arc<Publisher> {
+        &self.publisher
     }
 
     /// Get active transaction count
