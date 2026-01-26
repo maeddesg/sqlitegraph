@@ -22,6 +22,7 @@ Thumbs.db
 # Cache directories
 .fastembed_cache/
 .cargo-cache/
+.cargo/
 
 # Log files
 *.log
@@ -51,6 +52,9 @@ benchmark_results/
 .claude/
 results/
 AGENTS.md
+.mcp.json
+.splice/
+.splice-backup/
 
 # Temporary benchmark scripts and results
 quick_comparison_results.json
@@ -65,7 +69,8 @@ Archive.zip
 # Project development files (internal use)
 CLAUDE.md
 .planning/
-.codemcp
+.codemcp/
+.splice/
 *.zip
 *.tar.gz
 *.tgz
