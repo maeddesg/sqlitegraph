@@ -10,18 +10,19 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Milestone: v1.13 Pub/Sub (SHIPPED 2026-01-26)
-Phase: 44 - COMPLETE (5/5 plans)
+Phase: 44 - COMPLETE (6/6 plans)
 Status: Milestone archived — ready for next milestone
-Last activity: 2026-01-26 — v1.13 milestone complete (59 tests passing)
+Last activity: 2026-01-26 — Phase 44-06 regression test suite complete
 
-Progress: [█████████░] 99% of planned phases (44 phases complete, 171/179 plans)
+Progress: [█████████░] 99.4% of planned phases (44 phases complete, 172/179 plans)
 
 **Milestone v1.13 Summary:**
-- ✅ Phase 44: Pub/Sub (Minimal, In-Process) — 5/5 plans complete
+- ✅ Phase 44: Pub/Sub (Minimal, In-Process) — 6/6 plans complete
 - ✅ 59/59 tests passing (14 + 10 + 12 + 1 + 23 integration)
+- ✅ 6/6 concurrent subscriber regression tests passing
 - ✅ 8/8 requirements satisfied (PS-01 through PS-08)
 - ✅ Milestone audit: PASSED (8/8 integration checks wired)
-- ⏳ Phase 44-06: Regression validation (deferred — optional)
+- ✅ Phase 44-06: Regression test suite (4 benchmarks + 6 integration tests)
 
 **v1.13 Delivered:**
 - PubSub module with 4 event types (NodeChanged, EdgeChanged, KVChanged, SnapshotCommitted)
@@ -47,7 +48,11 @@ Progress: [█████████░] 99% of planned phases (44 phases comp
 
 **Next:**
 - Run `/gsd:new-milestone` to plan v1.14
-- Or run `/gsd:plan-phase 44-06` for regression validation first
+- Optionally run full benchmark suite to collect actual regression metrics:
+  - `cargo bench --bench regression_pubsub_write_cost`
+  - `cargo bench --bench regression_pubsub_memory`
+  - `cargo bench --bench regression_pubsub_non_chain`
+  - Update 44-06-REGRESSION-REPORT.md with actual measurements
 
 ---
 
