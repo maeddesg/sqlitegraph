@@ -2,6 +2,17 @@
 //!
 //! This module implements the Phase 14 redesign with compact edge records
 //! and clustered adjacency for optimal I/O locality and storage efficiency.
+//!
+//! ## V2 Modules
+//!
+//! - **edge_cluster**: Compact edge records with clustered adjacency
+//! - **kv_store**: Transactional key-value store with MVCC
+//! - **pubsub**: In-process pub/sub with ID-only events
+//! - **storage**: Delta index and MVCC support
+//! - **wal**: Write-Ahead Log with commit sequencing
+//! - **snapshot**: Multi-version concurrency control
+//! - **free_space**: Contiguous allocation management
+//! - **backup/restore**: Backup and recovery utilities
 
 pub mod backup;
 pub mod edge_cluster;
@@ -12,6 +23,7 @@ pub mod kv_store;
 pub mod migration;
 pub mod node_record_v2;
 pub mod planner;
+pub mod pubsub;
 pub mod restore;
 pub mod snapshot;
 pub mod storage;
@@ -34,6 +46,7 @@ pub use restore::{RestoreConfig, RestoreResult, restore_backup, restore};
 pub use migration::{detect_format_version, migrate_file, FormatVersion, MigrationResult};
 pub use node_record_v2::{NodeRecordV2, NodeRecordV2Ext};
 pub use planner::{ExportPlanner, PlannerDecision, DecisionReason, WalAnalysis};
+pub use pubsub::{PubSubEvent, PubSubEventType, SubscriptionFilter};
 pub use storage::{
     JsonLimits, JsonValidationError, parse_and_validate_json, parse_and_validate_json_str,
     DeltaIndex, DeltaRecord, SharedDeltaIndex,
