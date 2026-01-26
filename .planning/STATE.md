@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 Phase: 44 - Pub/Sub (In-Process)
 Previous: Phase 43 - Transactional KV Store (COMPLETE)
-Status: Phase 44 In Progress - Event types and subscriber structures complete
-Last activity: 2026-01-26 — Completed 44-01: PubSub event types and subscriber structures
+Status: Phase 44 In Progress - Event delivery mechanism complete
+Last activity: 2026-01-26 — Completed 44-02: Event delivery mechanism with Publisher
 
-Progress: [█████████░] 97% of planned phases (43 phases mostly complete, 171/179 plans)
+Progress: [█████████░] 97% of planned phases (43 phases mostly complete, 172/179 plans)
 
 **Phase 43 Status (6/6 COMPLETE):**
 - ✅ Plan 43-01: In-memory KV store with HashMap-based storage (18 tests pass)
@@ -24,24 +24,29 @@ Progress: [█████████░] 97% of planned phases (43 phases most
 - ✅ Plan 43-05: SQLite backend KV implementation (29 tests pass)
 - ✅ Plan 43-06: MVCC multi-version storage (COMPLETE)
 
-**Phase 44 Status (1/6 PLANNED):**
+**Phase 44 Status (2/6 PLANNED):**
 - ✅ Plan 44-01: PubSub event types and subscriber structures (COMPLETE - 14 tests pass)
-- ⏳ Plan 44-02: Event delivery mechanism (PLANNED)
+- ✅ Plan 44-02: Event delivery mechanism (COMPLETE - 10 tests pass)
 - ⏳ Plan 44-03: Emitter integration with commit path (PLANNED)
 - ⏳ Plan 44-04: PubSub manager and lifecycle (PLANNED)
 - ⏳ Plan 44-05: Integration tests (PLANNED)
 - ⏳ Plan 44-06: Regression validation (PLANNED)
 
 **Phase 44 Implementation Summary (IN PROGRESS):**
-- **Status:** Event types and subscriber structures complete
-- **Architecture:** ID-only event design with best-effort in-process delivery
+- **Status:** Event delivery mechanism complete with Publisher
+- **Architecture:** ID-only event design with best-effort in-process delivery via channels
 - **Event Types:** NodeChanged, EdgeChanged, KVChanged, SnapshotCommitted
 - **Subscriber Management:** SubscriberId (AtomicU64), SubscriptionFilter (inclusive matching), Subscriber
+- **Publisher:** Channel-based event delivery using std::sync::mpsc
+  - subscribe() returns (SubscriberId, Receiver<PubSubEvent>)
+  - emit() broadcasts to all matching subscribers (best-effort, no blocking)
+  - unsubscribe() removes subscriber by ID
+  - Thread-safe via Arc<Mutex<Vec<(SubscriberId, Sender, Filter)>>>
 - **Filtering:** Support for event type, node_ids, edge_ids, key_hashes filtering
-- **Tests:** 14 unit tests covering event classification, filter matching, subscriber creation
+- **Tests:** 24 unit tests (14 from 44-01, 10 from 44-02)
 - **Module Location:** sqlitegraph/src/backend/native/v2/pubsub/
-- **Exports:** PubSubEvent, PubSubEventType, SubscriptionFilter, Subscriber, SubscriberId
-- **Next:** Channel-based delivery, emitter integration with commit path
+- **Exports:** PubSubEvent, PubSubEventType, SubscriptionFilter, Subscriber, SubscriberId, Publisher
+- **Next:** Emitter integration with commit path
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -632,19 +637,38 @@ Resume file: None
 - Scalar functions made public for benchmark comparison
 - AMD Ryzen 7 7800X3D validation: AVX2 performance confirmed
 
+## Decisions
+
+**Phase 44 - Pub/Sub:**
+
+**44-02: Event delivery mechanism**
+- **Decision:** Use std::sync::mpsc instead of tokio::sync::broadcast
+  - **Rationale:** Simpler, works without async runtime, sufficient for in-process pub/sub
+  - **Trade-off:** No async support, but this is synchronous commit path anyway
+- **Decision:** Each subscriber gets their own mpsc channel (Vec<mpsc::Sender>)
+  - **Rationale:** Simpler than broadcast channel, no tokio dependency
+  - **Trade-off:** More memory overhead per subscriber, but subscriber count is low
+- **Decision:** Best-effort delivery (drop events if channel full or receiver gone)
+  - **Rationale:** Commit path must never block due to slow/dead subscribers
+  - **Trade-off:** No delivery guarantees, but this is acceptable for in-process pub/sub
+- **Decision:** Publisher manages SubscriberId sequence internally
+  - **Rationale:** Cleaner lifecycle tracking than global AtomicU64
+  - **Trade-off:** Slightly more complex Publisher initialization
+
 ## Session Continuity
 
-Last session: 2026-01-26T23:39:28Z
-Stopped at: Completed Phase 43-05 - SQLite backend KV implementation and snapshot tests
+Last session: 2026-01-26T00:52:15Z
+Stopped at: Completed Phase 44-02 - Event delivery mechanism with Publisher
 Resume file: None
 
-**Phase 43 Deliverables:**
-- In-memory KV store with HashMap-based storage (plan 01)
-- WAL integration for KV operations with recovery support (plan 02)
-- Snapshot isolation API integrated with GraphBackend trait (plan 03)
-- TTL cleanup and integration tests (plan 04)
-- SQLite backend KV implementation with feature parity (plan 05)
+**Phase 44 Deliverables (IN PROGRESS):**
+- PubSub event types and subscriber structures (plan 01) - COMPLETE
+- Event delivery mechanism with Publisher (plan 02) - COMPLETE
+- Emitter integration with commit path (plan 03) - NEXT
+- PubSub manager and lifecycle (plan 04) - PLANNED
+- Integration tests (plan 05) - PLANNED
+- Regression validation (plan 06) - PLANNED
 
-**Total Phase 43 Tests:** 108 tests passing (all KV store tests)
+**Total Phase 44 Tests (so far):** 24 tests passing (14 from 44-01, 10 from 44-02)
 
-**Ready for Phase 44:** Pub/Sub (Minimal, In-Process)
+**Next:** 44-03 - Emitter integration with commit path
