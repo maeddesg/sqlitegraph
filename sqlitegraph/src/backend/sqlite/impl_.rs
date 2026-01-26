@@ -513,6 +513,26 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 
         Ok(())
     }
+
+    #[cfg(feature = "native-v2")]
+    fn subscribe(
+        &self,
+        _filter: crate::backend::SubscriptionFilter,
+    ) -> Result<(u64, std::sync::mpsc::Receiver<crate::backend::PubSubEvent>), crate::SqliteGraphError> {
+        // SQLite backend does not support pub/sub (no WAL event emission)
+        // Return explicit error for clarity
+        Err(SqliteGraphError::Unsupported(
+            "Pub/sub is only available on Native V2 backend".to_string()
+        ))
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn unsubscribe(&self, _subscriber_id: u64) -> Result<bool, crate::SqliteGraphError> {
+        // SQLite backend does not support pub/sub
+        Err(SqliteGraphError::Unsupported(
+            "Pub/sub is only available on Native V2 backend".to_string()
+        ))
+    }
 }
 
 /// Convert KvValue to serde_json::Value for serialization
