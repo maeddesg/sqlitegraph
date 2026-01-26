@@ -4,7 +4,7 @@
 
 SQLiteGraph is an embedded graph database in Rust featuring a dual backend architecture. It provides SQLite and Native V2 storage options with graph algorithms, HNSW vector search, and MVCC snapshots.
 
-**Current Status: v1.1.0 - ACID & Reliability Complete**
+**Current Status: v1.2.0 - Pub/Sub Event System**
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
@@ -20,6 +20,7 @@ SQLiteGraph provides two backend options:
 - **Snapshot System**: Export/import with lifecycle management
 - **Cross-Platform Atomic Operations**: Concurrent access across platforms
 - **Storage Format**: Binary format with 70%+ size reduction vs legacy V1
+- **Pub/Sub Events**: In-process event notification for graph changes (Native V2 only)
 
 ### Dual Backend Architecture
 - **SQLite Backend**: Traditional SQLite with full ACID transactions
@@ -168,6 +169,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Pub/Sub Events (Native V2)
+
+```toml
+[dependencies]
+sqlitegraph = { version = "1.2", features = ["native-v2"] }
+```
+
+```rust
+use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::backend::SubscriptionFilter;
+
+let cfg = GraphConfig::native();
+let graph = open_graph("graph.db", &cfg)?;
+
+// Subscribe to all node change events
+let filter = SubscriptionFilter::all();
+let (subscriber_id, rx) = graph.subscribe(filter)?;
+
+// In a separate task or thread, receive events
+while let Ok(event) = rx.recv() {
+    println!("Event: {:?}", event);
+    // Events contain only IDs - read actual data from graph using snapshot_id
+}
+
+// Unsubscribe when done
+graph.unsubscribe(subscriber_id)?;
+```
+
 ## Backend Selection Guide
 
 | Use Case | Recommended Backend | Why |
@@ -185,10 +214,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.1"
+sqlitegraph = "1.2"
 
-# Native V2 backend
-sqlitegraph = { version = "1.0", features = ["native-v2"] }
+# Native V2 backend (with pub/sub support)
+sqlitegraph = { version = "1.2", features = ["native-v2"] }
 
 # Development features - I/O tracing
 sqlitegraph = { version = "1.0", features = ["trace_v2_io"] }
@@ -242,7 +271,8 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (Phase 10):**
+**Test Coverage (v1.2):**
+- 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
 - 27 algorithm tests passing (PageRank, Betweenness, Louvain, Label Propagation)

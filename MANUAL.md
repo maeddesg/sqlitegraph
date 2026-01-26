@@ -10,10 +10,10 @@ Comprehensive usage guide for SQLiteGraph with dual backend architecture (SQLite
 
 ```toml
 [dependencies]
-sqlitegraph = "1.1"
+sqlitegraph = "1.2"
 
-# For Native V2 backend
-sqlitegraph = { version = "1.1", features = ["native-v2"] }
+# For Native V2 backend (with pub/sub support)
+sqlitegraph = { version = "1.2", features = ["native-v2"] }
 ```
 
 ### Basic Usage
@@ -192,14 +192,15 @@ cargo test '*wal*'
 
 ### Test Coverage
 
-**v1.0 Test Results:**
+**v1.2 Test Results:**
+- 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
 - 27 algorithm tests passing (PageRank, Betweenness, Louvain, Label Propagation)
 - 134 HNSW tests passing
 - 65 MVCC lifecycle tests passing
 
-**Total**: 300+ tests passing
+**Total**: 380+ tests passing
 
 ---
 
@@ -468,7 +469,152 @@ cargo check --features native-v2
 
 ---
 
+## 14. Pub/Sub Events (Phase 44)
+
+### Overview
+
+The Native V2 backend includes an in-process publish/subscribe system for receiving notifications when graph data changes. Events are emitted when transactions commit and carry only identifiers (not full data payloads).
+
+### Availability
+
+| Backend | Pub/Sub Support |
+|---------|-----------------|
+| **Native V2** | Full support |
+| **SQLite** | Not supported (returns `Unsupported` error) |
+
+### Event Types
+
+Four event types are emitted on transaction commit:
+
+| Event Type | Fields | Description |
+|------------|--------|-------------|
+| `NodeChanged` | `node_id`, `snapshot_id` | A node was created or modified |
+| `EdgeChanged` | `edge_id`, `snapshot_id` | An edge was created or modified |
+| `KVChanged` | `key_hash`, `snapshot_id` | A KV entry was created, modified, or deleted |
+| `SnapshotCommitted` | `snapshot_id` | A transaction was committed |
+
+**Important**: Events are emitted on **commit only**, not on rollback.
+
+### Basic Usage
+
+```rust
+use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::backend::{SubscriptionFilter, PubSubEvent};
+
+let cfg = GraphConfig::native();
+let graph = open_graph("graph.db", &cfg)?;
+
+// Subscribe to all events
+let filter = SubscriptionFilter::all();
+let (subscriber_id, rx) = graph.subscribe(filter)?;
+
+// In a separate task/thread, receive events
+std::thread::spawn(move || {
+    while let Ok(event) = rx.recv() {
+        match event {
+            PubSubEvent::NodeChanged { node_id, snapshot_id } => {
+                println!("Node {} changed in snapshot {}", node_id, snapshot_id);
+            }
+            PubSubEvent::EdgeChanged { edge_id, snapshot_id } => {
+                println!("Edge {} changed in snapshot {}", edge_id, snapshot_id);
+            }
+            PubSubEvent::KVChanged { key_hash, snapshot_id } => {
+                println!("KV hash {} changed in snapshot {}", key_hash, snapshot_id);
+            }
+            PubSubEvent::SnapshotCommitted { snapshot_id } => {
+                println!("Transaction committed: snapshot {}", snapshot_id);
+            }
+        }
+    }
+});
+
+// Unsubscribe when done
+graph.unsubscribe(subscriber_id)?;
+```
+
+### Filtering Events
+
+You can filter events by type and/or specific entity IDs:
+
+```rust
+use sqlitegraph::backend::{SubscriptionFilter, PubSubEventType};
+
+// Subscribe only to node events
+let node_filter = SubscriptionFilter::event_types(vec![PubSubEventType::Node]);
+let (id, rx) = graph.subscribe(node_filter)?;
+
+// Subscribe only to specific node IDs
+let specific_nodes = SubscriptionFilter::nodes(vec![1, 2, 3]);
+let (id, rx) = graph.subscribe(specific_nodes)?;
+
+// Subscribe to node AND edge events
+let multi_filter = SubscriptionFilter::event_types(vec![
+    PubSubEventType::Node,
+    PubSubEventType::Edge,
+]);
+let (id, rx) = graph.subscribe(multi_filter)?;
+```
+
+### SubscriptionFilter API
+
+| Method | Description |
+|--------|-------------|
+| `all()` | Match all events |
+| `nodes(ids)` | Match only specific node IDs |
+| `edges(ids)` | Match only specific edge IDs |
+| `keys(hashes)` | Match only specific key hashes |
+| `event_types(types)` | Match specific event types |
+
+### ID-Only Design
+
+Events carry only identifiers, not full entity data. This design:
+
+- **Reduces overhead**: Events are lightweight (just IDs)
+- **Ensures consistency**: Consumers read from a specific snapshot
+- **Decouples schema**: Event structure doesn't change when entities change
+
+To read actual data, use the provided `snapshot_id`:
+
+```rust
+// Event gives you the ID
+if let PubSubEvent::NodeChanged { node_id, snapshot_id } = event {
+    // Query the graph for actual data at that snapshot
+    let node = graph.get_node_at_snapshot(node_id, snapshot_id)?;
+}
+```
+
+### Limitations
+
+The pub/sub system is **minimal and best-effort**:
+
+- **In-Process Only**: No networking or IPC support
+- **No Persistence**: Events are lost if the process crashes
+- **No Delivery Guarantees**: Events dropped if channel is full or receiver is gone
+- **No Ordering**: Subscribers may receive events in different orders
+- **Native V2 Only**: SQLite backend does not support pub/sub
+
+### Thread Safety
+
+- Multiple threads can safely subscribe/unsubscribe concurrently
+- Each subscriber gets their own channel
+- `Publisher` uses `Arc<Mutex<>>` for internal synchronization
+
+### Test Coverage
+
+**v1.2 Test Results:**
+- 59 pubsub tests passing (integration + module tests)
+- Tests cover: event emission, filtering, multiple subscribers, unsubscribe
+
+---
+
 ## Architecture Status
+
+**v1.2 Features:**
+- Pub/Sub Events: In-process event notification for graph changes
+  - Four event types (NodeChanged, EdgeChanged, KVChanged, SnapshotCommitted)
+  - Channel-based delivery with filtering
+  - Best-effort delivery (no blocking on commit path)
+  - Native V2 backend only
 
 **v1.1 Features:**
 - Native V2 Backend: Full ACID transaction correctness
@@ -488,4 +634,4 @@ cargo check --features native-v2
 - MVCC Snapshots: Read isolation
 - Developer Tools: Introspection, progress tracking, CLI
 
-**Test Coverage:** 126 tests passing (v1.1)
+**Test Coverage:** 185 tests passing (v1.2, including 59 pubsub tests)

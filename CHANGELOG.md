@@ -1,5 +1,69 @@
 # SQLiteGraph Changelog
 
+## [1.2.0] - 2026-01-26
+
+### v1.2 Pub/Sub Event System Release
+**Phase 44 completion: In-process publish/subscribe for graph change events**
+
+### Pub/Sub Module
+- **Event Types**: Four event types emitted on transaction commit
+  - `NodeChanged`: Node creation or modification (with node_id, snapshot_id)
+  - `EdgeChanged`: Edge creation or modification (with edge_id, snapshot_id)
+  - `KVChanged`: Key-value store changes (with key_hash, snapshot_id)
+  - `SnapshotCommitted`: Transaction commit events (with snapshot_id)
+- **ID-Only Design**: Events carry only identifiers, not full payloads
+  - Consumers read actual data from graph/KV APIs using provided snapshot_id
+  - Minimal overhead for event emission
+  - Decoupled from entity schema changes
+
+### Publisher/Subscriber
+- **Publisher**: Channel-based event broadcasting using `std::sync::mpsc`
+  - `subscribe(filter)`: Create subscription with event filter
+  - `unsubscribe(id)`: Remove subscription
+  - `emit(event)`: Broadcast to matching subscribers
+  - Best-effort delivery (no blocking on commit path)
+- **SubscriptionFilter**: Filter events by type and/or entity IDs
+  - Event type filtering: Node, Edge, KV, Commit, or All
+  - Entity-specific filtering: node_ids, edge_ids, key_hashes
+  - Inclusive matching (event matches if it matches ANY criteria)
+
+### WAL Integration
+- **V2WALManager**: Emits events on commit (not rollback)
+  - Events generated from WAL records during commit
+  - All events in a transaction share the same snapshot_id
+- **GraphBackend Trait**: Added `subscribe()` and `unsubscribe()` methods (feature-gated to native-v2)
+  - NativeGraphBackend: Delegates to V2WALManager.get_publisher()
+  - SQLite Backend: Returns Unsupported error
+
+### Module Organization
+- `sqlitegraph/src/backend/native/v2/pubsub/`:
+  - `event.rs`: PubSubEvent enum and PubSubEventType
+  - `subscriber.rs`: SubscriberId, SubscriptionFilter, Subscriber
+  - `publisher.rs`: Publisher with mpsc channels
+  - `emit.rs`: WAL record to PubSubEvent conversion
+  - `tests.rs`: Integration tests (23 tests)
+
+### Limitations
+- **In-Process Only**: No networking or IPC support
+- **Best-Effort Delivery**: No persistence, delivery guarantees, or ordering guarantees
+- **Native V2 Only**: SQLite backend does not support pub/sub
+- **No Payloads**: Events carry IDs only; consumers must query for actual data
+
+### Test Coverage (Phase 44-06)
+- **59 pubsub tests passing**
+- **Regression benchmarks**:
+  - Non-chain pattern regression benchmark
+  - Concurrent subscriber tests
+  - Memory overhead benchmark for Publisher
+  - Write cost benchmark for pub/sub emission
+
+### Summary of v1.2
+- **6 Sub-phases Complete**: Event types, publisher/subscriber, WAL integration, public API, comprehensive tests, regression validation
+- **18 Commits** across implementation, testing, and documentation
+- **59 Tests Passing** (23 integration tests + 36 module tests)
+
+---
+
 ## [1.1.0] - 2026-01-20
 
 ### v1.1 ACID & Reliability Release
