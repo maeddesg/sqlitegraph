@@ -1,5 +1,8 @@
 # SQLiteGraph
 
+[![crates.io](https://img.shields.io/crates/v/sqlitegraph.svg)](https://crates.io/crates/sqlitegraph)
+[![Documentation](https://docs.rs/sqlitegraph/badge.svg)](https://docs.rs/sqlitegraph)
+
 **Embedded Graph Database with Native V2 Backend**
 
 SQLiteGraph is an embedded graph database in Rust featuring a dual backend architecture. It provides SQLite and Native V2 storage options with graph algorithms, HNSW vector search, and MVCC snapshots.
@@ -334,6 +337,15 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 - HNSW vector search with persistence
 - MVCC snapshots for read isolation
 - Introspection and debugging tools
+
+## Built With
+
+SQLiteGraph was developed using the following tools:
+
+- **[Magellan](https://github.com/therootcompany/magellan)** - Code graph navigation and symbol analysis
+- **[Splice](https://github.com/jasonzialcita/splice)** - Safe code editing with span-based operations
+- **[LLM-Grep](https://github.com/paul-gauthier/llm-grep)** - Semantic code search
+- **[Claude Code](https://claude.ai/code)** - AI pair programming
 
 ## License
 
