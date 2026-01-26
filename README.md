@@ -5,7 +5,7 @@
 
 **Embedded Graph Database with Native V2 Backend**
 
-## What's New in v1.2.3
+## What's New in v1.2.4
 
 **Pub/Sub Event System** - In-process event notification for graph changes
 - Four event types: `NodeChanged`, `EdgeChanged`, `KVChanged`, `SnapshotCommitted`
@@ -168,7 +168,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.2.3", features = ["native-v2"] }
+sqlitegraph = { version = "1.2.4", features = ["native-v2"] }
 ```
 
 ```rust
@@ -198,7 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.2.3", features = ["native-v2"] }
+sqlitegraph = { version = "1.2.4", features = ["native-v2"] }
 ```
 
 ```rust
@@ -239,13 +239,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.2.3"
+sqlitegraph = "1.2.4"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.2.3", features = ["native-v2"] }
+sqlitegraph = { version = "1.2.4", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.2.3", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.2.4", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
