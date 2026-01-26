@@ -80,7 +80,7 @@ impl GraphFileValidator {
     /// to prevent collision with header fields. The header occupies bytes 0-79 (HEADER_SIZE=80),
     /// so the commit marker is at offset 80, immediately following the header.
     pub const fn commit_marker_offset() -> u64 {
-        80  // Position commit marker after header (bytes 0-79) to prevent collision with free_space_offset field
+        80 // Position commit marker after header (bytes 0-79) to prevent collision with free_space_offset field
     }
 
     /// Calculate minimum expected file size based on header state

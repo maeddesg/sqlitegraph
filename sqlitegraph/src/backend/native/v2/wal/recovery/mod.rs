@@ -29,18 +29,14 @@
 //! - Cluster-aware transaction state tracking
 
 // Re-export core recovery components
-pub use self::core::{
-    RecoveryOptions, RecoveryProgress, RecoveryResult, V2WALRecoveryEngine,
-};
+pub use self::core::{RecoveryOptions, RecoveryProgress, RecoveryResult, V2WALRecoveryEngine};
 
 // Re-export explicit recovery state model
-pub use self::states::{
-    Authority, RecoveryContext, RecoveryState as ExplicitRecoveryState,
-};
+pub use self::states::{Authority, RecoveryContext, RecoveryState as ExplicitRecoveryState};
 
 // Re-export recovery coordinator
 pub use self::coordinator::{
-    RecoveryCoordinator, RecoveryCoordinatorResult, RecoveryDecision, RecoveryCoordinatorStats,
+    RecoveryCoordinator, RecoveryCoordinatorResult, RecoveryCoordinatorStats, RecoveryDecision,
 };
 
 // Re-export recovery strategy components

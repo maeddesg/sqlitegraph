@@ -6,11 +6,11 @@
 //! - Rollback behavior during bulk ingest sessions
 //! - Performance metrics validation for bulk ingest optimization
 
+use crate::backend::native::NativeResult;
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::v2::wal::{
     BulkIngestConfig, BulkIngestExt, V2WALConfig, V2WALManager, V2WALRecord,
 };
-use crate::backend::native::NativeResult;
 use tempfile::tempdir;
 
 /// Test that bulk ingest mode reduces WAL flush/sync operations

@@ -3,9 +3,7 @@
 //! This module contains advanced features, debug operations,
 //! experimental features, and specialized utilities.
 
-use crate::backend::native::{
-    types::{NativeBackendError, NativeResult},
-};
+use crate::backend::native::types::{NativeBackendError, NativeResult};
 
 use super::GraphFile;
 

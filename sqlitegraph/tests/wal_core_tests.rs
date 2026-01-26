@@ -5,9 +5,7 @@
 //! Tests follow TDD methodology with comprehensive edge case coverage.
 
 use sqlitegraph::backend::native::v2::storage::JsonLimits;
-use sqlitegraph::backend::native::v2::wal::{
-    V2WALConfig, V2WALHeader,
-};
+use sqlitegraph::backend::native::v2::wal::{V2WALConfig, V2WALHeader};
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
 use std::path::Path;
 use tempfile::tempdir;
@@ -113,10 +111,7 @@ fn test_lsn_validation() -> NativeResult<()> {
         !is_valid_lsn_sequence(1000, 999),
         "Backward sequence should fail"
     );
-    assert!(
-        !is_valid_lsn_sequence(1000, 1000),
-        "Same LSN should fail"
-    );
+    assert!(!is_valid_lsn_sequence(1000, 1000), "Same LSN should fail");
 
     // Test boundary conditions
     assert!(
@@ -189,10 +184,11 @@ fn test_lsn_formatting_parsing() -> NativeResult<()> {
 
     for lsn in test_lsns {
         let formatted = format_lsn(lsn);
-        let parsed = parse_lsn(&formatted).map_err(|_| NativeBackendError::InvalidConfiguration {
-        parameter: "lsn".to_string(),
-        reason: "Parse error".to_string()
-    })?;
+        let parsed =
+            parse_lsn(&formatted).map_err(|_| NativeBackendError::InvalidConfiguration {
+                parameter: "lsn".to_string(),
+                reason: "Parse error".to_string(),
+            })?;
 
         assert_eq!(
             lsn, parsed,
@@ -294,12 +290,21 @@ fn test_error_handling_edge_cases() -> NativeResult<()> {
     };
 
     // Just test the path is set correctly - actual validation would be system-dependent
-    assert_eq!(invalid_config.wal_path, Path::new("/non/existent/directory/test.wal"));
+    assert_eq!(
+        invalid_config.wal_path,
+        Path::new("/non/existent/directory/test.wal")
+    );
 
     // Test LSN boundary conditions
     let is_valid_lsn_sequence = |prev: u64, next: u64| -> bool { next > prev };
-    assert!(!is_valid_lsn_sequence(u64::MAX, u64::MAX), "Same LSN should fail");
-    assert!(!is_valid_lsn_sequence(u64::MAX, 0), "Wrap-around should fail");
+    assert!(
+        !is_valid_lsn_sequence(u64::MAX, u64::MAX),
+        "Same LSN should fail"
+    );
+    assert!(
+        !is_valid_lsn_sequence(u64::MAX, 0),
+        "Wrap-around should fail"
+    );
 
     // Test size estimation with extreme values
     let calculate_wal_size_estimate = |record_count: u64, avg_size: u64| -> u64 {
@@ -383,9 +388,7 @@ fn test_memory_resource_management() -> NativeResult<()> {
 
     for (wal_size, buffer_size) in memory_configs {
         let config = V2WALConfig {
-            graph_path: temp_dir
-                .path()
-                .join(format!("memory_test_{}.db", wal_size)),
+            graph_path: temp_dir.path().join(format!("memory_test_{}.db", wal_size)),
             wal_path: temp_dir
                 .path()
                 .join(format!("memory_test_{}.wal", wal_size)),
@@ -402,7 +405,7 @@ fn test_memory_resource_management() -> NativeResult<()> {
             auto_checkpoint: false,
             background_checkpoint_thread: false,
             background_checkpoint_interval_secs: 0,
-        json_limits: JsonLimits::default(),
+            json_limits: JsonLimits::default(),
         };
 
         // Simple validation - check field values

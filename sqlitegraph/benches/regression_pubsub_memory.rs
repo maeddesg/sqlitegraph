@@ -5,9 +5,9 @@
 
 use std::time::Duration;
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
-use sqlitegraph::{open_graph, GraphConfig, NodeSpec, EdgeSpec, snapshot::SnapshotId};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use sqlitegraph::backend::SubscriptionFilter;
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph, snapshot::SnapshotId};
 
 mod bench_utils;
 use bench_utils::{MEASURE, WARM_UP, create_benchmark_temp_dir};
@@ -17,8 +17,7 @@ fn create_chain_graph(size: usize) -> (tempfile::TempDir, std::path::PathBuf, Ve
     let temp_dir = create_benchmark_temp_dir();
     let db_path = temp_dir.path().join("benchmark.db");
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(size);
 
@@ -61,22 +60,26 @@ fn bench_memory_baseline(criterion: &mut Criterion) {
     for &size in &[100, 500, 1000] {
         group.throughput(Throughput::Elements(size as u64));
 
-        group.bench_with_input(BenchmarkId::new("0_subscribers", size), &size, |b, &_size| {
-            b.iter(|| {
-                let (temp_dir, db_path, node_ids) = create_chain_graph(size);
+        group.bench_with_input(
+            BenchmarkId::new("0_subscribers", size),
+            &size,
+            |b, &_size| {
+                b.iter(|| {
+                    let (temp_dir, db_path, node_ids) = create_chain_graph(size);
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to open graph");
+                    let graph =
+                        open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
-                // Run BFS traversal
-                let start_node = node_ids[0];
-                let _result = graph
-                    .bfs(SnapshotId::current(), start_node, size as u32)
-                    .expect("BFS traversal failed");
+                    // Run BFS traversal
+                    let start_node = node_ids[0];
+                    let _result = graph
+                        .bfs(SnapshotId::current(), start_node, size as u32)
+                        .expect("BFS traversal failed");
 
-                std::mem::forget(temp_dir);
-            });
-        });
+                    std::mem::forget(temp_dir);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -104,8 +107,8 @@ fn bench_memory_with_subscribers(criterion: &mut Criterion) {
                 b.iter(|| {
                     let (temp_dir, db_path, node_ids) = create_chain_graph(SIZE);
 
-                    let graph = open_graph(&db_path, &GraphConfig::native())
-                        .expect("Failed to open graph");
+                    let graph =
+                        open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
                     // Subscribe N receivers (keep them to test queue memory)
                     let mut _receivers = Vec::with_capacity(subscriber_count);
@@ -247,11 +250,7 @@ fn estimate_pubsub_overhead(
     // Total overhead
     let total_overhead = publisher_base + (subscriber_count * per_subscriber_total);
 
-    (
-        publisher_base,
-        per_subscriber_total,
-        total_overhead,
-    )
+    (publisher_base, per_subscriber_total, total_overhead)
 }
 
 criterion_group!(

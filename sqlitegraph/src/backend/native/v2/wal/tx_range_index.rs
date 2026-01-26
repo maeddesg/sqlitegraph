@@ -16,8 +16,8 @@
 //! by WAL contiguity. We don't need explicit tx_id on each record - position determines
 //! ownership.
 
-use crate::snapshot::SnapshotId;
 use super::record::V2WALRecord;
+use crate::snapshot::SnapshotId;
 use std::collections::HashMap;
 
 /// Transaction range tracking LSN boundaries
@@ -118,7 +118,9 @@ impl TxRangeIndex {
     /// concurrent transactions, this could be optimized with binary search
     /// or an interval tree.
     pub fn get_tx_range_for_lsn(&self, lsn: u64) -> Option<&TxRange> {
-        self.tx_ranges.values().find(|range| range.contains_lsn(lsn))
+        self.tx_ranges
+            .values()
+            .find(|range| range.contains_lsn(lsn))
     }
 
     /// Get current maximum committed LSN
@@ -246,9 +248,7 @@ pub fn iter_visible_wal_records<'a, I>(
 where
     I: Iterator<Item = (u64, V2WALRecord)> + 'a,
 {
-    wal_records.filter(move |(tx_id, _record)| {
-        tx_index.is_tx_visible(*tx_id, snapshot_id)
-    })
+    wal_records.filter(move |(tx_id, _record)| tx_index.is_tx_visible(*tx_id, snapshot_id))
 }
 
 #[cfg(test)]
@@ -463,19 +463,46 @@ mod tests {
         index.commit_tx(3, 250); // committed after snapshot 200 - not visible
 
         let wal_records = vec![
-            (1, TransactionBegin { tx_id: 1, timestamp: 100 }),
-            (1, TransactionCommit { tx_id: 1, timestamp: 150 }),
-            (2, TransactionBegin { tx_id: 2, timestamp: 160 }),
-            (3, TransactionBegin { tx_id: 3, timestamp: 170 }),
-            (3, TransactionCommit { tx_id: 3, timestamp: 250 }),
+            (
+                1,
+                TransactionBegin {
+                    tx_id: 1,
+                    timestamp: 100,
+                },
+            ),
+            (
+                1,
+                TransactionCommit {
+                    tx_id: 1,
+                    timestamp: 150,
+                },
+            ),
+            (
+                2,
+                TransactionBegin {
+                    tx_id: 2,
+                    timestamp: 160,
+                },
+            ),
+            (
+                3,
+                TransactionBegin {
+                    tx_id: 3,
+                    timestamp: 170,
+                },
+            ),
+            (
+                3,
+                TransactionCommit {
+                    tx_id: 3,
+                    timestamp: 250,
+                },
+            ),
         ];
 
         let snapshot = SnapshotId::from_lsn(200);
-        let visible: Vec<_> = iter_visible_wal_records(
-            &index,
-            wal_records.into_iter(),
-            snapshot
-        ).collect();
+        let visible: Vec<_> =
+            iter_visible_wal_records(&index, wal_records.into_iter(), snapshot).collect();
 
         // Only tx1 records should be visible
         assert_eq!(visible.len(), 2);
@@ -499,11 +526,8 @@ mod tests {
         let wal_records = vec![];
         let snapshot = SnapshotId::current();
 
-        let visible: Vec<_> = iter_visible_wal_records(
-            &index,
-            wal_records.into_iter(),
-            snapshot
-        ).collect();
+        let visible: Vec<_> =
+            iter_visible_wal_records(&index, wal_records.into_iter(), snapshot).collect();
 
         assert_eq!(visible.len(), 0);
     }
@@ -517,20 +541,26 @@ mod tests {
         // tx1 not committed - all records invisible
 
         let wal_records = vec![
-            (1, TransactionBegin { tx_id: 1, timestamp: 100 }),
-            (1, NodeInsert {
-                node_id: 1,
-                slot_offset: 0,
-                node_data: vec![],
-            }),
+            (
+                1,
+                TransactionBegin {
+                    tx_id: 1,
+                    timestamp: 100,
+                },
+            ),
+            (
+                1,
+                NodeInsert {
+                    node_id: 1,
+                    slot_offset: 0,
+                    node_data: vec![],
+                },
+            ),
         ];
 
         let snapshot = SnapshotId::from_lsn(200);
-        let visible: Vec<_> = iter_visible_wal_records(
-            &index,
-            wal_records.into_iter(),
-            snapshot
-        ).collect();
+        let visible: Vec<_> =
+            iter_visible_wal_records(&index, wal_records.into_iter(), snapshot).collect();
 
         assert_eq!(visible.len(), 0);
     }

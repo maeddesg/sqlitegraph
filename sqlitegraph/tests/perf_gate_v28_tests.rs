@@ -28,8 +28,14 @@ fn test_chain_traversal_within_2x_sqlite_baseline() {
 
     println!("\n=== Chain Traversal Performance Gate (PERF-08) ===");
     println!("2x SQLite Target Thresholds:");
-    println!("  Chain BFS (100): {}ms (14.5ms target)", SQLITE_2X_THRESHOLD_100 as f64 / 1_000_000.0);
-    println!("  Chain BFS (500): {}ms (50ms target)", SQLITE_2X_THRESHOLD_500 as f64 / 1_000_000.0);
+    println!(
+        "  Chain BFS (100): {}ms (14.5ms target)",
+        SQLITE_2X_THRESHOLD_100 as f64 / 1_000_000.0
+    );
+    println!(
+        "  Chain BFS (500): {}ms (50ms target)",
+        SQLITE_2X_THRESHOLD_500 as f64 / 1_000_000.0
+    );
     println!();
 
     // Create BenchGate with 2x SQLite thresholds
@@ -53,18 +59,27 @@ fn test_chain_traversal_within_2x_sqlite_baseline() {
             SQLITE_2X_THRESHOLD_500
         };
         let ratio = run.mean_ns as f64 / (threshold as f64 / 2.0); // Compare to SQLite baseline
-        println!("  {}: {:.2}ms ({:.2}x SQLite target {:.2}ms) - {}",
+        println!(
+            "  {}: {:.2}ms ({:.2}x SQLite target {:.2}ms) - {}",
             run.name,
             run.mean_ns as f64 / 1_000_000.0,
             ratio,
             threshold as f64 / 1_000_000.0,
-            if run.mean_ns <= threshold { "PASS" } else { "FAIL" }
+            if run.mean_ns <= threshold {
+                "PASS"
+            } else {
+                "FAIL"
+            }
         );
     }
 
     // Assert Pass outcome
-    assert_eq!(outcome, BenchOutcome::Pass,
-        "Chain traversal exceeds 2x SQLite baseline. Outcome: {:?}", outcome);
+    assert_eq!(
+        outcome,
+        BenchOutcome::Pass,
+        "Chain traversal exceeds 2x SQLite baseline. Outcome: {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -75,8 +90,14 @@ fn test_chain_traversal_regression_eliminated() {
 
     println!("\n=== Chain Traversal Regression Check ===");
     println!("Phase 24 Baseline (before cache):");
-    println!("  Chain BFS (100): {:.2}ms", PHASE_24_BASELINE_100 as f64 / 1_000_000.0);
-    println!("  Chain BFS (500): {:.2}ms", PHASE_24_BASELINE_500 as f64 / 1_000_000.0);
+    println!(
+        "  Chain BFS (100): {:.2}ms",
+        PHASE_24_BASELINE_100 as f64 / 1_000_000.0
+    );
+    println!(
+        "  Chain BFS (500): {:.2}ms",
+        PHASE_24_BASELINE_500 as f64 / 1_000_000.0
+    );
     println!();
 
     // Check each benchmark
@@ -93,24 +114,31 @@ fn test_chain_traversal_regression_eliminated() {
             -((run.mean_ns as f64 - baseline as f64) / baseline as f64) * 100.0
         };
 
-        println!("  {}: Current {:.2}ms vs Baseline {:.2}ms ({:.1}% {})",
+        println!(
+            "  {}: Current {:.2}ms vs Baseline {:.2}ms ({:.1}% {})",
             run.name,
             run.mean_ns as f64 / 1_000_000.0,
             baseline as f64 / 1_000_000.0,
             improvement.abs(),
-            if improvement >= 0.0 { "improvement" } else { "regression" }
+            if improvement >= 0.0 {
+                "improvement"
+            } else {
+                "regression"
+            }
         );
     }
 
     // Assert current < baseline (regression eliminated)
     // Note: Chain graphs have 0% cache hit rate by design, so perfect elimination
     // may not be achievable. This test documents the current state.
-    let regression_100 = current_runs.iter()
+    let regression_100 = current_runs
+        .iter()
         .find(|r| r.name.contains("100"))
         .map(|r| r.mean_ns < PHASE_24_BASELINE_100)
         .unwrap_or(false);
 
-    let regression_500 = current_runs.iter()
+    let regression_500 = current_runs
+        .iter()
         .find(|r| r.name.contains("500"))
         .map(|r| r.mean_ns < PHASE_24_BASELINE_500)
         .unwrap_or(false);
@@ -131,8 +159,7 @@ fn load_criterion_results() -> Result<Vec<BenchRun>, String> {
     // CARGO_MANIFEST_DIR points to the crate directory (sqlitegraph/)
     // But Criterion output goes to workspace-root/target/criterion
     // Need to go up one level to reach workspace root
-    let criterion_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../target/criterion");
+    let criterion_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/criterion");
 
     let mut results = Vec::new();
 
@@ -148,7 +175,11 @@ fn load_criterion_results() -> Result<Vec<BenchRun>, String> {
             });
         }
         Err(e) => {
-            return Err(format!("Failed to load {}: {}. Run: cargo bench --bench bfs", path_100.display(), e));
+            return Err(format!(
+                "Failed to load {}: {}. Run: cargo bench --bench bfs",
+                path_100.display(),
+                e
+            ));
         }
     }
 
@@ -164,7 +195,11 @@ fn load_criterion_results() -> Result<Vec<BenchRun>, String> {
             });
         }
         Err(e) => {
-            return Err(format!("Failed to load {}: {}. Run: cargo bench --bench bfs", path_500.display(), e));
+            return Err(format!(
+                "Failed to load {}: {}. Run: cargo bench --bench bfs",
+                path_500.display(),
+                e
+            ));
         }
     }
 

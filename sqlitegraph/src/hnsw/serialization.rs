@@ -304,48 +304,50 @@ pub fn delta_decode(deltas: &[u32]) -> Vec<u32> {
 /// - **Overhead**: Falls back to scalar for < 16 elements
 #[target_feature(enable = "avx2")]
 #[inline]
-pub unsafe fn delta_encode_avx2(values: &[u32]) -> Vec<u32> { unsafe {
-    use std::arch::x86_64::*;
+pub unsafe fn delta_encode_avx2(values: &[u32]) -> Vec<u32> {
+    unsafe {
+        use std::arch::x86_64::*;
 
-    if values.len() < 16 {
-        // Too small for SIMD overhead to be worth it
-        return delta_encode_scalar(values);
-    }
-
-    let mut deltas = Vec::with_capacity(values.len());
-    deltas.push(values[0]);
-
-    let len = values.len();
-    let chunks = (len - 1) / 8;
-
-    let mut i = 1;
-    for _ in 0..chunks {
-        // Load 8 consecutive u32 values using AVX2 integer load
-        let v1 = _mm256_loadu_si256(values.as_ptr().add(i) as *const __m256i);
-        let v2 = _mm256_loadu_si256(values.as_ptr().add(i - 1) as *const __m256i);
-
-        // Compute differences using AVX2 integer subtraction
-        let diff = _mm256_sub_epi32(v1, v2);
-
-        // Extract results
-        let mut tmp = [0u32; 8];
-        _mm256_storeu_si256(tmp.as_mut_ptr() as *mut __m256i, diff);
-
-        for &val in &tmp {
-            deltas.push(val);
+        if values.len() < 16 {
+            // Too small for SIMD overhead to be worth it
+            return delta_encode_scalar(values);
         }
 
-        i += 8;
-    }
+        let mut deltas = Vec::with_capacity(values.len());
+        deltas.push(values[0]);
 
-    // Handle remainder
-    while i < len {
-        deltas.push(values[i] - values[i - 1]);
-        i += 1;
-    }
+        let len = values.len();
+        let chunks = (len - 1) / 8;
 
-    deltas
-}}
+        let mut i = 1;
+        for _ in 0..chunks {
+            // Load 8 consecutive u32 values using AVX2 integer load
+            let v1 = _mm256_loadu_si256(values.as_ptr().add(i) as *const __m256i);
+            let v2 = _mm256_loadu_si256(values.as_ptr().add(i - 1) as *const __m256i);
+
+            // Compute differences using AVX2 integer subtraction
+            let diff = _mm256_sub_epi32(v1, v2);
+
+            // Extract results
+            let mut tmp = [0u32; 8];
+            _mm256_storeu_si256(tmp.as_mut_ptr() as *mut __m256i, diff);
+
+            for &val in &tmp {
+                deltas.push(val);
+            }
+
+            i += 8;
+        }
+
+        // Handle remainder
+        while i < len {
+            deltas.push(values[i] - values[i - 1]);
+            i += 1;
+        }
+
+        deltas
+    }
+}
 
 //=============================================================================
 // Runtime Dispatch
@@ -484,10 +486,10 @@ mod tests {
     fn test_varint_continuation_bits() {
         // Test that continuation bits are properly set
         let test_cases = vec![
-            (127, vec![0x7F]),                    // No continuation
-            (128, vec![0x80, 0x01]),              // Continuation on first byte
-            (16383, vec![0xFF, 0x7F]),            // Continuation on first byte only
-            (16384, vec![0x80, 0x80, 0x01]),      // Continuation on first two bytes
+            (127, vec![0x7F]),               // No continuation
+            (128, vec![0x80, 0x01]),         // Continuation on first byte
+            (16383, vec![0xFF, 0x7F]),       // Continuation on first byte only
+            (16384, vec![0x80, 0x80, 0x01]), // Continuation on first two bytes
         ];
 
         for (value, expected) in test_cases {
@@ -563,7 +565,10 @@ mod tests {
         // 95 - 100 = 4294967291 (u32::MAX - 4)
         // 90 - 95 = 4294967291
         // etc.
-        assert_eq!(deltas, vec![100, 4294967291, 4294967291, 4294967291, 4294967291]);
+        assert_eq!(
+            deltas,
+            vec![100, 4294967291, 4294967291, 4294967291, 4294967291]
+        );
     }
 
     #[test]

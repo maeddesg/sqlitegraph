@@ -4,14 +4,14 @@
 //! the checkpoint process, coordinating record application, dirty block flushing,
 //! and progress tracking.
 
+use crate::backend::native::v2::wal::checkpoint::constants::*;
 use crate::backend::native::v2::wal::checkpoint::core::{
     CheckpointProgress, CheckpointState, DirtyBlockTracker,
 };
 use crate::backend::native::v2::wal::checkpoint::errors::{CheckpointError, CheckpointResult};
-use crate::backend::native::v2::wal::{V2WALConfig, V2WALReader, V2WALRecord};
-use crate::backend::native::v2::wal::checkpoint::constants::*;
 use crate::backend::native::v2::wal::checkpoint::io::block_flusher::BlockFlusher;
 use crate::backend::native::v2::wal::checkpoint::record::integrator::V2GraphIntegrator;
+use crate::backend::native::v2::wal::{V2WALConfig, V2WALReader, V2WALRecord};
 use std::fs::File;
 use std::io::BufWriter;
 use std::sync::{Arc, Mutex};

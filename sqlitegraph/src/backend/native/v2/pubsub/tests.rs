@@ -13,8 +13,8 @@
 //! - Best-effort delivery (no panic on dropped receiver)
 
 use super::*;
-use crate::backend::native::v2::wal::V2WALRecord;
 use crate::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
+use crate::backend::native::v2::wal::V2WALRecord;
 use std::time::Duration;
 
 // ============================================================================
@@ -39,7 +39,10 @@ fn test_node_insert_emits_node_changed() {
 
     // Should receive NodeChanged
     let event = rx.recv_timeout(Duration::from_millis(100)).unwrap();
-    assert!(matches!(event, PubSubEvent::NodeChanged { node_id: 42, .. }));
+    assert!(matches!(
+        event,
+        PubSubEvent::NodeChanged { node_id: 42, .. }
+    ));
 
     // Should receive SnapshotCommitted
     let event = rx.recv_timeout(Duration::from_millis(100)).unwrap();
@@ -382,10 +385,8 @@ fn test_filter_specific_edges() {
 #[test]
 fn test_filter_multiple_event_types() {
     let publisher = Publisher::new();
-    let filter = SubscriptionFilter::event_types(vec![
-        PubSubEventType::Node,
-        PubSubEventType::Edge,
-    ]);
+    let filter =
+        SubscriptionFilter::event_types(vec![PubSubEventType::Node, PubSubEventType::Edge]);
     let (_id, mut rx) = publisher.subscribe(filter);
 
     let records = vec![

@@ -246,13 +246,10 @@ pub mod simd;
 pub mod storage;
 
 // Re-export batch_filter public API
-pub use batch_filter::{filter_batch, filter_allowed_scalar, filter_denied_scalar};
+pub use batch_filter::{filter_allowed_scalar, filter_batch, filter_denied_scalar};
 
 // Re-export serialization public API
-pub use serialization::{
-    encode_varint_scalar, decode_varint_scalar,
-    delta_encode, delta_decode,
-};
+pub use serialization::{decode_varint_scalar, delta_decode, delta_encode, encode_varint_scalar};
 
 #[cfg(test)]
 mod tests {
@@ -399,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_serialization_module() {
-        use crate::hnsw::serialization::{encode_varint_scalar, decode_varint_scalar};
+        use crate::hnsw::serialization::{decode_varint_scalar, encode_varint_scalar};
 
         let value = 300u32;
         let mut buffer = Vec::new();
@@ -419,10 +416,14 @@ mod tests {
 
         let test_cases = vec![
             (vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]),
-            ((0..100).map(|i| i as f32).collect(),
-             (100..200).map(|i| i as f32).collect()),
-            ((0..1000).map(|i| i as f32).collect(),
-             (1000..2000).map(|i| i as f32).collect()),
+            (
+                (0..100).map(|i| i as f32).collect(),
+                (100..200).map(|i| i as f32).collect(),
+            ),
+            (
+                (0..1000).map(|i| i as f32).collect(),
+                (1000..2000).map(|i| i as f32).collect(),
+            ),
         ];
 
         for (a, b) in test_cases {
@@ -441,7 +442,11 @@ mod tests {
             assert!(
                 rel_error < 1e-5 || abs_diff < f32::EPSILON * 100.0,
                 "Dot product differs for size {}: scalar={}, simd={}, diff={}, rel_error={}",
-                a.len(), scalar, simd, abs_diff, rel_error
+                a.len(),
+                scalar,
+                simd,
+                abs_diff,
+                rel_error
             );
         }
     }
@@ -467,7 +472,10 @@ mod tests {
         assert!(
             rel_error < 1e-5 || abs_diff < f32::EPSILON * 10.0,
             "Euclidean: scalar={}, simd={}, diff={}, rel_error={}",
-            scalar, simd, abs_diff, rel_error
+            scalar,
+            simd,
+            abs_diff,
+            rel_error
         );
     }
 
@@ -493,7 +501,10 @@ mod tests {
         assert!(
             rel_error < 1e-4 || abs_diff < f32::EPSILON * 100.0,
             "Cosine: scalar={}, simd={}, diff={}, rel_error={}",
-            scalar, simd, abs_diff, rel_error
+            scalar,
+            simd,
+            abs_diff,
+            rel_error
         );
     }
 
@@ -517,13 +528,16 @@ mod tests {
         assert!(
             rel_error < 1e-5 || abs_diff < 0.01,
             "Norm squared: scalar={}, simd={}, diff={}, rel_error={}",
-            scalar, simd, abs_diff, rel_error
+            scalar,
+            simd,
+            abs_diff,
+            rel_error
         );
     }
 
     #[test]
     fn test_simd_correctness_edge_cases() {
-        use crate::hnsw::simd::{dot_product, euclidean_distance, cosine_similarity};
+        use crate::hnsw::simd::{cosine_similarity, dot_product, euclidean_distance};
 
         // Test with small vectors
         let a = vec![1.0, 2.0];
@@ -546,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_batch_filter_correctness() {
-        use crate::hnsw::batch_filter::{filter_batch, filter_allowed_scalar};
+        use crate::hnsw::batch_filter::{filter_allowed_scalar, filter_batch};
 
         let ids: Vec<u64> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let allowed: Vec<u64> = vec![2, 4, 6, 8, 10];
@@ -560,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_delta_encode_correctness() {
-        use crate::hnsw::serialization::{delta_encode, delta_encode_scalar, delta_decode};
+        use crate::hnsw::serialization::{delta_decode, delta_encode, delta_encode_scalar};
 
         let values: Vec<u32> = vec![100, 105, 110, 115, 120, 125];
 
@@ -577,7 +591,7 @@ mod tests {
 
     #[test]
     fn test_varint_encoding_round_trip() {
-        use crate::hnsw::serialization::{encode_varint_scalar, decode_varint_scalar};
+        use crate::hnsw::serialization::{decode_varint_scalar, encode_varint_scalar};
 
         let test_values = vec![0u32, 1, 127, 128, 300, 16383, 16384, u32::MAX];
 

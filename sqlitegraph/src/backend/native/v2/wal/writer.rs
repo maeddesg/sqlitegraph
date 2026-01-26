@@ -557,7 +557,11 @@ impl V2WALWriter {
     }
 
     /// Log a contiguous region allocation to WAL
-    pub fn log_allocate_contiguous(&self, txn_id: u64, region: crate::backend::native::v2::wal::ContiguousRegion) -> NativeResult<u64> {
+    pub fn log_allocate_contiguous(
+        &self,
+        txn_id: u64,
+        region: crate::backend::native::v2::wal::ContiguousRegion,
+    ) -> NativeResult<u64> {
         use crate::backend::native::v2::storage::free_space::Region;
         // Convert from ContiguousRegion (WAL) to Region (free_space)
         let _fs_region = Region::new(region.start_offset, region.total_size)
@@ -572,19 +576,21 @@ impl V2WALWriter {
     }
 
     /// Log a contiguous region commit to WAL
-    pub fn log_commit_contiguous(&self, txn_id: u64, region: crate::backend::native::v2::wal::ContiguousRegion) -> NativeResult<u64> {
-        let record = V2WALRecord::CommitContiguous {
-            txn_id,
-            region,
-        };
+    pub fn log_commit_contiguous(
+        &self,
+        txn_id: u64,
+        region: crate::backend::native::v2::wal::ContiguousRegion,
+    ) -> NativeResult<u64> {
+        let record = V2WALRecord::CommitContiguous { txn_id, region };
         self.write_record(record)
     }
 
     /// Log a contiguous region rollback to WAL
-    pub fn log_rollback_contiguous(&self, region: crate::backend::native::v2::wal::ContiguousRegion) -> NativeResult<u64> {
-        let record = V2WALRecord::RollbackContiguous {
-            region,
-        };
+    pub fn log_rollback_contiguous(
+        &self,
+        region: crate::backend::native::v2::wal::ContiguousRegion,
+    ) -> NativeResult<u64> {
+        let record = V2WALRecord::RollbackContiguous { region };
         self.write_record(record)
     }
 

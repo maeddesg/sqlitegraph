@@ -6,5 +6,5 @@
 pub mod detect;
 pub mod execute;
 
-pub use detect::{detect_format_version, needs_migration, FormatVersion};
-pub use execute::{migrate_file, MigrationError, MigrationResult};
+pub use detect::{FormatVersion, detect_format_version, needs_migration};
+pub use execute::{MigrationError, MigrationResult, migrate_file};

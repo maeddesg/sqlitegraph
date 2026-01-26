@@ -16,14 +16,11 @@
 //! detection), or TraversalCache (L2 cache) components.
 
 use sqlitegraph::{
+    GraphEdgeCreate, GraphEntity, GraphEntityCreate, SqliteGraph, SqliteGraphError,
     backend::native::{
-        graph_file::GraphFile,
+        NativeNodeId, edge_store::EdgeStore, graph_file::GraphFile, graph_ops::native_bfs,
         node_store::NodeStore,
-        edge_store::EdgeStore,
-        graph_ops::native_bfs,
-        NativeNodeId,
     },
-    GraphEdgeCreate, GraphEntityCreate, GraphEntity, SqliteGraph, SqliteGraphError,
 };
 
 use tempfile::TempDir;
@@ -51,36 +48,44 @@ fn create_simple_native_graph() -> (GraphFile, Vec<NativeNodeId>, TempDir) {
     let mut node_ids = Vec::new();
     for i in 1..=3 {
         let mut node_store = NodeStore::new(&mut graph_file);
-        let node_id = node_store.allocate_node_id().expect("Failed to allocate node ID");
+        let node_id = node_store
+            .allocate_node_id()
+            .expect("Failed to allocate node ID");
         let record = sqlitegraph::backend::native::NodeRecord::new(
             node_id,
             "test".to_string(),
             format!("node_{}", i),
             serde_json::json!({}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
     // Create edges A->B, B->C
     let mut edge_store = EdgeStore::new(&mut graph_file);
     let edge1 = sqlitegraph::backend::native::EdgeRecord::new(
-        1, // edge_id
+        1,           // edge_id
         node_ids[0], // from A
         node_ids[1], // to B
         "connects".to_string(),
         serde_json::json!({}),
     );
-    edge_store.write_edge(&edge1).expect("Failed to write edge A->B");
+    edge_store
+        .write_edge(&edge1)
+        .expect("Failed to write edge A->B");
 
     let edge2 = sqlitegraph::backend::native::EdgeRecord::new(
-        2, // edge_id
+        2,           // edge_id
         node_ids[1], // from B
         node_ids[2], // to C
         "connects".to_string(),
         serde_json::json!({}),
     );
-    edge_store.write_edge(&edge2).expect("Failed to write edge B->C");
+    edge_store
+        .write_edge(&edge2)
+        .expect("Failed to write edge B->C");
 
     (graph_file, node_ids, temp_dir)
 }
@@ -98,7 +103,11 @@ fn create_simple_native_graph() -> (GraphFile, Vec<NativeNodeId>, TempDir) {
 ///
 /// Returns:
 /// - Vec<NativeNodeId>: Discovered node IDs (excluding start node)
-fn run_bfs_traversal(graph_file: &mut GraphFile, start: NativeNodeId, depth: u32) -> Vec<NativeNodeId> {
+fn run_bfs_traversal(
+    graph_file: &mut GraphFile,
+    start: NativeNodeId,
+    depth: u32,
+) -> Vec<NativeNodeId> {
     native_bfs(graph_file, start, depth).expect("BFS should succeed")
 }
 
@@ -134,14 +143,8 @@ fn test_traversal_context_evaporation_on_function_return() {
     );
 
     // Verify we can reach both B and C from A
-    assert!(
-        result1.contains(&node_ids[1]),
-        "Should reach node B from A"
-    );
-    assert!(
-        result1.contains(&node_ids[2]),
-        "Should reach node C from A"
-    );
+    assert!(result1.contains(&node_ids[1]), "Should reach node B from A");
+    assert!(result1.contains(&node_ids[2]), "Should reach node C from A");
 }
 
 #[test]
@@ -162,7 +165,8 @@ fn test_sequential_buffer_no_pollution() {
         let result = run_bfs_traversal(&mut graph_file, start_node, 2);
         assert_eq!(
             result, expected_result,
-            "Traversal {} should match first result", i
+            "Traversal {} should match first result",
+            i
         );
     }
 
@@ -190,7 +194,10 @@ fn test_different_start_nodes_independent() {
     let result_b = run_bfs_traversal(&mut graph_file, node_ids[1], 1);
     assert_eq!(result_b.len(), 1, "From B depth 1: should reach 1 node");
     assert!(result_b.contains(&node_ids[2]), "From B: should reach C");
-    assert!(!result_b.contains(&node_ids[0]), "From B: should not reach A (directed)");
+    assert!(
+        !result_b.contains(&node_ids[0]),
+        "From B: should not reach A (directed)"
+    );
 
     // BFS from C should find nothing (no outgoing edges)
     let result_c = run_bfs_traversal(&mut graph_file, node_ids[2], 1);
@@ -293,13 +300,22 @@ fn test_multiple_depths_independent() {
     // Depth 1: should reach B only
     let result_d1 = run_bfs_traversal(&mut graph_file, start_node, 1);
     assert_eq!(result_d1.len(), 1, "Depth 1 should reach 1 node");
-    assert!(result_d1.contains(&node_ids[1]), "Depth 1 should reach node B");
+    assert!(
+        result_d1.contains(&node_ids[1]),
+        "Depth 1 should reach node B"
+    );
 
     // Depth 2: should reach B and C
     let result_d2 = run_bfs_traversal(&mut graph_file, start_node, 2);
     assert_eq!(result_d2.len(), 2, "Depth 2 should reach 2 nodes");
-    assert!(result_d2.contains(&node_ids[1]), "Depth 2 should reach node B");
-    assert!(result_d2.contains(&node_ids[2]), "Depth 2 should reach node C");
+    assert!(
+        result_d2.contains(&node_ids[1]),
+        "Depth 2 should reach node B"
+    );
+    assert!(
+        result_d2.contains(&node_ids[2]),
+        "Depth 2 should reach node C"
+    );
 
     // Depth 1 again: should still reach B only (no cache pollution from depth 2)
     let result_d1_again = run_bfs_traversal(&mut graph_file, start_node, 1);
@@ -330,7 +346,8 @@ fn test_rapid_sequential_traversals() {
         let result = run_bfs_traversal(&mut graph_file, start_node, 2);
         assert_eq!(
             result, expected,
-            "Traversal {} should produce consistent result", i
+            "Traversal {} should produce consistent result",
+            i
         );
     }
 }
@@ -450,7 +467,11 @@ fn test_traversal_context_matches_sqlite_backend() -> Result<(), SqliteGraphErro
 
     // SQLite BFS from A (depth 2)
     let sqlite_neighbors_a = sqlite_graph.query().outgoing(id_a)?;
-    assert_eq!(sqlite_neighbors_a.len(), 1, "SQLite: A should have 1 direct neighbor (B)");
+    assert_eq!(
+        sqlite_neighbors_a.len(),
+        1,
+        "SQLite: A should have 1 direct neighbor (B)"
+    );
 
     // Create Native graph
     let (mut native_graph, native_nodes, _temp_dir) = create_simple_native_graph();
@@ -458,14 +479,19 @@ fn test_traversal_context_matches_sqlite_backend() -> Result<(), SqliteGraphErro
     // Native BFS from A (depth 1)
     let native_result_a1 = run_bfs_traversal(&mut native_graph, native_nodes[0], 1);
     assert_eq!(
-        native_result_a1.len(), sqlite_neighbors_a.len(),
+        native_result_a1.len(),
+        sqlite_neighbors_a.len(),
         "Native depth 1 should match SQLite direct neighbors"
     );
 
     // Both backends should find reachable nodes consistently
     // (Native returns NodeIds, SQLite returns i64 entity IDs, but counts should match)
     let native_result_a2 = run_bfs_traversal(&mut native_graph, native_nodes[0], 2);
-    assert_eq!(native_result_a2.len(), 2, "Native depth 2 should reach 2 nodes");
+    assert_eq!(
+        native_result_a2.len(),
+        2,
+        "Native depth 2 should reach 2 nodes"
+    );
 
     Ok(())
 }
@@ -491,14 +517,18 @@ fn test_traversal_context_with_graph_modifications() {
     let mut node_ids = Vec::new();
     for i in 1..=3 {
         let mut node_store = NodeStore::new(&mut graph_file);
-        let node_id = node_store.allocate_node_id().expect("Failed to allocate node ID");
+        let node_id = node_store
+            .allocate_node_id()
+            .expect("Failed to allocate node ID");
         let record = sqlitegraph::backend::native::NodeRecord::new(
             node_id,
             "test".to_string(),
             format!("node_{}", i),
             serde_json::json!({}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -518,8 +548,14 @@ fn test_traversal_context_with_graph_modifications() {
     // First BFS: should reach node 2 only
     let result1 = run_bfs_traversal(&mut graph_file, node_ids[0], 2);
     assert_eq!(result1.len(), 1, "First BFS should reach 1 node");
-    assert!(result1.contains(&node_ids[1]), "First BFS should reach node 2");
-    assert!(!result1.contains(&node_ids[2]), "First BFS should not reach node 3 yet");
+    assert!(
+        result1.contains(&node_ids[1]),
+        "First BFS should reach node 2"
+    );
+    assert!(
+        !result1.contains(&node_ids[2]),
+        "First BFS should not reach node 3 yet"
+    );
 
     // Add edge 2->3
     {
@@ -537,9 +573,19 @@ fn test_traversal_context_with_graph_modifications() {
     // Second BFS: should reach nodes 2 and 3
     // This proves TraversalContext didn't cache stale graph state
     let result2 = run_bfs_traversal(&mut graph_file, node_ids[0], 2);
-    assert_eq!(result2.len(), 2, "Second BFS should reach 2 nodes after modification");
-    assert!(result2.contains(&node_ids[1]), "Second BFS should reach node 2");
-    assert!(result2.contains(&node_ids[2]), "Second BFS should reach node 3");
+    assert_eq!(
+        result2.len(),
+        2,
+        "Second BFS should reach 2 nodes after modification"
+    );
+    assert!(
+        result2.contains(&node_ids[1]),
+        "Second BFS should reach node 2"
+    );
+    assert!(
+        result2.contains(&node_ids[2]),
+        "Second BFS should reach node 3"
+    );
 }
 
 //
@@ -559,7 +605,10 @@ fn test_zero_depth_traversal() {
 
     let result = native_bfs(&mut graph_file, start_node, 0).expect("BFS should succeed");
     assert_eq!(result.len(), 1, "Depth 0 should return start node only");
-    assert_eq!(result[0], start_node, "Depth 0 should return the start node");
+    assert_eq!(
+        result[0], start_node,
+        "Depth 0 should return the start node"
+    );
 }
 
 #[test]
@@ -587,5 +636,8 @@ fn test_traversal_from_middle_node() {
     let result = run_bfs_traversal(&mut graph_file, middle_node, 2);
     assert_eq!(result.len(), 1, "Middle node should reach 1 node");
     assert!(result.contains(&node_ids[2]), "Middle node should reach C");
-    assert!(!result.contains(&node_ids[0]), "Middle node should not reach A (upstream)");
+    assert!(
+        !result.contains(&node_ids[0]),
+        "Middle node should not reach A (upstream)"
+    );
 }

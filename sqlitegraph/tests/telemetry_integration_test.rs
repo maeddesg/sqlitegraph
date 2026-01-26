@@ -21,8 +21,8 @@ fn test_telemetry_json_format_valid() {
     let telemetry_json = ctx.export_telemetry();
 
     // Parse JSON to verify it's valid
-    let telemetry: serde_json::Value = serde_json::from_str(&telemetry_json)
-        .expect("Telemetry JSON should be valid");
+    let telemetry: serde_json::Value =
+        serde_json::from_str(&telemetry_json).expect("Telemetry JSON should be valid");
 
     // Verify required fields are present
     assert!(telemetry.get("time_total_ms").is_some());
@@ -60,8 +60,8 @@ fn test_telemetry_chain_detection() {
 
     // Export telemetry
     let telemetry_json = ctx.export_telemetry();
-    let telemetry: serde_json::Value = serde_json::from_str(&telemetry_json)
-        .expect("Telemetry JSON should be valid");
+    let telemetry: serde_json::Value =
+        serde_json::from_str(&telemetry_json).expect("Telemetry JSON should be valid");
 
     // Verify chain detection metrics
     assert_eq!(telemetry["chains_detected"], 1);
@@ -86,13 +86,17 @@ fn test_telemetry_fragmentation_calculation() {
 
     // Export telemetry
     let telemetry_json = ctx.export_telemetry();
-    let telemetry: serde_json::Value = serde_json::from_str(&telemetry_json)
-        .expect("Telemetry JSON should be valid");
+    let telemetry: serde_json::Value =
+        serde_json::from_str(&telemetry_json).expect("Telemetry JSON should be valid");
 
     // Verify fragmentation is > 0
-    let fragmentation = telemetry["fragmentation_score"].as_f64()
+    let fragmentation = telemetry["fragmentation_score"]
+        .as_f64()
         .expect("fragmentation_score should be a number");
-    assert!(fragmentation > 0.0, "Fragmentation should be > 0 for gapped clusters");
+    assert!(
+        fragmentation > 0.0,
+        "Fragmentation should be > 0 for gapped clusters"
+    );
 
     // Verify gap bytes matches expected gap
     // Gap between cluster 1 (ends at 100) and cluster 2 (starts at 200) = 100 bytes
@@ -106,7 +110,8 @@ fn test_telemetry_timing_fields_populated() {
 
     // Perform operations that trigger timing
     for i in 0i32..10 {
-        ctx.detector.observe_with_cluster(i as NativeNodeId, 1, (i * 100) as u64, 100);
+        ctx.detector
+            .observe_with_cluster(i as NativeNodeId, 1, (i * 100) as u64, 100);
     }
 
     // Trigger contiguity validation
@@ -114,8 +119,8 @@ fn test_telemetry_timing_fields_populated() {
 
     // Export telemetry
     let telemetry_json = ctx.export_telemetry();
-    let telemetry: serde_json::Value = serde_json::from_str(&telemetry_json)
-        .expect("Telemetry JSON should be valid");
+    let telemetry: serde_json::Value =
+        serde_json::from_str(&telemetry_json).expect("Telemetry JSON should be valid");
 
     // Verify timing fields are present and numeric
     let linear_detection_ms = telemetry["linear_detection_ms"]
@@ -167,8 +172,8 @@ fn test_telemetry_combined_hit_rate() {
 
     // Export telemetry
     let telemetry_json = ctx.export_telemetry();
-    let telemetry: serde_json::Value = serde_json::from_str(&telemetry_json)
-        .expect("Telemetry JSON should be valid");
+    let telemetry: serde_json::Value =
+        serde_json::from_str(&telemetry_json).expect("Telemetry JSON should be valid");
 
     // Combined hit rate: (3 L1 hits + 5 L2 hits) / (3 L1 hits + 1 L1 miss + 5 L2 hits + 2 L2 misses)
     // = 8 / 11 ≈ 0.727
@@ -192,8 +197,8 @@ fn test_telemetry_cluster_buffer_stats() {
 
     // Export telemetry
     let telemetry_json = ctx.export_telemetry();
-    let telemetry: serde_json::Value = serde_json::from_str(&telemetry_json)
-        .expect("Telemetry JSON should be valid");
+    let telemetry: serde_json::Value =
+        serde_json::from_str(&telemetry_json).expect("Telemetry JSON should be valid");
 
     // Verify buffer correction counts
     assert_eq!(telemetry["overshoot_count"], 1);
@@ -212,8 +217,8 @@ fn test_telemetry_l2_cache_stats() {
 
     // Export telemetry
     let telemetry_json = ctx.export_telemetry();
-    let telemetry: serde_json::Value = serde_json::from_str(&telemetry_json)
-        .expect("Telemetry JSON should be valid");
+    let telemetry: serde_json::Value =
+        serde_json::from_str(&telemetry_json).expect("Telemetry JSON should be valid");
 
     // Verify L2 cache stats are preserved
     assert_eq!(telemetry["l2_cache_hits"], 42);

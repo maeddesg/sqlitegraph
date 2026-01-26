@@ -59,12 +59,7 @@ pub fn native_chain_query(
                     ctx.buffer.prefetch_clusters_from(graph_file, node)?;
                 }
 
-                get_neighbors_optimized(
-                    graph_file,
-                    node,
-                    direction,
-                    &mut ctx,
-                )?
+                get_neighbors_optimized(graph_file, node, direction, &mut ctx)?
             };
 
             next_nodes.extend(neighbors);
@@ -84,7 +79,10 @@ pub fn native_chain_query(
         if total_lookups > 0 {
             log::debug!(
                 "Chain query optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
-                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.buffer_hits,
+                ctx.buffer_misses,
+                ctx.stats.hits,
+                ctx.stats.misses,
                 ctx.combined_hit_rate() * 100.0
             );
         }

@@ -15,8 +15,8 @@
 //! 4. Non-contiguous clusters: Contiguity validation prevents sequential read on gapped storage
 
 use sqlitegraph::backend::native::{
+    adjacency::{AdjacencyHelpers, Direction, LinearDetector, TraversalPattern},
     graph_ops::TraversalContext,
-    adjacency::{LinearDetector, AdjacencyHelpers, Direction, TraversalPattern},
     types::NativeNodeId,
 };
 
@@ -47,7 +47,6 @@ fn test_chain_extraction_from_cluster_buffer() {
     ///
     /// Note: Full cluster_buffer extraction test requires actual GraphFile setup (deferred)
     /// This test validates the mapping population pattern that enables extraction.
-
     let mut ctx = create_fresh_context();
     let mut detector = LinearDetector::new();
 
@@ -69,23 +68,56 @@ fn test_chain_extraction_from_cluster_buffer() {
     }
 
     // Verify: After 5 observations with degree <= 1, linear confirmed
-    assert!(detector.is_linear_confirmed(), "LinearDetector should confirm linear pattern after 5 degree <= 1 observations");
+    assert!(
+        detector.is_linear_confirmed(),
+        "LinearDetector should confirm linear pattern after 5 degree <= 1 observations"
+    );
 
     // Verify: Clusters are contiguous
-    assert!(detector.validate_contiguity(), "Clusters should be contiguous (0, 4096, 8192, 12288, 16384)");
+    assert!(
+        detector.validate_contiguity(),
+        "Clusters should be contiguous (0, 4096, 8192, 12288, 16384)"
+    );
 
     // Verify: should_use_sequential_read returns true
-    assert!(detector.should_use_sequential_read(), "should_use_sequential_read() should return true for linear confirmed + contiguous");
+    assert!(
+        detector.should_use_sequential_read(),
+        "should_use_sequential_read() should return true for linear confirmed + contiguous"
+    );
 
     // Verify: node_cluster_index has 5 entries
-    assert_eq!(ctx.node_cluster_index.len(), 5, "node_cluster_index should have 5 entries");
+    assert_eq!(
+        ctx.node_cluster_index.len(),
+        5,
+        "node_cluster_index should have 5 entries"
+    );
 
     // Verify: Each node_id maps to correct cluster_index
-    assert_eq!(ctx.node_cluster_index.get(&1), Some(&0), "Node 1 should map to cluster_index 0");
-    assert_eq!(ctx.node_cluster_index.get(&2), Some(&1), "Node 2 should map to cluster_index 1");
-    assert_eq!(ctx.node_cluster_index.get(&3), Some(&2), "Node 3 should map to cluster_index 2");
-    assert_eq!(ctx.node_cluster_index.get(&4), Some(&3), "Node 4 should map to cluster_index 3");
-    assert_eq!(ctx.node_cluster_index.get(&5), Some(&4), "Node 5 should map to cluster_index 4");
+    assert_eq!(
+        ctx.node_cluster_index.get(&1),
+        Some(&0),
+        "Node 1 should map to cluster_index 0"
+    );
+    assert_eq!(
+        ctx.node_cluster_index.get(&2),
+        Some(&1),
+        "Node 2 should map to cluster_index 1"
+    );
+    assert_eq!(
+        ctx.node_cluster_index.get(&3),
+        Some(&2),
+        "Node 3 should map to cluster_index 2"
+    );
+    assert_eq!(
+        ctx.node_cluster_index.get(&4),
+        Some(&3),
+        "Node 4 should map to cluster_index 3"
+    );
+    assert_eq!(
+        ctx.node_cluster_index.get(&5),
+        Some(&4),
+        "Node 5 should map to cluster_index 4"
+    );
 }
 
 #[test]
@@ -95,7 +127,6 @@ fn test_tree_no_false_positive_sequential_read() {
     /// Validates that tree structures (immediate branching) don't falsely trigger
     /// the sequential cluster read optimization. This prevents performance regression
     /// on common tree-like graph patterns.
-
     let mut ctx = create_fresh_context();
     let mut detector = LinearDetector::new();
 
@@ -108,21 +139,38 @@ fn test_tree_no_false_positive_sequential_read() {
     ctx.node_cluster_index.insert(1, cluster_index);
 
     // Verify: NOT linear, NOT using sequential read
-    assert!(!detector.is_linear_confirmed(), "Root with degree 2 should NOT confirm linear pattern");
-    assert!(!detector.should_use_sequential_read(), "Branching pattern should NOT trigger sequential read");
+    assert!(
+        !detector.is_linear_confirmed(),
+        "Root with degree 2 should NOT confirm linear pattern"
+    );
+    assert!(
+        !detector.should_use_sequential_read(),
+        "Branching pattern should NOT trigger sequential read"
+    );
 
     // Verify: Pattern is Branching
-    assert_eq!(detector.current_pattern(), TraversalPattern::Branching, "Pattern should be Branching for degree 2");
+    assert_eq!(
+        detector.current_pattern(),
+        TraversalPattern::Branching,
+        "Pattern should be Branching for degree 2"
+    );
 
     // Continue traversal: children with degree 3 (1 parent + 2 children)
     detector.observe_with_cluster(2, 3, 4096, 4096);
     ctx.node_cluster_index.insert(2, 1);
 
     // Still NOT using sequential read
-    assert!(!detector.should_use_sequential_read(), "After branching, sequential read should still be disabled");
+    assert!(
+        !detector.should_use_sequential_read(),
+        "After branching, sequential read should still be disabled"
+    );
 
     // Verify: Still in Branching state (terminal)
-    assert_eq!(detector.current_pattern(), TraversalPattern::Branching, "Pattern should remain Branching once triggered");
+    assert_eq!(
+        detector.current_pattern(),
+        TraversalPattern::Branching,
+        "Pattern should remain Branching once triggered"
+    );
 }
 
 #[test]
@@ -136,7 +184,6 @@ fn test_diamond_triggers_immediate_fallback() {
     /// 1. Diamond graphs immediately detected as Branching
     /// 2. clear_cluster_buffer() is called to reset sequential read state
     /// 3. Buffer is cleared (None for cluster_buffer, empty for offsets and mapping)
-
     let mut ctx = create_fresh_context();
     let mut detector = LinearDetector::new();
 
@@ -145,9 +192,19 @@ fn test_diamond_triggers_immediate_fallback() {
     ctx.node_cluster_index.insert(1, 0);
 
     // Verify: Immediate Branching detection
-    assert_eq!(pattern_a, TraversalPattern::Branching, "Node A (degree 2) should trigger Branching pattern");
-    assert!(!detector.is_linear_confirmed(), "Branching pattern should NOT confirm linear");
-    assert!(!detector.should_use_sequential_read(), "Branching should NOT use sequential read");
+    assert_eq!(
+        pattern_a,
+        TraversalPattern::Branching,
+        "Node A (degree 2) should trigger Branching pattern"
+    );
+    assert!(
+        !detector.is_linear_confirmed(),
+        "Branching pattern should NOT confirm linear"
+    );
+    assert!(
+        !detector.should_use_sequential_read(),
+        "Branching should NOT use sequential read"
+    );
 
     // Simulate fallback behavior (as traverse_with_detection would do)
     if pattern_a == TraversalPattern::Branching {
@@ -155,9 +212,18 @@ fn test_diamond_triggers_immediate_fallback() {
     }
 
     // Verify: Buffer cleared
-    assert!(ctx.cluster_buffer.is_none(), "cluster_buffer should be None after clear_cluster_buffer()");
-    assert!(ctx.cluster_buffer_offsets.is_empty(), "cluster_buffer_offsets should be empty after clear_cluster_buffer()");
-    assert!(ctx.node_cluster_index.is_empty(), "node_cluster_index should be empty after clear_cluster_buffer()");
+    assert!(
+        ctx.cluster_buffer.is_none(),
+        "cluster_buffer should be None after clear_cluster_buffer()"
+    );
+    assert!(
+        ctx.cluster_buffer_offsets.is_empty(),
+        "cluster_buffer_offsets should be empty after clear_cluster_buffer()"
+    );
+    assert!(
+        ctx.node_cluster_index.is_empty(),
+        "node_cluster_index should be empty after clear_cluster_buffer()"
+    );
 
     // Continue traversal through B, C, D
     detector.observe_with_cluster(2, 2, 4096, 4096);
@@ -165,7 +231,10 @@ fn test_diamond_triggers_immediate_fallback() {
     detector.observe_with_cluster(4, 2, 12288, 4096);
 
     // Verify: Still NOT using sequential read
-    assert!(!detector.should_use_sequential_read(), "After diamond fallback, sequential read should remain disabled");
+    assert!(
+        !detector.should_use_sequential_read(),
+        "After diamond fallback, sequential read should remain disabled"
+    );
 }
 
 #[test]
@@ -179,7 +248,6 @@ fn test_non_contiguous_clusters_fallback_to_l2_l3() {
     /// - Linear pattern alone is insufficient for sequential read
     /// - Contiguity validation is required to avoid reading garbage data
     /// - Fallback to L2/L3 preserves correctness over performance
-
     let mut ctx = create_fresh_context();
     let mut detector = LinearDetector::new();
 
@@ -194,23 +262,38 @@ fn test_non_contiguous_clusters_fallback_to_l2_l3() {
     ctx.node_cluster_index.insert(3, 2);
 
     // Linear pattern confirmed (all degree 1)
-    assert!(detector.is_linear_confirmed(), "Linear pattern should be confirmed after 3 degree-1 observations");
+    assert!(
+        detector.is_linear_confirmed(),
+        "Linear pattern should be confirmed after 3 degree-1 observations"
+    );
 
     // But clusters ARE contiguous so far (0, 4096, 8192)
-    assert!(detector.validate_contiguity(), "Clusters 0-2 should be contiguous");
+    assert!(
+        detector.validate_contiguity(),
+        "Clusters 0-2 should be contiguous"
+    );
 
     // Add node 4 with GAP (should be 12288, but is 20000)
     detector.observe_with_cluster(4, 1, 20000, 4096);
     ctx.node_cluster_index.insert(4, 3);
 
     // Linear still confirmed (all degree 1)
-    assert!(detector.is_linear_confirmed(), "Linear pattern still confirmed (all degree 1)");
+    assert!(
+        detector.is_linear_confirmed(),
+        "Linear pattern still confirmed (all degree 1)"
+    );
 
     // But clusters NOT contiguous due to gap
-    assert!(!detector.validate_contiguity(), "Clusters NOT contiguous due to gap at node 4");
+    assert!(
+        !detector.validate_contiguity(),
+        "Clusters NOT contiguous due to gap at node 4"
+    );
 
     // Therefore: should NOT use sequential read
-    assert!(!detector.should_use_sequential_read(), "Non-contiguous clusters should prevent sequential read");
+    assert!(
+        !detector.should_use_sequential_read(),
+        "Non-contiguous clusters should prevent sequential read"
+    );
 
     // This means traversal falls back to L2/L3 path for node 4
     // (graceful degradation preserving correctness)
@@ -225,7 +308,6 @@ fn test_phase33_cluster_offset_tracking() {
     /// Backward compatibility: Phase 33 cluster offset tracking still works
     ///
     /// Ensures Phase 35 changes don't break Phase 33 LinearDetector functionality.
-
     let mut detector = LinearDetector::new();
 
     // Observe nodes with cluster offsets
@@ -245,7 +327,6 @@ fn test_phase33_contiguity_validation() {
     /// Backward compatibility: Phase 33 contiguity validation still works
     ///
     /// Ensures Phase 35 changes don't break contiguity checking.
-
     let mut detector = LinearDetector::new();
 
     // Contiguous clusters
@@ -266,7 +347,6 @@ fn test_phase33_should_use_sequential_read() {
     /// Backward compatibility: Phase 33 should_use_sequential_read() still works
     ///
     /// Ensures Phase 35 changes don't break the combined check.
-
     let mut detector = LinearDetector::new();
 
     // Not enough observations yet

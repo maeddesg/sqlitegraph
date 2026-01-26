@@ -22,8 +22,8 @@ use std::collections::VecDeque;
 
 use ahash::AHashMap;
 
-use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 use crate::progress::ProgressCallback;
+use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 
 /// Computes PageRank scores for all nodes in the graph.
 ///
@@ -286,9 +286,7 @@ where
 /// // ... add nodes and edges ...
 /// let centrality = betweenness_centrality(&graph)?;
 /// ```
-pub fn betweenness_centrality(
-    graph: &SqliteGraph,
-) -> Result<Vec<(i64, f64)>, SqliteGraphError> {
+pub fn betweenness_centrality(graph: &SqliteGraph) -> Result<Vec<(i64, f64)>, SqliteGraphError> {
     let all_ids = graph.all_entity_ids()?;
     let n = all_ids.len();
 

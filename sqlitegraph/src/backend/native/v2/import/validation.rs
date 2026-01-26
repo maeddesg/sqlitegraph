@@ -5,10 +5,8 @@
 
 use super::ImportValidationReport;
 use crate::backend::native::types::{NativeBackendError, NativeResult};
-use crate::backend::native::v2::wal::recovery::states::{
-    RecoveryState as ExplicitRecoveryState,
-};
 use crate::backend::native::v2::export::ExportManifest;
+use crate::backend::native::v2::wal::recovery::states::RecoveryState as ExplicitRecoveryState;
 use std::path::PathBuf;
 
 /// Import validator for pre-import validation
@@ -61,7 +59,8 @@ impl ImportValidator {
     pub fn validate_target_compatibility(&self) -> NativeResult<()> {
         // This will fail initially until we implement the functionality
         Err(NativeBackendError::CorruptStringTable {
-            reason: "ImportValidator::validate_target_compatibility not yet implemented".to_string(),
+            reason: "ImportValidator::validate_target_compatibility not yet implemented"
+                .to_string(),
         })
     }
 
@@ -169,7 +168,8 @@ impl MergeCompatibilityChecker {
     pub fn incompatibility_reason(&self) -> NativeResult<String> {
         // This will fail initially until we implement the functionality
         Err(NativeBackendError::CorruptStringTable {
-            reason: "MergeCompatibilityChecker::incompatibility_reason not yet implemented".to_string(),
+            reason: "MergeCompatibilityChecker::incompatibility_reason not yet implemented"
+                .to_string(),
         })
     }
 }

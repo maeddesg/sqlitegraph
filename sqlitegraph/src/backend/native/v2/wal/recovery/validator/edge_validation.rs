@@ -8,7 +8,7 @@
 use crate::backend::native::v2::wal::V2WALRecord;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryResult;
 use crate::backend::native::v2::wal::recovery::validator::{
-    ValidationResult, ValidationSeverity, MAX_EDGE_RECORD_SIZE, MAX_INSERTION_POINT,
+    MAX_EDGE_RECORD_SIZE, MAX_INSERTION_POINT, ValidationResult, ValidationSeverity,
 };
 
 use super::super::TransactionValidator;
@@ -102,9 +102,7 @@ pub fn validate_edge_update(
 
         // Validate edge records have same neighbor
         if old_edge.neighbor_id != new_edge.neighbor_id {
-            issues.push(
-                "Edge update changed neighbor ID - should use delete + insert".to_string(),
-            );
+            issues.push("Edge update changed neighbor ID - should use delete + insert".to_string());
         }
 
         // Validate size constraints

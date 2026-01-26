@@ -4,27 +4,25 @@
 //! for the V2 clustered edge format with proper separation of concerns.
 
 // Re-export all public types
-pub use self::types::*;
 pub use self::operations::*;
 pub use self::rollback::*;
+pub use self::types::*;
 
 // Module declarations
-mod types;
 mod operations;
 mod rollback;
+mod types;
 
-use crate::backend::native::{
-    GraphFile, NodeStore, EdgeStore,
-};
+use super::{core::TransactionState, errors::RecoveryError};
 use crate::backend::native::v2::StringTable;
 use crate::backend::native::v2::wal::V2WALRecord;
-use super::{errors::RecoveryError, core::TransactionState};
-use crate::debug::{info_log, debug_log, warn_log, error_log};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
+use crate::backend::native::{EdgeStore, GraphFile, NodeStore};
+use crate::debug::{debug_log, error_log, info_log, warn_log};
 use rayon::prelude::*;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::Instant;
 
 /// Production-grade V2 graph file replayer
 ///
@@ -56,13 +54,13 @@ impl V2GraphFileReplayer {
         // Validate database file exists and is readable
         if !database_path.exists() {
             return Err(RecoveryError::configuration(
-                "Database file does not exist".to_string()
+                "Database file does not exist".to_string(),
             ));
         }
 
         if !database_path.is_file() {
             return Err(RecoveryError::configuration(
-                "Database path is not a file".to_string()
+                "Database path is not a file".to_string(),
             ));
         }
 
@@ -124,11 +122,17 @@ impl V2GraphFileReplayer {
     /// # Returns
     /// * `Ok(ReplayResult)` - Successful replay with statistics
     /// * `Err(RecoveryError)` - Replay failure with details
-    pub fn replay_transactions(&self, transactions: &[TransactionState]) -> Result<ReplayResult, RecoveryError> {
+    pub fn replay_transactions(
+        &self,
+        transactions: &[TransactionState],
+    ) -> Result<ReplayResult, RecoveryError> {
         let start_time = Instant::now();
         let successful_operations = AtomicUsize::new(0);
 
-        info_log!("Starting PARALLEL V2 transaction replay for {} transactions", transactions.len());
+        info_log!(
+            "Starting PARALLEL V2 transaction replay for {} transactions",
+            transactions.len()
+        );
 
         // Sort transactions by commit LSN for proper replay order
         let mut committed_transactions: Vec<_> = transactions
@@ -136,26 +140,38 @@ impl V2GraphFileReplayer {
             .filter(|tx| tx.committed && tx.commit_lsn.is_some())
             .collect();
 
-        committed_transactions.sort_by(|a, b| {
-            a.commit_lsn.unwrap_or(0).cmp(&b.commit_lsn.unwrap_or(0))
-        });
+        committed_transactions
+            .sort_by(|a, b| a.commit_lsn.unwrap_or(0).cmp(&b.commit_lsn.unwrap_or(0)));
 
-        info_log!("Replaying {} committed transactions (parallelism: {})",
-                  committed_transactions.len(), self.config.max_parallel_transactions);
+        info_log!(
+            "Replaying {} committed transactions (parallelism: {})",
+            committed_transactions.len(),
+            self.config.max_parallel_transactions
+        );
 
         // Parallel replay using rayon
         let tx_results: Vec<_> = committed_transactions
-            .par_iter()  // Parallel iterator
+            .par_iter() // Parallel iterator
             .enumerate()
             .map(|(tx_index, transaction)| {
-                debug_log!("Replaying transaction TX {} ({}/{}) with {} records",
-                       transaction.tx_id, tx_index + 1, committed_transactions.len(), transaction.records.len());
+                debug_log!(
+                    "Replaying transaction TX {} ({}/{}) with {} records",
+                    transaction.tx_id,
+                    tx_index + 1,
+                    committed_transactions.len(),
+                    transaction.records.len()
+                );
 
-                let result = self.replay_transaction(transaction, tx_index + 1, committed_transactions.len());
+                let result = self.replay_transaction(
+                    transaction,
+                    tx_index + 1,
+                    committed_transactions.len(),
+                );
 
                 // Update counter if successful
                 if let Ok(ref tx_result) = result {
-                    successful_operations.fetch_add(tx_result.successful_operations as usize, Ordering::Relaxed);
+                    successful_operations
+                        .fetch_add(tx_result.successful_operations as usize, Ordering::Relaxed);
                 }
 
                 (tx_index, transaction.tx_id, result)
@@ -169,17 +185,24 @@ impl V2GraphFileReplayer {
         for (tx_index, tx_id, result) in tx_results {
             match result {
                 Ok(tx_result) => {
-                    debug_log!("Successfully replayed TX {} with {} operations", tx_id, tx_result.successful_operations);
+                    debug_log!(
+                        "Successfully replayed TX {} with {} operations",
+                        tx_id,
+                        tx_result.successful_operations
+                    );
                     failed_operations.extend(tx_result.failed_operations);
                     warnings.extend(tx_result.warnings);
                 }
                 Err(e) => {
                     error_log!("Failed to replay TX {}: {}", tx_id, e);
-                    failed_operations.push((V2WALRecord::HeaderUpdate {
-                        header_offset: 0,
-                        new_data: vec![],
-                        old_data: vec![],
-                    }, e));
+                    failed_operations.push((
+                        V2WALRecord::HeaderUpdate {
+                            header_offset: 0,
+                            new_data: vec![],
+                            old_data: vec![],
+                        },
+                        e,
+                    ));
                 }
             }
 
@@ -191,7 +214,8 @@ impl V2GraphFileReplayer {
 
         // Update final statistics
         let duration = start_time.elapsed();
-        self.statistics.set_total_duration(duration.as_millis() as u64);
+        self.statistics
+            .set_total_duration(duration.as_millis() as u64);
 
         let total_successful = successful_operations.load(Ordering::Relaxed) as u64;
 
@@ -261,16 +285,24 @@ impl V2GraphFileReplayer {
         if failed_operations.is_empty() {
             self.commit_transaction()?;
         } else {
-            warn_log!("Rolling back transaction due to {} failed operations", failed_operations.len());
+            warn_log!(
+                "Rolling back transaction due to {} failed operations",
+                failed_operations.len()
+            );
             if let Err(e) = self.rollback_transaction() {
                 error_log!("Failed to rollback transaction: {}", e);
                 warnings.push(format!("Rollback failed: {}", e));
             }
         }
 
-        let _duration = start_time.elapsed();
-        debug_log!("Transaction TX {} replayed in {:?}: {} success, {} failed",
-               transaction.tx_id, duration, successful_operations, failed_operations.len());
+        let duration = start_time.elapsed();
+        debug_log!(
+            "Transaction TX {} replayed in {:?}: {} success, {} failed",
+            transaction.tx_id,
+            duration,
+            successful_operations,
+            failed_operations.len()
+        );
 
         Ok(ReplayResult {
             successful_operations,
@@ -287,128 +319,251 @@ impl V2GraphFileReplayer {
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
         match record {
-            V2WALRecord::NodeInsert { node_id, slot_offset, node_data } => {
-                self.operations.handle_node_insert(*node_id as u64, *slot_offset, node_data, rollback_data)
-            }
-            V2WALRecord::NodeUpdate { node_id, slot_offset, new_data, old_data } => {
-                self.operations.handle_node_update(*node_id as u64, *slot_offset, &new_data, Some(&old_data), rollback_data)
-            }
-            V2WALRecord::NodeDelete { node_id, slot_offset, old_data, outgoing_edges: _, incoming_edges: _ } => {
-                self.operations.handle_node_delete(*node_id as u64, *slot_offset, Some(&old_data), rollback_data)
-            }
-            V2WALRecord::StringInsert { string_id, string_value } => {
-                self.operations.handle_string_insert(*string_id as u64, string_value, rollback_data)
+            V2WALRecord::NodeInsert {
+                node_id,
+                slot_offset,
+                node_data,
+            } => self.operations.handle_node_insert(
+                *node_id as u64,
+                *slot_offset,
+                node_data,
+                rollback_data,
+            ),
+            V2WALRecord::NodeUpdate {
+                node_id,
+                slot_offset,
+                new_data,
+                old_data,
+            } => self.operations.handle_node_update(
+                *node_id as u64,
+                *slot_offset,
+                &new_data,
+                Some(&old_data),
+                rollback_data,
+            ),
+            V2WALRecord::NodeDelete {
+                node_id,
+                slot_offset,
+                old_data,
+                outgoing_edges: _,
+                incoming_edges: _,
+            } => self.operations.handle_node_delete(
+                *node_id as u64,
+                *slot_offset,
+                Some(&old_data),
+                rollback_data,
+            ),
+            V2WALRecord::StringInsert {
+                string_id,
+                string_value,
+            } => {
+                self.operations
+                    .handle_string_insert(*string_id as u64, string_value, rollback_data)
             }
             // Mock implementations for edge and cluster operations
-            V2WALRecord::ClusterCreate { node_id, direction, cluster_offset, cluster_size, edge_data } => {
-                self.operations.handle_cluster_create(*node_id as u64, *direction, *cluster_offset, *cluster_size as u64, &edge_data, rollback_data)
+            V2WALRecord::ClusterCreate {
+                node_id,
+                direction,
+                cluster_offset,
+                cluster_size,
+                edge_data,
+            } => self.operations.handle_cluster_create(
+                *node_id as u64,
+                *direction,
+                *cluster_offset,
+                *cluster_size as u64,
+                &edge_data,
+                rollback_data,
+            ),
+            V2WALRecord::EdgeInsert {
+                cluster_key,
+                edge_record,
+                insertion_point,
+            } => {
+                let cluster_key_u64 = (
+                    cluster_key.0 as u64,
+                    match cluster_key.1 {
+                        crate::backend::native::v2::edge_cluster::Direction::Outgoing => 0,
+                        crate::backend::native::v2::edge_cluster::Direction::Incoming => 1,
+                    },
+                );
+                self.operations.handle_edge_insert(
+                    cluster_key_u64,
+                    &edge_record,
+                    *insertion_point,
+                    rollback_data,
+                )
             }
-            V2WALRecord::EdgeInsert { cluster_key, edge_record, insertion_point } => {
-                let cluster_key_u64 = (cluster_key.0 as u64, match cluster_key.1 {
-                    crate::backend::native::v2::edge_cluster::Direction::Outgoing => 0,
-                    crate::backend::native::v2::edge_cluster::Direction::Incoming => 1,
-                });
-                self.operations.handle_edge_insert(cluster_key_u64, &edge_record, *insertion_point, rollback_data)
-            }
-            V2WALRecord::EdgeUpdate { cluster_key, new_edge, position, old_edge } => {
-                self.operations.handle_edge_update(*cluster_key, &new_edge, *position, &old_edge, rollback_data)
-            }
-            V2WALRecord::EdgeDelete { cluster_key, position, old_edge } => {
-                self.operations.handle_edge_delete(*cluster_key, *position, &old_edge, rollback_data)
-            }
-            V2WALRecord::FreeSpaceAllocate { block_offset, block_size, block_type } => {
-                self.operations.handle_free_space_allocate(*block_offset, *block_size as u64, *block_type, rollback_data)
-            }
-            V2WALRecord::FreeSpaceDeallocate { block_offset, block_size, block_type } => {
-                self.operations.handle_free_space_deallocate(*block_offset, *block_size as u64, *block_type, rollback_data)
-            }
-            V2WALRecord::HeaderUpdate { header_offset, new_data, old_data } => {
-                {
-            let old_data_slice: Option<&[u8]> = Some(&old_data[..]);
-            self.operations.handle_header_update(*header_offset, new_data, old_data_slice, rollback_data)
-        }
+            V2WALRecord::EdgeUpdate {
+                cluster_key,
+                new_edge,
+                position,
+                old_edge,
+            } => self.operations.handle_edge_update(
+                *cluster_key,
+                &new_edge,
+                *position,
+                &old_edge,
+                rollback_data,
+            ),
+            V2WALRecord::EdgeDelete {
+                cluster_key,
+                position,
+                old_edge,
+            } => self.operations.handle_edge_delete(
+                *cluster_key,
+                *position,
+                &old_edge,
+                rollback_data,
+            ),
+            V2WALRecord::FreeSpaceAllocate {
+                block_offset,
+                block_size,
+                block_type,
+            } => self.operations.handle_free_space_allocate(
+                *block_offset,
+                *block_size as u64,
+                *block_type,
+                rollback_data,
+            ),
+            V2WALRecord::FreeSpaceDeallocate {
+                block_offset,
+                block_size,
+                block_type,
+            } => self.operations.handle_free_space_deallocate(
+                *block_offset,
+                *block_size as u64,
+                *block_type,
+                rollback_data,
+            ),
+            V2WALRecord::HeaderUpdate {
+                header_offset,
+                new_data,
+                old_data,
+            } => {
+                let old_data_slice: Option<&[u8]> = Some(&old_data[..]);
+                self.operations.handle_header_update(
+                    *header_offset,
+                    new_data,
+                    old_data_slice,
+                    rollback_data,
+                )
             }
 
             // Transaction control records
-            V2WALRecord::TransactionBegin { .. } |
-            V2WALRecord::TransactionCommit { .. } |
-            V2WALRecord::TransactionRollback { .. } => {
+            V2WALRecord::TransactionBegin { .. }
+            | V2WALRecord::TransactionCommit { .. }
+            | V2WALRecord::TransactionRollback { .. } => {
                 // Transaction control records are handled by the recovery coordinator
-                debug_log!("Transaction control record encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Transaction control record encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             V2WALRecord::Checkpoint { .. } => {
                 // Checkpoint records are handled by the recovery coordinator
-                debug_log!("Checkpoint record encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Checkpoint record encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             // Segment end marker
             V2WALRecord::SegmentEnd { .. } => {
                 // Segment end marks are handled by the recovery coordinator
-                debug_log!("Segment end marker encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Segment end marker encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             // Two-phase commit transaction records
-            V2WALRecord::TransactionPrepare { .. } |
-            V2WALRecord::TransactionAbort { .. } => {
+            V2WALRecord::TransactionPrepare { .. } | V2WALRecord::TransactionAbort { .. } => {
                 // Two-phase commit records are handled by the recovery coordinator
-                debug_log!("Two-phase commit transaction record encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Two-phase commit transaction record encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             // Savepoint records
-            V2WALRecord::SavepointCreate { .. } |
-            V2WALRecord::SavepointRollback { .. } |
-            V2WALRecord::SavepointRelease { .. } => {
+            V2WALRecord::SavepointCreate { .. }
+            | V2WALRecord::SavepointRollback { .. }
+            | V2WALRecord::SavepointRelease { .. } => {
                 // Savepoint records are handled by the recovery coordinator
-                debug_log!("Savepoint record encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Savepoint record encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             // Backup records
-            V2WALRecord::BackupCreate { .. } |
-            V2WALRecord::BackupRestore { .. } => {
+            V2WALRecord::BackupCreate { .. } | V2WALRecord::BackupRestore { .. } => {
                 // Backup records are handled by the recovery coordinator
-                debug_log!("Backup record encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Backup record encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             // Lock management records
-            V2WALRecord::LockAcquire { .. } |
-            V2WALRecord::LockRelease { .. } => {
+            V2WALRecord::LockAcquire { .. } | V2WALRecord::LockRelease { .. } => {
                 // Lock records are handled by the recovery coordinator
-                debug_log!("Lock record encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Lock record encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             // Metadata update records
-            V2WALRecord::IndexUpdate { .. } |
-            V2WALRecord::StatisticsUpdate { .. } => {
+            V2WALRecord::IndexUpdate { .. } | V2WALRecord::StatisticsUpdate { .. } => {
                 // Metadata update records are handled by the recovery coordinator
-                debug_log!("Metadata update record encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Metadata update record encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             // Contiguous allocation records
-            V2WALRecord::AllocateContiguous { .. } |
-            V2WALRecord::CommitContiguous { .. } |
-            V2WALRecord::RollbackContiguous { .. } => {
+            V2WALRecord::AllocateContiguous { .. }
+            | V2WALRecord::CommitContiguous { .. }
+            | V2WALRecord::RollbackContiguous { .. } => {
                 // Contiguous allocation records are handled by the recovery coordinator
-                debug_log!("Contiguous allocation record encountered during replay - handled by recovery coordinator");
+                debug_log!(
+                    "Contiguous allocation record encountered during replay - handled by recovery coordinator"
+                );
                 Ok(())
             }
 
             // KV operations - handle via KV operations module
-            V2WALRecord::KvSet { key, value_bytes, value_type, ttl_seconds, version } => {
-                self.operations.handle_kv_set(key.clone(), value_bytes.clone(), *value_type, *ttl_seconds, *version, rollback_data)
-            }
+            V2WALRecord::KvSet {
+                key,
+                value_bytes,
+                value_type,
+                ttl_seconds,
+                version,
+            } => self.operations.handle_kv_set(
+                key.clone(),
+                value_bytes.clone(),
+                *value_type,
+                *ttl_seconds,
+                *version,
+                rollback_data,
+            ),
 
-            V2WALRecord::KvDelete { key, old_value_bytes, old_value_type, old_version } => {
-                self.operations.handle_kv_delete(key.clone(), old_value_bytes.clone(), *old_value_type, *old_version, rollback_data)
-            }
+            V2WALRecord::KvDelete {
+                key,
+                old_value_bytes,
+                old_value_type,
+                old_version,
+            } => self.operations.handle_kv_delete(
+                key.clone(),
+                old_value_bytes.clone(),
+                *old_value_type,
+                *old_version,
+                rollback_data,
+            ),
         }
     }
 
@@ -438,10 +593,12 @@ impl V2GraphFileReplayer {
         let summary = rollback_system.get_summary();
 
         if summary.total_operations > 0 {
-            info_log!("Rolling back {} operations ({} node, {} string)",
-                  summary.total_operations,
-                  summary.data_operations_count() - summary.string_insert_count as usize,
-                  summary.string_insert_count);
+            info_log!(
+                "Rolling back {} operations ({} node, {} string)",
+                summary.total_operations,
+                summary.data_operations_count() - summary.string_insert_count as usize,
+                summary.string_insert_count
+            );
         }
 
         rollback_system.execute_rollback()
@@ -449,8 +606,13 @@ impl V2GraphFileReplayer {
 
     /// Report replay progress
     fn report_progress(&self, completed: usize, total: usize) {
-        let _percentage = (completed as f64 / total as f64) * 100.0;
-        info_log!("Replay progress: {}/{} transactions ({:.1}%)", completed, total, percentage);
+        let percentage = (completed as f64 / total as f64) * 100.0;
+        info_log!(
+            "Replay progress: {}/{} transactions ({:.1}%)",
+            completed,
+            total,
+            percentage
+        );
     }
 
     /// Get current replay statistics as a snapshot
@@ -464,7 +626,9 @@ impl V2GraphFileReplayer {
         // The old Arc will be dropped when all references are released
         // This is a no-op in practice since we can't replace the Arc contents
         // Use snapshot() instead to get consistent views
-        warn_log!("reset_statistics called on Arc<ReplayStatistics> - this is a no-op, use snapshot() instead");
+        warn_log!(
+            "reset_statistics called on Arc<ReplayStatistics> - this is a no-op, use snapshot() instead"
+        );
     }
 
     /// Get rollback system information
@@ -502,7 +666,10 @@ mod tests {
         let result = V2GraphFileReplayer::create(non_existent_path, config.clone());
         assert!(result.is_err());
         if let Err(error) = result {
-            assert!(matches!(error.kind, crate::backend::native::v2::wal::recovery::errors::RecoveryErrorKind::Configuration));
+            assert!(matches!(
+                error.kind,
+                crate::backend::native::v2::wal::recovery::errors::RecoveryErrorKind::Configuration
+            ));
             assert!(error.message.contains("Database file does not exist"));
         }
 
@@ -510,7 +677,10 @@ mod tests {
         let result = V2GraphFileReplayer::create(temp_dir.path().into(), config);
         assert!(result.is_err());
         if let Err(error) = result {
-            assert!(matches!(error.kind, crate::backend::native::v2::wal::recovery::errors::RecoveryErrorKind::Configuration));
+            assert!(matches!(
+                error.kind,
+                crate::backend::native::v2::wal::recovery::errors::RecoveryErrorKind::Configuration
+            ));
             assert!(error.message.contains("Database path is not a file"));
         }
     }
@@ -535,7 +705,10 @@ mod tests {
         };
 
         match operation {
-            RollbackOperation::StringInsert { string_id, string_value } => {
+            RollbackOperation::StringInsert {
+                string_id,
+                string_value,
+            } => {
                 assert_eq!(string_id, 123);
                 assert_eq!(string_value, "test_rollback");
             }
@@ -555,7 +728,10 @@ mod tests {
         // Verify we can create a replayer with our new modular structure
         let config = ReplayConfig::default();
         let replayer_result = V2GraphFileReplayer::create(db_path, config);
-        assert!(replayer_result.is_ok(), "Should create replayer successfully with modular structure");
+        assert!(
+            replayer_result.is_ok(),
+            "Should create replayer successfully with modular structure"
+        );
 
         if let Ok(replayer) = replayer_result {
             // Test basic functionality
@@ -567,7 +743,10 @@ mod tests {
 
             // Test string table access
             let string_table = replayer.string_table();
-            assert!(string_table.try_lock().is_ok(), "Should be able to lock string table");
+            assert!(
+                string_table.try_lock().is_ok(),
+                "Should be able to lock string table"
+            );
         }
     }
 
@@ -586,7 +765,10 @@ mod tests {
 
         // Test operations integration
         let mut rollback_data = Vec::new();
-        let result = replayer.operations.handle_string_insert(100, "integration_test", &mut rollback_data);
+        let result =
+            replayer
+                .operations
+                .handle_string_insert(100, "integration_test", &mut rollback_data);
 
         assert!(result.is_ok());
         assert_eq!(rollback_data.len(), 1);

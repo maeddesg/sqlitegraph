@@ -6,7 +6,7 @@
 
 use crate::backend::native::v2::wal::recovery::errors::RecoveryResult;
 use crate::backend::native::v2::wal::recovery::validator::{
-    ValidationResult, ValidationSeverity, V2_BLOCK_ALIGNMENT, MIN_BLOCK_SIZE, MAX_BLOCK_SIZE,
+    MAX_BLOCK_SIZE, MIN_BLOCK_SIZE, V2_BLOCK_ALIGNMENT, ValidationResult, ValidationSeverity,
 };
 
 use super::super::TransactionValidator;

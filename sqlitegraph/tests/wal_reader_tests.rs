@@ -4,12 +4,11 @@
 //! for V2-native clustered edge graph file operations. Tests focus on record filtering,
 //! cluster-aware reading, recovery operations, and V2 graph data validation.
 
-
+use sqlitegraph::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
+use sqlitegraph::backend::native::v2::wal::reader::WALReadFilter;
 use sqlitegraph::backend::native::v2::wal::{
     V2WALConfig, V2WALReader, V2WALRecord, V2WALRecordType, V2WALWriter,
 };
-use sqlitegraph::backend::native::v2::wal::reader::WALReadFilter;
-use sqlitegraph::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
 use std::path::Path;
 use tempfile::tempdir;
@@ -270,9 +269,9 @@ fn test_record_type_filtering_v2_operations() -> NativeResult<()> {
         writer.write_record(V2WALRecord::EdgeInsert {
             cluster_key: ((3000 + (i / 2)) as i64, Direction::Outgoing),
             edge_record: CompactEdgeRecord::new(
-                (3000 + i + 1) as i64,  // target_node as neighbor_id
-                0,  // edge_type_offset - temporary fix using 0 for CALLS
-                create_v2_edge_data(1.0, Some(i as u64))
+                (3000 + i + 1) as i64, // target_node as neighbor_id
+                0,                     // edge_type_offset - temporary fix using 0 for CALLS
+                create_v2_edge_data(1.0, Some(i as u64)),
             ),
             insertion_point: 0,
         })?;
@@ -369,11 +368,19 @@ fn test_lsn_based_reading_v2_operations() -> NativeResult<()> {
             0 => V2WALRecord::NodeInsert {
                 node_id: (4000 + i) as i64,
                 slot_offset: (i * 1024) as u64,
-                node_data: create_v2_node_record((4000 + i) as i64, "test", &format!("lsn_node_{}", i)),
+                node_data: create_v2_node_record(
+                    (4000 + i) as i64,
+                    "test",
+                    &format!("lsn_node_{}", i),
+                ),
             },
             1 => V2WALRecord::EdgeInsert {
                 cluster_key: ((4000 + (i / 4)) as i64, Direction::Outgoing),
-                edge_record: CompactEdgeRecord::new((4000 + i + 1) as i64, 0, create_v2_edge_data(1.0, Some(i as u64))),
+                edge_record: CompactEdgeRecord::new(
+                    (4000 + i + 1) as i64,
+                    0,
+                    create_v2_edge_data(1.0, Some(i as u64)),
+                ),
                 insertion_point: 0,
             },
             2 => V2WALRecord::StringInsert {
@@ -478,7 +485,11 @@ fn test_wal_statistics_v2_operations() -> NativeResult<()> {
     for i in 0..expected_counts.1 {
         writer.write_record(V2WALRecord::EdgeInsert {
             cluster_key: (5000 + (i % 5), Direction::Outgoing),
-            edge_record: CompactEdgeRecord::new((5000 + i + 1) as i64, 0, create_v2_edge_data((i % 10) as f64, Some(i as u64))),
+            edge_record: CompactEdgeRecord::new(
+                (5000 + i + 1) as i64,
+                0,
+                create_v2_edge_data((i % 10) as f64, Some(i as u64)),
+            ),
             insertion_point: 0,
         })?;
     }
@@ -512,7 +523,7 @@ fn test_wal_statistics_v2_operations() -> NativeResult<()> {
 
     writer.write_record(V2WALRecord::TransactionCommit {
         tx_id: 30001,
-          timestamp: 1640995201000,
+        timestamp: 1640995201000,
     })?;
 
     writer.shutdown()?;
@@ -591,7 +602,11 @@ fn test_wal_iterator_v2_operations() -> NativeResult<()> {
         let record = V2WALRecord::NodeInsert {
             node_id: (7000 + i) as i64,
             slot_offset: (i * 1024) as u64,
-            node_data: create_v2_node_record((7000 + i) as i64, "iterator", &format!("iter_node_{}", i)),
+            node_data: create_v2_node_record(
+                (7000 + i) as i64,
+                "iterator",
+                &format!("iter_node_{}", i),
+            ),
         };
         writer.write_record(record)?;
     }

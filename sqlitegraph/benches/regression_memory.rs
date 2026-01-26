@@ -5,8 +5,8 @@
 
 use std::time::Duration;
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
-use sqlitegraph::{open_graph, GraphConfig, NodeSpec, EdgeSpec};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
 
 mod bench_utils;
 use bench_utils::{MEASURE, WARM_UP, create_benchmark_temp_dir};
@@ -16,8 +16,7 @@ fn create_chain_graph(size: usize) -> (tempfile::TempDir, std::path::PathBuf, Ve
     let temp_dir = create_benchmark_temp_dir();
     let db_path = temp_dir.path().join("benchmark.db");
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(size);
 
@@ -62,22 +61,26 @@ fn bench_memory_overhead_native(criterion: &mut Criterion) {
     for &size in &[100, 500, 1000] {
         group.throughput(Throughput::Elements(size as u64));
 
-        group.bench_with_input(BenchmarkId::new("chain_native", size), &size, |b, &_size| {
-            b.iter(|| {
-                let (_temp_dir, db_path, node_ids) = create_chain_graph(size);
+        group.bench_with_input(
+            BenchmarkId::new("chain_native", size),
+            &size,
+            |b, &_size| {
+                b.iter(|| {
+                    let (_temp_dir, db_path, node_ids) = create_chain_graph(size);
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to open graph");
+                    let graph =
+                        open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
-                // Run BFS - native backend has telemetry in TraversalContext
-                let start_node = node_ids[0];
-                let _result = graph
-                    .bfs(start_node, size as u32)
-                    .expect("BFS traversal failed");
+                    // Run BFS - native backend has telemetry in TraversalContext
+                    let start_node = node_ids[0];
+                    let _result = graph
+                        .bfs(start_node, size as u32)
+                        .expect("BFS traversal failed");
 
-                std::mem::forget(_temp_dir);
-            });
-        });
+                    std::mem::forget(_temp_dir);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -94,22 +97,26 @@ fn bench_memory_overhead_sqlite(criterion: &mut Criterion) {
     for &size in &[100, 500, 1000] {
         group.throughput(Throughput::Elements(size as u64));
 
-        group.bench_with_input(BenchmarkId::new("chain_sqlite", size), &size, |b, &_size| {
-            b.iter(|| {
-                let (_temp_dir, db_path, node_ids) = create_chain_graph(size);
+        group.bench_with_input(
+            BenchmarkId::new("chain_sqlite", size),
+            &size,
+            |b, &_size| {
+                b.iter(|| {
+                    let (_temp_dir, db_path, node_ids) = create_chain_graph(size);
 
-                let graph = open_graph(&db_path, &GraphConfig::sqlite())
-                    .expect("Failed to open graph");
+                    let graph =
+                        open_graph(&db_path, &GraphConfig::sqlite()).expect("Failed to open graph");
 
-                // Run BFS - SQLite backend without TraversalContext overhead
-                let start_node = node_ids[0];
-                let _result = graph
-                    .bfs(start_node, size as u32)
-                    .expect("BFS traversal failed");
+                    // Run BFS - SQLite backend without TraversalContext overhead
+                    let start_node = node_ids[0];
+                    let _result = graph
+                        .bfs(start_node, size as u32)
+                        .expect("BFS traversal failed");
 
-                std::mem::forget(_temp_dir);
-            });
-        });
+                    std::mem::forget(_temp_dir);
+                });
+            },
+        );
     }
 
     group.finish();

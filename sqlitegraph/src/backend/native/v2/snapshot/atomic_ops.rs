@@ -13,37 +13,22 @@ pub struct AtomicFileOperations;
 #[derive(Debug)]
 pub enum AtomicOperationError {
     /// Source path does not exist or is inaccessible
-    SourceInaccessible {
-        path: PathBuf,
-        error: String,
-    },
+    SourceInaccessible { path: PathBuf, error: String },
 
     /// Destination path exists and overwrite protection is enabled
-    DestinationExists {
-        path: PathBuf,
-    },
+    DestinationExists { path: PathBuf },
 
     /// Source path is a directory when file expected
-    SourceIsDirectory {
-        path: PathBuf,
-    },
+    SourceIsDirectory { path: PathBuf },
 
     /// Destination parent directory does not exist
-    ParentDirectoryMissing {
-        parent: PathBuf,
-    },
+    ParentDirectoryMissing { parent: PathBuf },
 
     /// Filesystem I/O error during operation
-    IoError {
-        context: String,
-        error: String,
-    },
+    IoError { context: String, error: String },
 
     /// Temporary file cleanup failed
-    CleanupFailed {
-        temp_path: PathBuf,
-        error: String,
-    },
+    CleanupFailed { temp_path: PathBuf, error: String },
 }
 
 impl AtomicFileOperations {
@@ -132,7 +117,11 @@ impl AtomicFileOperations {
         // Check source is explicitly a file (not directory)
         if !source.is_file() {
             return Err(NativeBackendError::InvalidParameter {
-                context: format!("Source path is not a file: {:?} (is_directory: {})", source, source.is_dir()),
+                context: format!(
+                    "Source path is not a file: {:?} (is_directory: {})",
+                    source,
+                    source.is_dir()
+                ),
                 source: None,
             });
         }
@@ -140,7 +129,10 @@ impl AtomicFileOperations {
         // Check destination does not exist (overwrite protection)
         if destination.exists() {
             return Err(NativeBackendError::InvalidParameter {
-                context: format!("Destination already exists, overwrite protection enabled: {:?}", destination),
+                context: format!(
+                    "Destination already exists, overwrite protection enabled: {:?}",
+                    destination
+                ),
                 source: None,
             });
         }
@@ -155,7 +147,11 @@ impl AtomicFileOperations {
             }
             if !parent.is_dir() {
                 return Err(NativeBackendError::InvalidParameter {
-                    context: format!("Destination parent is not a directory: {:?} (is_file: {})", parent, parent.is_file()),
+                    context: format!(
+                        "Destination parent is not a directory: {:?} (is_file: {})",
+                        parent,
+                        parent.is_file()
+                    ),
                     source: None,
                 });
             }
@@ -167,11 +163,14 @@ impl AtomicFileOperations {
     /// Create temporary file path for atomic operation
     fn create_temp_path(&self, destination: &Path) -> PathBuf {
         // Generate unique temporary file path
-        let file_stem = destination.file_stem().unwrap_or_else(|| std::ffi::OsStr::new("temp"));
+        let file_stem = destination
+            .file_stem()
+            .unwrap_or_else(|| std::ffi::OsStr::new("temp"));
         let parent = destination.parent().unwrap_or_else(|| Path::new("."));
 
         // Simple format that guarantees file semantics
-        parent.join(format!("{}.tmp.{}",
+        parent.join(format!(
+            "{}.tmp.{}",
             file_stem.to_string_lossy(),
             std::process::id()
         ))
@@ -188,18 +187,27 @@ impl AtomicFileOperations {
                     }
                     Err(e) => {
                         // Log warning but don't fail the operation if cleanup fails
-                        eprintln!("Warning: Failed to cleanup temporary file {:?}: {}", temp_path, e);
+                        eprintln!(
+                            "Warning: Failed to cleanup temporary file {:?}: {}",
+                            temp_path, e
+                        );
                     }
                 }
             } else {
                 // Unexpected: temp path exists but is a directory
-                eprintln!("Warning: Temporary path exists as directory, attempting to remove: {:?}", temp_path);
+                eprintln!(
+                    "Warning: Temporary path exists as directory, attempting to remove: {:?}",
+                    temp_path
+                );
                 match std::fs::remove_dir_all(temp_path) {
                     Ok(()) => {
                         // Successfully removed directory
                     }
                     Err(e) => {
-                        eprintln!("Warning: Failed to cleanup temporary directory {:?}: {}", temp_path, e);
+                        eprintln!(
+                            "Warning: Failed to cleanup temporary directory {:?}: {}",
+                            temp_path, e
+                        );
                     }
                 }
             }
@@ -211,9 +219,7 @@ impl AtomicFileOperations {
     fn sync_file(&self, file_path: &Path) -> NativeResult<()> {
         use std::fs::OpenOptions;
 
-        let file = OpenOptions::new()
-            .write(true)
-            .open(file_path)?;
+        let file = OpenOptions::new().write(true).open(file_path)?;
 
         file.sync_all().map_err(|e| NativeBackendError::IoError {
             context: format!("Failed to sync file: {:?}", file_path),
@@ -226,20 +232,17 @@ impl AtomicFileOperations {
         use std::fs::OpenOptions;
 
         // Try to open directory for syncing, but don't fail if unsupported
-        match OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(dir_path)
-        {
-            Ok(dir) => {
-                dir.sync_all().map_err(|e| NativeBackendError::IoError {
-                    context: format!("Failed to sync directory: {:?}", dir_path),
-                    source: e,
-                })
-            }
+        match OpenOptions::new().read(true).write(true).open(dir_path) {
+            Ok(dir) => dir.sync_all().map_err(|e| NativeBackendError::IoError {
+                context: format!("Failed to sync directory: {:?}", dir_path),
+                source: e,
+            }),
             Err(e) => {
                 // Directory sync not supported on this filesystem, log warning but continue
-                eprintln!("Warning: Directory sync not supported: {:?} (error: {})", dir_path, e);
+                eprintln!(
+                    "Warning: Directory sync not supported: {:?} (error: {})",
+                    dir_path, e
+                );
                 Ok(())
             }
         }
@@ -249,9 +252,9 @@ impl AtomicFileOperations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::{TempDir, NamedTempFile};
     use std::fs;
     use std::io::Write;
+    use tempfile::{NamedTempFile, TempDir};
 
     #[test]
     fn test_atomic_copy_file_to_new_location() {
@@ -274,7 +277,10 @@ mod tests {
         let dest_file = temp_dir.path().join("destination.txt");
 
         // Debug: Verify destination doesn't exist initially
-        assert!(!dest_file.exists(), "Destination should not exist initially");
+        assert!(
+            !dest_file.exists(),
+            "Destination should not exist initially"
+        );
 
         // Perform atomic copy - should succeed when implemented
         match atomic_ops.atomic_copy_file(&source_file, &dest_file) {
@@ -387,9 +393,15 @@ mod tests {
             assert!(!temp_file.exists(), "Temporary file should be cleaned up");
         } else {
             // If failed, destination should not exist and no temp files should remain
-            assert!(!dest_file.exists(), "Destination should not exist on failed copy");
+            assert!(
+                !dest_file.exists(),
+                "Destination should not exist on failed copy"
+            );
             let temp_file = dest_file.with_extension("tmp");
-            assert!(!temp_file.exists(), "Temporary file should be cleaned up on failure");
+            assert!(
+                !temp_file.exists(),
+                "Temporary file should be cleaned up on failure"
+            );
         }
     }
 

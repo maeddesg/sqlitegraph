@@ -1,7 +1,7 @@
 //! Core SqliteGraph struct and construction functionality.
 
-use std::path::Path;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 use rusqlite::Connection;
@@ -10,11 +10,11 @@ use crate::{
     cache::{AdjacencyCache, CacheStats},
     config::SqliteConfig,
     errors::SqliteGraphError,
-    introspection::{GraphIntrospection, EdgeCount, IntrospectError},
+    hnsw::HnswIndex,
+    introspection::{EdgeCount, GraphIntrospection, IntrospectError},
     mvcc::SnapshotManager,
     query_cache::QueryCache,
     schema::ensure_schema,
-    hnsw::HnswIndex,
 };
 
 use super::{
@@ -81,7 +81,10 @@ impl SqliteGraph {
     ///     .with_wal_mode();
     /// let graph = SqliteGraph::open_with_config("my_graph.db", &cfg)?;
     /// ```
-    pub fn open_with_config<P: AsRef<Path>>(path: P, cfg: &SqliteConfig) -> Result<Self, SqliteGraphError> {
+    pub fn open_with_config<P: AsRef<Path>>(
+        path: P,
+        cfg: &SqliteConfig,
+    ) -> Result<Self, SqliteGraphError> {
         // Get pool size from config (default: 5)
         let pool_size = cfg.pool_size.unwrap_or(5) as u32;
 
@@ -90,7 +93,8 @@ impl SqliteGraph {
 
         // Initialize schema using first connection from pool
         {
-            let conn = pool.get()
+            let conn = pool
+                .get()
                 .map_err(|e| SqliteGraphError::connection(e.to_string()))?;
 
             if cfg.without_migrations {
@@ -129,7 +133,8 @@ impl SqliteGraph {
 
         // Load existing HNSW indexes from database
         let hnsw_indexes = {
-            let conn = pool.get()
+            let conn = pool
+                .get()
                 .map_err(|e| SqliteGraphError::connection(e.to_string()))?;
             Self::load_hnsw_indexes(&conn).unwrap_or_default()
         };
@@ -175,8 +180,8 @@ impl SqliteGraph {
     /// let graph = SqliteGraph::open_in_memory_with_config(&cfg)?;
     /// ```
     pub fn open_in_memory_with_config(cfg: &SqliteConfig) -> Result<Self, SqliteGraphError> {
-        let mut pool = PoolManager::in_memory()
-            .map_err(|e| SqliteGraphError::connection(e.to_string()))?;
+        let mut pool =
+            PoolManager::in_memory().map_err(|e| SqliteGraphError::connection(e.to_string()))?;
 
         // Set prepared statement cache size from config
         let cache_size = cfg.cache_size.unwrap_or(128);
@@ -184,9 +189,11 @@ impl SqliteGraph {
         // For in-memory databases, configure directly
         pool.configure_direct(|conn| {
             if cfg.without_migrations {
-                crate::schema::ensure_schema_without_migrations(conn).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                crate::schema::ensure_schema_without_migrations(conn)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
             } else {
-                ensure_schema(conn).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                ensure_schema(conn)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
             }
             conn.set_prepared_statement_cache_capacity(cache_size);
 
@@ -196,10 +203,12 @@ impl SqliteGraph {
             }
 
             Ok(())
-        }).map_err(|e| SqliteGraphError::connection(e.to_string()))?;
+        })
+        .map_err(|e| SqliteGraphError::connection(e.to_string()))?;
 
         // Load HNSW indexes (will be empty for fresh in-memory database)
-        let hnsw_indexes = pool.direct_connection()
+        let hnsw_indexes = pool
+            .direct_connection()
             .map(|conn| Self::load_hnsw_indexes(conn).unwrap_or_default())
             .unwrap_or_default();
 
@@ -256,7 +265,8 @@ impl SqliteGraph {
         });
 
         // Load HNSW indexes
-        let hnsw_indexes = pool.direct_connection()
+        let hnsw_indexes = pool
+            .direct_connection()
             .map(|conn| Self::load_hnsw_indexes(conn).unwrap_or_default())
             .unwrap_or_default();
 
@@ -276,12 +286,15 @@ impl SqliteGraph {
     ///
     /// This is called during SqliteGraph construction to restore any
     /// previously created HNSW indexes with full vector data.
-    fn load_hnsw_indexes(conn: &Connection) -> Result<HashMap<String, HnswIndex>, SqliteGraphError> {
+    fn load_hnsw_indexes(
+        conn: &Connection,
+    ) -> Result<HashMap<String, HnswIndex>, SqliteGraphError> {
         let mut indexes = HashMap::new();
 
         // Get list of existing indexes
-        let index_names = HnswIndex::list_indexes(conn)
-            .map_err(|e| SqliteGraphError::invalid_input(format!("Failed to load HNSW indexes: {}", e)))?;
+        let index_names = HnswIndex::list_indexes(conn).map_err(|e| {
+            SqliteGraphError::invalid_input(format!("Failed to load HNSW indexes: {}", e))
+        })?;
 
         // Load each index with vectors
         for name in index_names {
@@ -410,11 +423,7 @@ impl SqliteGraph {
 
         // First, get a quick estimate
         let estimate: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM graph_edges",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT COUNT(*) FROM graph_edges", [], |row| row.get(0))
             .map_err(|e| SqliteGraphError::query(e.to_string()))?;
 
         // For small graphs (< 10K edges), return exact count
@@ -459,13 +468,12 @@ impl SqliteGraph {
         } else {
             // Try to get the database path from SQLite
             self.pool.get().ok().and_then(|conn| {
-                conn
-                    .pragma_query_value(None, "database_list", |row| {
-                        let name: String = row.get(1)?;
-                        Ok(name)
-                    })
-                    .ok()
-                    .filter(|name| !name.is_empty() && name != ":memory:")
+                conn.pragma_query_value(None, "database_list", |row| {
+                    let name: String = row.get(1)?;
+                    Ok(name)
+                })
+                .ok()
+                .filter(|name| !name.is_empty() && name != ":memory:")
             })
         }
     }

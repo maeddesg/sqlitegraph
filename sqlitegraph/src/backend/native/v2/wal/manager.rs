@@ -7,8 +7,8 @@
 use crate::backend::native::v2::pubsub::Publisher;
 use crate::backend::native::v2::storage::SharedDeltaIndex;
 use crate::backend::native::v2::wal::{
-    transaction_coordinator::IsolationLevel, V2WALCheckpointManager, V2WALConfig, V2WALHeader,
-    V2WALReader, V2WALRecord, V2WALWriter,
+    V2WALCheckpointManager, V2WALConfig, V2WALHeader, V2WALReader, V2WALRecord, V2WALWriter,
+    transaction_coordinator::IsolationLevel,
 };
 use crate::backend::native::{NativeBackendError, NativeResult};
 use parking_lot::{Mutex, RwLock};
@@ -211,7 +211,9 @@ impl V2WALManager {
             metrics: Arc::new(RwLock::new(WALManagerMetrics::default())),
             shutdown_signal: Arc::new(Mutex::new(false)),
             coordinator_handle: Arc::new(Mutex::new(None)),
-            delta_index: Arc::new(parking_lot::RwLock::new(crate::backend::native::v2::storage::DeltaIndex::new())),
+            delta_index: Arc::new(parking_lot::RwLock::new(
+                crate::backend::native::v2::storage::DeltaIndex::new(),
+            )),
             publisher,
         };
 
@@ -899,18 +901,9 @@ mod tests {
 
     #[test]
     fn test_isolation_levels() {
-        assert_eq!(
-            IsolationLevel::ReadCommitted,
-            IsolationLevel::ReadCommitted
-        );
-        assert_ne!(
-            IsolationLevel::ReadCommitted,
-            IsolationLevel::Serializable
-        );
-        assert_ne!(
-            IsolationLevel::Serializable,
-            IsolationLevel::Snapshot
-        );
+        assert_eq!(IsolationLevel::ReadCommitted, IsolationLevel::ReadCommitted);
+        assert_ne!(IsolationLevel::ReadCommitted, IsolationLevel::Serializable);
+        assert_ne!(IsolationLevel::Serializable, IsolationLevel::Snapshot);
     }
 
     #[test]
@@ -1015,7 +1008,7 @@ mod tests {
             wal_path: temp_dir.path().join("test.wal"),
             checkpoint_path: temp_dir.path().join("test.checkpoint"),
             max_wal_size: 1024 * 1024, // 1MB (minimum allowed)
-            checkpoint_interval: 2, // Trigger after 2 transactions
+            checkpoint_interval: 2,    // Trigger after 2 transactions
             auto_checkpoint: true,
             ..Default::default()
         };
@@ -1216,8 +1209,8 @@ mod tests {
             wal_path: temp_dir.path().join("test.wal"),
             checkpoint_path: temp_dir.path().join("test.checkpoint"),
             max_wal_size: 1024 * 1024 * 1024, // 1GB
-            checkpoint_interval: 3, // Trigger after 3 transactions
-            auto_checkpoint: false, // Manual control for test
+            checkpoint_interval: 3,           // Trigger after 3 transactions
+            auto_checkpoint: false,           // Manual control for test
             ..Default::default()
         };
 
@@ -1225,15 +1218,19 @@ mod tests {
 
         // Commit 2 transactions - should NOT trigger checkpoint
         for i in 0..2 {
-            let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted).unwrap();
-            manager.write_transaction_record(
-                tx_id,
-                V2WALRecord::NodeInsert {
-                    node_id: i,
-                    slot_offset: ((i + 1) * 1024) as u64,
-                    node_data: vec![i as u8],
-                },
-            ).unwrap();
+            let tx_id = manager
+                .begin_transaction(IsolationLevel::ReadCommitted)
+                .unwrap();
+            manager
+                .write_transaction_record(
+                    tx_id,
+                    V2WALRecord::NodeInsert {
+                        node_id: i,
+                        slot_offset: ((i + 1) * 1024) as u64,
+                        node_data: vec![i as u8],
+                    },
+                )
+                .unwrap();
             manager.commit_transaction(tx_id).unwrap();
         }
 
@@ -1242,15 +1239,19 @@ mod tests {
         assert_eq!(metrics.checkpoint_count, 0);
 
         // Commit 3rd transaction - should trigger checkpoint (if auto enabled)
-        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted).unwrap();
-        manager.write_transaction_record(
-            tx_id,
-            V2WALRecord::NodeInsert {
-                node_id: 3,
-                slot_offset: 4096,
-                node_data: vec![3],
-            },
-        ).unwrap();
+        let tx_id = manager
+            .begin_transaction(IsolationLevel::ReadCommitted)
+            .unwrap();
+        manager
+            .write_transaction_record(
+                tx_id,
+                V2WALRecord::NodeInsert {
+                    node_id: 3,
+                    slot_offset: 4096,
+                    node_data: vec![3],
+                },
+            )
+            .unwrap();
         manager.commit_transaction(tx_id).unwrap();
 
         let metrics = manager.get_metrics();
@@ -1263,8 +1264,14 @@ mod tests {
 
         // Verify counter was reset after checkpoint callback
         let metrics = manager.get_metrics();
-        assert_eq!(metrics.transactions_since_checkpoint, 0, "Counter should reset after checkpoint");
-        assert_eq!(metrics.checkpoint_count, 1, "Checkpoint count should increment");
+        assert_eq!(
+            metrics.transactions_since_checkpoint, 0,
+            "Counter should reset after checkpoint"
+        );
+        assert_eq!(
+            metrics.checkpoint_count, 1,
+            "Checkpoint count should increment"
+        );
     }
 
     #[test]
@@ -1290,15 +1297,19 @@ mod tests {
         // Write enough data to exceed size threshold
         let large_data = vec![0u8; 256 * 1024]; // 256KB per record
         for i in 0..5 {
-            let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted).unwrap();
-            manager.write_transaction_record(
-                tx_id,
-                V2WALRecord::NodeInsert {
-                    node_id: i,
-                    slot_offset: ((i + 1) * 1024) as u64,
-                    node_data: large_data.clone(),
-                },
-            ).unwrap();
+            let tx_id = manager
+                .begin_transaction(IsolationLevel::ReadCommitted)
+                .unwrap();
+            manager
+                .write_transaction_record(
+                    tx_id,
+                    V2WALRecord::NodeInsert {
+                        node_id: i,
+                        slot_offset: ((i + 1) * 1024) as u64,
+                        node_data: large_data.clone(),
+                    },
+                )
+                .unwrap();
             manager.commit_transaction(tx_id).unwrap();
         }
 
@@ -1310,10 +1321,17 @@ mod tests {
         let wal_size = std::fs::metadata(temp_dir.path().join("test.wal"))
             .unwrap()
             .len();
-        assert!(wal_size > 1024 * 1024, "WAL should exceed 1MB threshold, got {}", wal_size);
+        assert!(
+            wal_size > 1024 * 1024,
+            "WAL should exceed 1MB threshold, got {}",
+            wal_size
+        );
 
         // Verify requires_checkpoint returns true based on size
-        assert!(manager.requires_checkpoint(), "Should require checkpoint when WAL exceeds threshold");
+        assert!(
+            manager.requires_checkpoint(),
+            "Should require checkpoint when WAL exceeds threshold"
+        );
     }
 
     #[test]
@@ -1338,15 +1356,19 @@ mod tests {
 
         // Commit 5 transactions
         for i in 0..5 {
-            let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted).unwrap();
-            manager.write_transaction_record(
-                tx_id,
-                V2WALRecord::NodeInsert {
-                    node_id: i,
-                    slot_offset: ((i + 1) * 1024) as u64,
-                    node_data: vec![i as u8],
-                },
-            ).unwrap();
+            let tx_id = manager
+                .begin_transaction(IsolationLevel::ReadCommitted)
+                .unwrap();
+            manager
+                .write_transaction_record(
+                    tx_id,
+                    V2WALRecord::NodeInsert {
+                        node_id: i,
+                        slot_offset: ((i + 1) * 1024) as u64,
+                        node_data: vec![i as u8],
+                    },
+                )
+                .unwrap();
             manager.commit_transaction(tx_id).unwrap();
         }
 
@@ -1360,25 +1382,33 @@ mod tests {
 
         // Verify counter was reset
         let metrics_after = manager.get_metrics();
-        assert_eq!(metrics_after.transactions_since_checkpoint, 0,
-            "Counter should be reset to 0 after checkpoint");
+        assert_eq!(
+            metrics_after.transactions_since_checkpoint, 0,
+            "Counter should be reset to 0 after checkpoint"
+        );
         assert_eq!(metrics_after.checkpoint_count, 1);
 
         // Commit more transactions and verify counter increments from 0
-        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted).unwrap();
-        manager.write_transaction_record(
-            tx_id,
-            V2WALRecord::NodeInsert {
-                node_id: 10,
-                slot_offset: 10240,
-                node_data: vec![10],
-            },
-        ).unwrap();
+        let tx_id = manager
+            .begin_transaction(IsolationLevel::ReadCommitted)
+            .unwrap();
+        manager
+            .write_transaction_record(
+                tx_id,
+                V2WALRecord::NodeInsert {
+                    node_id: 10,
+                    slot_offset: 10240,
+                    node_data: vec![10],
+                },
+            )
+            .unwrap();
         manager.commit_transaction(tx_id).unwrap();
 
         let metrics_final = manager.get_metrics();
-        assert_eq!(metrics_final.transactions_since_checkpoint, 1,
-            "Counter should increment from 0 after checkpoint");
+        assert_eq!(
+            metrics_final.transactions_since_checkpoint, 1,
+            "Counter should increment from 0 after checkpoint"
+        );
     }
 
     #[test]
@@ -1403,29 +1433,43 @@ mod tests {
         let manager = V2WALManager::create(config).unwrap();
 
         // Commit transaction to populate delta index
-        let tx1 = manager.begin_transaction(IsolationLevel::ReadCommitted).unwrap();
-        manager.write_transaction_record(
-            tx1,
-            V2WALRecord::NodeInsert {
-                node_id: 1i64,
-                slot_offset: 1024,
-                node_data: vec![1, 2, 3],
-            },
-        ).unwrap();
+        let tx1 = manager
+            .begin_transaction(IsolationLevel::ReadCommitted)
+            .unwrap();
+        manager
+            .write_transaction_record(
+                tx1,
+                V2WALRecord::NodeInsert {
+                    node_id: 1i64,
+                    slot_offset: 1024,
+                    node_data: vec![1, 2, 3],
+                },
+            )
+            .unwrap();
         manager.commit_transaction(tx1).unwrap();
 
         // Verify delta index populated with committed changes
         let delta_index = manager.get_delta_index().read();
-        assert_eq!(delta_index.delta_count(), 1, "Should have 1 delta after commit");
+        assert_eq!(
+            delta_index.delta_count(),
+            1,
+            "Should have 1 delta after commit"
+        );
         drop(delta_index);
 
         // Verify checkpoint completion cleans up delta index
         // Use a high LSN to ensure all deltas are dropped
         let high_checkpoint_lsn = u64::MAX;
-        manager.on_checkpoint_completed(high_checkpoint_lsn).unwrap();
+        manager
+            .on_checkpoint_completed(high_checkpoint_lsn)
+            .unwrap();
 
         // Verify all deltas dropped
         let delta_index = manager.get_delta_index().read();
-        assert_eq!(delta_index.delta_count(), 0, "All deltas should be dropped after checkpoint");
+        assert_eq!(
+            delta_index.delta_count(),
+            0,
+            "All deltas should be dropped after checkpoint"
+        );
     }
 }

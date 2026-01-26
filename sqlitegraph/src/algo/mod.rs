@@ -146,25 +146,14 @@
 
 // Centrality algorithms
 pub use centrality::{
-    pagerank,
-    pagerank_with_progress,
-    betweenness_centrality,
-    betweenness_centrality_with_progress,
+    betweenness_centrality, betweenness_centrality_with_progress, pagerank, pagerank_with_progress,
 };
 
 // Community detection algorithms
-pub use community::{
-    label_propagation,
-    louvain_communities,
-    louvain_communities_with_progress,
-};
+pub use community::{label_propagation, louvain_communities, louvain_communities_with_progress};
 
 // Structural analysis algorithms
-pub use structure::{
-    connected_components,
-    find_cycles_limited,
-    nodes_by_degree,
-};
+pub use structure::{connected_components, find_cycles_limited, nodes_by_degree};
 
 // Module declarations
 mod centrality;

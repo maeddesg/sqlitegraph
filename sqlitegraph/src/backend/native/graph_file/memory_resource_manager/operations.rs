@@ -61,7 +61,7 @@ impl<'a> MemoryResourceManager<'a> {
     /// * `file_size_fn` - Function to get current file size
     ///
     /// Routes write operations based on I/O mode and buffer considerations
-    #[allow(unused_variables)]  // Allow warnings for feature-conditional parameters
+    #[allow(unused_variables)] // Allow warnings for feature-conditional parameters
     pub fn memory_aware_write<F>(
         &mut self,
         file: &mut std::fs::File,

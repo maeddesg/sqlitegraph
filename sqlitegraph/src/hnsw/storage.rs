@@ -480,18 +480,13 @@ impl VectorStorage for SQLiteVectorStorage {
             .unwrap_or_default()
             .as_secs() as i64;
 
-        self.conn.execute(
-            "INSERT INTO hnsw_vectors (index_id, vector_data, metadata, created_at, updated_at)
+        self.conn
+            .execute(
+                "INSERT INTO hnsw_vectors (index_id, vector_data, metadata, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                &self.index_id,
-                &vector_bytes,
-                &metadata_json,
-                now,
-                now,
-            ],
-        )
-        .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+                rusqlite::params![&self.index_id, &vector_bytes, &metadata_json, now, now,],
+            )
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
 
         Ok(self.conn.last_insert_rowid() as u64)
     }
@@ -613,9 +608,9 @@ impl VectorStorage for SQLiteVectorStorage {
 
         match result {
             Ok(()) => {
-                self.conn
-                    .execute("COMMIT", [])
-                    .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+                self.conn.execute("COMMIT", []).map_err(|e| {
+                    HnswError::Storage(HnswStorageError::DatabaseError(e.to_string()))
+                })?;
             }
             Err(err) => {
                 let _ = self.conn.execute("ROLLBACK", []);

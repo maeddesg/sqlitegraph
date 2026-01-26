@@ -62,7 +62,11 @@ impl AccessPatternTracker {
     fn is_traversal_pattern(&self, node_id: i64) -> bool {
         // Simple heuristic: if we're revisiting nodes from recent history,
         // it's likely a BFS/DFS traversal rather than random lookups
-        self.access_history.iter().filter(|&&id| id == node_id).count() > 0
+        self.access_history
+            .iter()
+            .filter(|&&id| id == node_id)
+            .count()
+            > 0
     }
 }
 
@@ -348,11 +352,9 @@ mod tests {
         let key2 = CacheKey::new(2, Direction::Outgoing);
 
         // Insert and retrieve
-        let cluster = Arc::new(EdgeCluster::create_from_compact_edges(
-            vec![],
-            1,
-            Direction::Outgoing,
-        ).unwrap());
+        let cluster = Arc::new(
+            EdgeCluster::create_from_compact_edges(vec![], 1, Direction::Outgoing).unwrap(),
+        );
 
         cache.insert(key1, Arc::clone(&cluster));
         assert!(cache.get(key1).is_some());
@@ -371,11 +373,9 @@ mod tests {
         let key2 = CacheKey::new(2, Direction::Outgoing);
         let key3 = CacheKey::new(3, Direction::Outgoing);
 
-        let cluster = Arc::new(EdgeCluster::create_from_compact_edges(
-            vec![],
-            1,
-            Direction::Outgoing,
-        ).unwrap());
+        let cluster = Arc::new(
+            EdgeCluster::create_from_compact_edges(vec![], 1, Direction::Outgoing).unwrap(),
+        );
 
         // Fill cache
         cache.insert(key1, Arc::clone(&cluster));
@@ -393,11 +393,9 @@ mod tests {
         let mut cache = TraversalAwareCache::new(10);
 
         let key1 = CacheKey::new(1, Direction::Outgoing);
-        let cluster = Arc::new(EdgeCluster::create_from_compact_edges(
-            vec![],
-            1,
-            Direction::Outgoing,
-        ).unwrap());
+        let cluster = Arc::new(
+            EdgeCluster::create_from_compact_edges(vec![], 1, Direction::Outgoing).unwrap(),
+        );
 
         cache.insert(key1, Arc::clone(&cluster));
 

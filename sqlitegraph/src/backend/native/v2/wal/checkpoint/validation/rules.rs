@@ -339,7 +339,7 @@ impl<'a> ValidationContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-        use tempfile::tempdir;
+    use tempfile::tempdir;
 
     #[test]
     fn test_validation_rule_engine_creation() {

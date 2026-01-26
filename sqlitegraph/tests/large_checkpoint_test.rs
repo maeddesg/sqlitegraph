@@ -4,12 +4,12 @@
 //! Tests verify segment rotation, manifest creation, and recovery for
 //! checkpoints that exceed the 1GB single-file limit.
 
+use sqlitegraph::backend::native::GraphFile;
+use sqlitegraph::backend::native::v2::wal::V2WALConfig;
 use sqlitegraph::backend::native::v2::wal::checkpoint::{
-    CheckpointStrategy, CheckpointState, MultiFileCheckpointConfig, MultiFileRecovery,
+    CheckpointState, CheckpointStrategy, MultiFileCheckpointConfig, MultiFileRecovery,
     V2WALCheckpointManager,
 };
-use sqlitegraph::backend::native::v2::wal::V2WALConfig;
-use sqlitegraph::backend::native::GraphFile;
 use std::time::Duration;
 use tempfile::tempdir;
 
@@ -24,8 +24,8 @@ fn test_checkpoint_exceeds_1gb() {
     let v2_graph_path = temp_dir.path().join("test.v2");
 
     // Create a V2 graph file
-    let _graph_file = GraphFile::create(&v2_graph_path)
-        .expect("Failed to create test V2 graph file");
+    let _graph_file =
+        GraphFile::create(&v2_graph_path).expect("Failed to create test V2 graph file");
 
     let checkpoint_path = temp_dir.path().join("checkpoint");
 
@@ -46,12 +46,8 @@ fn test_checkpoint_exceeds_1gb() {
         .with_max_segments(16); // 160MB total
 
     let strategy = CheckpointStrategy::TimeInterval(Duration::from_secs(60));
-    let manager = V2WALCheckpointManager::with_multi_file(
-        config,
-        strategy,
-        multi_file_config,
-    )
-    .expect("Failed to create multi-file checkpoint manager");
+    let manager = V2WALCheckpointManager::with_multi_file(config, strategy, multi_file_config)
+        .expect("Failed to create multi-file checkpoint manager");
 
     // Verify multi-file is enabled
     assert!(manager.is_multi_file_enabled());
@@ -94,7 +90,9 @@ fn test_checkpoint_segment_rotation() {
     assert!(!writer.needs_rotation());
 
     // Rotate to next segment (this will auto-finalize the first segment)
-    writer.rotate_segment(200).expect("Failed to rotate segment");
+    writer
+        .rotate_segment(200)
+        .expect("Failed to rotate segment");
     assert_eq!(writer.current_index(), 1);
 
     // Verify first segment was completed
@@ -102,9 +100,13 @@ fn test_checkpoint_segment_rotation() {
 
     // Write to second segment
     let data2 = vec![2u8; 500 * 1024]; // 500KB
-    writer.write_data(&data2).expect("Failed to write data to second segment");
+    writer
+        .write_data(&data2)
+        .expect("Failed to write data to second segment");
 
-    let segment2 = writer.finalize(300, 50).expect("Failed to finalize second segment");
+    let segment2 = writer
+        .finalize(300, 50)
+        .expect("Failed to finalize second segment");
     assert_eq!(segment2.segment_index, 1);
     assert_eq!(segment2.lsn_range, (200, 300));
 
@@ -118,7 +120,9 @@ fn test_checkpoint_segment_rotation() {
 /// file is missing, ensuring atomic recovery semantics.
 #[test]
 fn test_recovery_partial_segments() {
-    use sqlitegraph::backend::native::v2::wal::checkpoint::io::{CheckpointManifest, CheckpointSegmentMeta, SegmentWriter};
+    use sqlitegraph::backend::native::v2::wal::checkpoint::io::{
+        CheckpointManifest, CheckpointSegmentMeta, SegmentWriter,
+    };
 
     let temp_dir = tempdir().unwrap();
     let checkpoint_path = temp_dir.path().join("checkpoint");
@@ -154,8 +158,12 @@ fn test_recovery_partial_segments() {
     let segment0_path = checkpoint_path.with_extension("ckpt.000");
     let mut writer = SegmentWriter::create(multi_file_config.clone(), 0, 100)
         .expect("Failed to create segment 0");
-    writer.write_data(&[1u8; 1024]).expect("Failed to write data");
-    writer.finalize(200, 50).expect("Failed to finalize segment 0");
+    writer
+        .write_data(&[1u8; 1024])
+        .expect("Failed to write data");
+    writer
+        .finalize(200, 50)
+        .expect("Failed to finalize segment 0");
 
     // Verify segment 0 exists but segment 1 doesn't
     assert!(segment0_path.exists());
@@ -176,8 +184,8 @@ fn test_concurrent_checkpoint_limit() {
     let temp_dir = tempdir().unwrap();
     let v2_graph_path = temp_dir.path().join("test.v2");
 
-    let _graph_file = GraphFile::create(&v2_graph_path)
-        .expect("Failed to create test V2 graph file");
+    let _graph_file =
+        GraphFile::create(&v2_graph_path).expect("Failed to create test V2 graph file");
 
     let checkpoint_path = temp_dir.path().join("checkpoint");
 
@@ -196,12 +204,8 @@ fn test_concurrent_checkpoint_limit() {
         .with_max_segments(4);
 
     let strategy = CheckpointStrategy::TimeInterval(Duration::from_secs(1));
-    let manager = V2WALCheckpointManager::with_multi_file(
-        config,
-        strategy,
-        multi_file_config,
-    )
-    .expect("Failed to create multi-file checkpoint manager");
+    let manager = V2WALCheckpointManager::with_multi_file(config, strategy, multi_file_config)
+        .expect("Failed to create multi-file checkpoint manager");
 
     // Initially idle
     assert_eq!(manager.get_state(), CheckpointState::Idle);
@@ -222,7 +226,9 @@ fn test_concurrent_checkpoint_limit() {
 /// and can be validated for consistency.
 #[test]
 fn test_manifest_creation_and_validation() {
-    use sqlitegraph::backend::native::v2::wal::checkpoint::io::{CheckpointManifest, CheckpointSegmentMeta};
+    use sqlitegraph::backend::native::v2::wal::checkpoint::io::{
+        CheckpointManifest, CheckpointSegmentMeta,
+    };
 
     let temp_dir = tempdir().unwrap();
     let checkpoint_path = temp_dir.path().join("checkpoint");
@@ -272,7 +278,9 @@ fn test_manifest_creation_and_validation() {
 /// segments without gaps or overlaps.
 #[test]
 fn test_lsn_continuity_across_segments() {
-    use sqlitegraph::backend::native::v2::wal::checkpoint::io::{CheckpointManifest, CheckpointSegmentMeta};
+    use sqlitegraph::backend::native::v2::wal::checkpoint::io::{
+        CheckpointManifest, CheckpointSegmentMeta,
+    };
 
     let mut manifest = CheckpointManifest::new();
 

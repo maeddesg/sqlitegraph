@@ -31,15 +31,15 @@
 //!
 //! Run tests with: `cargo test --lib pubsub`
 
-pub mod event;
-pub mod subscriber;
-pub mod publisher;
 pub mod emit;
+pub mod event;
+pub mod publisher;
+pub mod subscriber;
 
-pub use event::{PubSubEvent, PubSubEventType};
-pub use subscriber::{Subscriber, SubscriberId, SubscriptionFilter};
-pub use publisher::Publisher;
 pub use emit::{records_to_events, should_emit_event};
+pub use event::{PubSubEvent, PubSubEventType};
+pub use publisher::Publisher;
+pub use subscriber::{Subscriber, SubscriberId, SubscriptionFilter};
 
 #[cfg(test)]
 mod tests;

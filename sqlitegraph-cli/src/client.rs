@@ -3,7 +3,7 @@
 //! This provides a simplified BackendClient that wraps existing v0.2.5 backends
 //! without the missing pipeline/subgraph/safety modules.
 
-use sqlitegraph::{SqliteGraphBackend, NativeGraphBackend, GraphBackend, SqliteGraph};
+use sqlitegraph::{GraphBackend, NativeGraphBackend, SqliteGraph, SqliteGraphBackend};
 
 /// Minimal client wrapper for v0.2.5
 pub enum BackendClient {
@@ -65,7 +65,9 @@ impl BackendClient {
 
     /// Get WAL metrics (only available for Native backend with native-v2 feature)
     #[cfg(feature = "native-v2")]
-    pub fn get_wal_metrics(&self) -> Option<sqlitegraph::backend::native::v2::wal::WALManagerMetrics> {
+    pub fn get_wal_metrics(
+        &self,
+    ) -> Option<sqlitegraph::backend::native::v2::wal::WALManagerMetrics> {
         match self {
             BackendClient::Native(b) => b.get_wal_metrics(),
             BackendClient::Dynamic(_) => None, // Dynamic backends don't expose WAL-specific methods

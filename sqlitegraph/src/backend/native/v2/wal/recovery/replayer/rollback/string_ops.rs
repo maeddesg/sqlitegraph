@@ -18,10 +18,14 @@ use crate::debug::debug_log;
 /// reference counting.
 pub fn rollback_string_insert(
     system: &RollbackSystem,
-    _string_id: u64,
-    _string_value: &str,
+    string_id: u64,
+    string_value: &str,
 ) -> Result<(), RecoveryError> {
-    debug_log!("Rolling back string insert: id={}, value='{}'", string_id, string_value);
+    debug_log!(
+        "Rolling back string insert: id={}, value='{}'",
+        string_id,
+        string_value
+    );
 
     // String rollback is complex due to deduplication in the string table
     // Multiple WAL records might reference the same string, so we can't
@@ -32,15 +36,22 @@ pub fn rollback_string_insert(
     // 2. Note that the string remains in the table for consistency
     // 3. Future implementation could use reference counting
 
-    let _current_string_count = {
-        let string_table_guard = system.string_table().lock()
-            .map_err(|e| RecoveryError::replay_failure(format!("Failed to lock string table: {}", e)))?;
+    let current_string_count = {
+        let string_table_guard = system.string_table().lock().map_err(|e| {
+            RecoveryError::replay_failure(format!("Failed to lock string table: {}", e))
+        })?;
 
         string_table_guard.len()
     };
 
-    debug_log!("String table currently has {} strings", current_string_count);
-    debug_log!("String '{}' remains in table due to deduplication complexity", string_value);
+    debug_log!(
+        "String table currently has {} strings",
+        current_string_count
+    );
+    debug_log!(
+        "String '{}' remains in table due to deduplication complexity",
+        string_value
+    );
 
     // In a production implementation with reference counting:
     // 1. Decrease reference count for the string

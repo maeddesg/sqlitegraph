@@ -5,19 +5,18 @@
 //! edge cases. These tests ensure the recovery system handles abnormal conditions
 //! gracefully and maintains data integrity.
 
+use sqlitegraph::backend::native::GraphFile;
 use sqlitegraph::backend::native::v2::wal::{
-    V2WALConfig, V2WALManager, V2WALRecord, V2WALHeader,
-    manager::TransactionIsolation,
+    V2WALConfig, V2WALHeader, V2WALManager, V2WALRecord, manager::TransactionIsolation,
 };
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
-use sqlitegraph::backend::native::GraphFile;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Test infrastructure setup for recovery edge cases
 struct RecoveryTestSetup {
     #[allow(dead_code)]
-    temp_dir: TempDir,  // Kept to ensure cleanup on drop
+    temp_dir: TempDir, // Kept to ensure cleanup on drop
     wal_path: PathBuf,
     db_path: PathBuf,
     checkpoint_path: PathBuf,
@@ -26,11 +25,10 @@ struct RecoveryTestSetup {
 impl RecoveryTestSetup {
     /// Create a new test setup with temporary directory
     fn new() -> NativeResult<Self> {
-        let temp_dir = TempDir::new()
-            .map_err(|e| NativeBackendError::IoError {
-                context: "Failed to create temp dir".to_string(),
-                source: e.into(),
-            })?;
+        let temp_dir = TempDir::new().map_err(|e| NativeBackendError::IoError {
+            context: "Failed to create temp dir".to_string(),
+            source: e.into(),
+        })?;
 
         let wal_path = temp_dir.path().join("test.wal");
         let db_path = temp_dir.path().join("test.v2");
@@ -59,11 +57,10 @@ impl RecoveryTestSetup {
 
     /// Write arbitrary corrupted data to WAL file
     fn write_corrupted_wal(&self, data: &[u8]) -> NativeResult<()> {
-        std::fs::write(&self.wal_path, data)
-            .map_err(|e| NativeBackendError::IoError {
-                context: "Failed to write corrupted WAL".to_string(),
-                source: e.into(),
-            })?;
+        std::fs::write(&self.wal_path, data).map_err(|e| NativeBackendError::IoError {
+            context: "Failed to write corrupted WAL".to_string(),
+            source: e.into(),
+        })?;
         Ok(())
     }
 
@@ -101,7 +98,7 @@ fn test_recovery_from_truncated_wal() -> NativeResult<()> {
             node_id: 1,
             slot_offset: 1024,
             node_data: vec![1, 2, 3],
-        }
+        },
     )?;
     manager.commit_transaction(tx_id)?;
 
@@ -150,10 +147,10 @@ fn test_recovery_with_invalid_magic_bytes() -> NativeResult<()> {
             // Should fail with corruption-related error
             let error_msg = e.to_string();
             assert!(
-                error_msg.contains("corruption") ||
-                error_msg.contains("magic") ||
-                error_msg.contains("invalid") ||
-                error_msg.contains("header"),
+                error_msg.contains("corruption")
+                    || error_msg.contains("magic")
+                    || error_msg.contains("invalid")
+                    || error_msg.contains("header"),
                 "Error should indicate corruption: {}",
                 error_msg
             );
@@ -179,7 +176,7 @@ fn test_recovery_with_corrupted_payload() -> NativeResult<()> {
             node_id: 1,
             slot_offset: 1024,
             node_data: vec![1, 2, 3],
-        }
+        },
     )?;
     manager.commit_transaction(tx_id)?;
 
@@ -211,9 +208,9 @@ fn test_recovery_with_corrupted_payload() -> NativeResult<()> {
             // Should fail with corruption-related error
             let error_msg = e.to_string().to_lowercase();
             assert!(
-                error_msg.contains("corruption") ||
-                error_msg.contains("checksum") ||
-                error_msg.contains("invalid"),
+                error_msg.contains("corruption")
+                    || error_msg.contains("checksum")
+                    || error_msg.contains("invalid"),
                 "Error should indicate corruption: {}",
                 e.to_string()
             );
@@ -239,7 +236,7 @@ fn test_recovery_with_corrupted_checksum() -> NativeResult<()> {
             node_id: 1,
             slot_offset: 1024,
             node_data: vec![1, 2, 3],
-        }
+        },
     )?;
     manager.commit_transaction(tx_id)?;
 
@@ -267,9 +264,9 @@ fn test_recovery_with_corrupted_checksum() -> NativeResult<()> {
             let error_msg = e.to_string().to_lowercase();
             // Should mention corruption or checksum
             assert!(
-                error_msg.contains("corruption") ||
-                error_msg.contains("checksum") ||
-                error_msg.contains("invalid"),
+                error_msg.contains("corruption")
+                    || error_msg.contains("checksum")
+                    || error_msg.contains("invalid"),
                 "Error should indicate data integrity issue: {}",
                 e.to_string()
             );
@@ -300,7 +297,7 @@ fn test_recovery_with_incomplete_transaction() -> NativeResult<()> {
             node_id: 1,
             slot_offset: 1024,
             node_data: vec![1, 2, 3],
-        }
+        },
     )?;
     manager.commit_transaction(tx_id1)?;
 
@@ -312,7 +309,7 @@ fn test_recovery_with_incomplete_transaction() -> NativeResult<()> {
             node_id: 2,
             slot_offset: 2048,
             node_data: vec![4, 5, 6],
-        }
+        },
     )?;
     // No commit - simulate crash by dropping without commit
 
@@ -326,7 +323,10 @@ fn test_recovery_with_incomplete_transaction() -> NativeResult<()> {
     let result = V2WALManager::create(config);
 
     // Should successfully recover (ignoring incomplete transaction)
-    assert!(result.is_ok(), "Should recover despite incomplete transaction");
+    assert!(
+        result.is_ok(),
+        "Should recover despite incomplete transaction"
+    );
 
     Ok(())
 }
@@ -347,7 +347,7 @@ fn test_recovery_rollback_after_partial_writes() -> NativeResult<()> {
             node_id: 1,
             slot_offset: 1024,
             node_data: vec![1, 2, 3],
-        }
+        },
     )?;
     manager.write_transaction_record(
         tx_id,
@@ -355,7 +355,7 @@ fn test_recovery_rollback_after_partial_writes() -> NativeResult<()> {
             node_id: 2,
             slot_offset: 2048,
             node_data: vec![4, 5, 6],
-        }
+        },
     )?;
 
     // Rollback transaction
@@ -363,7 +363,10 @@ fn test_recovery_rollback_after_partial_writes() -> NativeResult<()> {
 
     // Verify rollback was successful
     let metrics = manager.get_metrics();
-    assert_eq!(metrics.rolled_back_transactions, 1, "Should have 1 rolled back transaction");
+    assert_eq!(
+        metrics.rolled_back_transactions, 1,
+        "Should have 1 rolled back transaction"
+    );
 
     // Commit a new transaction to verify WAL is still functional
     let tx_id2 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
@@ -373,12 +376,15 @@ fn test_recovery_rollback_after_partial_writes() -> NativeResult<()> {
             node_id: 3,
             slot_offset: 3072,
             node_data: vec![7, 8, 9],
-        }
+        },
     )?;
     manager.commit_transaction(tx_id2)?;
 
     let final_metrics = manager.get_metrics();
-    assert_eq!(final_metrics.committed_transactions, 1, "Should have 1 committed transaction");
+    assert_eq!(
+        final_metrics.committed_transactions, 1,
+        "Should have 1 committed transaction"
+    );
 
     Ok(())
 }
@@ -399,7 +405,7 @@ fn test_recovery_mixed_commit_rollback_transactions() -> NativeResult<()> {
             node_id: 1,
             slot_offset: 1024,
             node_data: vec![],
-        }
+        },
     )?;
     manager.commit_transaction(tx1)?;
 
@@ -411,7 +417,7 @@ fn test_recovery_mixed_commit_rollback_transactions() -> NativeResult<()> {
             node_id: 2,
             slot_offset: 2048,
             node_data: vec![],
-        }
+        },
     )?;
     manager.rollback_transaction(tx2)?;
 
@@ -423,14 +429,20 @@ fn test_recovery_mixed_commit_rollback_transactions() -> NativeResult<()> {
             node_id: 3,
             slot_offset: 3072,
             node_data: vec![],
-        }
+        },
     )?;
     manager.commit_transaction(tx3)?;
 
     // Verify metrics
     let metrics = manager.get_metrics();
-    assert_eq!(metrics.committed_transactions, 2, "Should have 2 committed transactions");
-    assert_eq!(metrics.rolled_back_transactions, 1, "Should have 1 rolled back transaction");
+    assert_eq!(
+        metrics.committed_transactions, 2,
+        "Should have 2 committed transactions"
+    );
+    assert_eq!(
+        metrics.rolled_back_transactions, 1,
+        "Should have 1 rolled back transaction"
+    );
 
     Ok(())
 }
@@ -453,7 +465,7 @@ fn test_recovery_transaction_with_multiple_records() -> NativeResult<()> {
                 node_id: i,
                 slot_offset: (i * 1024) as u64,
                 node_data: vec![i as u8],
-            }
+            },
         )?;
     }
 
@@ -462,7 +474,10 @@ fn test_recovery_transaction_with_multiple_records() -> NativeResult<()> {
     // Verify all records were written
     let metrics = manager.get_metrics();
     assert_eq!(metrics.committed_transactions, 1);
-    assert!(metrics.total_records_written >= 10, "Should have written at least 10 records");
+    assert!(
+        metrics.total_records_written >= 10,
+        "Should have written at least 10 records"
+    );
 
     Ok(())
 }
@@ -488,7 +503,7 @@ fn test_recovery_incomplete_checkpoint() -> NativeResult<()> {
                 node_id: i,
                 slot_offset: (i * 1024) as u64,
                 node_data: vec![i as u8],
-            }
+            },
         )?;
         manager.commit_transaction(tx_id)?;
     }
@@ -500,7 +515,10 @@ fn test_recovery_incomplete_checkpoint() -> NativeResult<()> {
     assert!(checkpoint_result.is_ok(), "Checkpoint should succeed");
 
     let metrics = manager.get_metrics();
-    assert!(metrics.checkpoint_count > 0, "Should have performed checkpoint");
+    assert!(
+        metrics.checkpoint_count > 0,
+        "Should have performed checkpoint"
+    );
 
     Ok(())
 }
@@ -521,7 +539,7 @@ fn test_checkpoint_after_rollback() -> NativeResult<()> {
             node_id: 1,
             slot_offset: 1024,
             node_data: vec![1],
-        }
+        },
     )?;
     manager.commit_transaction(tx1)?;
 
@@ -533,13 +551,16 @@ fn test_checkpoint_after_rollback() -> NativeResult<()> {
             node_id: 2,
             slot_offset: 2048,
             node_data: vec![2],
-        }
+        },
     )?;
     manager.rollback_transaction(tx2)?;
 
     // Checkpoint should only include committed transaction
     let _checkpoint_result = manager.force_checkpoint();
-    assert!(_checkpoint_result.is_ok(), "Checkpoint should succeed after rollback");
+    assert!(
+        _checkpoint_result.is_ok(),
+        "Checkpoint should succeed after rollback"
+    );
 
     Ok(())
 }
@@ -563,7 +584,7 @@ fn test_multiple_checkpoints() -> NativeResult<()> {
                     node_id: (checkpoint_round * 10 + i) as i64,
                     slot_offset: ((checkpoint_round * 10 + i) * 1024) as u64,
                     node_data: vec![(checkpoint_round * 10 + i) as u8],
-                }
+                },
             )?;
             manager.commit_transaction(tx_id)?;
         }
@@ -574,7 +595,10 @@ fn test_multiple_checkpoints() -> NativeResult<()> {
 
     let metrics = manager.get_metrics();
     assert_eq!(metrics.checkpoint_count, 3, "Should have 3 checkpoints");
-    assert_eq!(metrics.committed_transactions, 6, "Should have 6 committed transactions");
+    assert_eq!(
+        metrics.committed_transactions, 6,
+        "Should have 6 committed transactions"
+    );
 
     Ok(())
 }
@@ -591,10 +615,16 @@ fn test_checkpoint_with_empty_wal() -> NativeResult<()> {
     let checkpoint_result = manager.force_checkpoint();
 
     // Should succeed even with no transactions
-    assert!(checkpoint_result.is_ok(), "Checkpoint should succeed with empty WAL");
+    assert!(
+        checkpoint_result.is_ok(),
+        "Checkpoint should succeed with empty WAL"
+    );
 
     let metrics = manager.get_metrics();
-    assert_eq!(metrics.committed_transactions, 0, "Should have no committed transactions");
+    assert_eq!(
+        metrics.committed_transactions, 0,
+        "Should have no committed transactions"
+    );
 
     Ok(())
 }
@@ -645,7 +675,7 @@ fn test_recovery_with_only_committed_transactions() -> NativeResult<()> {
                 node_id: i,
                 slot_offset: (i * 1024) as u64,
                 node_data: vec![i as u8],
-            }
+            },
         )?;
         manager.commit_transaction(tx_id)?;
     }
@@ -660,13 +690,18 @@ fn test_recovery_with_only_committed_transactions() -> NativeResult<()> {
     let _metrics = new_manager.get_metrics();
 
     // WAL file should exist with committed data
-    assert!(setup.wal_exists(), "WAL file should persist after manager drop");
+    assert!(
+        setup.wal_exists(),
+        "WAL file should persist after manager drop"
+    );
 
     // Manager should create successfully even if recovery isn't implemented
     // The total_transactions counter starts at 0 for new manager instance
     // This is expected behavior - recovery would restore this in full implementation
-    assert!(new_manager.get_active_transaction_count() == 0,
-            "New manager should have no active transactions");
+    assert!(
+        new_manager.get_active_transaction_count() == 0,
+        "New manager should have no active transactions"
+    );
 
     // Verify we can write new transactions after restart
     let tx_id = new_manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
@@ -676,7 +711,7 @@ fn test_recovery_with_only_committed_transactions() -> NativeResult<()> {
             node_id: 10,
             slot_offset: 10240,
             node_data: vec![10],
-        }
+        },
     )?;
     new_manager.commit_transaction(tx_id)?;
 
@@ -700,7 +735,7 @@ fn test_recovery_with_mixed_committed_rolled_back() -> NativeResult<()> {
                 node_id: i,
                 slot_offset: (i * 1024) as u64,
                 node_data: vec![i as u8],
-            }
+            },
         )?;
         manager.commit_transaction(tx_id)?;
     }
@@ -714,7 +749,7 @@ fn test_recovery_with_mixed_committed_rolled_back() -> NativeResult<()> {
                 node_id: i,
                 slot_offset: (i * 1024) as u64,
                 node_data: vec![i as u8],
-            }
+            },
         )?;
         manager.rollback_transaction(tx_id)?;
     }
@@ -739,7 +774,7 @@ fn test_recovery_with_mixed_committed_rolled_back() -> NativeResult<()> {
             node_id: 100,
             slot_offset: 102400,
             node_data: vec![100],
-        }
+        },
     )?;
     new_manager.commit_transaction(tx_id)?;
 
@@ -765,7 +800,7 @@ fn test_recovery_after_manager_drop() -> NativeResult<()> {
                     node_id: i,
                     slot_offset: (i * 1024) as u64,
                     node_data: vec![i as u8],
-                }
+                },
             )?;
             manager.commit_transaction(tx_id)?;
         }
@@ -789,14 +824,16 @@ fn test_recovery_after_manager_drop() -> NativeResult<()> {
             node_id: 999,
             slot_offset: 999999,
             node_data: vec![99],
-        }
+        },
     )?;
     new_manager.commit_transaction(tx_id)?;
 
     // Verify transaction was counted in new manager instance
     let metrics = new_manager.get_metrics();
-    assert!(metrics.total_transactions >= 1 || metrics.committed_transactions >= 1,
-            "New manager should track new transactions");
+    assert!(
+        metrics.total_transactions >= 1 || metrics.committed_transactions >= 1,
+        "New manager should track new transactions"
+    );
 
     Ok(())
 }
@@ -824,7 +861,7 @@ fn test_recovery_concurrent_transactions() -> NativeResult<()> {
             node_id: 1,
             slot_offset: 1024,
             node_data: vec![1],
-        }
+        },
     )?;
 
     manager.write_transaction_record(
@@ -833,7 +870,7 @@ fn test_recovery_concurrent_transactions() -> NativeResult<()> {
             node_id: 2,
             slot_offset: 2048,
             node_data: vec![2],
-        }
+        },
     )?;
 
     // Commit both
@@ -864,7 +901,7 @@ fn test_recovery_large_transaction() -> NativeResult<()> {
                 node_id: i,
                 slot_offset: (i * 1024) as u64,
                 node_data: vec![i as u8; 100], // 100 bytes per record
-            }
+            },
         )?;
     }
 
@@ -893,7 +930,7 @@ fn test_recovery_rapid_commits() -> NativeResult<()> {
                 node_id: i,
                 slot_offset: (i * 1024) as u64,
                 node_data: vec![i as u8],
-            }
+            },
         )?;
         manager.commit_transaction(tx_id)?;
     }
@@ -920,7 +957,7 @@ fn test_wal_recreation_after_deletion() -> NativeResult<()> {
                 node_id: 1,
                 slot_offset: 1024,
                 node_data: vec![1],
-            }
+            },
         )?;
         manager.commit_transaction(tx_id)?;
         manager.flush()?;
@@ -944,7 +981,7 @@ fn test_wal_recreation_after_deletion() -> NativeResult<()> {
             node_id: 2,
             slot_offset: 2048,
             node_data: vec![2],
-        }
+        },
     )?;
     manager.commit_transaction(tx_id)?;
 

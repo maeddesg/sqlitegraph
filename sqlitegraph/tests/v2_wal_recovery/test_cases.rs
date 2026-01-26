@@ -7,14 +7,14 @@
 //! and assert correct recovery decisions and replay behavior.
 
 use sqlitegraph::backend::native::graph_file::GraphFile;
-use sqlitegraph::backend::native::v2::wal::{
-    V2WALConfig, V2WALRecord, V2WALManager, V2WALHeader, V2WALRecordType,
-};
-use sqlitegraph::backend::native::v2::{Direction};
+use sqlitegraph::backend::native::v2::Direction;
+use sqlitegraph::backend::native::v2::wal::recovery::states::RecoveryState as ExplicitRecoveryState;
 use sqlitegraph::backend::native::v2::wal::recovery::{
     Authority, RecoveryContext, RecoverySeverity,
 };
-use sqlitegraph::backend::native::v2::wal::recovery::states::RecoveryState as ExplicitRecoveryState;
+use sqlitegraph::backend::native::v2::wal::{
+    V2WALConfig, V2WALHeader, V2WALManager, V2WALRecord, V2WALRecordType,
+};
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
 use std::fs::File;
 use std::io::Write;
@@ -41,12 +41,17 @@ fn test_recovery_clean_shutdown_no_replay() -> NativeResult<()> {
     let manager = V2WALManager::create(config)?;
 
     // Write and commit a transaction cleanly
-    let tx_id = manager.begin_transaction(sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-        node_id: 1,
-        slot_offset: 0,
-        node_data: vec![1, 2, 3],
-    })?;
+    let tx_id = manager.begin_transaction(
+        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+    )?;
+    manager.write_transaction_record(
+        tx_id,
+        V2WALRecord::NodeInsert {
+            node_id: 1,
+            slot_offset: 0,
+            node_data: vec![1, 2, 3],
+        },
+    )?;
     manager.commit_transaction(tx_id)?;
 
     // Force checkpoint to ensure clean state
@@ -62,7 +67,10 @@ fn test_recovery_clean_shutdown_no_replay() -> NativeResult<()> {
     assert!(!context.authority.should_recover());
 
     // Assert: No recovery should be needed
-    assert_eq!(context.state.severity(), sqlitegraph::backend::native::v2::wal::recovery::RecoverySeverity::Minimal);
+    assert_eq!(
+        context.state.severity(),
+        sqlitegraph::backend::native::v2::wal::recovery::RecoverySeverity::Minimal
+    );
 
     Ok(())
 }
@@ -87,12 +95,17 @@ fn test_recovery_dirty_wal_replay() -> NativeResult<()> {
     let manager = V2WALManager::create(config)?;
 
     // Write transaction but DO NOT commit (simulates crash)
-    let tx_id = manager.begin_transaction(sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-        node_id: 2,
-        slot_offset: 0,
-        node_data: vec![4, 5, 6],
-    })?;
+    let tx_id = manager.begin_transaction(
+        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+    )?;
+    manager.write_transaction_record(
+        tx_id,
+        V2WALRecord::NodeInsert {
+            node_id: 2,
+            slot_offset: 0,
+            node_data: vec![4, 5, 6],
+        },
+    )?;
 
     // Simulate crash by dropping manager without commit
     drop(manager);
@@ -108,7 +121,10 @@ fn test_recovery_dirty_wal_replay() -> NativeResult<()> {
     assert!(context.authority.should_recover());
 
     // Assert: Recovery should be possible
-    assert_eq!(context.state.severity(), sqlitegraph::backend::native::v2::wal::recovery::RecoverySeverity::Low);
+    assert_eq!(
+        context.state.severity(),
+        sqlitegraph::backend::native::v2::wal::recovery::RecoverySeverity::Low
+    );
 
     Ok(())
 }
@@ -133,21 +149,31 @@ fn test_recovery_partial_checkpoint_resume() -> NativeResult<()> {
     let manager = V2WALManager::create(config)?;
 
     // Write and commit transactions
-    let tx1_id = manager.begin_transaction(sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx1_id, V2WALRecord::NodeInsert {
-        node_id: 3,
-        slot_offset: 0,
-        node_data: vec![7, 8, 9],
-    })?;
+    let tx1_id = manager.begin_transaction(
+        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+    )?;
+    manager.write_transaction_record(
+        tx1_id,
+        V2WALRecord::NodeInsert {
+            node_id: 3,
+            slot_offset: 0,
+            node_data: vec![7, 8, 9],
+        },
+    )?;
     manager.commit_transaction(tx1_id)?;
 
     // Write second transaction but don't checkpoint
-    let tx2_id = manager.begin_transaction(sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx2_id, V2WALRecord::NodeInsert {
-        node_id: 4,
-        slot_offset: 0,
-        node_data: vec![10, 11, 12],
-    })?;
+    let tx2_id = manager.begin_transaction(
+        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+    )?;
+    manager.write_transaction_record(
+        tx2_id,
+        V2WALRecord::NodeInsert {
+            node_id: 4,
+            slot_offset: 0,
+            node_data: vec![10, 11, 12],
+        },
+    )?;
     manager.commit_transaction(tx2_id)?;
 
     // Create partial checkpoint (simulate interrupted checkpoint)
@@ -168,7 +194,10 @@ fn test_recovery_partial_checkpoint_resume() -> NativeResult<()> {
     assert!(context.authority.should_recover());
 
     // Assert: Medium severity recovery needed
-    assert_eq!(context.state.severity(), sqlitegraph::backend::native::v2::wal::recovery::RecoverySeverity::Medium);
+    assert_eq!(
+        context.state.severity(),
+        sqlitegraph::backend::native::v2::wal::recovery::RecoverySeverity::Medium
+    );
 
     Ok(())
 }
@@ -193,19 +222,27 @@ fn test_recovery_uncommitted_transaction_rollback() -> NativeResult<()> {
     let manager = V2WALManager::create(config)?;
 
     // Begin transaction and write records but ROLLBACK
-    let tx_id = manager.begin_transaction(sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-        node_id: 5,
-        slot_offset: 0,
-        node_data: vec![13, 14, 15],
-    })?;
-    manager.write_transaction_record(tx_id, V2WALRecord::ClusterCreate {
-        node_id: 5,
-        direction: sqlitegraph::backend::native::v2::Direction::Outgoing,
-        cluster_offset: 100,
-        cluster_size: 5,
-        edge_data: vec![16, 17, 18],
-    })?;
+    let tx_id = manager.begin_transaction(
+        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+    )?;
+    manager.write_transaction_record(
+        tx_id,
+        V2WALRecord::NodeInsert {
+            node_id: 5,
+            slot_offset: 0,
+            node_data: vec![13, 14, 15],
+        },
+    )?;
+    manager.write_transaction_record(
+        tx_id,
+        V2WALRecord::ClusterCreate {
+            node_id: 5,
+            direction: sqlitegraph::backend::native::v2::Direction::Outgoing,
+            cluster_offset: 100,
+            cluster_size: 5,
+            edge_data: vec![16, 17, 18],
+        },
+    )?;
 
     // Explicit rollback
     manager.rollback_transaction(tx_id)?;
@@ -253,7 +290,10 @@ fn test_recovery_corrupt_wal_detection() -> NativeResult<()> {
     assert!(!context.authority.should_recover());
 
     // Assert: Critical severity
-    assert_eq!(context.state.severity(), sqlitegraph::backend::native::v2::wal::recovery::RecoverySeverity::Critical);
+    assert_eq!(
+        context.state.severity(),
+        sqlitegraph::backend::native::v2::wal::recovery::RecoverySeverity::Critical
+    );
 
     Ok(())
 }
@@ -275,12 +315,17 @@ fn test_recovery_authority_resolution() -> NativeResult<()> {
             ..Default::default()
         };
         let manager = V2WALManager::create(config)?;
-        let tx_id = manager.begin_transaction(sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted)?;
-        manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-            node_id: 10,
-            slot_offset: 0,
-            node_data: vec![1, 2, 3],
-        })?;
+        let tx_id = manager.begin_transaction(
+            sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+        )?;
+        manager.write_transaction_record(
+            tx_id,
+            V2WALRecord::NodeInsert {
+                node_id: 10,
+                slot_offset: 0,
+                node_data: vec![1, 2, 3],
+            },
+        )?;
         manager.commit_transaction(tx_id)?;
         manager.force_checkpoint()?;
         drop(manager);
@@ -298,12 +343,17 @@ fn test_recovery_authority_resolution() -> NativeResult<()> {
             ..Default::default()
         };
         let manager = V2WALManager::create(config)?;
-        let tx_id = manager.begin_transaction(sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted)?;
-        manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-            node_id: 11,
-            slot_offset: 0,
-            node_data: vec![4, 5, 6],
-        })?;
+        let tx_id = manager.begin_transaction(
+            sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+        )?;
+        manager.write_transaction_record(
+            tx_id,
+            V2WALRecord::NodeInsert {
+                node_id: 11,
+                slot_offset: 0,
+                node_data: vec![4, 5, 6],
+            },
+        )?;
         // Intentionally do not commit - simulate crash
         drop(manager);
 

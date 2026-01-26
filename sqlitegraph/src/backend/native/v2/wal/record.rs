@@ -4,8 +4,8 @@
 //! efficient serialization/deserialization with minimal overhead and
 //! cluster-affinity organization for optimal I/O patterns.
 
-use crate::backend::native::{NativeBackendError, NativeResult};
 use crate::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
+use crate::backend::native::{NativeBackendError, NativeResult};
 /// V2 WAL record types for different operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -275,22 +275,13 @@ pub enum V2WALRecord {
     },
 
     /// Transaction begin marker
-    TransactionBegin {
-        tx_id: u64,
-        timestamp: u64,
-    },
+    TransactionBegin { tx_id: u64, timestamp: u64 },
 
     /// Transaction commit marker
-    TransactionCommit {
-        tx_id: u64,
-        timestamp: u64,
-    },
+    TransactionCommit { tx_id: u64, timestamp: u64 },
 
     /// Transaction rollback marker
-    TransactionRollback {
-        tx_id: u64,
-        timestamp: u64,
-    },
+    TransactionRollback { tx_id: u64, timestamp: u64 },
 
     /// Checkpoint marker
     Checkpoint {
@@ -306,10 +297,7 @@ pub enum V2WALRecord {
     },
 
     /// End of WAL segment marker
-    SegmentEnd {
-        segment_lsn: u64,
-        checksum: u32,
-    },
+    SegmentEnd { segment_lsn: u64, checksum: u32 },
 
     /// Transaction prepare phase marker (two-phase commit)
     TransactionPrepare {
@@ -405,9 +393,7 @@ pub enum V2WALRecord {
     },
 
     /// Contiguous region rollback
-    RollbackContiguous {
-        region: ContiguousRegion,
-    },
+    RollbackContiguous { region: ContiguousRegion },
 
     /// KV key-value set operation
     KvSet {
@@ -481,7 +467,10 @@ impl ContiguousRegion {
     /// Deserialize from bytes
     pub fn deserialize(data: &[u8]) -> Result<Self, String> {
         if data.len() < 24 {
-            return Err(format!("Insufficient data for ContiguousRegion: expected 24, got {}", data.len()));
+            return Err(format!(
+                "Insufficient data for ContiguousRegion: expected 24, got {}",
+                data.len()
+            ));
         }
 
         let start_offset = u64::from_le_bytes(data[0..8].try_into().unwrap());
@@ -544,9 +533,18 @@ impl V2WALRecord {
             Self::NodeUpdate { node_id, .. } => Some(*node_id),
             Self::NodeDelete { node_id, .. } => Some(*node_id),
             Self::ClusterCreate { node_id, .. } => Some(*node_id),
-            Self::EdgeInsert { cluster_key: (node_id, _), .. } => Some(*node_id),
-            Self::EdgeUpdate { cluster_key: (node_id, _), .. } => Some(*node_id),
-            Self::EdgeDelete { cluster_key: (node_id, _), .. } => Some(*node_id),
+            Self::EdgeInsert {
+                cluster_key: (node_id, _),
+                ..
+            } => Some(*node_id),
+            Self::EdgeUpdate {
+                cluster_key: (node_id, _),
+                ..
+            } => Some(*node_id),
+            Self::EdgeDelete {
+                cluster_key: (node_id, _),
+                ..
+            } => Some(*node_id),
             _ => None,
         }
     }
@@ -557,47 +555,94 @@ impl V2WALRecord {
 
         match self {
             Self::NodeInsert { node_data, .. } => base_size + 8 + 8 + 4 + node_data.len(),
-            Self::NodeUpdate { old_data, new_data, .. } => base_size + 8 + 8 + 4 + old_data.len() + 4 + new_data.len(),
-            Self::NodeDelete { old_data, outgoing_edges, incoming_edges, .. } => {
+            Self::NodeUpdate {
+                old_data, new_data, ..
+            } => base_size + 8 + 8 + 4 + old_data.len() + 4 + new_data.len(),
+            Self::NodeDelete {
+                old_data,
+                outgoing_edges,
+                incoming_edges,
+                ..
+            } => {
                 let outgoing_size: usize = outgoing_edges.iter().map(|e| e.serialized_size()).sum();
                 let incoming_size: usize = incoming_edges.iter().map(|e| e.serialized_size()).sum();
                 base_size + 8 + 8 + 4 + old_data.len() + 4 + outgoing_size + 4 + incoming_size
             }
             Self::ClusterCreate { edge_data, .. } => base_size + 8 + 1 + 8 + 4 + edge_data.len(),
-            Self::EdgeInsert { edge_record, .. } => base_size + 8 + 1 + edge_record.serialized_size() + 4,
-            Self::EdgeUpdate { old_edge, new_edge, .. } => {
-                base_size + 8 + 1 + old_edge.serialized_size() + new_edge.serialized_size() + 4
+            Self::EdgeInsert { edge_record, .. } => {
+                base_size + 8 + 1 + edge_record.serialized_size() + 4
             }
+            Self::EdgeUpdate {
+                old_edge, new_edge, ..
+            } => base_size + 8 + 1 + old_edge.serialized_size() + new_edge.serialized_size() + 4,
             Self::EdgeDelete { old_edge, .. } => base_size + 8 + 1 + old_edge.serialized_size() + 4,
             Self::StringInsert { string_value, .. } => base_size + 4 + string_value.len(),
-            Self::FreeSpaceAllocate { .. } | Self::FreeSpaceDeallocate { .. } => base_size + 8 + 4 + 1,
-            Self::TransactionBegin { .. } | Self::TransactionCommit { .. } | Self::TransactionRollback { .. } => {
-                base_size + 8 + 8
+            Self::FreeSpaceAllocate { .. } | Self::FreeSpaceDeallocate { .. } => {
+                base_size + 8 + 4 + 1
             }
+            Self::TransactionBegin { .. }
+            | Self::TransactionCommit { .. }
+            | Self::TransactionRollback { .. } => base_size + 8 + 8,
             Self::Checkpoint { .. } => base_size + 8 + 8,
-            Self::HeaderUpdate { old_data, new_data, .. } => base_size + 8 + old_data.len() + new_data.len(),
+            Self::HeaderUpdate {
+                old_data, new_data, ..
+            } => base_size + 8 + old_data.len() + new_data.len(),
             Self::SegmentEnd { .. } => base_size + 8 + 4,
-            Self::TransactionPrepare { record_count: _, .. } => base_size + 8 + 8 + 8,
+            Self::TransactionPrepare {
+                record_count: _, ..
+            } => base_size + 8 + 8 + 8,
             Self::TransactionAbort { abort_reason, .. } => base_size + 8 + abort_reason.len(),
             Self::SavepointCreate { savepoint_id, .. } => base_size + 8 + savepoint_id.len(),
             Self::SavepointRollback { savepoint_id, .. } => base_size + 8 + savepoint_id.len(),
             Self::SavepointRelease { savepoint_id, .. } => base_size + 8 + savepoint_id.len(),
-            Self::BackupCreate { backup_id, backup_path, .. } => {
-                base_size + backup_id.len() + backup_path.to_string_lossy().len()
-            }
-            Self::BackupRestore { backup_id, backup_path, target_path, .. } => {
-                base_size + backup_id.len() + backup_path.to_string_lossy().len() + target_path.to_string_lossy().len()
+            Self::BackupCreate {
+                backup_id,
+                backup_path,
+                ..
+            } => base_size + backup_id.len() + backup_path.to_string_lossy().len(),
+            Self::BackupRestore {
+                backup_id,
+                backup_path,
+                target_path,
+                ..
+            } => {
+                base_size
+                    + backup_id.len()
+                    + backup_path.to_string_lossy().len()
+                    + target_path.to_string_lossy().len()
             }
             Self::LockAcquire { .. } | Self::LockRelease { .. } => base_size + 8 + 8 + 1,
             Self::IndexUpdate { .. } | Self::StatisticsUpdate { .. } => base_size,
             Self::AllocateContiguous { .. } => base_size + 8 + 24 + 8, // txn_id + region + timestamp
-            Self::CommitContiguous { .. } => base_size + 8 + 24, // txn_id + region
-            Self::RollbackContiguous { .. } => base_size + 24, // region
-            Self::KvSet { key, value_bytes, ttl_seconds, .. } => {
-                base_size + 4 + key.len() + 4 + value_bytes.len() + 1 + 1 + (if ttl_seconds.is_some() { 8 } else { 0 }) + 8
+            Self::CommitContiguous { .. } => base_size + 8 + 24,       // txn_id + region
+            Self::RollbackContiguous { .. } => base_size + 24,         // region
+            Self::KvSet {
+                key,
+                value_bytes,
+                ttl_seconds,
+                ..
+            } => {
+                base_size
+                    + 4
+                    + key.len()
+                    + 4
+                    + value_bytes.len()
+                    + 1
+                    + 1
+                    + (if ttl_seconds.is_some() { 8 } else { 0 })
+                    + 8
             }
-            Self::KvDelete { key, old_value_bytes, .. } => {
-                base_size + 4 + key.len() + 1 + old_value_bytes.as_ref().map(|v| 4 + v.len()).unwrap_or(0) + 8
+            Self::KvDelete {
+                key,
+                old_value_bytes,
+                ..
+            } => {
+                base_size
+                    + 4
+                    + key.len()
+                    + 1
+                    + old_value_bytes.as_ref().map(|v| 4 + v.len()).unwrap_or(0)
+                    + 8
             }
         }
     }
@@ -627,10 +672,7 @@ pub enum WALSerializationError {
     },
 
     /// Data corruption detected
-    CorruptedData {
-        location: String,
-        details: String,
-    },
+    CorruptedData { location: String, details: String },
 
     /// I/O error during serialization
     IoError(String),
@@ -643,8 +685,16 @@ impl std::fmt::Display for WALSerializationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidRecordType(t) => write!(f, "Invalid WAL record type: {}", t),
-            Self::InsufficientData { expected, actual, record_type } => {
-                write!(f, "Insufficient data for {:?}: expected {}, got {}", record_type, expected, actual)
+            Self::InsufficientData {
+                expected,
+                actual,
+                record_type,
+            } => {
+                write!(
+                    f,
+                    "Insufficient data for {:?}: expected {}, got {}",
+                    record_type, expected, actual
+                )
             }
             Self::CorruptedData { location, details } => {
                 write!(f, "Corrupted WAL data at {}: {}", location, details)
@@ -676,14 +726,23 @@ impl V2WALSerializer {
 
         // Serialize record-specific data
         match record {
-            V2WALRecord::NodeInsert { node_id, slot_offset, node_data } => {
+            V2WALRecord::NodeInsert {
+                node_id,
+                slot_offset,
+                node_data,
+            } => {
                 buffer.extend_from_slice(&node_id.to_le_bytes());
                 buffer.extend_from_slice(&slot_offset.to_le_bytes());
                 buffer.extend_from_slice(&(node_data.len() as u32).to_le_bytes());
                 buffer.extend_from_slice(node_data);
             }
 
-            V2WALRecord::NodeUpdate { node_id, slot_offset, old_data, new_data } => {
+            V2WALRecord::NodeUpdate {
+                node_id,
+                slot_offset,
+                old_data,
+                new_data,
+            } => {
                 buffer.extend_from_slice(&node_id.to_le_bytes());
                 buffer.extend_from_slice(&slot_offset.to_le_bytes());
                 buffer.extend_from_slice(&(old_data.len() as u32).to_le_bytes());
@@ -692,7 +751,13 @@ impl V2WALSerializer {
                 buffer.extend_from_slice(new_data);
             }
 
-            V2WALRecord::NodeDelete { node_id, slot_offset, old_data, outgoing_edges, incoming_edges } => {
+            V2WALRecord::NodeDelete {
+                node_id,
+                slot_offset,
+                old_data,
+                outgoing_edges,
+                incoming_edges,
+            } => {
                 buffer.extend_from_slice(&node_id.to_le_bytes());
                 buffer.extend_from_slice(&slot_offset.to_le_bytes());
                 buffer.extend_from_slice(&(old_data.len() as u32).to_le_bytes());
@@ -711,7 +776,13 @@ impl V2WALSerializer {
                 }
             }
 
-            V2WALRecord::ClusterCreate { node_id, direction, cluster_offset, cluster_size, edge_data } => {
+            V2WALRecord::ClusterCreate {
+                node_id,
+                direction,
+                cluster_offset,
+                cluster_size,
+                edge_data,
+            } => {
                 buffer.extend_from_slice(&node_id.to_le_bytes());
                 buffer.push(*direction as u8);
                 buffer.extend_from_slice(&cluster_offset.to_le_bytes());
@@ -720,7 +791,11 @@ impl V2WALSerializer {
                 buffer.extend_from_slice(edge_data);
             }
 
-            V2WALRecord::EdgeInsert { cluster_key, edge_record, insertion_point } => {
+            V2WALRecord::EdgeInsert {
+                cluster_key,
+                edge_record,
+                insertion_point,
+            } => {
                 buffer.extend_from_slice(&cluster_key.0.to_le_bytes());
                 buffer.push(cluster_key.1 as u8);
                 buffer.extend_from_slice(&edge_record.as_bytes());
@@ -742,7 +817,11 @@ impl V2WALSerializer {
                 buffer.extend_from_slice(&timestamp.to_le_bytes());
             }
 
-            V2WALRecord::AllocateContiguous { txn_id, region, timestamp } => {
+            V2WALRecord::AllocateContiguous {
+                txn_id,
+                region,
+                timestamp,
+            } => {
                 buffer.extend_from_slice(&txn_id.to_le_bytes());
                 let region_bytes = region.serialize();
                 buffer.extend_from_slice(&(region_bytes.len() as u32).to_le_bytes());
@@ -763,7 +842,13 @@ impl V2WALSerializer {
                 buffer.extend_from_slice(&region_bytes);
             }
 
-            V2WALRecord::KvSet { key, value_bytes, value_type, ttl_seconds, version } => {
+            V2WALRecord::KvSet {
+                key,
+                value_bytes,
+                value_type,
+                ttl_seconds,
+                version,
+            } => {
                 // Serialize KvSet record
                 buffer.extend_from_slice(&(key.len() as u32).to_le_bytes());
                 buffer.extend_from_slice(key);
@@ -783,7 +868,12 @@ impl V2WALSerializer {
                 buffer.extend_from_slice(&version.to_le_bytes());
             }
 
-            V2WALRecord::KvDelete { key, old_value_bytes, old_value_type, old_version } => {
+            V2WALRecord::KvDelete {
+                key,
+                old_value_bytes,
+                old_value_type,
+                old_version,
+            } => {
                 // Serialize KvDelete record
                 buffer.extend_from_slice(&(key.len() as u32).to_le_bytes());
                 buffer.extend_from_slice(key);
@@ -805,7 +895,10 @@ impl V2WALSerializer {
             // Implement other record types similarly...
             _ => {
                 return Err(NativeBackendError::CorruptStringTable {
-                    reason: format!("WAL serialization error - unsupported record type: {:?}", record.record_type()),
+                    reason: format!(
+                        "WAL serialization error - unsupported record type: {:?}",
+                        record.record_type()
+                    ),
                 });
             }
         }
@@ -838,7 +931,11 @@ impl V2WALSerializer {
 
         if data.len() < 5 + record_size {
             return Err(NativeBackendError::CorruptStringTable {
-                reason: format!("WAL deserialization error - insufficient data: expected {}, got {}", record_size + 5, data.len()),
+                reason: format!(
+                    "WAL deserialization error - insufficient data: expected {}, got {}",
+                    record_size + 5,
+                    data.len()
+                ),
             });
         }
 
@@ -849,7 +946,8 @@ impl V2WALSerializer {
             V2WALRecordType::NodeInsert => {
                 if record_data.len() < 16 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "NodeInsert deserialization error - insufficient data for header".to_string(),
+                        reason: "NodeInsert deserialization error - insufficient data for header"
+                            .to_string(),
                     });
                 }
 
@@ -858,7 +956,9 @@ impl V2WALSerializer {
 
                 if record_data.len() < 20 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "NodeInsert deserialization error - insufficient data for size field".to_string(),
+                        reason:
+                            "NodeInsert deserialization error - insufficient data for size field"
+                                .to_string(),
                     });
                 }
 
@@ -866,19 +966,26 @@ impl V2WALSerializer {
 
                 if record_data.len() < 20 + data_len {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "NodeInsert deserialization error - insufficient data for node data".to_string(),
+                        reason:
+                            "NodeInsert deserialization error - insufficient data for node data"
+                                .to_string(),
                     });
                 }
 
                 let node_data = record_data[20..20 + data_len].to_vec();
 
-                Ok(V2WALRecord::NodeInsert { node_id, slot_offset, node_data })
+                Ok(V2WALRecord::NodeInsert {
+                    node_id,
+                    slot_offset,
+                    node_data,
+                })
             }
 
             V2WALRecordType::NodeDelete => {
                 if record_data.len() < 16 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "NodeDelete deserialization error - insufficient data for header".to_string(),
+                        reason: "NodeDelete deserialization error - insufficient data for header"
+                            .to_string(),
                     });
                 }
 
@@ -887,7 +994,9 @@ impl V2WALSerializer {
 
                 if record_data.len() < 20 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "NodeDelete deserialization error - insufficient data for size field".to_string(),
+                        reason:
+                            "NodeDelete deserialization error - insufficient data for size field"
+                                .to_string(),
                     });
                 }
 
@@ -895,7 +1004,9 @@ impl V2WALSerializer {
 
                 if record_data.len() < 20 + data_len {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "NodeDelete deserialization error - insufficient data for node data".to_string(),
+                        reason:
+                            "NodeDelete deserialization error - insufficient data for node data"
+                                .to_string(),
                     });
                 }
 
@@ -908,7 +1019,9 @@ impl V2WALSerializer {
                         reason: "NodeDelete deserialization error - insufficient data for outgoing edge count".to_string(),
                     });
                 }
-                let outgoing_count = u32::from_le_bytes(record_data[offset..offset + 4].try_into().unwrap()) as usize;
+                let outgoing_count =
+                    u32::from_le_bytes(record_data[offset..offset + 4].try_into().unwrap())
+                        as usize;
                 offset += 4;
 
                 let mut outgoing_edges = Vec::with_capacity(outgoing_count);
@@ -920,7 +1033,9 @@ impl V2WALSerializer {
                     }
 
                     // CompactEdgeRecord layout: neighbor_id (8) + type_offset (2) + data_len (2) = 12 bytes min
-                    let edge_data_len = u16::from_be_bytes(record_data[offset + 10..offset + 12].try_into().unwrap()) as usize;
+                    let edge_data_len = u16::from_be_bytes(
+                        record_data[offset + 10..offset + 12].try_into().unwrap(),
+                    ) as usize;
                     let edge_total_len = 12 + edge_data_len;
 
                     if record_data.len() < offset + edge_total_len {
@@ -932,9 +1047,14 @@ impl V2WALSerializer {
                     let edge_bytes = &record_data[offset..offset + edge_total_len];
                     match CompactEdgeRecord::deserialize(edge_bytes) {
                         Ok(edge) => outgoing_edges.push(edge),
-                        Err(e) => return Err(NativeBackendError::CorruptStringTable {
-                            reason: format!("NodeDelete deserialization error - failed to deserialize outgoing edge: {:?}", e),
-                        }),
+                        Err(e) => {
+                            return Err(NativeBackendError::CorruptStringTable {
+                                reason: format!(
+                                    "NodeDelete deserialization error - failed to deserialize outgoing edge: {:?}",
+                                    e
+                                ),
+                            });
+                        }
                     }
                     offset += edge_total_len;
                 }
@@ -945,7 +1065,9 @@ impl V2WALSerializer {
                         reason: "NodeDelete deserialization error - insufficient data for incoming edge count".to_string(),
                     });
                 }
-                let incoming_count = u32::from_le_bytes(record_data[offset..offset + 4].try_into().unwrap()) as usize;
+                let incoming_count =
+                    u32::from_le_bytes(record_data[offset..offset + 4].try_into().unwrap())
+                        as usize;
                 offset += 4;
 
                 let mut incoming_edges = Vec::with_capacity(incoming_count);
@@ -956,7 +1078,9 @@ impl V2WALSerializer {
                         });
                     }
 
-                    let edge_data_len = u16::from_be_bytes(record_data[offset + 10..offset + 12].try_into().unwrap()) as usize;
+                    let edge_data_len = u16::from_be_bytes(
+                        record_data[offset + 10..offset + 12].try_into().unwrap(),
+                    ) as usize;
                     let edge_total_len = 12 + edge_data_len;
 
                     if record_data.len() < offset + edge_total_len {
@@ -968,9 +1092,14 @@ impl V2WALSerializer {
                     let edge_bytes = &record_data[offset..offset + edge_total_len];
                     match CompactEdgeRecord::deserialize(edge_bytes) {
                         Ok(edge) => incoming_edges.push(edge),
-                        Err(e) => return Err(NativeBackendError::CorruptStringTable {
-                            reason: format!("NodeDelete deserialization error - failed to deserialize incoming edge: {:?}", e),
-                        }),
+                        Err(e) => {
+                            return Err(NativeBackendError::CorruptStringTable {
+                                reason: format!(
+                                    "NodeDelete deserialization error - failed to deserialize incoming edge: {:?}",
+                                    e
+                                ),
+                            });
+                        }
                     }
                     offset += edge_total_len;
                 }
@@ -987,7 +1116,8 @@ impl V2WALSerializer {
             V2WALRecordType::TransactionBegin => {
                 if record_data.len() < 16 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "TransactionBegin deserialization error - insufficient data".to_string(),
+                        reason: "TransactionBegin deserialization error - insufficient data"
+                            .to_string(),
                     });
                 }
 
@@ -1000,7 +1130,8 @@ impl V2WALSerializer {
             V2WALRecordType::TransactionCommit => {
                 if record_data.len() < 16 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "TransactionCommit deserialization error - insufficient data".to_string(),
+                        reason: "TransactionCommit deserialization error - insufficient data"
+                            .to_string(),
                     });
                 }
 
@@ -1013,7 +1144,8 @@ impl V2WALSerializer {
             V2WALRecordType::TransactionRollback => {
                 if record_data.len() < 16 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "TransactionRollback deserialization error - insufficient data".to_string(),
+                        reason: "TransactionRollback deserialization error - insufficient data"
+                            .to_string(),
                     });
                 }
 
@@ -1026,44 +1158,68 @@ impl V2WALSerializer {
             V2WALRecordType::AllocateContiguous => {
                 if record_data.len() < 40 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: format!("AllocateContiguous deserialization error - insufficient data: expected 40, got {}", record_data.len()),
+                        reason: format!(
+                            "AllocateContiguous deserialization error - insufficient data: expected 40, got {}",
+                            record_data.len()
+                        ),
                     });
                 }
 
                 let txn_id = u64::from_le_bytes(record_data[0..8].try_into().unwrap());
-                let region_len = u32::from_le_bytes(record_data[8..12].try_into().unwrap()) as usize;
+                let region_len =
+                    u32::from_le_bytes(record_data[8..12].try_into().unwrap()) as usize;
                 let region_bytes = &record_data[12..12 + region_len];
-                let timestamp = u64::from_le_bytes(record_data[12 + region_len..20 + region_len].try_into().unwrap());
+                let timestamp = u64::from_le_bytes(
+                    record_data[12 + region_len..20 + region_len]
+                        .try_into()
+                        .unwrap(),
+                );
 
-                let region = ContiguousRegion::deserialize(region_bytes)
-                    .map_err(|e| NativeBackendError::CorruptStringTable {
-                        reason: format!("AllocateContiguous deserialization error - invalid region: {}", e),
-                    })?;
+                let region = ContiguousRegion::deserialize(region_bytes).map_err(|e| {
+                    NativeBackendError::CorruptStringTable {
+                        reason: format!(
+                            "AllocateContiguous deserialization error - invalid region: {}",
+                            e
+                        ),
+                    }
+                })?;
 
-                Ok(V2WALRecord::AllocateContiguous { txn_id, region, timestamp })
+                Ok(V2WALRecord::AllocateContiguous {
+                    txn_id,
+                    region,
+                    timestamp,
+                })
             }
 
             V2WALRecordType::CommitContiguous => {
                 if record_data.len() < 12 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "CommitContiguous deserialization error - insufficient data".to_string(),
+                        reason: "CommitContiguous deserialization error - insufficient data"
+                            .to_string(),
                     });
                 }
 
                 let txn_id = u64::from_le_bytes(record_data[0..8].try_into().unwrap());
-                let region_len = u32::from_le_bytes(record_data[8..12].try_into().unwrap()) as usize;
+                let region_len =
+                    u32::from_le_bytes(record_data[8..12].try_into().unwrap()) as usize;
 
                 if record_data.len() < 12 + region_len {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "CommitContiguous deserialization error - insufficient data for region".to_string(),
+                        reason:
+                            "CommitContiguous deserialization error - insufficient data for region"
+                                .to_string(),
                     });
                 }
 
                 let region_bytes = &record_data[12..12 + region_len];
-                let region = ContiguousRegion::deserialize(region_bytes)
-                    .map_err(|e| NativeBackendError::CorruptStringTable {
-                        reason: format!("CommitContiguous deserialization error - invalid region: {}", e),
-                    })?;
+                let region = ContiguousRegion::deserialize(region_bytes).map_err(|e| {
+                    NativeBackendError::CorruptStringTable {
+                        reason: format!(
+                            "CommitContiguous deserialization error - invalid region: {}",
+                            e
+                        ),
+                    }
+                })?;
 
                 Ok(V2WALRecord::CommitContiguous { txn_id, region })
             }
@@ -1071,7 +1227,8 @@ impl V2WALSerializer {
             V2WALRecordType::RollbackContiguous => {
                 if record_data.len() < 4 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "RollbackContiguous deserialization error - insufficient data".to_string(),
+                        reason: "RollbackContiguous deserialization error - insufficient data"
+                            .to_string(),
                     });
                 }
 
@@ -1084,10 +1241,14 @@ impl V2WALSerializer {
                 }
 
                 let region_bytes = &record_data[4..4 + region_len];
-                let region = ContiguousRegion::deserialize(region_bytes)
-                    .map_err(|e| NativeBackendError::CorruptStringTable {
-                        reason: format!("RollbackContiguous deserialization error - invalid region: {}", e),
-                    })?;
+                let region = ContiguousRegion::deserialize(region_bytes).map_err(|e| {
+                    NativeBackendError::CorruptStringTable {
+                        reason: format!(
+                            "RollbackContiguous deserialization error - invalid region: {}",
+                            e
+                        ),
+                    }
+                })?;
 
                 Ok(V2WALRecord::RollbackContiguous { region })
             }
@@ -1096,7 +1257,8 @@ impl V2WALSerializer {
                 // Deserialize KvSet record: key_len(4) + key + value_len(4) + value + type(1) + ttl_flag(1) + [ttl(8)] + version(8)
                 if record_data.len() < 4 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "KvSet deserialization error - insufficient data for key length".to_string(),
+                        reason: "KvSet deserialization error - insufficient data for key length"
+                            .to_string(),
                     });
                 }
 
@@ -1111,11 +1273,15 @@ impl V2WALSerializer {
                 let key = record_data[4..4 + key_len].to_vec();
                 let offset = 4 + key_len;
 
-                let value_len = u32::from_le_bytes(record_data[offset..offset + 4].try_into().unwrap()) as usize;
+                let value_len =
+                    u32::from_le_bytes(record_data[offset..offset + 4].try_into().unwrap())
+                        as usize;
 
                 if record_data.len() < offset + 4 + value_len + 1 + 1 + 8 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "KvSet deserialization error - insufficient data for value and metadata".to_string(),
+                        reason:
+                            "KvSet deserialization error - insufficient data for value and metadata"
+                                .to_string(),
                     });
                 }
 
@@ -1129,10 +1295,13 @@ impl V2WALSerializer {
                 let ttl_seconds = if ttl_flag == 1 {
                     if record_data.len() < offset + 1 + 8 {
                         return Err(NativeBackendError::CorruptStringTable {
-                            reason: "KvSet deserialization error - insufficient data for TTL".to_string(),
+                            reason: "KvSet deserialization error - insufficient data for TTL"
+                                .to_string(),
                         });
                     }
-                    let ttl = u64::from_le_bytes(record_data[offset + 1..offset + 1 + 8].try_into().unwrap());
+                    let ttl = u64::from_le_bytes(
+                        record_data[offset + 1..offset + 1 + 8].try_into().unwrap(),
+                    );
                     Some(ttl)
                 } else {
                     None
@@ -1141,20 +1310,29 @@ impl V2WALSerializer {
 
                 if record_data.len() < offset + 8 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "KvSet deserialization error - insufficient data for version".to_string(),
+                        reason: "KvSet deserialization error - insufficient data for version"
+                            .to_string(),
                     });
                 }
 
-                let version = u64::from_le_bytes(record_data[offset..offset + 8].try_into().unwrap());
+                let version =
+                    u64::from_le_bytes(record_data[offset..offset + 8].try_into().unwrap());
 
-                Ok(V2WALRecord::KvSet { key, value_bytes, value_type, ttl_seconds, version })
+                Ok(V2WALRecord::KvSet {
+                    key,
+                    value_bytes,
+                    value_type,
+                    ttl_seconds,
+                    version,
+                })
             }
 
             V2WALRecordType::KvDelete => {
                 // Deserialize KvDelete record: key_len(4) + key + type(1) + old_value_flag(1) + [len(4) + old_value] + old_version(8)
                 if record_data.len() < 4 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "KvDelete deserialization error - insufficient data for key length".to_string(),
+                        reason: "KvDelete deserialization error - insufficient data for key length"
+                            .to_string(),
                     });
                 }
 
@@ -1162,7 +1340,9 @@ impl V2WALSerializer {
 
                 if record_data.len() < 4 + key_len + 1 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "KvDelete deserialization error - insufficient data for key and type".to_string(),
+                        reason:
+                            "KvDelete deserialization error - insufficient data for key and type"
+                                .to_string(),
                     });
                 }
 
@@ -1174,7 +1354,9 @@ impl V2WALSerializer {
 
                 if record_data.len() < offset + 1 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "KvDelete deserialization error - insufficient data for old value flag".to_string(),
+                        reason:
+                            "KvDelete deserialization error - insufficient data for old value flag"
+                                .to_string(),
                     });
                 }
 
@@ -1185,15 +1367,20 @@ impl V2WALSerializer {
                             reason: "KvDelete deserialization error - insufficient data for old value length".to_string(),
                         });
                     }
-                    let old_value_len = u32::from_le_bytes(record_data[offset + 1..offset + 1 + 4].try_into().unwrap()) as usize;
+                    let old_value_len = u32::from_le_bytes(
+                        record_data[offset + 1..offset + 1 + 4].try_into().unwrap(),
+                    ) as usize;
 
                     if record_data.len() < offset + 1 + 4 + old_value_len {
                         return Err(NativeBackendError::CorruptStringTable {
-                            reason: "KvDelete deserialization error - insufficient data for old value".to_string(),
+                            reason:
+                                "KvDelete deserialization error - insufficient data for old value"
+                                    .to_string(),
                         });
                     }
 
-                    let value = record_data[offset + 1 + 4..offset + 1 + 4 + old_value_len].to_vec();
+                    let value =
+                        record_data[offset + 1 + 4..offset + 1 + 4 + old_value_len].to_vec();
                     Some(value)
                 } else {
                     None
@@ -1202,18 +1389,29 @@ impl V2WALSerializer {
 
                 if record_data.len() < offset + 8 {
                     return Err(NativeBackendError::CorruptStringTable {
-                        reason: "KvDelete deserialization error - insufficient data for old version".to_string(),
+                        reason:
+                            "KvDelete deserialization error - insufficient data for old version"
+                                .to_string(),
                     });
                 }
 
-                let old_version = u64::from_le_bytes(record_data[offset..offset + 8].try_into().unwrap());
+                let old_version =
+                    u64::from_le_bytes(record_data[offset..offset + 8].try_into().unwrap());
 
-                Ok(V2WALRecord::KvDelete { key, old_value_bytes, old_value_type, old_version })
+                Ok(V2WALRecord::KvDelete {
+                    key,
+                    old_value_bytes,
+                    old_value_type,
+                    old_version,
+                })
             }
 
             // Implement other record types similarly...
             _ => Err(NativeBackendError::CorruptStringTable {
-                reason: format!("WAL deserialization error - unsupported record type: {:?}", record_type),
+                reason: format!(
+                    "WAL deserialization error - unsupported record type: {:?}",
+                    record_type
+                ),
             }),
         }
     }
@@ -1258,8 +1456,18 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match (original, deserialized) {
-            (V2WALRecord::NodeInsert { node_id: id1, slot_offset: off1, node_data: data1 },
-             V2WALRecord::NodeInsert { node_id: id2, slot_offset: off2, node_data: data2 }) => {
+            (
+                V2WALRecord::NodeInsert {
+                    node_id: id1,
+                    slot_offset: off1,
+                    node_data: data1,
+                },
+                V2WALRecord::NodeInsert {
+                    node_id: id2,
+                    slot_offset: off2,
+                    node_data: data2,
+                },
+            ) => {
                 assert_eq!(id1, id2);
                 assert_eq!(off1, off2);
                 assert_eq!(data1, data2);
@@ -1297,8 +1505,22 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match (original, deserialized) {
-            (V2WALRecord::KvSet { key: k1, value_bytes: v1, value_type: t1, ttl_seconds: ttl1, version: ver1 },
-             V2WALRecord::KvSet { key: k2, value_bytes: v2, value_type: t2, ttl_seconds: ttl2, version: ver2 }) => {
+            (
+                V2WALRecord::KvSet {
+                    key: k1,
+                    value_bytes: v1,
+                    value_type: t1,
+                    ttl_seconds: ttl1,
+                    version: ver1,
+                },
+                V2WALRecord::KvSet {
+                    key: k2,
+                    value_bytes: v2,
+                    value_type: t2,
+                    ttl_seconds: ttl2,
+                    version: ver2,
+                },
+            ) => {
                 assert_eq!(k1, k2);
                 assert_eq!(v1, v2);
                 assert_eq!(t1, t2);
@@ -1322,8 +1544,20 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match (original, deserialized) {
-            (V2WALRecord::KvDelete { key: k1, old_value_bytes: v1, old_value_type: t1, old_version: ver1 },
-             V2WALRecord::KvDelete { key: k2, old_value_bytes: v2, old_value_type: t2, old_version: ver2 }) => {
+            (
+                V2WALRecord::KvDelete {
+                    key: k1,
+                    old_value_bytes: v1,
+                    old_value_type: t1,
+                    old_version: ver1,
+                },
+                V2WALRecord::KvDelete {
+                    key: k2,
+                    old_value_bytes: v2,
+                    old_value_type: t2,
+                    old_version: ver2,
+                },
+            ) => {
                 assert_eq!(k1, k2);
                 assert_eq!(v1, v2);
                 assert_eq!(t1, t2);
@@ -1367,7 +1601,9 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match deserialized {
-            V2WALRecord::KvDelete { old_value_bytes, .. } => {
+            V2WALRecord::KvDelete {
+                old_value_bytes, ..
+            } => {
                 assert_eq!(old_value_bytes, None);
             }
             _ => panic!("Wrong record type"),

@@ -10,11 +10,9 @@
 //! These tests verify that the snapshot system's thread-safe components provide
 //! proper isolation under concurrent access patterns.
 
-use sqlitegraph::{
-    GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError,
-};
-use sqlitegraph::mvcc::SnapshotManager;
 use sqlitegraph::algo;
+use sqlitegraph::mvcc::SnapshotManager;
+use sqlitegraph::{GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Barrier};
@@ -323,8 +321,15 @@ fn test_sustained_concurrent_access() {
     }
 
     // Verify reasonable throughput (at least 1000 snapshots total)
-    assert!(total >= 1000, "Low throughput: {} snapshots in 2 seconds", total);
-    println!("Sustained concurrent access: {} snapshots in 2 seconds", total);
+    assert!(
+        total >= 1000,
+        "Low throughput: {} snapshots in 2 seconds",
+        total
+    );
+    println!(
+        "Sustained concurrent access: {} snapshots in 2 seconds",
+        total
+    );
 }
 
 //
@@ -422,7 +427,8 @@ fn test_concurrent_snapshot_ordering() {
     assert!(
         time2 >= time1,
         "Snapshot ordering violated: {:?} >= {:?}",
-        time2, time1
+        time2,
+        time1
     );
 }
 
@@ -521,7 +527,10 @@ fn test_high_contention_snapshot_acquisition() {
 
     // Expected: 50 threads * 100 snapshots = 5000 successful acquisitions
     let success = success_count.load(Ordering::Relaxed);
-    assert_eq!(success, 5000, "Expected all snapshot acquisitions to succeed");
+    assert_eq!(
+        success, 5000,
+        "Expected all snapshot acquisitions to succeed"
+    );
 }
 
 #[test]
@@ -606,7 +615,9 @@ fn test_snapshot_state_with_algorithm_preparation() {
     warm_cache(&graph).expect("Failed to warm cache");
 
     // Acquire snapshot
-    let snapshot = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+    let snapshot = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire snapshot");
 
     // Verify snapshot has nodes
     assert!(snapshot.node_count() > 0, "Snapshot should have nodes");
@@ -614,7 +625,11 @@ fn test_snapshot_state_with_algorithm_preparation() {
     // Verify snapshot data structure is consistent
     let entity_ids = graph.list_entity_ids().expect("Failed to get entity IDs");
     for &id in &entity_ids {
-        assert!(snapshot.contains_node(id), "Snapshot should contain node {}", id);
+        assert!(
+            snapshot.contains_node(id),
+            "Snapshot should contain node {}",
+            id
+        );
     }
 
     // Verify algorithms can run on the graph (not snapshot directly)
@@ -698,7 +713,10 @@ fn test_algorithm_with_empty_graph() {
     let pagerank = algo::pagerank(&graph, 0.85, 10);
     let cycles = algo::find_cycles_limited(&graph, 10);
 
-    assert!(components.is_ok(), "Connected components should handle empty graph");
+    assert!(
+        components.is_ok(),
+        "Connected components should handle empty graph"
+    );
     assert!(degrees.is_ok(), "Nodes by degree should handle empty graph");
     assert!(pagerank.is_ok(), "PageRank should handle empty graph");
     assert!(cycles.is_ok(), "Find cycles should handle empty graph");
@@ -718,7 +736,9 @@ fn test_algorithm_snapshot_consistency() {
     warm_cache(&graph).expect("Failed to warm cache");
 
     // Acquire snapshot
-    let snapshot = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+    let snapshot = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire snapshot");
     let snapshot_count = snapshot.node_count();
 
     // Run algorithm
@@ -812,7 +832,9 @@ fn test_rapid_snapshot_creation_destruction_10k() {
     let start = Instant::now();
 
     for i in 0..10_000 {
-        let snapshot = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+        let snapshot = graph
+            .acquire_snapshot()
+            .expect("Failed to acquire snapshot");
 
         // Verify snapshot is valid
         assert!(snapshot.node_count() > 0, "Snapshot {} invalid", i);
@@ -824,7 +846,9 @@ fn test_rapid_snapshot_creation_destruction_10k() {
     println!("10K snapshot creations in {:?}", elapsed);
 
     // Final snapshot should still work
-    let final_snapshot = graph.acquire_snapshot().expect("Failed to acquire final snapshot");
+    let final_snapshot = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire final snapshot");
     assert!(final_snapshot.node_count() > 0, "Final snapshot invalid");
 }
 
@@ -836,14 +860,18 @@ fn test_snapshot_during_algorithm_execution() {
     warm_cache(&graph).expect("Failed to warm cache");
 
     // Acquire initial snapshot
-    let snapshot1 = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+    let snapshot1 = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire snapshot");
     let count1 = snapshot1.node_count();
 
     // Run algorithm
     let _ = algo::label_propagation(&graph, 5).expect("Label propagation failed");
 
     // Acquire second snapshot
-    let snapshot2 = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+    let snapshot2 = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire snapshot");
     let count2 = snapshot2.node_count();
 
     // Verify snapshots are independent but same (no writes occurred)
@@ -863,7 +891,9 @@ fn test_graph_snapshot_creation() {
     let graph = create_test_graph().expect("Failed to create test graph");
     warm_cache(&graph).expect("Failed to warm cache");
 
-    let snapshot1 = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+    let snapshot1 = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire snapshot");
     let original_count = snapshot1.node_count();
 
     assert!(original_count > 0, "Snapshot should have nodes");
@@ -884,7 +914,9 @@ fn test_graph_snapshot_creation() {
 
     // New snapshot reflects changes
     warm_cache(&graph).expect("Failed to warm cache");
-    let snapshot2 = graph.acquire_snapshot().expect("Failed to acquire second snapshot");
+    let snapshot2 = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire second snapshot");
     assert!(snapshot2.node_count() > original_count);
 }
 
@@ -895,7 +927,9 @@ fn test_graph_snapshot_isolation() {
     let graph = create_large_test_graph(100).expect("Failed to create large graph");
     warm_cache(&graph).expect("Failed to warm cache");
 
-    let snapshot1 = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+    let snapshot1 = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire snapshot");
     let count1 = snapshot1.node_count();
 
     // Modify graph
@@ -910,7 +944,9 @@ fn test_graph_snapshot_isolation() {
     );
 
     warm_cache(&graph).expect("Failed to warm cache");
-    let snapshot2 = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+    let snapshot2 = graph
+        .acquire_snapshot()
+        .expect("Failed to acquire snapshot");
     let count2 = snapshot2.node_count();
 
     // Verify isolation
@@ -929,7 +965,9 @@ fn test_graph_snapshot_performance() {
     let start = Instant::now();
 
     for _ in 0..100 {
-        let _ = graph.acquire_snapshot().expect("Failed to acquire snapshot");
+        let _ = graph
+            .acquire_snapshot()
+            .expect("Failed to acquire snapshot");
     }
 
     let elapsed = start.elapsed();

@@ -9,9 +9,7 @@
 //! part of the public SqliteGraph API. These tests validate snapshot behavior
 //! with write operations that would generate WAL in file-based databases.
 
-use sqlitegraph::{
-    GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError,
-};
+use sqlitegraph::{GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError};
 use std::time::{Duration, Instant};
 
 //
@@ -291,8 +289,10 @@ fn test_snapshot_with_write_heavy_workload() -> Result<(), SqliteGraphError> {
 
     // Verify monotonic growth
     for i in 1..snapshot_counts.len() {
-        assert!(snapshot_counts[i] > snapshot_counts[i - 1],
-                "Snapshot counts should grow monotonically");
+        assert!(
+            snapshot_counts[i] > snapshot_counts[i - 1],
+            "Snapshot counts should grow monotonically"
+        );
     }
 
     Ok(())

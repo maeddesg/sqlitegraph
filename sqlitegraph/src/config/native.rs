@@ -29,7 +29,7 @@ impl Default for NativeConfig {
             reserve_edge_capacity: None,
             cpu_profile: None,
             max_parallel_transactions: 4, // Default parallelism degree
-            checkpoint_strategy: None,   // Uses WAL manager default
+            checkpoint_strategy: None,    // Uses WAL manager default
         }
     }
 }
@@ -89,7 +89,9 @@ impl NativeConfig {
 
     /// Set time-based checkpoint interval (builder pattern)
     pub fn with_time_checkpoint(mut self, interval_secs: u64) -> Self {
-        self.checkpoint_strategy = Some(CheckpointStrategy::TimeInterval(Duration::from_secs(interval_secs)));
+        self.checkpoint_strategy = Some(CheckpointStrategy::TimeInterval(Duration::from_secs(
+            interval_secs,
+        )));
         self
     }
 }

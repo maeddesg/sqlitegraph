@@ -172,7 +172,10 @@ impl<'a> EdgeStore<'a> {
     /// # Note
     /// This is a soft deletion - the edge record remains but is marked as deleted.
     /// This is reversible for rollback scenarios.
-    pub fn delete_edge(&mut self, edge_id: crate::backend::native::types::NativeEdgeId) -> crate::backend::native::types::NativeResult<()> {
+    pub fn delete_edge(
+        &mut self,
+        edge_id: crate::backend::native::types::NativeEdgeId,
+    ) -> crate::backend::native::types::NativeResult<()> {
         let mut operations = record_operations::EdgeRecordOperations::new(self.graph_file);
         operations.delete_edge(edge_id)
     }
@@ -208,7 +211,18 @@ impl<'a> EdgeStore<'a> {
     /// # Performance Note
     /// This scans all edge records in the database (1 to header.edge_count), which is O(N)
     /// where N is the total number of edges. For large graphs, consider adding an index.
-    pub fn iter_edges_with_ids(&mut self, node_id: crate::backend::native::types::NativeNodeId, direction: crate::backend::native::adjacency::Direction) -> Box<dyn Iterator<Item = (crate::backend::native::types::NativeEdgeId, crate::backend::native::types::NativeNodeId)> + '_> {
+    pub fn iter_edges_with_ids(
+        &mut self,
+        node_id: crate::backend::native::types::NativeNodeId,
+        direction: crate::backend::native::adjacency::Direction,
+    ) -> Box<
+        dyn Iterator<
+                Item = (
+                    crate::backend::native::types::NativeEdgeId,
+                    crate::backend::native::types::NativeNodeId,
+                ),
+            > + '_,
+    > {
         match self.iter_edges_with_ids_direct(node_id, direction) {
             Ok(edges) => Box::new(edges.into_iter()),
             Err(_) => Box::new(std::iter::empty()),
@@ -225,7 +239,7 @@ impl<'a> EdgeStore<'a> {
     ) -> crate::backend::native::types::NativeResult<Vec<crate::backend::native::types::NativeNodeId>>
     {
         use crate::backend::native::node_store::NodeStore;
-        
+
         // Read V2 node to get edge count information
         let mut node_store = NodeStore::new(self.graph_file);
         let node_v2 = node_store.read_node_v2(node_id)?;
@@ -306,7 +320,16 @@ impl<'a> EdgeStore<'a> {
 
     /// Direct edge iteration with IDs, returning (edge_id, neighbor_id) tuples
     /// Similar to iter_neighbors_direct but includes edge IDs for operations like cascade cleanup
-    fn iter_edges_with_ids_direct(&mut self, node_id: crate::backend::native::types::NativeNodeId, direction: crate::backend::native::adjacency::Direction) -> crate::backend::native::types::NativeResult<Vec<(crate::backend::native::types::NativeEdgeId, crate::backend::native::types::NativeNodeId)>> {
+    fn iter_edges_with_ids_direct(
+        &mut self,
+        node_id: crate::backend::native::types::NativeNodeId,
+        direction: crate::backend::native::adjacency::Direction,
+    ) -> crate::backend::native::types::NativeResult<
+        Vec<(
+            crate::backend::native::types::NativeEdgeId,
+            crate::backend::native::types::NativeNodeId,
+        )>,
+    > {
         use crate::backend::native::node_store::NodeStore;
 
         // Read V2 node to get edge count information
@@ -323,8 +346,10 @@ impl<'a> EdgeStore<'a> {
             return Ok(Vec::new());
         }
 
-        debug!("Direct edge iteration with IDs for node {} (direction: {:?}) - {} edges expected",
-               node_id, direction, edge_count);
+        debug!(
+            "Direct edge iteration with IDs for node {} (direction: {:?}) - {} edges expected",
+            node_id, direction, edge_count
+        );
 
         // Read edges directly from legacy edge storage by scanning all edges
         let header = self.graph_file.header();
@@ -334,7 +359,9 @@ impl<'a> EdgeStore<'a> {
             let mut operations = record_operations::EdgeRecordOperations::new(self.graph_file);
             if let Ok(edge) = operations.read_edge(edge_id) {
                 let matches_direction = match direction {
-                    crate::backend::native::adjacency::Direction::Outgoing => edge.from_id == node_id,
+                    crate::backend::native::adjacency::Direction::Outgoing => {
+                        edge.from_id == node_id
+                    }
                     crate::backend::native::adjacency::Direction::Incoming => edge.to_id == node_id,
                 };
 
@@ -348,8 +375,12 @@ impl<'a> EdgeStore<'a> {
             }
         }
 
-        debug!("Direct edge iteration with IDs found {} edges for node {} (direction: {:?})",
-               edges.len(), node_id, direction);
+        debug!(
+            "Direct edge iteration with IDs found {} edges for node {} (direction: {:?})",
+            edges.len(),
+            node_id,
+            direction
+        );
 
         Ok(edges)
     }

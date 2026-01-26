@@ -5,13 +5,10 @@
 //! instead of observe(), enabling LinearDetector to track cluster offsets and confirm
 //! linear chains for sequential read optimization.
 
-use sqlitegraph::backend::native::{
-    edge_store::EdgeStore,
-    graph_file::GraphFile,
-    node_store::NodeStore,
-    NativeNodeId,
-};
 use sqlitegraph::backend::native::graph_ops::native_bfs_with_telemetry;
+use sqlitegraph::backend::native::{
+    NativeNodeId, edge_store::EdgeStore, graph_file::GraphFile, node_store::NodeStore,
+};
 use tempfile::TempDir;
 
 /// Create a linear chain graph for testing
@@ -33,7 +30,9 @@ fn create_chain_graph(size: usize, temp_dir: &TempDir) -> (GraphFile, Vec<Native
             format!("node_{}", i),
             serde_json::json!({"id": i}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -41,8 +40,8 @@ fn create_chain_graph(size: usize, temp_dir: &TempDir) -> (GraphFile, Vec<Native
     let mut edge_store = EdgeStore::new(&mut graph_file);
     for i in 0..size.saturating_sub(1) {
         let edge = sqlitegraph::backend::native::EdgeRecord::new(
-            i as i64 + 1, // edge_id
-            node_ids[i],   // from node i
+            i as i64 + 1,    // edge_id
+            node_ids[i],     // from node i
             node_ids[i + 1], // to node i+1
             "chain".to_string(),
             serde_json::json!({"order": i}),
@@ -75,17 +74,26 @@ fn test_bfs_uses_sequential_cluster_reads() {
     let start_node = node_ids[0];
 
     // Run BFS with telemetry
-    let (visited_nodes, telemetry_json) = native_bfs_with_telemetry(&mut graph_file, start_node, chain_length as u32)
-        .expect("BFS traversal failed");
+    let (visited_nodes, telemetry_json) =
+        native_bfs_with_telemetry(&mut graph_file, start_node, chain_length as u32)
+            .expect("BFS traversal failed");
 
     // Parse telemetry
     let telemetry: serde_json::Value =
         serde_json::from_str(&telemetry_json).expect("Failed to parse telemetry");
 
-    println!("Telemetry: {}", serde_json::to_string_pretty(&telemetry).unwrap());
+    println!(
+        "Telemetry: {}",
+        serde_json::to_string_pretty(&telemetry).unwrap()
+    );
 
     // Verify traversal visited all nodes (start node + 499 others)
-    assert_eq!(visited_nodes.len() + 1, chain_length, "Should visit all {} nodes", chain_length);
+    assert_eq!(
+        visited_nodes.len() + 1,
+        chain_length,
+        "Should visit all {} nodes",
+        chain_length
+    );
 
     // Verify cluster offsets were tracked (PRIMARY SUCCESS METRIC)
     let cluster_offsets_count = telemetry["cluster_offsets_count"]
@@ -96,10 +104,15 @@ fn test_bfs_uses_sequential_cluster_reads() {
         "Expected cluster_offsets_count > 0 after observe_with_cluster fix, got {}",
         cluster_offsets_count
     );
-    println!("✓ cluster_offsets_count = {} (cluster metadata IS being tracked!)", cluster_offsets_count);
+    println!(
+        "✓ cluster_offsets_count = {} (cluster metadata IS being tracked!)",
+        cluster_offsets_count
+    );
 
     // Verify clusters are contiguous (enables sequential reads)
-    let fragmentation_score = telemetry["fragmentation_score"].as_f64().expect("fragmentation_score missing");
+    let fragmentation_score = telemetry["fragmentation_score"]
+        .as_f64()
+        .expect("fragmentation_score missing");
     let gap_bytes = telemetry["gap_bytes"].as_u64().expect("gap_bytes missing");
     assert_eq!(
         fragmentation_score, 0.0,
@@ -111,17 +124,27 @@ fn test_bfs_uses_sequential_cluster_reads() {
         "Expected gap_bytes = 0 for contiguous clusters, got {}",
         gap_bytes
     );
-    println!("✓ fragmentation_score = {} (clusters are perfectly contiguous!)", fragmentation_score);
+    println!(
+        "✓ fragmentation_score = {} (clusters are perfectly contiguous!)",
+        fragmentation_score
+    );
     println!("✓ gap_bytes = {} (no gaps between clusters!)", gap_bytes);
 
     // Verify traversal time is reasonable
-    let time_total_ms = telemetry["time_total_ms"].as_f64().expect("time_total_ms missing");
+    let time_total_ms = telemetry["time_total_ms"]
+        .as_f64()
+        .expect("time_total_ms missing");
     println!("✓ time_total_ms = {:.2}ms", time_total_ms);
 
     // Note: chains_detected is NOT a success metric for this test
     // It's only incremented by explicit record_chain() calls, not during BFS
-    let chains_detected = telemetry["chains_detected"].as_u64().expect("chains_detected missing");
-    println!("✓ chains_detected = {} (expected 0 - record_chain not called during BFS)", chains_detected);
+    let chains_detected = telemetry["chains_detected"]
+        .as_u64()
+        .expect("chains_detected missing");
+    println!(
+        "✓ chains_detected = {} (expected 0 - record_chain not called during BFS)",
+        chains_detected
+    );
 }
 
 /// Test that LinearDetector confirms chains during traversal
@@ -161,7 +184,12 @@ fn test_linear_detector_confirms_chains() {
 
     // Verify cluster offsets were tracked
     let offsets = detector.cluster_offsets();
-    assert_eq!(offsets.len(), 10, "Expected 10 cluster offsets, got {}", offsets.len());
+    assert_eq!(
+        offsets.len(),
+        10,
+        "Expected 10 cluster offsets, got {}",
+        offsets.len()
+    );
 
     // Verify offsets are contiguous
     for i in 0..offsets.len() - 1 {
@@ -190,10 +218,22 @@ fn test_sequential_cluster_reader_engaged() {
     let reader = SequentialClusterReader::new();
 
     // Verify initial metrics are zero (metrics is a field, not a method)
-    assert_eq!(reader.metrics.read_time_ns, 0, "Initial read_time_ns should be 0");
-    assert_eq!(reader.metrics.total_bytes_read, 0, "Initial total_bytes_read should be 0");
-    assert_eq!(reader.metrics.clusters_read, 0, "Initial clusters_read should be 0");
-    assert_eq!(reader.metrics.extract_count, 0, "Initial extract_count should be 0");
+    assert_eq!(
+        reader.metrics.read_time_ns, 0,
+        "Initial read_time_ns should be 0"
+    );
+    assert_eq!(
+        reader.metrics.total_bytes_read, 0,
+        "Initial total_bytes_read should be 0"
+    );
+    assert_eq!(
+        reader.metrics.clusters_read, 0,
+        "Initial clusters_read should be 0"
+    );
+    assert_eq!(
+        reader.metrics.extract_count, 0,
+        "Initial extract_count should be 0"
+    );
 
     println!("✓ SequentialClusterReader metrics initialized correctly");
     // Note: Actual sequential read requires graph file with cluster data,
@@ -221,9 +261,9 @@ fn test_traversal_context_cluster_tracking() {
         let cluster_offset = 100 + (i * 8);
         let cluster_size = 8;
 
-        let _pattern = ctx
-            .detector
-            .observe_with_cluster(node_id, degree, cluster_offset, cluster_size);
+        let _pattern =
+            ctx.detector
+                .observe_with_cluster(node_id, degree, cluster_offset, cluster_size);
     }
 
     // After 3 observations, should be linear confirmed

@@ -154,8 +154,8 @@ unsafe fn dot_product_avx2(a: &[f32], b: &[f32]) -> f32 {
         // _mm_add_ps: Add two 128-bit vectors element-wise
         // _mm_cvtss_f32: Extract first scalar from 128-bit vector
         let high = unsafe { _mm256_extractf128_ps(sum0, 1) }; // Extract upper 128 bits
-        let low = _mm256_castps256_ps128(sum0);   // Extract lower 128 bits
-        let sum128 = unsafe { _mm_add_ps(high, low) };       // Add the two 128-bit vectors
+        let low = _mm256_castps256_ps128(sum0); // Extract lower 128 bits
+        let sum128 = unsafe { _mm_add_ps(high, low) }; // Add the two 128-bit vectors
 
         // Horizontal sum of 128-bit vector: shuffle and add
         // [x0, x1, x2, x3] -> shuffle to [x1, x0, x3, x2], add to get [x0+x1, x0+x1, x2+x3, x2+x3]
@@ -227,9 +227,7 @@ pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     #[cfg(target_arch = "x86_64")]
     {
         // Check AVX2 support once and cache the result
-        let has_avx2 = HAS_AVX2.get_or_init(|| {
-            std::arch::is_x86_feature_detected!("avx2")
-        });
+        let has_avx2 = HAS_AVX2.get_or_init(|| std::arch::is_x86_feature_detected!("avx2"));
 
         // SAFETY: We've verified AVX2 is available before calling the unsafe function
         if *has_avx2 {
@@ -301,55 +299,57 @@ pub fn compute_norm_squared_scalar(v: &[f32]) -> f32 {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn compute_norm_squared_avx2(v: &[f32]) -> f32 { unsafe {
-    use std::arch::x86_64::*;
+unsafe fn compute_norm_squared_avx2(v: &[f32]) -> f32 {
+    unsafe {
+        use std::arch::x86_64::*;
 
-    let len = v.len();
-    let mut result = 0.0f32;
+        let len = v.len();
+        let mut result = 0.0f32;
 
-    // Process 8 elements at a time using AVX2
-    let simd_len = len & !7; // Round down to nearest multiple of 8
-    let mut i = 0;
+        // Process 8 elements at a time using AVX2
+        let simd_len = len & !7; // Round down to nearest multiple of 8
+        let mut i = 0;
 
-    if simd_len > 0 {
-        let mut sum0 = unsafe { _mm256_setzero_ps() };
+        if simd_len > 0 {
+            let mut sum0 = unsafe { _mm256_setzero_ps() };
 
-        while i < simd_len {
-            // Load 8 floats
-            let v_vec = _mm256_loadu_ps(v.as_ptr().add(i));
+            while i < simd_len {
+                // Load 8 floats
+                let v_vec = _mm256_loadu_ps(v.as_ptr().add(i));
 
-            // Square each element
-            let squared = _mm256_mul_ps(v_vec, v_vec);
+                // Square each element
+                let squared = _mm256_mul_ps(v_vec, v_vec);
 
-            // Accumulate
-            sum0 = _mm256_add_ps(squared, sum0);
+                // Accumulate
+                sum0 = _mm256_add_ps(squared, sum0);
 
-            i += 8;
+                i += 8;
+            }
+
+            // Horizontal sum: extract high and low 128-bit lanes, add them
+            let high = unsafe { _mm256_extractf128_ps(sum0, 1) };
+            let low = _mm256_castps256_ps128(sum0);
+            let sum128 = unsafe { _mm_add_ps(high, low) };
+
+            // Horizontal sum of 128-bit vector
+            let shuffle = unsafe { _mm_shuffle_ps(sum128, sum128, 0b01_00_11_10) };
+            let sum2 = unsafe { _mm_add_ps(sum128, shuffle) };
+            let shuffle2 = unsafe { _mm_shuffle_ps(sum2, sum2, 0b00_00_11_11) };
+            let sum3 = unsafe { _mm_add_ps(sum2, shuffle2) };
+
+            result = unsafe { _mm_cvtss_f32(sum3) };
         }
 
-        // Horizontal sum: extract high and low 128-bit lanes, add them
-        let high = unsafe { _mm256_extractf128_ps(sum0, 1) };
-        let low = _mm256_castps256_ps128(sum0);
-        let sum128 = unsafe { _mm_add_ps(high, low) };
+        // Handle remaining elements with scalar loop
+        while i < len {
+            let val = v[i];
+            result += val * val;
+            i += 1;
+        }
 
-        // Horizontal sum of 128-bit vector
-        let shuffle = unsafe { _mm_shuffle_ps(sum128, sum128, 0b01_00_11_10) };
-        let sum2 = unsafe { _mm_add_ps(sum128, shuffle) };
-        let shuffle2 = unsafe { _mm_shuffle_ps(sum2, sum2, 0b00_00_11_11) };
-        let sum3 = unsafe { _mm_add_ps(sum2, shuffle2) };
-
-        result = unsafe { _mm_cvtss_f32(sum3) };
+        result
     }
-
-    // Handle remaining elements with scalar loop
-    while i < len {
-        let val = v[i];
-        result += val * val;
-        i += 1;
-    }
-
-    result
-}}
+}
 
 /// Runtime-dispatched squared norm computation with AVX2 acceleration
 ///
@@ -385,9 +385,7 @@ unsafe fn compute_norm_squared_avx2(v: &[f32]) -> f32 { unsafe {
 pub fn compute_norm_squared(v: &[f32]) -> f32 {
     #[cfg(target_arch = "x86_64")]
     {
-        let has_avx2 = HAS_AVX2.get_or_init(|| {
-            std::arch::is_x86_feature_detected!("avx2")
-        });
+        let has_avx2 = HAS_AVX2.get_or_init(|| std::arch::is_x86_feature_detected!("avx2"));
 
         if *has_avx2 {
             unsafe { compute_norm_squared_avx2(v) }
@@ -475,18 +473,20 @@ pub fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn cosine_similarity_avx2(a: &[f32], b: &[f32]) -> f32 { unsafe {
-    assert!(!a.is_empty(), "Vectors cannot be empty");
+unsafe fn cosine_similarity_avx2(a: &[f32], b: &[f32]) -> f32 {
+    unsafe {
+        assert!(!a.is_empty(), "Vectors cannot be empty");
 
-    let dot = dot_product_avx2(a, b);
-    let norm_a = compute_norm_squared_avx2(a).sqrt();
-    let norm_b = compute_norm_squared_avx2(b).sqrt();
+        let dot = dot_product_avx2(a, b);
+        let norm_a = compute_norm_squared_avx2(a).sqrt();
+        let norm_b = compute_norm_squared_avx2(b).sqrt();
 
-    assert!(norm_a > f32::EPSILON, "First vector has zero magnitude");
-    assert!(norm_b > f32::EPSILON, "Second vector has zero magnitude");
+        assert!(norm_a > f32::EPSILON, "First vector has zero magnitude");
+        assert!(norm_b > f32::EPSILON, "Second vector has zero magnitude");
 
-    dot / (norm_a * norm_b)
-}}
+        dot / (norm_a * norm_b)
+    }
+}
 
 /// Runtime-dispatched cosine similarity with AVX2 acceleration
 ///
@@ -537,9 +537,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 
     #[cfg(target_arch = "x86_64")]
     {
-        let has_avx2 = HAS_AVX2.get_or_init(|| {
-            std::arch::is_x86_feature_detected!("avx2")
-        });
+        let has_avx2 = HAS_AVX2.get_or_init(|| std::arch::is_x86_feature_detected!("avx2"));
 
         if *has_avx2 {
             unsafe { cosine_similarity_avx2(a, b) }
@@ -631,51 +629,53 @@ pub fn euclidean_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 { unsafe {
-    use std::arch::x86_64::*;
+unsafe fn euclidean_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
+    unsafe {
+        use std::arch::x86_64::*;
 
-    assert_eq!(a.len(), b.len(), "Vectors must have the same length");
+        assert_eq!(a.len(), b.len(), "Vectors must have the same length");
 
-    let len = a.len();
-    let mut sum = 0.0_f32;
+        let len = a.len();
+        let mut sum = 0.0_f32;
 
-    // Process 8 elements at a time
-    let chunks = len / 8;
-    let remainder = len % 8;
+        // Process 8 elements at a time
+        let chunks = len / 8;
+        let remainder = len % 8;
 
-    let mut i = 0;
-    for _ in 0..chunks {
-        // Unaligned loads - safe for any alignment
-        let av = _mm256_loadu_ps(a.as_ptr().add(i));
-        let bv = _mm256_loadu_ps(b.as_ptr().add(i));
+        let mut i = 0;
+        for _ in 0..chunks {
+            // Unaligned loads - safe for any alignment
+            let av = _mm256_loadu_ps(a.as_ptr().add(i));
+            let bv = _mm256_loadu_ps(b.as_ptr().add(i));
 
-        // Compute difference: av - bv
-        let diff = _mm256_sub_ps(av, bv);
+            // Compute difference: av - bv
+            let diff = _mm256_sub_ps(av, bv);
 
-        // Square differences: diff * diff
-        let squared = _mm256_mul_ps(diff, diff);
+            // Square differences: diff * diff
+            let squared = _mm256_mul_ps(diff, diff);
 
-        // Horizontal sum (partial)
-        let high = _mm256_extractf128_ps(squared, 1);
-        let low = _mm256_castps256_ps128(squared);
-        let sum2 = _mm_add_ps(low, high);
+            // Horizontal sum (partial)
+            let high = _mm256_extractf128_ps(squared, 1);
+            let low = _mm256_castps256_ps128(squared);
+            let sum2 = _mm_add_ps(low, high);
 
-        // Accumulate (complete horizontal sum)
-        let mut tmp = [0.0_f32; 4];
-        _mm_storeu_ps(tmp.as_mut_ptr(), sum2);
-        sum += tmp[0] + tmp[1] + tmp[2] + tmp[3];
+            // Accumulate (complete horizontal sum)
+            let mut tmp = [0.0_f32; 4];
+            _mm_storeu_ps(tmp.as_mut_ptr(), sum2);
+            sum += tmp[0] + tmp[1] + tmp[2] + tmp[3];
 
-        i += 8;
+            i += 8;
+        }
+
+        // Handle remainder elements (len % 8)
+        for j in 0..remainder {
+            let diff = a[i + j] - b[i + j];
+            sum += diff * diff;
+        }
+
+        sum.sqrt()
     }
-
-    // Handle remainder elements (len % 8)
-    for j in 0..remainder {
-        let diff = a[i + j] - b[i + j];
-        sum += diff * diff;
-    }
-
-    sum.sqrt()
-}}
+}
 
 /// Runtime-dispatched Euclidean (L2) distance computation
 ///
@@ -709,9 +709,7 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
 
     #[cfg(target_arch = "x86_64")]
     {
-        let has_avx2 = HAS_AVX2.get_or_init(|| {
-            std::arch::is_x86_feature_detected!("avx2")
-        });
+        let has_avx2 = HAS_AVX2.get_or_init(|| std::arch::is_x86_feature_detected!("avx2"));
 
         if *has_avx2 {
             unsafe { euclidean_distance_avx2(a, b) }
@@ -832,7 +830,10 @@ mod tests {
         assert!(
             rel_error < 1e-5 || abs_diff < f32::EPSILON,
             "Relative error {} too large (abs diff: {}, result: {}, expected: {})",
-            rel_error, abs_diff, result, expected
+            rel_error,
+            abs_diff,
+            result,
+            expected
         );
     }
 
@@ -858,7 +859,11 @@ mod tests {
             assert!(
                 rel_error < 1e-5 || abs_diff < f32::EPSILON,
                 "Scalar and SIMD differ for size {}: scalar={}, simd={}, diff={}, rel_error={}",
-                size, scalar_result, simd_result, abs_diff, rel_error
+                size,
+                scalar_result,
+                simd_result,
+                abs_diff,
+                rel_error
             );
         }
     }
@@ -950,9 +955,14 @@ mod tests {
         } else {
             abs_diff
         };
-        assert!(rel_error < 1e-5 || abs_diff < 1e-3,
-                "Norm squared differs: result={}, expected={}, diff={}, rel_error={}",
-                result, expected, abs_diff, rel_error);
+        assert!(
+            rel_error < 1e-5 || abs_diff < 1e-3,
+            "Norm squared differs: result={}, expected={}, diff={}, rel_error={}",
+            result,
+            expected,
+            abs_diff,
+            rel_error
+        );
     }
 
     #[test]
@@ -964,9 +974,13 @@ mod tests {
 
         // Allow small tolerance due to different accumulation order in SIMD
         let abs_diff = (scalar_result - simd_result).abs();
-        assert!(abs_diff < 1e-3,
-                "Norm squared differs: scalar={}, simd={}, diff={}",
-                scalar_result, simd_result, abs_diff);
+        assert!(
+            abs_diff < 1e-3,
+            "Norm squared differs: scalar={}, simd={}, diff={}",
+            scalar_result,
+            simd_result,
+            abs_diff
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -1214,7 +1228,7 @@ mod tests {
         if std::arch::is_x86_feature_detected!("avx2") {
             for size in [1, 7, 8, 9, 15, 16, 17, 23, 24, 25].iter() {
                 let a: Vec<f32> = (1..=*size).map(|i| i as f32).collect();
-                let b: Vec<f32> = (*size+1..=*size*2).map(|i| i as f32).collect();
+                let b: Vec<f32> = (*size + 1..=*size * 2).map(|i| i as f32).collect();
 
                 let scalar_result = euclidean_distance_scalar(&a, &b);
                 let avx2_result = unsafe { euclidean_distance_avx2(&a, &b) };
@@ -1222,7 +1236,9 @@ mod tests {
                 assert!(
                     (avx2_result - scalar_result).abs() < f32::EPSILON,
                     "Mismatch for size {}: scalar={}, avx2={}",
-                    size, scalar_result, avx2_result
+                    size,
+                    scalar_result,
+                    avx2_result
                 );
             }
         }

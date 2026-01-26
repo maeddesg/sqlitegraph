@@ -198,10 +198,7 @@ impl SequentialClusterReader {
         }
 
         // Calculate total size by summing all cluster_size values
-        let total_size: u64 = cluster_offsets
-            .iter()
-            .map(|(_, size)| *size as u64)
-            .sum();
+        let total_size: u64 = cluster_offsets.iter().map(|(_, size)| *size as u64).sum();
 
         // Validate total size against MAX_CLUSTER_BUFFER_SIZE
         if total_size > MAX_CLUSTER_BUFFER_SIZE as u64 {
@@ -337,10 +334,10 @@ impl Default for SequentialClusterReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::native::v2::edge_cluster::cluster::EdgeCluster;
-    use crate::backend::native::v2::edge_cluster::cluster_trace::Direction;
     use crate::backend::native::EdgeRecord;
     use crate::backend::native::types::EdgeFlags;
+    use crate::backend::native::v2::edge_cluster::cluster::EdgeCluster;
+    use crate::backend::native::v2::edge_cluster::cluster_trace::Direction;
     use crate::backend::native::v2::string_table::StringTable;
 
     /// Mock GraphFile for testing (bypasses full file format requirements)
@@ -386,8 +383,9 @@ mod tests {
             })
             .collect();
 
-        let cluster = EdgeCluster::create_from_edges(&edges, 1, Direction::Outgoing, &mut string_table)
-            .expect("Failed to create cluster");
+        let cluster =
+            EdgeCluster::create_from_edges(&edges, 1, Direction::Outgoing, &mut string_table)
+                .expect("Failed to create cluster");
         cluster.serialize()
     }
 
@@ -420,10 +418,7 @@ mod tests {
         }
 
         // Calculate total size by summing all cluster_size values
-        let total_size: u64 = cluster_offsets
-            .iter()
-            .map(|(_, size)| *size as u64)
-            .sum();
+        let total_size: u64 = cluster_offsets.iter().map(|(_, size)| *size as u64).sum();
 
         // Validate total size against MAX_CLUSTER_BUFFER_SIZE
         if total_size > MAX_CLUSTER_BUFFER_SIZE as u64 {
@@ -494,7 +489,10 @@ mod tests {
         let cluster_offsets = [
             (1024, cluster1.len() as u32),
             (1024 + cluster1.len() as u64, cluster2.len() as u32),
-            (1024 + cluster1.len() as u64 + cluster2.len() as u64, cluster3.len() as u32),
+            (
+                1024 + cluster1.len() as u64 + cluster2.len() as u64,
+                cluster3.len() as u32,
+            ),
         ];
 
         let result = read_with_mock(&data, &cluster_offsets);
@@ -512,10 +510,7 @@ mod tests {
             &buffer[cluster1.len()..cluster1.len() + cluster2.len()],
             &cluster2[..]
         );
-        assert_eq!(
-            &buffer[cluster1.len() + cluster2.len()..],
-            &cluster3[..]
-        );
+        assert_eq!(&buffer[cluster1.len() + cluster2.len()..], &cluster3[..]);
     }
 
     #[test]
@@ -550,15 +545,18 @@ mod tests {
         let cluster_offsets = [
             (1024, cluster1.len() as u32),
             (1024 + cluster1.len() as u64, cluster2.len() as u32),
-            (1024 + cluster1.len() as u64 + cluster2.len() as u64, cluster3.len() as u32),
+            (
+                1024 + cluster1.len() as u64 + cluster2.len() as u64,
+                cluster3.len() as u32,
+            ),
         ];
 
-        let buffer = read_with_mock(&data, &cluster_offsets)
-            .expect("Failed to read clusters");
+        let buffer = read_with_mock(&data, &cluster_offsets).expect("Failed to read clusters");
 
         // Extract neighbors from first cluster (index 0)
         let mut reader = SequentialClusterReader::new();
-        let neighbors = reader.extract_neighbors(&buffer, 0, &cluster_offsets)
+        let neighbors = reader
+            .extract_neighbors(&buffer, 0, &cluster_offsets)
             .expect("Failed to extract neighbors");
 
         assert_eq!(neighbors, vec![2, 3]);
@@ -575,15 +573,18 @@ mod tests {
         let cluster_offsets = [
             (1024, cluster1.len() as u32),
             (1024 + cluster1.len() as u64, cluster2.len() as u32),
-            (1024 + cluster1.len() as u64 + cluster2.len() as u64, cluster3.len() as u32),
+            (
+                1024 + cluster1.len() as u64 + cluster2.len() as u64,
+                cluster3.len() as u32,
+            ),
         ];
 
-        let buffer = read_with_mock(&data, &cluster_offsets)
-            .expect("Failed to read clusters");
+        let buffer = read_with_mock(&data, &cluster_offsets).expect("Failed to read clusters");
 
         // Extract neighbors from middle cluster (index 1)
         let mut reader = SequentialClusterReader::new();
-        let neighbors = reader.extract_neighbors(&buffer, 1, &cluster_offsets)
+        let neighbors = reader
+            .extract_neighbors(&buffer, 1, &cluster_offsets)
             .expect("Failed to extract neighbors");
 
         assert_eq!(neighbors, vec![4, 5, 6]);
@@ -601,8 +602,7 @@ mod tests {
             (1024 + cluster1.len() as u64, cluster2.len() as u32),
         ];
 
-        let buffer = read_with_mock(&data, &cluster_offsets)
-            .expect("Failed to read clusters");
+        let buffer = read_with_mock(&data, &cluster_offsets).expect("Failed to read clusters");
 
         // Try to extract neighbors with invalid index (out of bounds)
         let mut reader = SequentialClusterReader::new();
@@ -628,15 +628,18 @@ mod tests {
         let cluster_offsets = [
             (1024, cluster1.len() as u32),
             (1024 + cluster1.len() as u64, cluster2.len() as u32),
-            (1024 + cluster1.len() as u64 + cluster2.len() as u64, cluster3.len() as u32),
+            (
+                1024 + cluster1.len() as u64 + cluster2.len() as u64,
+                cluster3.len() as u32,
+            ),
         ];
 
-        let buffer = read_with_mock(&data, &cluster_offsets)
-            .expect("Failed to read clusters");
+        let buffer = read_with_mock(&data, &cluster_offsets).expect("Failed to read clusters");
 
         // Extract neighbors from last cluster (index 2)
         let mut reader = SequentialClusterReader::new();
-        let neighbors = reader.extract_neighbors(&buffer, 2, &cluster_offsets)
+        let neighbors = reader
+            .extract_neighbors(&buffer, 2, &cluster_offsets)
             .expect("Failed to extract neighbors");
 
         assert_eq!(neighbors, vec![7, 8, 9, 10]);
@@ -653,19 +656,24 @@ mod tests {
         let cluster_offsets = [
             (1024, cluster1.len() as u32),
             (1024 + cluster1.len() as u64, cluster2.len() as u32),
-            (1024 + cluster1.len() as u64 + cluster2.len() as u64, cluster3.len() as u32),
+            (
+                1024 + cluster1.len() as u64 + cluster2.len() as u64,
+                cluster3.len() as u32,
+            ),
         ];
 
-        let buffer = read_with_mock(&data, &cluster_offsets)
-            .expect("Failed to read clusters");
+        let buffer = read_with_mock(&data, &cluster_offsets).expect("Failed to read clusters");
 
         // Extract neighbors from all clusters
         let mut reader = SequentialClusterReader::new();
-        let neighbors_0 = reader.extract_neighbors(&buffer, 0, &cluster_offsets)
+        let neighbors_0 = reader
+            .extract_neighbors(&buffer, 0, &cluster_offsets)
             .expect("Failed to extract neighbors from cluster 0");
-        let neighbors_1 = reader.extract_neighbors(&buffer, 1, &cluster_offsets)
+        let neighbors_1 = reader
+            .extract_neighbors(&buffer, 1, &cluster_offsets)
             .expect("Failed to extract neighbors from cluster 1");
-        let neighbors_2 = reader.extract_neighbors(&buffer, 2, &cluster_offsets)
+        let neighbors_2 = reader
+            .extract_neighbors(&buffer, 2, &cluster_offsets)
             .expect("Failed to extract neighbors from cluster 2");
 
         assert_eq!(neighbors_0, vec![2, 3]);
@@ -691,7 +699,10 @@ mod tests {
         let cluster_offsets = [
             (1024, cluster1.len() as u32),
             (1024 + cluster1.len() as u64, cluster2.len() as u32),
-            (1024 + cluster1.len() as u64 + cluster2.len() as u64, cluster3.len() as u32),
+            (
+                1024 + cluster1.len() as u64 + cluster2.len() as u64,
+                cluster3.len() as u32,
+            ),
         ];
 
         let result = read_with_mock(&data, &cluster_offsets);
@@ -705,11 +716,14 @@ mod tests {
 
         // Verify extraction works with variable sizes
         let mut reader = SequentialClusterReader::new();
-        let neighbors_0 = reader.extract_neighbors(&buffer, 0, &cluster_offsets)
+        let neighbors_0 = reader
+            .extract_neighbors(&buffer, 0, &cluster_offsets)
             .expect("Failed to extract from cluster 0");
-        let neighbors_1 = reader.extract_neighbors(&buffer, 1, &cluster_offsets)
+        let neighbors_1 = reader
+            .extract_neighbors(&buffer, 1, &cluster_offsets)
             .expect("Failed to extract from cluster 1");
-        let neighbors_2 = reader.extract_neighbors(&buffer, 2, &cluster_offsets)
+        let neighbors_2 = reader
+            .extract_neighbors(&buffer, 2, &cluster_offsets)
             .expect("Failed to extract from cluster 2");
 
         assert_eq!(neighbors_0, vec![2]);

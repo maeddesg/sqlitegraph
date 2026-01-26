@@ -24,7 +24,12 @@ pub fn rollback_free_space_allocate(
     block_size: u64,
     block_type: u8,
 ) -> Result<(), RecoveryError> {
-    debug_log!("Rolling back free space allocation: offset={}, size={}, type={}", block_offset, block_size, block_type);
+    debug_log!(
+        "Rolling back free space allocation: offset={}, size={}, type={}",
+        block_offset,
+        block_size,
+        block_type
+    );
 
     // Free space allocation rollback is complex because:
     // 1. The allocated block may have been used by subsequent operations
@@ -38,28 +43,33 @@ pub fn rollback_free_space_allocate(
     // 3. Future implementation would need sophisticated space tracking
 
     // Log the rollback attempt
-    debug_log!("Attempting to rollback allocation of {} bytes at offset {} (type: {})", block_size, block_offset, block_type);
+    debug_log!(
+        "Attempting to rollback allocation of {} bytes at offset {} (type: {})",
+        block_size,
+        block_offset,
+        block_type
+    );
 
     // Type-specific rollback considerations
     match block_type {
         1 => {
-            debug_log!("Rollback for CLUSTER storage type");     // Edge cluster storage
-        },
+            debug_log!("Rollback for CLUSTER storage type"); // Edge cluster storage
+        }
         2 => {
-            debug_log!("Rollback for NODE_DATA storage type");   // Node record storage
-        },
+            debug_log!("Rollback for NODE_DATA storage type"); // Node record storage
+        }
         3 => {
             debug_log!("Rollback for STRING_TABLE storage type"); // String table storage
-        },
+        }
         4 => {
-            debug_log!("Rollback for INDEX storage type");       // Index storage
-        },
+            debug_log!("Rollback for INDEX storage type"); // Index storage
+        }
         5 => {
-            debug_log!("Rollback for METADATA storage type");    // Metadata/header storage
-        },
+            debug_log!("Rollback for METADATA storage type"); // Metadata/header storage
+        }
         _ => {
-            debug_log!("Rollback for GENERAL storage type");     // General purpose storage
-        },
+            debug_log!("Rollback for GENERAL storage type"); // General purpose storage
+        }
     }
 
     // In a production implementation with proper space tracking:
@@ -77,7 +87,12 @@ pub fn rollback_free_space_allocate(
     // - Recovery scenarios are exceptional, not performance-critical
 
     warn_log!("Free space allocation rollback completed (space preserved for consistency)");
-    warn_log!("Block at offset {} ({} bytes, type {}) remains allocated", block_offset, block_size, block_type);
+    warn_log!(
+        "Block at offset {} ({} bytes, type {}) remains allocated",
+        block_offset,
+        block_size,
+        block_type
+    );
 
     // NOTE: A complete implementation would:
     // 1. Access the FreeSpaceManager and deallocate the block
@@ -105,7 +120,12 @@ pub fn rollback_free_space_deallocate(
     block_size: u64,
     block_type: u8,
 ) -> Result<(), RecoveryError> {
-    debug_log!("Rolling back free space deallocation: offset={}, size={}, type={}", block_offset, block_size, block_type);
+    debug_log!(
+        "Rolling back free space deallocation: offset={}, size={}, type={}",
+        block_offset,
+        block_size,
+        block_type
+    );
 
     // Free space deallocation rollback is the inverse of allocation rollback:
     // 1. The deallocated block needs to be marked as allocated again
@@ -118,28 +138,33 @@ pub fn rollback_free_space_deallocate(
     // 3. Future implementation would directly manipulate FreeSpaceManager state
 
     // Log the rollback attempt
-    debug_log!("Attempting to rollback deallocation of {} bytes at offset {} (type: {})", block_size, block_offset, block_type);
+    debug_log!(
+        "Attempting to rollback deallocation of {} bytes at offset {} (type: {})",
+        block_size,
+        block_offset,
+        block_type
+    );
 
     // Type-specific rollback considerations
     match block_type {
         1 => {
-            debug_log!("Rollback for CLUSTER storage type");     // Edge cluster storage
-        },
+            debug_log!("Rollback for CLUSTER storage type"); // Edge cluster storage
+        }
         2 => {
-            debug_log!("Rollback for NODE_DATA storage type");   // Node record storage
-        },
+            debug_log!("Rollback for NODE_DATA storage type"); // Node record storage
+        }
         3 => {
             debug_log!("Rollback for STRING_TABLE storage type"); // String table storage
-        },
+        }
         4 => {
-            debug_log!("Rollback for INDEX storage type");       // Index storage
-        },
+            debug_log!("Rollback for INDEX storage type"); // Index storage
+        }
         5 => {
-            debug_log!("Rollback for METADATA storage type");    // Metadata/header storage
-        },
+            debug_log!("Rollback for METADATA storage type"); // Metadata/header storage
+        }
         _ => {
-            debug_log!("Rollback for GENERAL storage type");     // General purpose storage
-        },
+            debug_log!("Rollback for GENERAL storage type"); // General purpose storage
+        }
     }
 
     // In a production implementation with proper FreeSpaceManager access:
@@ -156,7 +181,12 @@ pub fn rollback_free_space_deallocate(
     // - Generally acceptable for recovery scenarios
 
     warn_log!("Free space deallocation rollback completed (block remains in free list)");
-    warn_log!("Block at offset {} ({} bytes, type {}) available for reuse", block_offset, block_size, block_type);
+    warn_log!(
+        "Block at offset {} ({} bytes, type {}) available for reuse",
+        block_offset,
+        block_size,
+        block_type
+    );
 
     // NOTE: A complete implementation would:
     // 1. Access the FreeSpaceManager and remove the block from free list

@@ -22,46 +22,50 @@ fn bench_write_cost_with_metadata(criterion: &mut Criterion) {
 
     // Test various graph sizes to detect scaling issues
     for &size in &[100, 500, 1000, 5000] {
-        group.bench_with_input(BenchmarkId::new("native_with_metadata", size), &size, |b, &size| {
-            b.iter(|| {
-                let temp_dir = create_benchmark_temp_dir();
-                let db_path = temp_dir.path().join("benchmark.db");
+        group.bench_with_input(
+            BenchmarkId::new("native_with_metadata", size),
+            &size,
+            |b, &size| {
+                b.iter(|| {
+                    let temp_dir = create_benchmark_temp_dir();
+                    let db_path = temp_dir.path().join("benchmark.db");
 
-                let graph = open_graph(&db_path, &sqlitegraph::GraphConfig::native())
-                    .expect("Failed to create graph");
+                    let graph = open_graph(&db_path, &sqlitegraph::GraphConfig::native())
+                        .expect("Failed to create graph");
 
-                // Create nodes
-                let mut node_ids = Vec::with_capacity(size);
-                for i in 0..size {
-                    let node_id = graph
-                        .insert_node(NodeSpec {
-                            kind: "Node".to_string(),
-                            name: format!("node_{}", i),
-                            file_path: None,
-                            data: serde_json::json!({
-                                "id": i,
-                                "created_at": "regression_test",
-                            }),
-                        })
-                        .expect("Failed to insert node");
-                    node_ids.push(node_id);
-                }
+                    // Create nodes
+                    let mut node_ids = Vec::with_capacity(size);
+                    for i in 0..size {
+                        let node_id = graph
+                            .insert_node(NodeSpec {
+                                kind: "Node".to_string(),
+                                name: format!("node_{}", i),
+                                file_path: None,
+                                data: serde_json::json!({
+                                    "id": i,
+                                    "created_at": "regression_test",
+                                }),
+                            })
+                            .expect("Failed to insert node");
+                        node_ids.push(node_id);
+                    }
 
-                // Create chain edges (linear pattern)
-                for i in 0..size.saturating_sub(1) {
-                    graph
-                        .insert_edge(EdgeSpec {
-                            from: node_ids[i],
-                            to: node_ids[i + 1],
-                            edge_type: "chain".to_string(),
-                            data: serde_json::json!({"order": i}),
-                        })
-                        .expect("Failed to insert edge");
-                }
+                    // Create chain edges (linear pattern)
+                    for i in 0..size.saturating_sub(1) {
+                        graph
+                            .insert_edge(EdgeSpec {
+                                from: node_ids[i],
+                                to: node_ids[i + 1],
+                                edge_type: "chain".to_string(),
+                                data: serde_json::json!({"order": i}),
+                            })
+                            .expect("Failed to insert edge");
+                    }
 
-                std::mem::forget(temp_dir);
-            });
-        });
+                    std::mem::forget(temp_dir);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -79,46 +83,50 @@ fn bench_write_cost_baseline(criterion: &mut Criterion) {
 
     // Measure the same operations to establish baseline
     for &size in &[100, 500, 1000, 5000] {
-        group.bench_with_input(BenchmarkId::new("native_baseline", size), &size, |b, &size| {
-            b.iter(|| {
-                let temp_dir = create_benchmark_temp_dir();
-                let db_path = temp_dir.path().join("benchmark.db");
+        group.bench_with_input(
+            BenchmarkId::new("native_baseline", size),
+            &size,
+            |b, &size| {
+                b.iter(|| {
+                    let temp_dir = create_benchmark_temp_dir();
+                    let db_path = temp_dir.path().join("benchmark.db");
 
-                let graph = open_graph(&db_path, &sqlitegraph::GraphConfig::native())
-                    .expect("Failed to create graph");
+                    let graph = open_graph(&db_path, &sqlitegraph::GraphConfig::native())
+                        .expect("Failed to create graph");
 
-                // Create nodes
-                let mut node_ids = Vec::with_capacity(size);
-                for i in 0..size {
-                    let node_id = graph
-                        .insert_node(NodeSpec {
-                            kind: "Node".to_string(),
-                            name: format!("node_{}", i),
-                            file_path: None,
-                            data: serde_json::json!({
-                                "id": i,
-                                "created_at": "baseline_test",
-                            }),
-                        })
-                        .expect("Failed to insert node");
-                    node_ids.push(node_id);
-                }
+                    // Create nodes
+                    let mut node_ids = Vec::with_capacity(size);
+                    for i in 0..size {
+                        let node_id = graph
+                            .insert_node(NodeSpec {
+                                kind: "Node".to_string(),
+                                name: format!("node_{}", i),
+                                file_path: None,
+                                data: serde_json::json!({
+                                    "id": i,
+                                    "created_at": "baseline_test",
+                                }),
+                            })
+                            .expect("Failed to insert node");
+                        node_ids.push(node_id);
+                    }
 
-                // Create chain edges
-                for i in 0..size.saturating_sub(1) {
-                    graph
-                        .insert_edge(EdgeSpec {
-                            from: node_ids[i],
-                            to: node_ids[i + 1],
-                            edge_type: "chain".to_string(),
-                            data: serde_json::json!({"order": i}),
-                        })
-                        .expect("Failed to insert edge");
-                }
+                    // Create chain edges
+                    for i in 0..size.saturating_sub(1) {
+                        graph
+                            .insert_edge(EdgeSpec {
+                                from: node_ids[i],
+                                to: node_ids[i + 1],
+                                edge_type: "chain".to_string(),
+                                data: serde_json::json!({"order": i}),
+                            })
+                            .expect("Failed to insert edge");
+                    }
 
-                std::mem::forget(temp_dir);
-            });
-        });
+                    std::mem::forget(temp_dir);
+                });
+            },
+        );
     }
 
     group.finish();

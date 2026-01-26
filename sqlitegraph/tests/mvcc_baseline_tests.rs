@@ -8,9 +8,8 @@
 //! tests. They document the current state even if buggy - this is intentional.
 
 use sqlitegraph::{
+    CacheStats, GraphEdgeCreate, GraphEntityCreate, GraphQuery, SqliteGraph, SqliteGraphError,
     add_label, add_property, cache_stats,
-    CacheStats, GraphEdgeCreate, GraphEntityCreate, GraphQuery, SqliteGraph,
-    SqliteGraphError,
 };
 use std::time::{Duration, Instant};
 
@@ -215,10 +214,7 @@ fn test_snapshot_neighbor_isolation() -> Result<(), SqliteGraphError> {
 
     // Verify snapshot neighbors match initial state
     let snapshot_neighbors = snapshot.get_outgoing(test_node);
-    assert_eq!(
-        snapshot_neighbors,
-        Some(&original_neighbors)
-    );
+    assert_eq!(snapshot_neighbors, Some(&original_neighbors));
 
     // Add new edge to main graph
     if entity_ids.len() >= 2 {
@@ -236,10 +232,7 @@ fn test_snapshot_neighbor_isolation() -> Result<(), SqliteGraphError> {
 
         // Verify snapshot neighbors unchanged
         let snapshot_neighbors_after = snapshot.get_outgoing(test_node);
-        assert_eq!(
-            snapshot_neighbors_after,
-            Some(&original_neighbors)
-        );
+        assert_eq!(snapshot_neighbors_after, Some(&original_neighbors));
     }
 
     Ok(())
@@ -264,10 +257,7 @@ fn test_snapshot_incoming_neighbor_isolation() -> Result<(), SqliteGraphError> {
 
     // Verify snapshot incoming neighbors match
     let snapshot_incoming = snapshot.get_incoming(target_node);
-    assert_eq!(
-        snapshot_incoming,
-        Some(&original_incoming)
-    );
+    assert_eq!(snapshot_incoming, Some(&original_incoming));
 
     // Add new edge pointing to target
     let new_edge = GraphEdgeCreate {
@@ -284,10 +274,7 @@ fn test_snapshot_incoming_neighbor_isolation() -> Result<(), SqliteGraphError> {
 
     // Verify snapshot unchanged
     let snapshot_incoming_after = snapshot.get_incoming(target_node);
-    assert_eq!(
-        snapshot_incoming_after,
-        Some(&original_incoming)
-    );
+    assert_eq!(snapshot_incoming_after, Some(&original_incoming));
 
     Ok(())
 }
@@ -761,10 +748,7 @@ fn test_snapshot_consistency_during_modifications() -> Result<(), SqliteGraphErr
 
     // Verify snapshot state consistent
     let snapshot_neighbors = snapshot.get_outgoing(entity_ids[0]);
-    assert_eq!(
-        snapshot_neighbors,
-        Some(&initial_neighbors)
-    );
+    assert_eq!(snapshot_neighbors, Some(&initial_neighbors));
 
     Ok(())
 }

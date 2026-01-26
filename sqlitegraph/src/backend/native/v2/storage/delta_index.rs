@@ -22,25 +22,45 @@ pub struct DeltaIndex {
 }
 
 impl DeltaIndex {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    pub fn apply_commit(&mut self, records: Vec<V2WALRecord>, commit_lsn: u64) -> Result<(), NativeBackendError> {
+    pub fn apply_commit(
+        &mut self,
+        records: Vec<V2WALRecord>,
+        commit_lsn: u64,
+    ) -> Result<(), NativeBackendError> {
         for record in records {
-            let delta = DeltaRecord { record: record.clone(), commit_lsn };
+            let delta = DeltaRecord {
+                record: record.clone(),
+                commit_lsn,
+            };
             match record {
-                V2WALRecord::NodeInsert { node_id, .. } | V2WALRecord::NodeDelete { node_id, .. } => {
-                    self.node_deltas.entry(node_id).or_insert_with(Vec::new).push(delta);
+                V2WALRecord::NodeInsert { node_id, .. }
+                | V2WALRecord::NodeDelete { node_id, .. } => {
+                    self.node_deltas
+                        .entry(node_id)
+                        .or_insert_with(Vec::new)
+                        .push(delta);
                 }
                 V2WALRecord::NodeUpdate { node_id, .. } => {
-                    self.node_deltas.entry(node_id).or_insert_with(Vec::new).push(delta);
+                    self.node_deltas
+                        .entry(node_id)
+                        .or_insert_with(Vec::new)
+                        .push(delta);
                 }
                 V2WALRecord::TransactionBegin { .. }
                 | V2WALRecord::TransactionCommit { .. }
                 | V2WALRecord::TransactionRollback { .. }
                 | V2WALRecord::Checkpoint { .. }
                 | V2WALRecord::SegmentEnd { .. }
-                | V2WALRecord::HeaderUpdate { .. } => { continue; }
-                _ => { continue; }
+                | V2WALRecord::HeaderUpdate { .. } => {
+                    continue;
+                }
+                _ => {
+                    continue;
+                }
             }
         }
         Ok(())
@@ -49,7 +69,10 @@ impl DeltaIndex {
     pub fn get_node_delta(&self, node_id: i64, snapshot_id: SnapshotId) -> Option<&DeltaRecord> {
         self.node_deltas.get(&node_id).and_then(|deltas| {
             let snapshot_lsn = snapshot_id.as_lsn();
-            deltas.iter().rev().find(|delta| delta.commit_lsn <= snapshot_lsn)
+            deltas
+                .iter()
+                .rev()
+                .find(|delta| delta.commit_lsn <= snapshot_lsn)
         })
     }
 
@@ -95,13 +118,11 @@ mod tests {
     #[test]
     fn test_apply_commit() {
         let mut index = DeltaIndex::new();
-        let records = vec![
-            V2WALRecord::NodeInsert {
-                node_id: 1,
-                slot_offset: 100,
-                node_data: vec![1, 2, 3],
-            },
-        ];
+        let records = vec![V2WALRecord::NodeInsert {
+            node_id: 1,
+            slot_offset: 100,
+            node_data: vec![1, 2, 3],
+        }];
         let result = index.apply_commit(records, 100);
         assert!(result.is_ok());
         assert_eq!(index.delta_count(), 1);
@@ -110,13 +131,11 @@ mod tests {
     #[test]
     fn test_get_node_delta_visible() {
         let mut index = DeltaIndex::new();
-        let records = vec![
-            V2WALRecord::NodeInsert {
-                node_id: 1,
-                slot_offset: 100,
-                node_data: vec![1, 2, 3],
-            },
-        ];
+        let records = vec![V2WALRecord::NodeInsert {
+            node_id: 1,
+            slot_offset: 100,
+            node_data: vec![1, 2, 3],
+        }];
         index.apply_commit(records, 100).unwrap();
 
         let snapshot = SnapshotId::from_lsn(150);
@@ -128,13 +147,11 @@ mod tests {
     #[test]
     fn test_get_node_delta_not_visible() {
         let mut index = DeltaIndex::new();
-        let records = vec![
-            V2WALRecord::NodeInsert {
-                node_id: 1,
-                slot_offset: 100,
-                node_data: vec![1, 2, 3],
-            },
-        ];
+        let records = vec![V2WALRecord::NodeInsert {
+            node_id: 1,
+            slot_offset: 100,
+            node_data: vec![1, 2, 3],
+        }];
         index.apply_commit(records, 200).unwrap();
 
         let snapshot = SnapshotId::from_lsn(150);
@@ -145,13 +162,11 @@ mod tests {
     #[test]
     fn test_checkpoint_completed() {
         let mut index = DeltaIndex::new();
-        let records = vec![
-            V2WALRecord::NodeInsert {
-                node_id: 1,
-                slot_offset: 100,
-                node_data: vec![1, 2, 3],
-            },
-        ];
+        let records = vec![V2WALRecord::NodeInsert {
+            node_id: 1,
+            slot_offset: 100,
+            node_data: vec![1, 2, 3],
+        }];
         index.apply_commit(records, 100).unwrap();
         assert_eq!(index.delta_count(), 1);
 
@@ -164,35 +179,36 @@ mod tests {
     fn test_multiple_deltas_same_entity() {
         let mut index = DeltaIndex::new();
 
-        let records1 = vec![
-            V2WALRecord::NodeInsert {
-                node_id: 1,
-                slot_offset: 100,
-                node_data: vec![1, 2, 3],
-            },
-        ];
+        let records1 = vec![V2WALRecord::NodeInsert {
+            node_id: 1,
+            slot_offset: 100,
+            node_data: vec![1, 2, 3],
+        }];
         index.apply_commit(records1, 100).unwrap();
 
-        let records2 = vec![
-            V2WALRecord::NodeDelete {
-                node_id: 1,
-                slot_offset: 100,
-                old_data: vec![1, 2, 3],
-                outgoing_edges: vec![],
-                incoming_edges: vec![],
-            },
-        ];
+        let records2 = vec![V2WALRecord::NodeDelete {
+            node_id: 1,
+            slot_offset: 100,
+            old_data: vec![1, 2, 3],
+            outgoing_edges: vec![],
+            incoming_edges: vec![],
+        }];
         index.apply_commit(records2, 200).unwrap();
 
         let snapshot1 = SnapshotId::from_lsn(150);
         let delta1 = index.get_node_delta(1, snapshot1);
         assert!(delta1.is_some());
-        assert!(matches!(delta1.unwrap().record, V2WALRecord::NodeInsert { .. }));
+        assert!(matches!(
+            delta1.unwrap().record,
+            V2WALRecord::NodeInsert { .. }
+        ));
 
         let snapshot2 = SnapshotId::from_lsn(250);
         let delta2 = index.get_node_delta(1, snapshot2);
         assert!(delta2.is_some());
-        assert!(matches!(delta2.unwrap().record, V2WALRecord::NodeDelete { .. }));
+        assert!(matches!(
+            delta2.unwrap().record,
+            V2WALRecord::NodeDelete { .. }
+        ));
     }
 }
-

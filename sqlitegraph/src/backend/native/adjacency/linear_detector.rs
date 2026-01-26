@@ -1001,7 +1001,9 @@ impl LinearDetector {
             DetectorState::Linear => {
                 // Linear confirmed: use max of cluster count and consecutive count
                 // This handles both observe() and observe_with_cluster() usage
-                self.cluster_offsets.len().max(self.consecutive_linear as usize)
+                self.cluster_offsets
+                    .len()
+                    .max(self.consecutive_linear as usize)
             }
             DetectorState::Accumulating => {
                 // Accumulating: use consecutive linear count
@@ -1900,10 +1902,7 @@ mod tests {
 
         // Verify first and last offsets
         assert_eq!(detector.cluster_offsets()[0], (0, 4096));
-        assert_eq!(
-            detector.cluster_offsets()[99],
-            (99 * 4096, 4096)
-        );
+        assert_eq!(detector.cluster_offsets()[99], (99 * 4096, 4096));
     }
 
     #[test]

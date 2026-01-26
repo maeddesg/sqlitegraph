@@ -91,11 +91,9 @@ fn test_chain_traversal_regression_check() {
     // Check for regression vs v1.3 (allow 10% tolerance for non-chain workloads)
     for run in &current_runs {
         let improvement = if run.mean_ns < V13_BASELINE_500 {
-            ((V13_BASELINE_500 as f64 - run.mean_ns as f64) / V13_BASELINE_500 as f64)
-                * 100.0
+            ((V13_BASELINE_500 as f64 - run.mean_ns as f64) / V13_BASELINE_500 as f64) * 100.0
         } else {
-            -((run.mean_ns as f64 - V13_BASELINE_500 as f64) / V13_BASELINE_500 as f64)
-                * 100.0
+            -((run.mean_ns as f64 - V13_BASELINE_500 as f64) / V13_BASELINE_500 as f64) * 100.0
         };
 
         println!(
@@ -121,8 +119,7 @@ fn test_chain_traversal_regression_check() {
 fn load_criterion_results() -> Result<Vec<BenchRun>, String> {
     // CARGO_MANIFEST_DIR points to the crate directory (sqlitegraph/)
     // Criterion output goes to workspace-root/target/criterion
-    let criterion_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../target/criterion");
+    let criterion_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/criterion");
 
     let mut results = Vec::new();
 

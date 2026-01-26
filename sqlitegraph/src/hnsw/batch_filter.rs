@@ -184,45 +184,47 @@ pub fn filter_denied_scalar(ids: &[u64], denied: &[u64]) -> Vec<u64> {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn filter_batch_avx2(ids: &[u64], filter_set: &[u64], include: bool) -> Vec<u64> { unsafe {
-    use std::arch::x86_64::*;
+unsafe fn filter_batch_avx2(ids: &[u64], filter_set: &[u64], include: bool) -> Vec<u64> {
+    unsafe {
+        use std::arch::x86_64::*;
 
-    let filter_set_hash: HashSet<u64> = filter_set.iter().copied().collect();
-    let mut result = Vec::with_capacity(ids.len());
+        let filter_set_hash: HashSet<u64> = filter_set.iter().copied().collect();
+        let mut result = Vec::with_capacity(ids.len());
 
-    // Process in chunks of 4 for AVX2 (256-bit register holds 4 u64 values)
-    // While we could use SIMD for comparison, the HashSet lookup is still serial
-    // The optimization here is primarily in memory access patterns and chunking
-    let chunks = ids.chunks_exact(4);
-    let remainder = chunks.remainder();
+        // Process in chunks of 4 for AVX2 (256-bit register holds 4 u64 values)
+        // While we could use SIMD for comparison, the HashSet lookup is still serial
+        // The optimization here is primarily in memory access patterns and chunking
+        let chunks = ids.chunks_exact(4);
+        let remainder = chunks.remainder();
 
-    for chunk in chunks {
-        // Load 4 u64 values using AVX2
-        let _id_vec = _mm256_loadu_si256(chunk.as_ptr() as *const __m256i);
+        for chunk in chunks {
+            // Load 4 u64 values using AVX2
+            let _id_vec = _mm256_loadu_si256(chunk.as_ptr() as *const __m256i);
 
-        // Extract individual values for HashSet lookup
-        // Note: SIMD doesn't help with HashSet lookup, but chunking improves
-        // cache locality and allows for potential future optimizations
-        let id_array = [chunk[0], chunk[1], chunk[2], chunk[3]];
+            // Extract individual values for HashSet lookup
+            // Note: SIMD doesn't help with HashSet lookup, but chunking improves
+            // cache locality and allows for potential future optimizations
+            let id_array = [chunk[0], chunk[1], chunk[2], chunk[3]];
 
-        for &id in &id_array {
+            for &id in &id_array {
+                let in_set = filter_set_hash.contains(&id);
+                if (include && in_set) || (!include && !in_set) {
+                    result.push(id);
+                }
+            }
+        }
+
+        // Process remainder elements
+        for &id in remainder {
             let in_set = filter_set_hash.contains(&id);
             if (include && in_set) || (!include && !in_set) {
                 result.push(id);
             }
         }
-    }
 
-    // Process remainder elements
-    for &id in remainder {
-        let in_set = filter_set_hash.contains(&id);
-        if (include && in_set) || (!include && !in_set) {
-            result.push(id);
-        }
+        result
     }
-
-    result
-}}
+}
 
 /// Runtime-dispatched batch ID filtering
 ///
@@ -343,7 +345,11 @@ mod tests {
         // Verify all results are in allowed set
         let allowed_set: HashSet<u64> = allowed.iter().copied().collect();
         for &id in &filtered {
-            assert!(allowed_set.contains(&id), "ID {} should be in allowed set", id);
+            assert!(
+                allowed_set.contains(&id),
+                "ID {} should be in allowed set",
+                id
+            );
         }
 
         // Verify we got expected count

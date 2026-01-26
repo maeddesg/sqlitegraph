@@ -19,7 +19,7 @@ use std::sync::Arc;
 // V2 WAL integration (always available when native-v2 feature is enabled)
 #[cfg(feature = "native-v2")]
 use crate::backend::native::v2::wal::{
-    V2GraphWALIntegrator, V2WALConfig, GraphWALIntegrationConfig,
+    GraphWALIntegrationConfig, V2GraphWALIntegrator, V2WALConfig,
 };
 
 #[cfg(feature = "native-v2")]
@@ -96,7 +96,9 @@ impl NativeGraphBackend {
 
     /// Create WAL integrator for the graph
     #[cfg(feature = "native-v2")]
-    fn create_wal_integrator<P: AsRef<std::path::Path>>(path: P) -> Result<Arc<V2GraphWALIntegrator>, SqliteGraphError> {
+    fn create_wal_integrator<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<Arc<V2GraphWALIntegrator>, SqliteGraphError> {
         let path_ref = path.as_ref();
 
         // Use the helper function to create WAL config with correct paths
@@ -106,8 +108,10 @@ impl NativeGraphBackend {
         let integration_config = GraphWALIntegrationConfig::default();
 
         // Create the integrator
-        let integrator = V2GraphWALIntegrator::create(wal_config, integration_config)
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to create WAL integrator: {:?}", e)))?;
+        let integrator =
+            V2GraphWALIntegrator::create(wal_config, integration_config).map_err(|e| {
+                SqliteGraphError::connection(format!("Failed to create WAL integrator: {:?}", e))
+            })?;
 
         Ok(Arc::new(integrator))
     }
@@ -124,13 +128,17 @@ impl NativeGraphBackend {
     /// Get WAL metrics (if native-v2 feature is enabled and WAL integrator exists)
     #[cfg(feature = "native-v2")]
     pub fn get_wal_metrics(&self) -> Option<crate::backend::native::v2::wal::WALManagerMetrics> {
-        self.wal_integrator.as_ref().map(|integrator| integrator.get_metrics())
+        self.wal_integrator
+            .as_ref()
+            .map(|integrator| integrator.get_metrics())
     }
 
     /// Get active transaction count (if native-v2 feature is enabled and WAL integrator exists)
     #[cfg(feature = "native-v2")]
     pub fn get_active_transaction_count(&self) -> Option<usize> {
-        self.wal_integrator.as_ref().map(|integrator| integrator.get_active_transaction_count())
+        self.wal_integrator
+            .as_ref()
+            .map(|integrator| integrator.get_active_transaction_count())
     }
 }
 
@@ -150,7 +158,11 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn get_node(&self, snapshot_id: crate::snapshot::SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+    fn get_node(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        id: i64,
+    ) -> Result<GraphEntity, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
             // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
             let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
@@ -185,7 +197,12 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn neighbors(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
+    fn neighbors(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        node: i64,
+        query: NeighborQuery,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
             let node_id = node as NativeNodeId;
 
@@ -232,7 +249,12 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn bfs(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
+    fn bfs(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        start: i64,
+        depth: u32,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
             // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
             let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
@@ -241,7 +263,12 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn shortest_path(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
+    fn shortest_path(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        start: i64,
+        end: i64,
+    ) -> Result<Option<Vec<i64>>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
             // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
             let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
@@ -251,7 +278,11 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn node_degree(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64) -> Result<(usize, usize), SqliteGraphError> {
+    fn node_degree(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        node: i64,
+    ) -> Result<(usize, usize), SqliteGraphError> {
         self.with_graph_file(|graph_file| {
             // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
             let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
@@ -310,7 +341,12 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn chain_query(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, chain: &[ChainStep]) -> Result<Vec<i64>, SqliteGraphError> {
+    fn chain_query(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        start: i64,
+        chain: &[ChainStep],
+    ) -> Result<Vec<i64>, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
             // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
             let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
@@ -336,9 +372,9 @@ impl GraphBackend for NativeGraphBackend {
         #[cfg(feature = "native-v2")]
         {
             if let Some(ref integrator) = self.wal_integrator {
-                integrator
-                    .force_checkpoint()
-                    .map_err(|e| SqliteGraphError::connection(format!("WAL checkpoint failed: {:?}", e)))?;
+                integrator.force_checkpoint().map_err(|e| {
+                    SqliteGraphError::connection(format!("WAL checkpoint failed: {:?}", e))
+                })?;
                 return Ok(());
             }
         }
@@ -347,22 +383,25 @@ impl GraphBackend for NativeGraphBackend {
         Ok(())
     }
 
-    fn snapshot_export(&self, export_dir: &std::path::Path) -> Result<crate::backend::SnapshotMetadata, SqliteGraphError> {
+    fn snapshot_export(
+        &self,
+        export_dir: &std::path::Path,
+    ) -> Result<crate::backend::SnapshotMetadata, SqliteGraphError> {
         use crate::backend::native::v2::export::SnapshotExporter;
         use crate::backend::native::v2::export::snapshot::SnapshotExportConfig;
         use std::time::{SystemTime, UNIX_EPOCH};
 
         // Get the graph file path from the GraphFile
-        let graph_path = self.with_graph_file(|graph_file| {
-            Ok(graph_file.path().to_path_buf())
-        })?;
+        let graph_path = self.with_graph_file(|graph_file| Ok(graph_file.path().to_path_buf()))?;
 
         // Create snapshot exporter with default config
-        let snapshot_id = format!("snapshot_{}",
+        let snapshot_id = format!(
+            "snapshot_{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_secs());
+                .as_secs()
+        );
 
         let config = SnapshotExportConfig {
             export_path: export_dir.to_path_buf(),
@@ -372,11 +411,13 @@ impl GraphBackend for NativeGraphBackend {
             checksum_validation: true,
         };
 
-        let mut exporter = SnapshotExporter::new(&graph_path, config)
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to create snapshot exporter: {:?}", e)))?;
+        let mut exporter = SnapshotExporter::new(&graph_path, config).map_err(|e| {
+            SqliteGraphError::connection(format!("Failed to create snapshot exporter: {:?}", e))
+        })?;
 
-        let result = exporter.export_snapshot()
-            .map_err(|e| SqliteGraphError::connection(format!("Snapshot export failed: {:?}", e)))?;
+        let result = exporter.export_snapshot().map_err(|e| {
+            SqliteGraphError::connection(format!("Snapshot export failed: {:?}", e))
+        })?;
 
         Ok(crate::backend::SnapshotMetadata {
             snapshot_path: result.snapshot_path,
@@ -386,21 +427,22 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn backup(&self, backup_dir: &std::path::Path) -> Result<crate::backend::BackupResult, SqliteGraphError> {
+    fn backup(
+        &self,
+        backup_dir: &std::path::Path,
+    ) -> Result<crate::backend::BackupResult, SqliteGraphError> {
         #[cfg(feature = "native-v2")]
         {
             use crate::backend::native::v2::backup;
 
             // Get the graph file path from the GraphFile
-            let graph_path = self.with_graph_file(|graph_file| {
-                Ok(graph_file.path().to_path_buf())
-            })?;
+            let graph_path =
+                self.with_graph_file(|graph_file| Ok(graph_file.path().to_path_buf()))?;
 
             // Create backup with default configuration (includes checkpoint)
-            let native_result = backup::create_backup(
-                &graph_path,
-                backup::BackupConfig::new(backup_dir),
-            ).map_err(|e| SqliteGraphError::connection(format!("Backup failed: {:?}", e)))?;
+            let native_result =
+                backup::create_backup(&graph_path, backup::BackupConfig::new(backup_dir))
+                    .map_err(|e| SqliteGraphError::connection(format!("Backup failed: {:?}", e)))?;
 
             Ok(crate::backend::BackupResult {
                 snapshot_path: native_result.snapshot_path,
@@ -417,19 +459,22 @@ impl GraphBackend for NativeGraphBackend {
         #[cfg(not(feature = "native-v2"))]
         {
             let _ = backup_dir;
-            Err(SqliteGraphError::connection("Backup not available without native-v2 feature".to_string()))
+            Err(SqliteGraphError::connection(
+                "Backup not available without native-v2 feature".to_string(),
+            ))
         }
     }
 
-    fn snapshot_import(&self, import_dir: &std::path::Path) -> Result<crate::backend::ImportMetadata, SqliteGraphError> {
+    fn snapshot_import(
+        &self,
+        import_dir: &std::path::Path,
+    ) -> Result<crate::backend::ImportMetadata, SqliteGraphError> {
+        use crate::backend::native::v2::import::ImportMode;
         use crate::backend::native::v2::import::SnapshotImporter;
         use crate::backend::native::v2::import::snapshot::SnapshotImportConfig;
-        use crate::backend::native::v2::import::ImportMode;
 
         // Get the graph file path
-        let graph_path = self.with_graph_file(|graph_file| {
-            Ok(graph_file.path().to_path_buf())
-        })?;
+        let graph_path = self.with_graph_file(|graph_file| Ok(graph_file.path().to_path_buf()))?;
 
         let config = SnapshotImportConfig {
             target_graph_path: graph_path.clone(),
@@ -440,11 +485,14 @@ impl GraphBackend for NativeGraphBackend {
             overwrite_existing: true, // Allow overwriting for import
         };
 
-        let importer = SnapshotImporter::from_export_dir(import_dir, &graph_path, config)
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to create snapshot importer: {:?}", e)))?;
+        let importer =
+            SnapshotImporter::from_export_dir(import_dir, &graph_path, config).map_err(|e| {
+                SqliteGraphError::connection(format!("Failed to create snapshot importer: {:?}", e))
+            })?;
 
-        let result = importer.import()
-            .map_err(|e| SqliteGraphError::connection(format!("Snapshot import failed: {:?}", e)))?;
+        let result = importer.import().map_err(|e| {
+            SqliteGraphError::connection(format!("Snapshot import failed: {:?}", e))
+        })?;
 
         Ok(crate::backend::ImportMetadata {
             snapshot_path: import_dir.join("snapshot"), // Approximate path
@@ -460,7 +508,8 @@ impl GraphBackend for NativeGraphBackend {
         key: &[u8],
     ) -> Result<Option<KvValue>, SqliteGraphError> {
         let store = self.kv_store.read();
-        store.get_at_snapshot(key, snapshot_id)
+        store
+            .get_at_snapshot(key, snapshot_id)
             .map_err(|e| SqliteGraphError::connection(e.to_string()))
     }
 
@@ -474,8 +523,9 @@ impl GraphBackend for NativeGraphBackend {
         use crate::backend::native::v2::kv_store::wal;
         use crate::backend::native::v2::wal::record::V2WALRecord;
 
-        let wal_integrator = self.wal_integrator.as_ref()
-            .ok_or_else(|| SqliteGraphError::connection("WAL not available - KV requires native-v2".to_string()))?;
+        let wal_integrator = self.wal_integrator.as_ref().ok_or_else(|| {
+            SqliteGraphError::connection("WAL not available - KV requires native-v2".to_string())
+        })?;
 
         // Clone key for use in both WAL and store
         let key_clone = key.clone();
@@ -495,12 +545,15 @@ impl GraphBackend for NativeGraphBackend {
         };
 
         // Write WAL record and get assigned LSN
-        let commit_lsn = wal_integrator.wal_manager().write_record(wal_record)
+        let commit_lsn = wal_integrator
+            .wal_manager()
+            .write_record(wal_record)
             .map_err(|e| SqliteGraphError::connection(format!("KV WAL write failed: {:?}", e)))?;
 
         // Update in-memory store with assigned LSN as version
         let mut store = self.kv_store.write();
-        store.set_with_version(key_clone, value, ttl_seconds, commit_lsn)
+        store
+            .set_with_version(key_clone, value, ttl_seconds, commit_lsn)
             .map_err(|e| SqliteGraphError::connection(format!("KV store update failed: {}", e)))?;
 
         Ok(())
@@ -511,19 +564,22 @@ impl GraphBackend for NativeGraphBackend {
         use crate::backend::native::v2::kv_store::wal;
         use crate::backend::native::v2::wal::record::V2WALRecord;
 
-        let wal_integrator = self.wal_integrator.as_ref()
-            .ok_or_else(|| SqliteGraphError::connection("WAL not available - KV requires native-v2".to_string()))?;
+        let wal_integrator = self.wal_integrator.as_ref().ok_or_else(|| {
+            SqliteGraphError::connection("WAL not available - KV requires native-v2".to_string())
+        })?;
 
         // Get old value for rollback/recovery
         let store = self.kv_store.read();
-        let old_value = store.get(key)
+        let old_value = store
+            .get(key)
             .map_err(|e| SqliteGraphError::connection(format!("KV get failed: {}", e)))?;
         drop(store);
 
         // Serialize old value if exists
         let (old_value_bytes, old_value_type) = if let Some(ref value) = old_value {
-            let bytes = wal::serialize_value(value)
-                .map_err(|e| SqliteGraphError::connection(format!("KV serialization failed: {}", e)))?;
+            let bytes = wal::serialize_value(value).map_err(|e| {
+                SqliteGraphError::connection(format!("KV serialization failed: {}", e))
+            })?;
             let type_tag = wal::get_value_type_tag(value);
             (Some(bytes), type_tag)
         } else {
@@ -539,7 +595,9 @@ impl GraphBackend for NativeGraphBackend {
         };
 
         // Write WAL record and get assigned LSN
-        let _commit_lsn = wal_integrator.wal_manager().write_record(wal_record)
+        let _commit_lsn = wal_integrator
+            .wal_manager()
+            .write_record(wal_record)
             .map_err(|e| SqliteGraphError::connection(format!("KV WAL delete failed: {:?}", e)))?;
 
         // Delete from in-memory store
@@ -554,13 +612,18 @@ impl GraphBackend for NativeGraphBackend {
     fn subscribe(
         &self,
         filter: crate::backend::SubscriptionFilter,
-    ) -> Result<(u64, std::sync::mpsc::Receiver<crate::backend::PubSubEvent>), SqliteGraphError> {
-        
+    ) -> Result<(u64, std::sync::mpsc::Receiver<crate::backend::PubSubEvent>), SqliteGraphError>
+    {
+        let wal_integrator = self.wal_integrator.as_ref().ok_or_else(|| {
+            SqliteGraphError::connection(
+                "WAL not available - pub/sub requires native-v2".to_string(),
+            )
+        })?;
 
-        let wal_integrator = self.wal_integrator.as_ref()
-            .ok_or_else(|| SqliteGraphError::connection("WAL not available - pub/sub requires native-v2".to_string()))?;
-
-        let (sub_id, rx) = wal_integrator.wal_manager().get_publisher().subscribe(filter);
+        let (sub_id, rx) = wal_integrator
+            .wal_manager()
+            .get_publisher()
+            .subscribe(filter);
         Ok((sub_id.as_u64(), rx))
     }
 
@@ -568,11 +631,17 @@ impl GraphBackend for NativeGraphBackend {
     fn unsubscribe(&self, subscriber_id: u64) -> Result<bool, SqliteGraphError> {
         use crate::backend::native::v2::pubsub::SubscriberId;
 
-        let wal_integrator = self.wal_integrator.as_ref()
-            .ok_or_else(|| SqliteGraphError::connection("WAL not available - pub/sub requires native-v2".to_string()))?;
+        let wal_integrator = self.wal_integrator.as_ref().ok_or_else(|| {
+            SqliteGraphError::connection(
+                "WAL not available - pub/sub requires native-v2".to_string(),
+            )
+        })?;
 
         let sub_id = SubscriberId::from_raw(subscriber_id);
-        let removed = wal_integrator.wal_manager().get_publisher().unsubscribe(sub_id);
+        let removed = wal_integrator
+            .wal_manager()
+            .get_publisher()
+            .unsubscribe(sub_id);
         Ok(removed)
     }
 }
@@ -622,12 +691,14 @@ mod tests {
         let (sub_id, mut rx) = backend.subscribe(filter).unwrap();
 
         // Make a change (direct node insert - no transaction API in this test)
-        let node_id = backend.insert_node(NodeSpec {
-            kind: "Test".to_string(),
-            name: "test_node".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
+        let node_id = backend
+            .insert_node(NodeSpec {
+                kind: "Test".to_string(),
+                name: "test_node".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
 
         // Note: Events are only emitted on WAL commit, which requires transaction API
         // For now, just verify subscription was successful

@@ -29,10 +29,10 @@
 
 use std::time::Duration;
 
-use criterion::{black_box, BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use sqlitegraph::backend::native::{
-    adjacency::{LinearDetector, are_clusters_contiguous},
     NativeNodeId,
+    adjacency::{LinearDetector, are_clusters_contiguous},
 };
 
 /// Common benchmark configuration
@@ -52,25 +52,21 @@ fn bench_observe_overhead(criterion: &mut Criterion) {
 
     for &count in &node_counts {
         group.throughput(Throughput::Elements(count as u64));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &count| {
-                b.iter(|| {
-                    let mut detector = LinearDetector::new();
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
+            b.iter(|| {
+                let mut detector = LinearDetector::new();
 
-                    // Simulate observing a linear chain
-                    for i in 0..count {
-                        let node_id = i as NativeNodeId;
-                        let degree = 1u32; // Linear chain: all nodes have degree 1
-                        black_box(detector.observe(black_box(node_id), black_box(degree)));
-                    }
+                // Simulate observing a linear chain
+                for i in 0..count {
+                    let node_id = i as NativeNodeId;
+                    let degree = 1u32; // Linear chain: all nodes have degree 1
+                    black_box(detector.observe(black_box(node_id), black_box(degree)));
+                }
 
-                    // Prevent optimization
-                    black_box(detector.is_linear_confirmed());
-                });
-            },
-        );
+                // Prevent optimization
+                black_box(detector.is_linear_confirmed());
+            });
+        });
     }
 
     group.finish();
@@ -89,38 +85,34 @@ fn bench_observe_with_cluster_overhead(criterion: &mut Criterion) {
 
     for &count in &node_counts {
         group.throughput(Throughput::Elements(count as u64));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &count| {
-                b.iter(|| {
-                    let mut detector = LinearDetector::new();
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
+            b.iter(|| {
+                let mut detector = LinearDetector::new();
 
-                    // Simulate observing a linear chain with contiguous clusters
-                    // Each cluster is 4096 bytes, starting at offset 1024
-                    let mut current_offset = 1024u64;
-                    let cluster_size = 4096u32;
+                // Simulate observing a linear chain with contiguous clusters
+                // Each cluster is 4096 bytes, starting at offset 1024
+                let mut current_offset = 1024u64;
+                let cluster_size = 4096u32;
 
-                    for i in 0..count {
-                        let node_id = i as NativeNodeId;
-                        let degree = 1u32;
+                for i in 0..count {
+                    let node_id = i as NativeNodeId;
+                    let degree = 1u32;
 
-                        black_box(detector.observe_with_cluster(
-                            black_box(node_id),
-                            black_box(degree),
-                            black_box(current_offset),
-                            black_box(cluster_size),
-                        ));
+                    black_box(detector.observe_with_cluster(
+                        black_box(node_id),
+                        black_box(degree),
+                        black_box(current_offset),
+                        black_box(cluster_size),
+                    ));
 
-                        current_offset += cluster_size as u64;
-                    }
+                    current_offset += cluster_size as u64;
+                }
 
-                    // Prevent optimization
-                    black_box(detector.cluster_offsets().len());
-                    black_box(detector.is_linear_confirmed());
-                });
-            },
-        );
+                // Prevent optimization
+                black_box(detector.cluster_offsets().len());
+                black_box(detector.is_linear_confirmed());
+            });
+        });
     }
 
     group.finish();
@@ -148,15 +140,11 @@ fn bench_contiguity_validation(criterion: &mut Criterion) {
             current_offset += cluster_size as u64;
         }
 
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &_count| {
-                b.iter(|| {
-                    black_box(are_clusters_contiguous(black_box(&offsets)));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
+            b.iter(|| {
+                black_box(are_clusters_contiguous(black_box(&offsets)));
+            });
+        });
     }
 
     group.finish();
@@ -184,25 +172,21 @@ fn bench_validate_contiguity_method(criterion: &mut Criterion) {
             current_offset += cluster_size as u64;
         }
 
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &_count| {
-                b.iter(|| {
-                    // Create fresh detector for each iteration
-                    let mut detector = LinearDetector::new();
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
+            b.iter(|| {
+                // Create fresh detector for each iteration
+                let mut detector = LinearDetector::new();
 
-                    // Populate with cluster offsets
-                    for (i, &(offset, size)) in offsets.iter().enumerate() {
-                        let node_id = i as NativeNodeId;
-                        detector.observe_with_cluster(node_id, 1, offset, size);
-                    }
+                // Populate with cluster offsets
+                for (i, &(offset, size)) in offsets.iter().enumerate() {
+                    let node_id = i as NativeNodeId;
+                    detector.observe_with_cluster(node_id, 1, offset, size);
+                }
 
-                    // Benchmark validate_contiguity() method
-                    black_box(detector.validate_contiguity());
-                });
-            },
-        );
+                // Benchmark validate_contiguity() method
+                black_box(detector.validate_contiguity());
+            });
+        });
     }
 
     group.finish();
@@ -237,15 +221,11 @@ fn bench_non_contiguous_validation(criterion: &mut Criterion) {
             }
         }
 
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &_count| {
-                b.iter(|| {
-                    black_box(are_clusters_contiguous(black_box(&offsets)));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
+            b.iter(|| {
+                black_box(are_clusters_contiguous(black_box(&offsets)));
+            });
+        });
     }
 
     group.finish();

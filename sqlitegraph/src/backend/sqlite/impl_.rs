@@ -60,7 +60,9 @@ impl SqliteGraphBackend {
             )",
             [],
         )
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to create kv_store table: {}", e)))?;
+        .map_err(|e| {
+            SqliteGraphError::connection(format!("Failed to create kv_store table: {}", e))
+        })?;
 
         Ok(())
     }
@@ -122,7 +124,11 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         })
     }
 
-    fn get_node(&self, snapshot_id: crate::snapshot::SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+    fn get_node(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        id: i64,
+    ) -> Result<GraphEntity, SqliteGraphError> {
         // SQLite: BEGIN TRANSACTION at snapshot_id, then query
         // For now, snapshot_id is ignored (SQLite transactions handle isolation)
         let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
@@ -139,13 +145,23 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         })
     }
 
-    fn neighbors(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
+    fn neighbors(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        node: i64,
+        query: NeighborQuery,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
         // SQLite: Transactions handle isolation automatically
         let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         self.query_neighbors(node, query.direction, &query.edge_type)
     }
 
-    fn bfs(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
+    fn bfs(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        start: i64,
+        depth: u32,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
         // SQLite: Transactions handle isolation automatically
         let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         // Check query cache first
@@ -159,7 +175,12 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         Ok(result)
     }
 
-    fn shortest_path(&self, snapshot_id: crate::snapshot::SnapshotId, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
+    fn shortest_path(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        start: i64,
+        end: i64,
+    ) -> Result<Option<Vec<i64>>, SqliteGraphError> {
         // SQLite: Transactions handle isolation automatically
         let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         // Check query cache first
@@ -175,7 +196,11 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         Ok(result)
     }
 
-    fn node_degree(&self, snapshot_id: crate::snapshot::SnapshotId, node: i64) -> Result<(usize, usize), SqliteGraphError> {
+    fn node_degree(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        node: i64,
+    ) -> Result<(usize, usize), SqliteGraphError> {
         // SQLite: Transactions handle isolation automatically
         let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
         let out = self.graph.fetch_outgoing(node)?.len();
@@ -270,16 +295,20 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
             let _checkpointed: i32 = row.get(2)?;
             Ok(())
         })
-            .map_err(|e| SqliteGraphError::connection(format!("WAL checkpoint failed: {}", e)))?;
+        .map_err(|e| SqliteGraphError::connection(format!("WAL checkpoint failed: {}", e)))?;
         Ok(())
     }
 
-    fn backup(&self, backup_dir: &std::path::Path) -> Result<crate::backend::BackupResult, SqliteGraphError> {
+    fn backup(
+        &self,
+        backup_dir: &std::path::Path,
+    ) -> Result<crate::backend::BackupResult, SqliteGraphError> {
         use std::fs;
 
         // Ensure backup directory exists
-        fs::create_dir_all(backup_dir)
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to create backup directory: {}", e)))?;
+        fs::create_dir_all(backup_dir).map_err(|e| {
+            SqliteGraphError::connection(format!("Failed to create backup directory: {}", e))
+        })?;
 
         // Generate backup filename with timestamp
         let timestamp = std::time::SystemTime::now()
@@ -295,11 +324,14 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
             .map_err(|e| SqliteGraphError::connection(format!("SQLite backup failed: {}", e)))?;
 
         // Get backup metadata
-        let metadata = fs::metadata(&backup_path)
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to read backup metadata: {}", e)))?;
+        let metadata = fs::metadata(&backup_path).map_err(|e| {
+            SqliteGraphError::connection(format!("Failed to read backup metadata: {}", e))
+        })?;
 
         // Get entity count
-        let entity_ids = self.graph.all_entity_ids()
+        let entity_ids = self
+            .graph
+            .all_entity_ids()
             .map_err(|e| SqliteGraphError::query(format!("Failed to get entity count: {}", e)))?;
 
         // Create a simple manifest
@@ -309,8 +341,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
             "size_bytes": metadata.len(),
             "entity_count": entity_ids.len(),
         });
-        fs::write(&manifest_path, manifest.to_string())
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to write manifest: {}", e)))?;
+        fs::write(&manifest_path, manifest.to_string()).map_err(|e| {
+            SqliteGraphError::connection(format!("Failed to write manifest: {}", e))
+        })?;
 
         Ok(crate::backend::BackupResult {
             snapshot_path: backup_path,
@@ -324,12 +357,16 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         })
     }
 
-    fn snapshot_export(&self, export_dir: &std::path::Path) -> Result<crate::backend::SnapshotMetadata, SqliteGraphError> {
+    fn snapshot_export(
+        &self,
+        export_dir: &std::path::Path,
+    ) -> Result<crate::backend::SnapshotMetadata, SqliteGraphError> {
         use std::fs;
 
         // Ensure export directory exists
-        fs::create_dir_all(export_dir)
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to create export directory: {}", e)))?;
+        fs::create_dir_all(export_dir).map_err(|e| {
+            SqliteGraphError::connection(format!("Failed to create export directory: {}", e))
+        })?;
 
         let snapshot_file = export_dir.join("snapshot.json");
 
@@ -337,10 +374,13 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         crate::recovery::dump_graph_to_path(&self.graph, &snapshot_file)?;
 
         // Get metadata
-        let metadata = fs::metadata(&snapshot_file)
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to read snapshot metadata: {}", e)))?;
+        let metadata = fs::metadata(&snapshot_file).map_err(|e| {
+            SqliteGraphError::connection(format!("Failed to read snapshot metadata: {}", e))
+        })?;
 
-        let entity_ids = self.graph.all_entity_ids()
+        let entity_ids = self
+            .graph
+            .all_entity_ids()
             .map_err(|e| SqliteGraphError::query(format!("Failed to get entity count: {}", e)))?;
 
         Ok(crate::backend::SnapshotMetadata {
@@ -351,7 +391,10 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         })
     }
 
-    fn snapshot_import(&self, import_dir: &std::path::Path) -> Result<crate::backend::ImportMetadata, SqliteGraphError> {
+    fn snapshot_import(
+        &self,
+        import_dir: &std::path::Path,
+    ) -> Result<crate::backend::ImportMetadata, SqliteGraphError> {
         let snapshot_file = import_dir.join("snapshot.json");
 
         if !snapshot_file.exists() {
@@ -362,7 +405,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         }
 
         // Get entity count before import
-        let before_count = self.graph.all_entity_ids()
+        let before_count = self
+            .graph
+            .all_entity_ids()
             .map_err(|e| SqliteGraphError::query(format!("Failed to get entity count: {}", e)))?
             .len();
 
@@ -370,7 +415,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         crate::recovery::load_graph_from_path(&self.graph, &snapshot_file)?;
 
         // Get entity count after import
-        let after_count = self.graph.all_entity_ids()
+        let after_count = self
+            .graph
+            .all_entity_ids()
             .map_err(|e| SqliteGraphError::query(format!("Failed to get entity count: {}", e)))?
             .len();
 
@@ -386,8 +433,8 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         &self,
         _snapshot_id: crate::snapshot::SnapshotId,
         key: &[u8],
-    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, crate::SqliteGraphError> {
-        
+    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, crate::SqliteGraphError>
+    {
         use std::time::SystemTime;
 
         // Initialize KV table if needed
@@ -399,18 +446,17 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         let conn = self.graph.connection();
 
         // Query the kv_store table
-        let result = conn
-            .query_row(
-                "SELECT value_json, ttl_seconds, created_at FROM kv_store WHERE key = ?1",
-                params![key_str],
-                |row| {
-                    let value_json: String = row.get(0)?;
-                    let ttl_seconds: Option<u64> = row.get(1)?;
-                    let created_at: u64 = row.get(2)?;
+        let result = conn.query_row(
+            "SELECT value_json, ttl_seconds, created_at FROM kv_store WHERE key = ?1",
+            params![key_str],
+            |row| {
+                let value_json: String = row.get(0)?;
+                let ttl_seconds: Option<u64> = row.get(1)?;
+                let created_at: u64 = row.get(2)?;
 
-                    Ok((value_json, ttl_seconds, created_at))
-                },
-            );
+                Ok((value_json, ttl_seconds, created_at))
+            },
+        );
 
         match result {
             Ok((value_json, ttl_seconds, created_at)) => {
@@ -428,14 +474,22 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
                 }
 
                 // Parse JSON value back to KvValue
-                let json_value: serde_json::Value = serde_json::from_str(&value_json)
-                    .map_err(|e| SqliteGraphError::connection(format!("Failed to parse KV value JSON: {}", e)))?;
+                let json_value: serde_json::Value =
+                    serde_json::from_str(&value_json).map_err(|e| {
+                        SqliteGraphError::connection(format!(
+                            "Failed to parse KV value JSON: {}",
+                            e
+                        ))
+                    })?;
 
                 let kv_value = json_to_kv_value(json_value)?;
                 Ok(Some(kv_value))
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(SqliteGraphError::query(format!("Failed to query KV store: {}", e))),
+            Err(e) => Err(SqliteGraphError::query(format!(
+                "Failed to query KV store: {}",
+                e
+            ))),
         }
     }
 
@@ -456,8 +510,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 
         // Serialize KvValue to JSON
         let json_value = kv_value_to_json(&value);
-        let value_json = serde_json::to_string(&json_value)
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to serialize KV value: {}", e)))?;
+        let value_json = serde_json::to_string(&json_value).map_err(|e| {
+            SqliteGraphError::connection(format!("Failed to serialize KV value: {}", e))
+        })?;
 
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -505,10 +560,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         let conn = self.graph.connection();
 
         // Delete the entry (ignore if not found - idempotent)
-        conn.execute(
-            "DELETE FROM kv_store WHERE key = ?1",
-            params![key_str],
-        )
+        conn.execute("DELETE FROM kv_store WHERE key = ?1", params![key_str])
             .map_err(|e| SqliteGraphError::query(format!("Failed to delete KV entry: {}", e)))?;
 
         Ok(())
@@ -518,11 +570,14 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
     fn subscribe(
         &self,
         _filter: crate::backend::SubscriptionFilter,
-    ) -> Result<(u64, std::sync::mpsc::Receiver<crate::backend::PubSubEvent>), crate::SqliteGraphError> {
+    ) -> Result<
+        (u64, std::sync::mpsc::Receiver<crate::backend::PubSubEvent>),
+        crate::SqliteGraphError,
+    > {
         // SQLite backend does not support pub/sub (no WAL event emission)
         // Return explicit error for clarity
         Err(SqliteGraphError::Unsupported(
-            "Pub/sub is only available on Native V2 backend".to_string()
+            "Pub/sub is only available on Native V2 backend".to_string(),
         ))
     }
 
@@ -530,14 +585,16 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
     fn unsubscribe(&self, _subscriber_id: u64) -> Result<bool, crate::SqliteGraphError> {
         // SQLite backend does not support pub/sub
         Err(SqliteGraphError::Unsupported(
-            "Pub/sub is only available on Native V2 backend".to_string()
+            "Pub/sub is only available on Native V2 backend".to_string(),
         ))
     }
 }
 
 /// Convert KvValue to serde_json::Value for serialization
 #[cfg(feature = "native-v2")]
-fn kv_value_to_json(value: &crate::backend::native::v2::kv_store::types::KvValue) -> serde_json::Value {
+fn kv_value_to_json(
+    value: &crate::backend::native::v2::kv_store::types::KvValue,
+) -> serde_json::Value {
     use crate::backend::native::v2::kv_store::types::KvValue;
 
     match value {
@@ -599,57 +656,67 @@ fn bytes_to_string(bytes: &[u8]) -> String {
 fn string_to_bytes(s: &str) -> Result<Vec<u8>, SqliteGraphError> {
     s.split(',')
         .map(|part| {
-            part.trim().parse::<u8>()
+            part.trim()
+                .parse::<u8>()
                 .map_err(|_| SqliteGraphError::connection(format!("Invalid byte string: {}", s)))
         })
         .collect()
 }
 
-
 /// Convert serde_json::Value back to KvValue after deserialization
 #[cfg(feature = "native-v2")]
-fn json_to_kv_value(json_value: serde_json::Value) -> Result<crate::backend::native::v2::kv_store::types::KvValue, SqliteGraphError> {
+fn json_to_kv_value(
+    json_value: serde_json::Value,
+) -> Result<crate::backend::native::v2::kv_store::types::KvValue, SqliteGraphError> {
     use crate::backend::native::v2::kv_store::types::KvValue;
 
     let type_str = json_value
         .get("type")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| SqliteGraphError::connection("Missing type field in KV value JSON".to_string()))?;
+        .ok_or_else(|| {
+            SqliteGraphError::connection("Missing type field in KV value JSON".to_string())
+        })?;
 
-    let data = json_value
-        .get("data")
-        .ok_or_else(|| SqliteGraphError::connection("Missing data field in KV value JSON".to_string()))?;
+    let data = json_value.get("data").ok_or_else(|| {
+        SqliteGraphError::connection("Missing data field in KV value JSON".to_string())
+    })?;
 
     match type_str {
         "bytes" => {
-            let bytes_str = data.as_str()
-                .ok_or_else(|| SqliteGraphError::connection("Invalid bytes data in KV value".to_string()))?;
+            let bytes_str = data.as_str().ok_or_else(|| {
+                SqliteGraphError::connection("Invalid bytes data in KV value".to_string())
+            })?;
             let bytes = string_to_bytes(bytes_str)?;
             Ok(KvValue::Bytes(bytes))
         }
         "string" => {
-            let s = data.as_str()
-                .ok_or_else(|| SqliteGraphError::connection("Invalid string data in KV value".to_string()))?;
+            let s = data.as_str().ok_or_else(|| {
+                SqliteGraphError::connection("Invalid string data in KV value".to_string())
+            })?;
             Ok(KvValue::String(s.to_string()))
         }
         "integer" => {
-            let n = data.as_i64()
-                .ok_or_else(|| SqliteGraphError::connection("Invalid integer data in KV value".to_string()))?;
+            let n = data.as_i64().ok_or_else(|| {
+                SqliteGraphError::connection("Invalid integer data in KV value".to_string())
+            })?;
             Ok(KvValue::Integer(n))
         }
         "float" => {
-            let f = data.as_f64()
-                .ok_or_else(|| SqliteGraphError::connection("Invalid float data in KV value".to_string()))?;
+            let f = data.as_f64().ok_or_else(|| {
+                SqliteGraphError::connection("Invalid float data in KV value".to_string())
+            })?;
             Ok(KvValue::Float(f))
         }
         "boolean" => {
-            let b = data.as_bool()
-                .ok_or_else(|| SqliteGraphError::connection("Invalid boolean data in KV value".to_string()))?;
+            let b = data.as_bool().ok_or_else(|| {
+                SqliteGraphError::connection("Invalid boolean data in KV value".to_string())
+            })?;
             Ok(KvValue::Boolean(b))
         }
-        "json" => {
-            Ok(KvValue::Json(data.clone()))
-        }
-        _ => Err(SqliteGraphError::connection(format!("Unknown KV value type: {}", type_str))),
+        "json" => Ok(KvValue::Json(data.clone())),
+        _ => Err(SqliteGraphError::connection(format!(
+            "Unknown KV value type: {}",
+            type_str
+        ))),
     }
 }

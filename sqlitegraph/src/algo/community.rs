@@ -21,8 +21,8 @@
 
 use ahash::AHashMap;
 
-use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 use crate::progress::ProgressCallback;
+use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 
 /// Label Propagation algorithm for fast community detection.
 ///
@@ -241,13 +241,17 @@ pub fn louvain_communities(
             // Count outgoing edges
             for &neighbor in &graph.fetch_outgoing(node)? {
                 let neighbor_community = *communities.get(&neighbor).unwrap_or(&neighbor);
-                *community_connections.entry(neighbor_community).or_insert(0.0) += 1.0;
+                *community_connections
+                    .entry(neighbor_community)
+                    .or_insert(0.0) += 1.0;
             }
 
             // Count incoming edges
             for &neighbor in &graph.fetch_incoming(node)? {
                 let neighbor_community = *communities.get(&neighbor).unwrap_or(&neighbor);
-                *community_connections.entry(neighbor_community).or_insert(0.0) += 1.0;
+                *community_connections
+                    .entry(neighbor_community)
+                    .or_insert(0.0) += 1.0;
             }
 
             // Calculate modularity delta for moving to each neighbor's community
@@ -271,9 +275,8 @@ pub fn louvain_communities(
                 // Simplified for single node move:
                 // ΔQ = [(2*edges_to_community - node_degree*community_degree/m) / (2*m)]
 
-                let delta = (2.0 * edges_to_community
-                    - node_degree * community_degree / m)
-                    / (2.0 * m);
+                let delta =
+                    (2.0 * edges_to_community - node_degree * community_degree / m) / (2.0 * m);
 
                 if delta > best_delta {
                     best_delta = delta;
@@ -404,13 +407,17 @@ where
             // Count outgoing edges
             for &neighbor in &graph.fetch_outgoing(node)? {
                 let neighbor_community = *communities.get(&neighbor).unwrap_or(&neighbor);
-                *community_connections.entry(neighbor_community).or_insert(0.0) += 1.0;
+                *community_connections
+                    .entry(neighbor_community)
+                    .or_insert(0.0) += 1.0;
             }
 
             // Count incoming edges
             for &neighbor in &graph.fetch_incoming(node)? {
                 let neighbor_community = *communities.get(&neighbor).unwrap_or(&neighbor);
-                *community_connections.entry(neighbor_community).or_insert(0.0) += 1.0;
+                *community_connections
+                    .entry(neighbor_community)
+                    .or_insert(0.0) += 1.0;
             }
 
             // Calculate modularity delta for moving to each neighbor's community
@@ -434,9 +441,8 @@ where
                 // Simplified for single node move:
                 // ΔQ = [(2*edges_to_community - node_degree*community_degree/m) / (2*m)]
 
-                let delta = (2.0 * edges_to_community
-                    - node_degree * community_degree / m)
-                    / (2.0 * m);
+                let delta =
+                    (2.0 * edges_to_community - node_degree * community_degree / m) / (2.0 * m);
 
                 if delta > best_delta {
                     best_delta = delta;

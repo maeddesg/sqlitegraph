@@ -8,7 +8,12 @@ use sqlitegraph::backend::native::{EdgeFlags, EdgeRecord};
 use std::time::Instant;
 
 /// Create a test edge record.
-fn create_test_edge(from_id: i64, to_id: i64, edge_type: &str, data: serde_json::Value) -> EdgeRecord {
+fn create_test_edge(
+    from_id: i64,
+    to_id: i64,
+    edge_type: &str,
+    data: serde_json::Value,
+) -> EdgeRecord {
     EdgeRecord {
         id: 1,
         from_id,
@@ -154,12 +159,9 @@ fn test_compression_ratio() {
     // Create compact edges
     let mut compact_edges = Vec::new();
     for edge in &edges {
-        let compact = CompactEdgeRecord::from_edge_record(
-            edge,
-            Direction::Outgoing,
-            &mut string_table,
-        )
-        .unwrap();
+        let compact =
+            CompactEdgeRecord::from_edge_record(edge, Direction::Outgoing, &mut string_table)
+                .unwrap();
         compact_edges.push(compact);
     }
 
@@ -185,7 +187,10 @@ fn test_compression_ratio() {
 
     println!("Compression ratio: {:.2}x", compression_ratio);
     println!("Original size: {} bytes", original_size);
-    println!("Estimated compressed size: {} bytes", estimated_compressed_size);
+    println!(
+        "Estimated compressed size: {} bytes",
+        estimated_compressed_size
+    );
 }
 
 /// Test decompression performance vs Vec iteration.

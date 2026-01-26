@@ -12,9 +12,7 @@
 //! - ⏳ **Phase 38-04 PENDING**: WAL filtering not yet implemented
 //! - ❌ **Native/SQLite implementations**: Need to be updated to match trait signature
 
-use sqlitegraph::{
-    snapshot::SnapshotId,
-};
+use sqlitegraph::snapshot::SnapshotId;
 
 // ============================================================================
 // SnapshotId Type Tests (Phase 38-02 - COMPLETE)

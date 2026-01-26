@@ -3,14 +3,12 @@
 //! This module implements the main import orchestration that reconstructs database
 //! state from exported artifacts using existing WAL, checkpoint, and recovery components.
 
-use crate::backend::native::v2::{ExportManifest, ImportMode};
-use crate::backend::native::v2::export::ManifestSerializer;
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::{NativeBackendError, NativeResult};
-use crate::backend::native::v2::wal::recovery::states::{
-    RecoveryState as ExplicitRecoveryState,
-};
+use crate::backend::native::v2::export::ManifestSerializer;
+use crate::backend::native::v2::wal::recovery::states::RecoveryState as ExplicitRecoveryState;
 use crate::backend::native::v2::wal::{V2WALConfig, V2WALRecord};
+use crate::backend::native::v2::{ExportManifest, ImportMode};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -114,11 +112,12 @@ impl V2Importer {
         }
 
         // Use existing ManifestSerializer to read manifest
-        let manifest = ManifestSerializer::read_from_file(&manifest_path)
-            .map_err(|_| NativeBackendError::InvalidParameter {
+        let manifest = ManifestSerializer::read_from_file(&manifest_path).map_err(|_| {
+            NativeBackendError::InvalidParameter {
                 context: format!("Failed to read manifest from {:?}", manifest_path),
                 source: None,
-            })?;
+            }
+        })?;
 
         // Set up WAL configuration for target
         let mut wal_config = V2WALConfig::for_graph_file(target_graph_path);
@@ -144,17 +143,20 @@ impl V2Importer {
         };
 
         // Validate manifest integrity
-        report.manifest_valid = self.validate_manifest_integrity(&mut report.warnings, &mut report.errors);
+        report.manifest_valid =
+            self.validate_manifest_integrity(&mut report.warnings, &mut report.errors);
 
         // Validate required files exist
         report.files_exist = self.validate_export_files(&mut report.warnings, &mut report.errors);
 
         // Validate format compatibility
-        report.format_compatible = self.validate_format_compatibility(&mut report.warnings, &mut report.errors);
+        report.format_compatible =
+            self.validate_format_compatibility(&mut report.warnings, &mut report.errors);
 
         // Validate target compatibility for merge imports
         if self.config.import_mode == ImportMode::Merge {
-            report.target_compatible = self.validate_target_compatibility(&mut report.warnings, &mut report.errors);
+            report.target_compatible =
+                self.validate_target_compatibility(&mut report.warnings, &mut report.errors);
         } else {
             report.target_compatible = true; // Fresh mode doesn't need target compatibility
         }
@@ -171,7 +173,11 @@ impl V2Importer {
     }
 
     /// Validate manifest integrity
-    fn validate_manifest_integrity(&self, _warnings: &mut Vec<String>, errors: &mut Vec<String>) -> bool {
+    fn validate_manifest_integrity(
+        &self,
+        _warnings: &mut Vec<String>,
+        errors: &mut Vec<String>,
+    ) -> bool {
         // Check magic bytes
         if self.manifest.magic != ExportManifest::MAGIC {
             errors.push("Invalid manifest magic bytes".to_string());
@@ -180,12 +186,17 @@ impl V2Importer {
 
         // Check version
         if self.manifest.version != ExportManifest::VERSION {
-            errors.push(format!("Unsupported manifest version: {}", self.manifest.version));
+            errors.push(format!(
+                "Unsupported manifest version: {}",
+                self.manifest.version
+            ));
             return false;
         }
 
         // Check LSN consistency
-        if let (Some(wal_start), Some(wal_end)) = (self.manifest.wal_start_lsn, self.manifest.wal_end_lsn) {
+        if let (Some(wal_start), Some(wal_end)) =
+            (self.manifest.wal_start_lsn, self.manifest.wal_end_lsn)
+        {
             if wal_start > wal_end {
                 errors.push("Invalid WAL LSN range: start > end".to_string());
                 return false;
@@ -208,10 +219,7 @@ impl V2Importer {
             "v2_export.graph",
         ];
 
-        let expected_wal_files = vec![
-            "v2_export.wal",
-            "v2_export_lsn.wal",
-        ];
+        let expected_wal_files = vec!["v2_export.wal", "v2_export_lsn.wal"];
 
         // Check for manifest file (already validated to exist)
         let manifest_path = export_path.join("export.manifest");
@@ -244,23 +252,36 @@ impl V2Importer {
     }
 
     /// Validate format compatibility
-    fn validate_format_compatibility(&self, warnings: &mut Vec<String>, errors: &mut Vec<String>) -> bool {
+    fn validate_format_compatibility(
+        &self,
+        warnings: &mut Vec<String>,
+        errors: &mut Vec<String>,
+    ) -> bool {
         // Check if V2 format is supported
         if self.manifest.graph_format_version != 2 {
-            errors.push(format!("Unsupported graph format version: {}", self.manifest.graph_format_version));
+            errors.push(format!(
+                "Unsupported graph format version: {}",
+                self.manifest.graph_format_version
+            ));
             return false;
         }
 
         // Check WAL format version compatibility
         if let Some(wal_end_lsn) = self.manifest.wal_end_lsn {
             if wal_end_lsn > 0 && self.manifest.wal_format_version != 1 {
-                errors.push(format!("Unsupported WAL format version: {}", self.manifest.wal_format_version));
+                errors.push(format!(
+                    "Unsupported WAL format version: {}",
+                    self.manifest.wal_format_version
+                ));
                 return false;
             }
         }
 
         // Warn about potential incompatibilities
-        if self.manifest.export_mode != crate::backend::native::v2::export::ExportMode::CheckpointAligned && self.manifest.wal_end_lsn.is_none() {
+        if self.manifest.export_mode
+            != crate::backend::native::v2::export::ExportMode::CheckpointAligned
+            && self.manifest.wal_end_lsn.is_none()
+        {
             warnings.push("Export is not checkpoint aligned and has no WAL tail".to_string());
         }
 
@@ -274,7 +295,11 @@ impl V2Importer {
     }
 
     /// Validate target compatibility for merge imports
-    fn validate_target_compatibility(&self, warnings: &mut Vec<String>, errors: &mut Vec<String>) -> bool {
+    fn validate_target_compatibility(
+        &self,
+        warnings: &mut Vec<String>,
+        errors: &mut Vec<String>,
+    ) -> bool {
         let target_path = &self.config.target_graph_path;
 
         // Check if target graph exists for merge
@@ -305,4 +330,3 @@ impl V2Importer {
         })
     }
 }
-

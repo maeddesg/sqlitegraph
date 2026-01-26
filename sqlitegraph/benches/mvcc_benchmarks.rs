@@ -7,10 +7,8 @@
 //! These benchmarks establish performance baselines for MVCC-lite snapshot
 //! operations and track overhead compared to direct graph access.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use sqlitegraph::{
-    GraphEdgeCreate, GraphEntityCreate, SqliteGraph,
-};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use sqlitegraph::{GraphEdgeCreate, GraphEntityCreate, SqliteGraph};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,7 +17,10 @@ use std::time::Duration;
 //
 
 /// Helper: Insert entity using proper API
-fn insert_entity(graph: &SqliteGraph, create: GraphEntityCreate) -> Result<i64, sqlitegraph::SqliteGraphError> {
+fn insert_entity(
+    graph: &SqliteGraph,
+    create: GraphEntityCreate,
+) -> Result<i64, sqlitegraph::SqliteGraphError> {
     let entity = sqlitegraph::GraphEntity {
         id: 0,
         kind: create.kind,
@@ -31,7 +32,10 @@ fn insert_entity(graph: &SqliteGraph, create: GraphEntityCreate) -> Result<i64, 
 }
 
 /// Helper: Insert edge using proper API
-fn insert_edge(graph: &SqliteGraph, create: GraphEdgeCreate) -> Result<i64, sqlitegraph::SqliteGraphError> {
+fn insert_edge(
+    graph: &SqliteGraph,
+    create: GraphEdgeCreate,
+) -> Result<i64, sqlitegraph::SqliteGraphError> {
     let edge = sqlitegraph::GraphEdge {
         id: 0,
         from_id: create.from_id,
@@ -187,48 +191,52 @@ fn bench_concurrent_snapshot_acquisition(c: &mut Criterion) {
     // Use SnapshotManager directly for concurrent testing
     use sqlitegraph::mvcc::SnapshotManager;
     use std::collections::HashMap;
-    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Barrier;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     for thread_count in [1, 2, 4, 8].iter() {
-        group.bench_with_input(BenchmarkId::from_parameter(thread_count), thread_count, |b, &num_threads| {
-            b.iter(|| {
-                // Create test snapshot manager
-                let mut outgoing = HashMap::new();
-                let mut incoming = HashMap::new();
-                for i in 0..1_000 {
-                    outgoing.insert(i, vec![]);
-                    incoming.insert(i, vec![]);
-                }
-                let manager = Arc::new(SnapshotManager::with_state(&outgoing, &incoming));
-                let barrier = Arc::new(Barrier::new(num_threads));
-                let counter = Arc::new(AtomicU64::new(0));
+        group.bench_with_input(
+            BenchmarkId::from_parameter(thread_count),
+            thread_count,
+            |b, &num_threads| {
+                b.iter(|| {
+                    // Create test snapshot manager
+                    let mut outgoing = HashMap::new();
+                    let mut incoming = HashMap::new();
+                    for i in 0..1_000 {
+                        outgoing.insert(i, vec![]);
+                        incoming.insert(i, vec![]);
+                    }
+                    let manager = Arc::new(SnapshotManager::with_state(&outgoing, &incoming));
+                    let barrier = Arc::new(Barrier::new(num_threads));
+                    let counter = Arc::new(AtomicU64::new(0));
 
-                let handles: Vec<_> = (0..num_threads)
-                    .map(|_| {
-                        let manager = manager.clone();
-                        let barrier = barrier.clone();
-                        let counter = counter.clone();
+                    let handles: Vec<_> = (0..num_threads)
+                        .map(|_| {
+                            let manager = manager.clone();
+                            let barrier = barrier.clone();
+                            let counter = counter.clone();
 
-                        std::thread::spawn(move || {
-                            barrier.wait();
-                            for _ in 0..100 {
-                                let snapshot = manager.acquire_snapshot();
-                                if snapshot.node_count() > 0 {
-                                    counter.fetch_add(1, Ordering::Relaxed);
+                            std::thread::spawn(move || {
+                                barrier.wait();
+                                for _ in 0..100 {
+                                    let snapshot = manager.acquire_snapshot();
+                                    if snapshot.node_count() > 0 {
+                                        counter.fetch_add(1, Ordering::Relaxed);
+                                    }
                                 }
-                            }
+                            })
                         })
-                    })
-                    .collect();
+                        .collect();
 
-                for h in handles {
-                    h.join().unwrap();
-                }
+                    for h in handles {
+                        h.join().unwrap();
+                    }
 
-                black_box(counter.load(Ordering::Relaxed))
-            })
-        });
+                    black_box(counter.load(Ordering::Relaxed))
+                })
+            },
+        );
     }
 
     group.finish();

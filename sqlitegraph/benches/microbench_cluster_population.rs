@@ -26,12 +26,12 @@
 
 use std::time::Duration;
 
-use criterion::{black_box, BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use sqlitegraph::backend::native::{
-    types::{NativeBackendError, NativeResult},
+    EdgeFlags, EdgeRecord,
     adjacency::SequentialClusterReader,
+    types::{NativeBackendError, NativeResult},
     v2::edge_cluster::{cluster::EdgeCluster, cluster_trace::Direction},
-    EdgeRecord, EdgeFlags,
     v2::string_table::StringTable,
 };
 
@@ -134,9 +134,8 @@ fn bench_single_cluster_read(criterion: &mut Criterion) {
             let total_size: u64 = offsets.iter().map(|(_, size)| *size as u64).sum();
             let mut buffer = vec![0u8; total_size as usize];
             let start_offset = offsets[0].0;
-            let _ = black_box(
-                graph_file.read_bytes(black_box(start_offset), black_box(&mut buffer))
-            );
+            let _ =
+                black_box(graph_file.read_bytes(black_box(start_offset), black_box(&mut buffer)));
         });
     });
 
@@ -164,22 +163,18 @@ fn bench_multiple_cluster_read(criterion: &mut Criterion) {
         let total_bytes: u64 = offsets.iter().map(|(_, size)| *size as u64).sum();
 
         group.throughput(Throughput::Bytes(total_bytes));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &_count| {
-                b.iter(|| {
-                    // Simulate sequential cluster read: single I/O for all clusters
-                    let total_size: u64 = offsets.iter().map(|(_, size)| *size as u64).sum();
-                    let mut buffer = vec![0u8; total_size as usize];
-                    let start_offset = offsets[0].0;
-                    let _ = black_box(
-                        graph_file.read_bytes(black_box(start_offset), black_box(&mut buffer))
-                    );
-                    black_box(&buffer);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
+            b.iter(|| {
+                // Simulate sequential cluster read: single I/O for all clusters
+                let total_size: u64 = offsets.iter().map(|(_, size)| *size as u64).sum();
+                let mut buffer = vec![0u8; total_size as usize];
+                let start_offset = offsets[0].0;
+                let _ = black_box(
+                    graph_file.read_bytes(black_box(start_offset), black_box(&mut buffer)),
+                );
+                black_box(&buffer);
+            });
+        });
     }
 
     group.finish();
@@ -213,7 +208,7 @@ fn bench_cluster_read_throughput(criterion: &mut Criterion) {
                     let mut buffer = vec![0u8; total_size as usize];
                     let start_offset = offsets[0].0;
                     let _ = black_box(
-                        graph_file.read_bytes(black_box(start_offset), black_box(&mut buffer))
+                        graph_file.read_bytes(black_box(start_offset), black_box(&mut buffer)),
                     );
                     black_box(&buffer);
                 });

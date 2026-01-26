@@ -11,6 +11,8 @@ use crate::backend::native::{
 
 #[cfg(feature = "v2_experimental")]
 use memmap2::{MmapMut, MmapOptions};
+#[cfg(feature = "v2_experimental")]
+use std::io::{Seek, SeekFrom, Write};
 
 /// Memory mapping management utilities for GraphFile
 pub struct MemoryMappingManager;
@@ -80,7 +82,8 @@ impl MemoryMappingManager {
             file.flush()?;
         }
 
-        let current_mmap_size = mmap.as_ref()
+        let current_mmap_size = mmap
+            .as_ref()
             .ok_or_else(|| NativeBackendError::InvalidState {
                 context: "Memory mapping not initialized in ensure_mmap_covers".to_string(),
                 source: None,

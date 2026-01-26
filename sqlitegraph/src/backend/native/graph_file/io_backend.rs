@@ -4,8 +4,9 @@
 //! handling different I/O modes (standard vs mmap) and exclusive access patterns.
 
 use crate::backend::native::{
-    graph_file::buffers::WriteBuffer, graph_file::file_ops::IOMode,
-    types::NativeResult,
+    graph_file::buffers::WriteBuffer,
+    graph_file::file_ops::IOMode,
+    types::{NativeBackendError, NativeResult},
 };
 
 #[cfg(feature = "v2_experimental")]
@@ -21,7 +22,7 @@ impl IOBackendManager {
     /// - Exclusive MMAP mode: Direct memory-mapped reads
     /// - Exclusive STD mode: Standard file I/O with buffer management
     /// - Default mode: Standard file I/O
-    #[allow(unused_variables)]  // Allow warnings for feature-conditional parameters
+    #[allow(unused_variables)] // Allow warnings for feature-conditional parameters
     pub fn route_read_bytes(
         file: &mut std::fs::File,
         buffer: &mut [u8],
@@ -54,7 +55,7 @@ impl IOBackendManager {
     /// - Exclusive MMAP mode: Direct memory-mapped writes
     /// - Exclusive STD mode: Standard file I/O with buffer management
     /// - Default mode: Standard file I/O
-    #[allow(unused_variables)]  // Allow warnings for feature-conditional parameters
+    #[allow(unused_variables)] // Allow warnings for feature-conditional parameters
     pub fn route_write_bytes(
         file: &mut std::fs::File,
         data: &[u8],
@@ -85,7 +86,7 @@ impl IOBackendManager {
     ///
     /// Handles buffered write operations with proper backend routing
     /// for different I/O modes and exclusive access patterns.
-    #[allow(unused_variables)]  // Allow warnings for feature-conditional parameters
+    #[allow(unused_variables)] // Allow warnings for feature-conditional parameters
     pub fn route_buffered_write_bytes(
         file: &mut std::fs::File,
         data: &[u8],

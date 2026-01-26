@@ -81,19 +81,26 @@ mod tests {
         node.outgoing_cluster_offset = 4096;
         node.outgoing_cluster_size = 1024;
         node.outgoing_edge_count = 10;
-        node.incoming_cluster_offset = 4608;  // Starts within outgoing cluster
+        node.incoming_cluster_offset = 4608; // Starts within outgoing cluster
         node.incoming_cluster_size = 512;
         node.incoming_edge_count = 5;
 
         let result = node.validate();
-        assert!(result.is_err(), "Expected validation error for overlapping clusters");
+        assert!(
+            result.is_err(),
+            "Expected validation error for overlapping clusters"
+        );
 
         let err = result.unwrap_err();
         match err {
-            crate::backend::native::NativeBackendError::InconsistentAdjacency { node_id, direction, file_count } => {
+            crate::backend::native::NativeBackendError::InconsistentAdjacency {
+                node_id,
+                direction,
+                file_count,
+            } => {
                 assert_eq!(node_id, 1);
                 assert_eq!(direction, "cluster_overlap");
-                assert_eq!(file_count, 512);  // Should include overlap size
+                assert_eq!(file_count, 512); // Should include overlap size
             }
             _ => panic!("Expected InconsistentAdjacency error with cluster_overlap direction"),
         }
@@ -114,12 +121,15 @@ mod tests {
         node.outgoing_cluster_offset = 10000;
         node.outgoing_cluster_size = 500;
         node.outgoing_edge_count = 10;
-        node.incoming_cluster_offset = 10500;  // Starts right after outgoing ends (adjacent)
+        node.incoming_cluster_offset = 10500; // Starts right after outgoing ends (adjacent)
         node.incoming_cluster_size = 300;
         node.incoming_edge_count = 5;
 
         let result = node.validate();
-        assert!(result.is_ok(), "Expected validation to pass for non-overlapping clusters");
+        assert!(
+            result.is_ok(),
+            "Expected validation to pass for non-overlapping clusters"
+        );
     }
 
     #[test]
@@ -141,6 +151,9 @@ mod tests {
         node.incoming_edge_count = 0;
 
         let result = node.validate();
-        assert!(result.is_ok(), "Expected validation to pass when only one cluster allocated");
+        assert!(
+            result.is_ok(),
+            "Expected validation to pass when only one cluster allocated"
+        );
     }
 }

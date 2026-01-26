@@ -146,12 +146,13 @@ pub fn map_to_graph_error(err: NativeBackendError) -> SqliteGraphError {
         NativeBackendError::MigrationFailed(message) => {
             SqliteGraphError::connection(format!("Migration failed: {}", message))
         }
-        NativeBackendError::TransactionIdExhaustion { current_id, remaining } => {
-            SqliteGraphError::connection(format!(
-                "Transaction ID exhaustion at ID {}: {} remaining",
-                current_id, remaining
-            ))
-        }
+        NativeBackendError::TransactionIdExhaustion {
+            current_id,
+            remaining,
+        } => SqliteGraphError::connection(format!(
+            "Transaction ID exhaustion at ID {}: {} remaining",
+            current_id, remaining
+        )),
         NativeBackendError::WalContiguityViolation(msg) => {
             SqliteGraphError::connection(format!("WAL contiguity violation: {}", msg))
         }

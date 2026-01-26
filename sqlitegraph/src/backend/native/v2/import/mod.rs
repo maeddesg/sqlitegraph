@@ -19,17 +19,18 @@
 //! 5. Atomic Operations: Either complete import or rollback entirely
 
 // Re-export core import components
-pub use self::importer::{V2Importer, V2ImportConfig, ImportResult, ImportValidationReport};
+pub use self::importer::{ImportResult, ImportValidationReport, V2ImportConfig, V2Importer};
+pub use self::snapshot::{
+    SnapshotImportConfig, SnapshotImportResult, SnapshotImportValidationReport, SnapshotImporter,
+};
 pub use self::validation::{ImportValidator, PostImportValidator};
-pub use self::snapshot::{SnapshotImporter, SnapshotImportConfig, SnapshotImportResult, SnapshotImportValidationReport};
 
 // ImportMode is defined in this module, so it's automatically available
 
 // Module declarations
 pub mod importer;
-pub mod validation;
 pub mod snapshot;
-
+pub mod validation;
 
 /// Import module factory for creating import components
 pub struct ImportFactory;
@@ -96,10 +97,7 @@ mod tests {
         let export_dir = temp_dir.path().join("export");
         let target_path = temp_dir.path().join("imported.v2");
 
-        let result = ImportFactory::create_fresh_importer(
-            &export_dir,
-            &target_path,
-        );
+        let result = ImportFactory::create_fresh_importer(&export_dir, &target_path);
         // This should initially fail until we implement the importer
         assert!(result.is_err() || result.is_ok()); // We don't know the exact error yet
     }

@@ -36,28 +36,20 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 // Re-export validation operation modules
-pub mod node_validation;
-pub mod edge_validation;
 pub mod cluster_validation;
-pub mod string_validation;
-pub mod free_space_validation;
 pub mod cross_record;
+pub mod edge_validation;
+pub mod free_space_validation;
+pub mod node_validation;
+pub mod string_validation;
 
 // Re-export public types
-pub use node_validation::{
-    validate_node_insert, validate_node_update, validate_node_delete,
-};
-pub use edge_validation::{
-    validate_edge_insert, validate_edge_update, validate_edge_delete,
-};
 pub use cluster_validation::validate_cluster_create;
+pub use cross_record::{validate_cross_record_consistency, validate_v2_invariants};
+pub use edge_validation::{validate_edge_delete, validate_edge_insert, validate_edge_update};
+pub use free_space_validation::{validate_free_space_allocate, validate_free_space_deallocate};
+pub use node_validation::{validate_node_delete, validate_node_insert, validate_node_update};
 pub use string_validation::validate_string_insert;
-pub use free_space_validation::{
-    validate_free_space_allocate, validate_free_space_deallocate,
-};
-pub use cross_record::{
-    validate_cross_record_consistency, validate_v2_invariants,
-};
 
 // Validation result types
 /// Validation result for a single operation
@@ -186,35 +178,45 @@ impl TransactionValidator {
         match self.graph_file.lock() {
             Ok(mut guard) => *guard = Some(graph_file),
             Err(poisoned) => {
-                eprintln!("WARNING: Graph file mutex poisoned during validator initialization. Recovering...");
+                eprintln!(
+                    "WARNING: Graph file mutex poisoned during validator initialization. Recovering..."
+                );
                 *poisoned.into_inner() = Some(graph_file);
             }
         }
         match self.node_store.lock() {
             Ok(mut guard) => *guard = Some(node_store),
             Err(poisoned) => {
-                eprintln!("WARNING: Node store mutex poisoned during validator initialization. Recovering...");
+                eprintln!(
+                    "WARNING: Node store mutex poisoned during validator initialization. Recovering..."
+                );
                 *poisoned.into_inner() = Some(node_store);
             }
         }
         match self.edge_store.lock() {
             Ok(mut guard) => *guard = Some(edge_store),
             Err(poisoned) => {
-                eprintln!("WARNING: Edge store mutex poisoned during validator initialization. Recovering...");
+                eprintln!(
+                    "WARNING: Edge store mutex poisoned during validator initialization. Recovering..."
+                );
                 *poisoned.into_inner() = Some(edge_store);
             }
         }
         match self.string_table.lock() {
             Ok(mut guard) => *guard = Some(string_table),
             Err(poisoned) => {
-                eprintln!("WARNING: String table mutex poisoned during validator initialization. Recovering...");
+                eprintln!(
+                    "WARNING: String table mutex poisoned during validator initialization. Recovering..."
+                );
                 *poisoned.into_inner() = Some(string_table);
             }
         }
         match self.free_space_manager.lock() {
             Ok(mut guard) => *guard = Some(free_space_manager),
             Err(poisoned) => {
-                eprintln!("WARNING: Free space manager mutex poisoned during validator initialization. Recovering...");
+                eprintln!(
+                    "WARNING: Free space manager mutex poisoned during validator initialization. Recovering..."
+                );
                 *poisoned.into_inner() = Some(free_space_manager);
             }
         }
@@ -363,7 +365,12 @@ impl TransactionValidator {
             | V2WALRecord::HeaderUpdate { .. }
             | V2WALRecord::SegmentEnd { .. } => Ok(ValidationResult::Valid),
             // KV operations - basic validation
-            V2WALRecord::KvSet { key, value_bytes: _, version, .. } => {
+            V2WALRecord::KvSet {
+                key,
+                value_bytes: _,
+                version,
+                ..
+            } => {
                 if key.is_empty() {
                     Ok(ValidationResult::Invalid {
                         errors: vec!["KvSet key cannot be empty".to_string()],
@@ -378,7 +385,9 @@ impl TransactionValidator {
                     Ok(ValidationResult::Valid)
                 }
             }
-            V2WALRecord::KvDelete { key, old_version, .. } => {
+            V2WALRecord::KvDelete {
+                key, old_version, ..
+            } => {
                 if key.is_empty() {
                     Ok(ValidationResult::Invalid {
                         errors: vec!["KvDelete key cannot be empty".to_string()],
@@ -494,7 +503,10 @@ impl RecoveryValidator {
 
         // Open and validate the graph file
         let graph_file = GraphFile::open(&self.graph_file_path).map_err(|e| {
-            RecoveryError::validation(format!("Failed to open graph file for integrity check: {}", e))
+            RecoveryError::validation(format!(
+                "Failed to open graph file for integrity check: {}",
+                e
+            ))
         })?;
 
         // Read and validate persistent header
@@ -532,8 +544,7 @@ impl RecoveryValidator {
         if header.node_data_offset < HEADER_SIZE as u64 {
             errors.push(format!(
                 "node_data_offset {} is less than header size {}",
-                header.node_data_offset,
-                HEADER_SIZE
+                header.node_data_offset, HEADER_SIZE
             ));
         }
 
@@ -610,9 +621,7 @@ impl RecoveryValidator {
 /// - Stores are accessed through Mutex guards, preventing use-after-free
 pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static> {
     // SAFETY: See function-level safety documentation
-    unsafe {
-        NodeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file))
-    }
+    unsafe { NodeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file)) }
 }
 
 /// # Safety
@@ -626,9 +635,7 @@ pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static
 /// - Stores are accessed through Mutex guards, preventing use-after-free
 pub unsafe fn create_edge_store(graph_file: &mut GraphFile) -> EdgeStore<'static> {
     // SAFETY: See function-level safety documentation
-    unsafe {
-        EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file))
-    }
+    unsafe { EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file)) }
 }
 
 // V2-specific validation constants

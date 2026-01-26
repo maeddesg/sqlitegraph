@@ -4,9 +4,7 @@
 //! It generates detailed validation reports, performance reports, and analysis summaries
 //! for checkpoint operations and consistency checks.
 
-use super::consistency::{
-    ConsistencyResult, ConsistencySeverity,
-};
+use super::consistency::{ConsistencyResult, ConsistencySeverity};
 use super::invariants::V2InvariantResult;
 use crate::backend::native::v2::wal::V2WALConfig;
 use crate::backend::native::v2::wal::checkpoint::constants::performance;
@@ -597,9 +595,10 @@ use std::time::Duration;
 mod tests {
     use super::*;
     use crate::backend::native::v2::wal::checkpoint::validation::{
-        ConsistencyViolation, ConsistencyViolationType, V2InvariantViolation, V2InvariantViolationType
+        ConsistencyViolation, ConsistencyViolationType, V2InvariantViolation,
+        V2InvariantViolationType,
     };
-        use std::time::SystemTime;
+    use std::time::SystemTime;
     use tempfile::tempdir;
 
     fn create_test_performance_metrics() -> PerformanceMetrics {

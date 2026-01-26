@@ -38,13 +38,13 @@
 //! The pool demonstrates excellent concurrent access with near-linear scaling
 //! across threads and 4-5x throughput improvement over direct connections.
 
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use r2d2::Pool as R2d2Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::Connection;
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 use tempfile::TempDir;
 
 mod bench_utils;
@@ -65,8 +65,11 @@ fn setup_test_db(db_path: &std::path::Path) {
     )
     .unwrap();
     for i in 0..100 {
-        conn.execute("INSERT INTO test (value) VALUES (?)", [format!("value_{}", i)])
-            .unwrap();
+        conn.execute(
+            "INSERT INTO test (value) VALUES (?)",
+            [format!("value_{}", i)],
+        )
+        .unwrap();
     }
 }
 

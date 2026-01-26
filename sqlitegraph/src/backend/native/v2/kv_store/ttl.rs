@@ -4,8 +4,8 @@
 //! not proactively by background threads. This matches the Phase 43 architecture
 //! constraint: NO background TTL sweepers.
 
-use crate::backend::native::v2::kv_store::types::KvEntry;
 use crate::backend::native::v2::kv_store::store::KvStore;
+use crate::backend::native::v2::kv_store::types::KvEntry;
 use std::time::SystemTime;
 
 /// Check if an entry is expired (TTL exceeded)
@@ -152,7 +152,7 @@ pub fn cleanup_expired_entries(store: &mut KvStore) -> usize {
 mod tests {
     use super::*;
     use crate::backend::native::v2::kv_store::types::{KvEntry, KvMetadata, KvValue};
-    use std::time::{SystemTime, Duration};
+    use std::time::{Duration, SystemTime};
 
     fn create_test_entry(ttl_seconds: Option<u64>) -> KvEntry {
         let now = SystemTime::now()
@@ -242,10 +242,14 @@ mod tests {
         let mut store = KvStore::new();
 
         // Add non-expired entry (no TTL)
-        store.set(b"key1".to_vec(), KvValue::Integer(1), None).unwrap();
+        store
+            .set(b"key1".to_vec(), KvValue::Integer(1), None)
+            .unwrap();
 
         // Add non-expired entry (long TTL)
-        store.set(b"key2".to_vec(), KvValue::Integer(2), Some(3600)).unwrap();
+        store
+            .set(b"key2".to_vec(), KvValue::Integer(2), Some(3600))
+            .unwrap();
 
         // Add expired entry by manually manipulating metadata
         {

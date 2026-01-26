@@ -46,11 +46,15 @@ pub fn native_shortest_path(
 
             #[cfg(debug_assertions)]
             {
-                let total_lookups = ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
+                let total_lookups =
+                    ctx.buffer_hits + ctx.buffer_misses + ctx.stats.hits + ctx.stats.misses;
                 if total_lookups > 0 {
                     log::debug!(
                         "Shortest path optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
-                        ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                        ctx.buffer_hits,
+                        ctx.buffer_misses,
+                        ctx.stats.hits,
+                        ctx.stats.misses,
                         ctx.combined_hit_rate() * 100.0
                     );
                 }
@@ -65,7 +69,8 @@ pub fn native_shortest_path(
 
         // Trigger prefetch if linear confirmed
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
-            ctx.buffer.prefetch_clusters_from(graph_file, current_node)?;
+            ctx.buffer
+                .prefetch_clusters_from(graph_file, current_node)?;
         }
 
         let neighbors = get_neighbors_optimized(
@@ -89,7 +94,10 @@ pub fn native_shortest_path(
         if total_lookups > 0 {
             log::debug!(
                 "Shortest path optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
-                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.buffer_hits,
+                ctx.buffer_misses,
+                ctx.stats.hits,
+                ctx.stats.misses,
                 ctx.combined_hit_rate() * 100.0
             );
         }

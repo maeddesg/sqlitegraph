@@ -7,7 +7,9 @@
 mod tests {
     use crate::backend::native::v2::kv_store::store::KvStore;
     use crate::backend::native::v2::kv_store::types::KvValue;
-    use crate::backend::native::v2::kv_store::wal::{apply_delete, apply_set, deserialize_value, get_value_type_tag, serialize_value};
+    use crate::backend::native::v2::kv_store::wal::{
+        apply_delete, apply_set, deserialize_value, get_value_type_tag, serialize_value,
+    };
     use crate::backend::native::v2::wal::record::{V2WALRecord, V2WALSerializer};
     use std::time::SystemTime;
 
@@ -33,8 +35,22 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match (record, deserialized) {
-            (V2WALRecord::KvSet { key: k1, value_bytes: v1, value_type: t1, ttl_seconds: ttl1, version: ver1 },
-             V2WALRecord::KvSet { key: k2, value_bytes: v2, value_type: t2, ttl_seconds: ttl2, version: ver2 }) => {
+            (
+                V2WALRecord::KvSet {
+                    key: k1,
+                    value_bytes: v1,
+                    value_type: t1,
+                    ttl_seconds: ttl1,
+                    version: ver1,
+                },
+                V2WALRecord::KvSet {
+                    key: k2,
+                    value_bytes: v2,
+                    value_type: t2,
+                    ttl_seconds: ttl2,
+                    version: ver2,
+                },
+            ) => {
                 assert_eq!(k1, k2);
                 assert_eq!(v1, v2);
                 assert_eq!(t1, t2);
@@ -58,8 +74,20 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match (record, deserialized) {
-            (V2WALRecord::KvDelete { key: k1, old_value_bytes: v1, old_value_type: t1, old_version: ver1 },
-             V2WALRecord::KvDelete { key: k2, old_value_bytes: v2, old_value_type: t2, old_version: ver2 }) => {
+            (
+                V2WALRecord::KvDelete {
+                    key: k1,
+                    old_value_bytes: v1,
+                    old_value_type: t1,
+                    old_version: ver1,
+                },
+                V2WALRecord::KvDelete {
+                    key: k2,
+                    old_value_bytes: v2,
+                    old_value_type: t2,
+                    old_version: ver2,
+                },
+            ) => {
                 assert_eq!(k1, k2);
                 assert_eq!(v1, v2);
                 assert_eq!(t1, t2);
@@ -134,7 +162,13 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match deserialized {
-            V2WALRecord::KvSet { key: k, value_bytes: vb, value_type: vt, ttl_seconds: t, version: v } => {
+            V2WALRecord::KvSet {
+                key: k,
+                value_bytes: vb,
+                value_type: vt,
+                ttl_seconds: t,
+                version: v,
+            } => {
                 assert_eq!(k, key);
                 assert_eq!(vb, value_bytes);
                 assert_eq!(vt, value_type);
@@ -166,7 +200,12 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match deserialized {
-            V2WALRecord::KvDelete { key: k, old_value_bytes: ovb, old_value_type: ovt, old_version: ov } => {
+            V2WALRecord::KvDelete {
+                key: k,
+                old_value_bytes: ovb,
+                old_value_type: ovt,
+                old_version: ov,
+            } => {
                 assert_eq!(k, key);
                 assert_eq!(ovb, Some(old_value_bytes));
                 assert_eq!(ovt, old_value_type);
@@ -207,7 +246,15 @@ mod tests {
         let ttl = None;
         let version = 1;
 
-        apply_set(&mut store, key.clone(), value_bytes, value_type, ttl, version).unwrap();
+        apply_set(
+            &mut store,
+            key.clone(),
+            value_bytes,
+            value_type,
+            ttl,
+            version,
+        )
+        .unwrap();
 
         // Verify the entry was restored
         let result = store.get(&key).unwrap();
@@ -229,7 +276,15 @@ mod tests {
         let ttl = None;
         let version = 2;
 
-        apply_set(&mut store, key.clone(), value_bytes, value_type, ttl, version).unwrap();
+        apply_set(
+            &mut store,
+            key.clone(),
+            value_bytes,
+            value_type,
+            ttl,
+            version,
+        )
+        .unwrap();
 
         // Verify the entry was updated
         let result = store.get(&key).unwrap();
@@ -243,8 +298,12 @@ mod tests {
         // Create some entries
         let key1 = b"key1".to_vec();
         let key2 = b"key2".to_vec();
-        store.set(key1.clone(), KvValue::String("value1".to_string()), None).unwrap();
-        store.set(key2.clone(), KvValue::String("value2".to_string()), None).unwrap();
+        store
+            .set(key1.clone(), KvValue::String("value1".to_string()), None)
+            .unwrap();
+        store
+            .set(key2.clone(), KvValue::String("value2".to_string()), None)
+            .unwrap();
 
         // Verify they exist
         assert!(store.get(&key1).unwrap().is_some());
@@ -270,7 +329,15 @@ mod tests {
         let ttl = Some(1); // 1 second TTL
         let version = 1;
 
-        apply_set(&mut store, key.clone(), value_bytes, value_type, ttl, version).unwrap();
+        apply_set(
+            &mut store,
+            key.clone(),
+            value_bytes,
+            value_type,
+            ttl,
+            version,
+        )
+        .unwrap();
 
         // Verify the entry exists and can be retrieved
         let result = store.get(&key).unwrap();
@@ -338,7 +405,9 @@ mod tests {
         let deserialized = V2WALSerializer::deserialize(&serialized).unwrap();
 
         match deserialized {
-            V2WALRecord::KvDelete { old_value_bytes, .. } => {
+            V2WALRecord::KvDelete {
+                old_value_bytes, ..
+            } => {
                 assert_eq!(old_value_bytes, None);
             }
             _ => panic!("Wrong record type"),

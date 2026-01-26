@@ -21,11 +21,7 @@ pub mod atomic_ops;
 pub mod lifecycle;
 
 // Re-export lifecycle components
-pub use lifecycle::{
-    SnapshotLifecycleInspector, SnapshotLifecycleState, SnapshotMetadata,
-};
+pub use lifecycle::{SnapshotLifecycleInspector, SnapshotLifecycleState, SnapshotMetadata};
 
 // Re-export atomic operations components
-pub use atomic_ops::{
-    AtomicFileOperations, AtomicOperationError,
-};
+pub use atomic_ops::{AtomicFileOperations, AtomicOperationError};

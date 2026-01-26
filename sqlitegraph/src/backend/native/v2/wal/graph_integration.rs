@@ -5,11 +5,9 @@
 //! clustered edge operations with automatic WAL transaction management.
 
 use crate::backend::native::v2::wal::{
-    transaction_coordinator::IsolationLevel, V2WALConfig, V2WALManager, V2WALRecord,
+    V2WALConfig, V2WALManager, V2WALRecord, transaction_coordinator::IsolationLevel,
 };
-use crate::backend::native::v2::{
-    CompactEdgeRecord, Direction, NodeRecordV2,
-};
+use crate::backend::native::v2::{CompactEdgeRecord, Direction, NodeRecordV2};
 use crate::backend::native::{NativeBackendError, NativeResult};
 use parking_lot::RwLock;
 use std::collections::HashMap;

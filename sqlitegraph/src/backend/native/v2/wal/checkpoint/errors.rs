@@ -217,10 +217,9 @@ impl CheckpointError {
 
     /// Create checkpoint required error (for overflow handling)
     pub fn checkpoint_required(message: impl Into<String>) -> Self {
-        Self::new(CheckpointErrorKind::Resource, message)
-            .with_recovery(RecoverySuggestion::Custom(
-                "Checkpoint required to free dirty blocks".to_string(),
-            ))
+        Self::new(CheckpointErrorKind::Resource, message).with_recovery(RecoverySuggestion::Custom(
+            "Checkpoint required to free dirty blocks".to_string(),
+        ))
     }
 
     /// Get error severity level
@@ -547,7 +546,7 @@ macro_rules! checkpoint_error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_checkpoint_error_creation() {
         let error = CheckpointError::configuration("Invalid path");

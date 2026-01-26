@@ -1,6 +1,5 @@
 //! Unit tests for KV store operations
 
-
 #[test]
 fn test_new_store() {
     let store = KvStore::new();
@@ -10,7 +9,9 @@ fn test_new_store() {
 #[test]
 fn test_set_get() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
     let result = store.get(b"key");
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), Some(KvValue::Integer(42)));
@@ -27,7 +28,9 @@ fn test_get_missing_key() {
 #[test]
 fn test_delete() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
     store.delete(b"key").unwrap();
     assert_eq!(store.get(b"key").unwrap(), None);
 }
@@ -43,7 +46,9 @@ fn test_delete_missing_key() {
 fn test_exists() {
     let mut store = KvStore::new();
     assert!(!store.exists(b"key"));
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
     assert!(store.exists(b"key"));
     store.delete(b"key").unwrap();
     assert!(!store.exists(b"key"));
@@ -53,7 +58,9 @@ fn test_exists() {
 fn test_bytes_value() {
     let mut store = KvStore::new();
     let data = vec![1, 2, 3, 4, 5];
-    store.set(b"key".to_vec(), KvValue::Bytes(data.clone()), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Bytes(data.clone()), None)
+        .unwrap();
     let result = store.get(b"key");
     assert_eq!(result.unwrap(), Some(KvValue::Bytes(data)));
 }
@@ -61,7 +68,9 @@ fn test_bytes_value() {
 #[test]
 fn test_string_value() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::String("hello".to_string()), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::String("hello".to_string()), None)
+        .unwrap();
     let result = store.get(b"key");
     assert_eq!(result.unwrap(), Some(KvValue::String("hello".to_string())));
 }
@@ -69,7 +78,9 @@ fn test_string_value() {
 #[test]
 fn test_integer_value() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Integer(-12345), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(-12345), None)
+        .unwrap();
     let result = store.get(b"key");
     assert_eq!(result.unwrap(), Some(KvValue::Integer(-12345)));
 }
@@ -77,7 +88,9 @@ fn test_integer_value() {
 #[test]
 fn test_float_value() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Float(3.14159), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Float(3.14159), None)
+        .unwrap();
     let result = store.get(b"key");
     assert_eq!(result.unwrap(), Some(KvValue::Float(3.14159)));
 }
@@ -85,7 +98,9 @@ fn test_float_value() {
 #[test]
 fn test_boolean_value() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Boolean(true), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Boolean(true), None)
+        .unwrap();
     let result = store.get(b"key");
     assert_eq!(result.unwrap(), Some(KvValue::Boolean(true)));
 }
@@ -94,7 +109,9 @@ fn test_boolean_value() {
 fn test_json_value() {
     let mut store = KvStore::new();
     let json = serde_json::json!({"foo": "bar", "num": 42});
-    store.set(b"key".to_vec(), KvValue::Json(json.clone()), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Json(json.clone()), None)
+        .unwrap();
     let result = store.get(b"key");
     assert_eq!(result.unwrap(), Some(KvValue::Json(json)));
 }
@@ -102,7 +119,9 @@ fn test_json_value() {
 #[test]
 fn test_created_at_set() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
     // Just verify metadata exists - timestamp testing would require mocking
     assert!(store.exists(b"key"));
 }
@@ -110,10 +129,21 @@ fn test_created_at_set() {
 #[test]
 fn test_overwrite() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
-    store.set(b"key".to_vec(), KvValue::String("updated".to_string()), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
+    store
+        .set(
+            b"key".to_vec(),
+            KvValue::String("updated".to_string()),
+            None,
+        )
+        .unwrap();
     let result = store.get(b"key");
-    assert_eq!(result.unwrap(), Some(KvValue::String("updated".to_string())));
+    assert_eq!(
+        result.unwrap(),
+        Some(KvValue::String("updated".to_string()))
+    );
     assert_eq!(store.len(), 1);
 }
 
@@ -121,8 +151,12 @@ fn test_overwrite() {
 fn test_len_and_clear() {
     let mut store = KvStore::new();
     assert_eq!(store.len(), 0);
-    store.set(b"key1".to_vec(), KvValue::Integer(1), None).unwrap();
-    store.set(b"key2".to_vec(), KvValue::Integer(2), None).unwrap();
+    store
+        .set(b"key1".to_vec(), KvValue::Integer(1), None)
+        .unwrap();
+    store
+        .set(b"key2".to_vec(), KvValue::Integer(2), None)
+        .unwrap();
     assert_eq!(store.len(), 2);
 }
 
@@ -137,6 +171,8 @@ fn test_empty_key() {
 #[test]
 fn test_ttl_none() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
     assert!(store.exists(b"key"));
 }

@@ -185,7 +185,10 @@ mod tests {
         assert_eq!(events.len(), 2); // NodeChanged + SnapshotCommitted
         assert!(events[0].is_node_event());
         match &events[0] {
-            PubSubEvent::NodeChanged { node_id, snapshot_id } => {
+            PubSubEvent::NodeChanged {
+                node_id,
+                snapshot_id,
+            } => {
                 assert_eq!(*node_id, 42);
                 assert_eq!(*snapshot_id, 100);
             }
@@ -198,7 +201,10 @@ mod tests {
     fn test_edge_insert_emits_edge_changed() {
         let edge_record = CompactEdgeRecord::new(123, 45, vec![6, 7, 8]);
         let records = vec![V2WALRecord::EdgeInsert {
-            cluster_key: (42, crate::backend::native::v2::edge_cluster::cluster_trace::Direction::Outgoing),
+            cluster_key: (
+                42,
+                crate::backend::native::v2::edge_cluster::cluster_trace::Direction::Outgoing,
+            ),
             edge_record,
             insertion_point: 0,
         }];
@@ -207,7 +213,10 @@ mod tests {
         assert_eq!(events.len(), 2); // EdgeChanged + SnapshotCommitted
         assert!(events[0].is_edge_event());
         match &events[0] {
-            PubSubEvent::EdgeChanged { edge_id, snapshot_id } => {
+            PubSubEvent::EdgeChanged {
+                edge_id,
+                snapshot_id,
+            } => {
                 assert_eq!(*snapshot_id, 200);
                 // edge_id should combine neighbor_id and type_offset
                 assert_ne!(*edge_id, 0);
@@ -281,7 +290,10 @@ mod tests {
         assert_eq!(events.len(), 2); // KVChanged + SnapshotCommitted
         assert!(events[0].is_kv_event());
         match &events[0] {
-            PubSubEvent::KVChanged { key_hash, snapshot_id } => {
+            PubSubEvent::KVChanged {
+                key_hash,
+                snapshot_id,
+            } => {
                 assert_eq!(*snapshot_id, 500);
                 assert_ne!(*key_hash, 0); // Should have a hash
             }
@@ -368,7 +380,10 @@ mod tests {
             new_data: vec![],
         }));
         assert!(should_emit_event(&V2WALRecord::EdgeInsert {
-            cluster_key: (1, crate::backend::native::v2::edge_cluster::cluster_trace::Direction::Outgoing),
+            cluster_key: (
+                1,
+                crate::backend::native::v2::edge_cluster::cluster_trace::Direction::Outgoing
+            ),
             edge_record: CompactEdgeRecord::new(2, 3, vec![]),
             insertion_point: 0,
         }));
@@ -438,7 +453,10 @@ mod tests {
                 version: 1,
             },
             V2WALRecord::EdgeInsert {
-                cluster_key: (1, crate::backend::native::v2::edge_cluster::cluster_trace::Direction::Outgoing),
+                cluster_key: (
+                    1,
+                    crate::backend::native::v2::edge_cluster::cluster_trace::Direction::Outgoing,
+                ),
                 edge_record: CompactEdgeRecord::new(2, 1, vec![]),
                 insertion_point: 0,
             },

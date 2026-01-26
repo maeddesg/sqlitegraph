@@ -325,10 +325,8 @@ mod tests {
 
     #[test]
     fn test_filter_event_types() {
-        let filter = SubscriptionFilter::event_types(vec![
-            PubSubEventType::Node,
-            PubSubEventType::Edge,
-        ]);
+        let filter =
+            SubscriptionFilter::event_types(vec![PubSubEventType::Node, PubSubEventType::Edge]);
 
         let node_event = PubSubEvent::NodeChanged {
             node_id: 1,

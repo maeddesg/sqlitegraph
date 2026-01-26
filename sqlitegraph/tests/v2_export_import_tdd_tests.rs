@@ -15,20 +15,19 @@
 
 use sqlitegraph::backend::native::graph_file::GraphFile;
 use sqlitegraph::backend::native::v2::Direction;
-use sqlitegraph::backend::native::v2::wal::{
-    V2WALConfig, V2WALManager, V2WALRecord, V2WALReader,
-    TransactionIsolation, BulkIngestConfig, BulkIngestExt,
-};
-use sqlitegraph::backend::native::v2::wal::recovery::states::{
-    RecoveryContext, Authority, RecoveryState as ExplicitRecoveryState,
-};
 use sqlitegraph::backend::native::v2::export::{
-    V2Exporter, V2ExportConfig, ExportResult, ExportConsistencyReport,
-    ExportFactory, ExportManifest, manifest::ManifestSerializer,
+    ExportConsistencyReport, ExportFactory, ExportManifest, ExportResult, V2ExportConfig,
+    V2Exporter, manifest::ManifestSerializer,
 };
 use sqlitegraph::backend::native::v2::import::{
-    V2Importer, V2ImportConfig, ImportResult, ImportValidationReport,
-    ImportFactory, ImportMode,
+    ImportFactory, ImportMode, ImportResult, ImportValidationReport, V2ImportConfig, V2Importer,
+};
+use sqlitegraph::backend::native::v2::wal::recovery::states::{
+    Authority, RecoveryContext, RecoveryState as ExplicitRecoveryState,
+};
+use sqlitegraph::backend::native::v2::wal::{
+    BulkIngestConfig, BulkIngestExt, TransactionIsolation, V2WALConfig, V2WALManager, V2WALReader,
+    V2WALRecord,
 };
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
 use tempfile::tempdir;
@@ -57,25 +56,28 @@ fn test_export_clean_checkpoint_no_wal() -> NativeResult<()> {
 
     // Write and commit a clean transaction
     let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-        node_id: 1,
-        slot_offset: 0,
-        node_data: vec![1, 2, 3, 4, 5],
-    })?;
+    manager.write_transaction_record(
+        tx_id,
+        V2WALRecord::NodeInsert {
+            node_id: 1,
+            slot_offset: 0,
+            node_data: vec![1, 2, 3, 4, 5],
+        },
+    )?;
     manager.commit_transaction(tx_id)?;
 
     // Force checkpoint to ensure clean state
     manager.force_checkpoint()?;
 
     // Create export configuration for checkpoint-aligned export
-    let exporter = ExportFactory::create_checkpoint_aligned_exporter(
-        &graph_path,
-        &export_dir,
-    )?;
+    let exporter = ExportFactory::create_checkpoint_aligned_exporter(&graph_path, &export_dir)?;
 
     // This should fail initially until export system is implemented
     let result = exporter.export_checkpoint_aligned();
-    assert!(result.is_err(), "Should fail until export_checkpoint_aligned is implemented");
+    assert!(
+        result.is_err(),
+        "Should fail until export_checkpoint_aligned is implemented"
+    );
 
     // Verify export files were created (if they were)
     let manifest_path = export_dir.join("export.manifest");
@@ -111,24 +113,27 @@ fn test_export_active_wal_tail() -> NativeResult<()> {
 
     // Write transaction but DO NOT commit (simulates active state)
     let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-        node_id: 2,
-        slot_offset: 0,
-        node_data: vec![6, 7, 8, 9, 10],
-    })?;
+    manager.write_transaction_record(
+        tx_id,
+        V2WALRecord::NodeInsert {
+            node_id: 2,
+            slot_offset: 0,
+            node_data: vec![6, 7, 8, 9, 10],
+        },
+    )?;
 
     // Simulate crash by dropping manager without commit
     drop(manager);
 
     // Create export configuration for full export (includes WAL tail)
-    let exporter = ExportFactory::create_full_exporter(
-        &graph_path,
-        &export_dir,
-    )?;
+    let exporter = ExportFactory::create_full_exporter(&graph_path, &export_dir)?;
 
     // This should fail initially until export system is implemented
     let result = exporter.export_full();
-    assert!(result.is_err(), "Should fail until export_full is implemented");
+    assert!(
+        result.is_err(),
+        "Should fail until export_full is implemented"
+    );
 
     Ok(())
 }
@@ -170,17 +175,26 @@ fn test_import_into_empty_graph() -> NativeResult<()> {
 
     // Try to create importer - should fail initially
     let importer_result = V2Importer::from_export_dir(&export_dir, &target_path, config);
-    assert!(importer_result.is_err(), "Should fail until V2Importer::from_export_dir is implemented");
+    assert!(
+        importer_result.is_err(),
+        "Should fail until V2Importer::from_export_dir is implemented"
+    );
 
     // Even if importer creation succeeded, validation should fail
     if let Ok(importer) = importer_result {
         let validation_result = importer.validate_export();
-        assert!(validation_result.is_err(), "Should fail until validate_export is implemented");
+        assert!(
+            validation_result.is_err(),
+            "Should fail until validate_export is implemented"
+        );
 
         // Even if validation succeeded, import should fail
         if let Ok(_validation) = validation_result {
             let import_result = importer.import();
-            assert!(import_result.is_err(), "Should fail until import is implemented");
+            assert!(
+                import_result.is_err(),
+                "Should fail until import is implemented"
+            );
         }
     }
 
@@ -221,7 +235,10 @@ fn test_import_recovery_validation() -> NativeResult<()> {
 
     // Try to create importer - should fail initially
     let importer_result = V2Importer::from_export_dir(&export_dir, &target_path, config);
-    assert!(importer_result.is_err(), "Should fail until V2Importer is implemented");
+    assert!(
+        importer_result.is_err(),
+        "Should fail until V2Importer is implemented"
+    );
 
     Ok(())
 }
@@ -263,7 +280,10 @@ fn test_import_incompatible_manifest() -> NativeResult<()> {
     // Even if importer creation succeeded, validation should catch incompatibility
     if let Ok(importer) = result {
         let validation_result = importer.validate_export();
-        assert!(validation_result.is_err(), "Should detect manifest incompatibility");
+        assert!(
+            validation_result.is_err(),
+            "Should detect manifest incompatibility"
+        );
     }
 
     Ok(())
@@ -296,20 +316,26 @@ fn test_end_to_end_export_import_roundtrip() -> NativeResult<()> {
         let tx_id = source_manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
 
         // Write node record
-        source_manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-            node_id: i,
-            slot_offset: (i * 100) as u64,
-            node_data: vec![i as u8; 10],
-        })?;
+        source_manager.write_transaction_record(
+            tx_id,
+            V2WALRecord::NodeInsert {
+                node_id: i,
+                slot_offset: (i * 100) as u64,
+                node_data: vec![i as u8; 10],
+            },
+        )?;
 
         // Write edge record
-        source_manager.write_transaction_record(tx_id, V2WALRecord::ClusterCreate {
-            node_id: i,
-            direction: Direction::Outgoing,
-            cluster_offset: (i * 1000) as u64,
-            cluster_size: 5,
-            edge_data: vec![i as u8; 20],
-        })?;
+        source_manager.write_transaction_record(
+            tx_id,
+            V2WALRecord::ClusterCreate {
+                node_id: i,
+                direction: Direction::Outgoing,
+                cluster_offset: (i * 1000) as u64,
+                cluster_size: 5,
+                edge_data: vec![i as u8; 20],
+            },
+        )?;
 
         source_manager.commit_transaction(tx_id)?;
     }
@@ -320,7 +346,10 @@ fn test_end_to_end_export_import_roundtrip() -> NativeResult<()> {
     // Step 1: Export from source
     let source_exporter = ExportFactory::create_full_exporter(&source_path, &export_dir)?;
     let export_result = source_exporter.export_full();
-    assert!(export_result.is_err(), "Should fail until export system is implemented");
+    assert!(
+        export_result.is_err(),
+        "Should fail until export system is implemented"
+    );
 
     // Step 2: Import to target
     let import_config = V2ImportConfig {
@@ -333,7 +362,10 @@ fn test_end_to_end_export_import_roundtrip() -> NativeResult<()> {
 
     let target_importer = V2Importer::from_export_dir(&export_dir, &target_path, import_config)?;
     let import_result = target_importer.import();
-    assert!(import_result.is_err(), "Should fail until import system is implemented");
+    assert!(
+        import_result.is_err(),
+        "Should fail until import system is implemented"
+    );
 
     // When implemented, verify:
     // 1. Export creates valid manifest, graph file, and WAL tail
@@ -368,11 +400,14 @@ fn test_lsn_bounded_export_validation() -> NativeResult<()> {
     // Write multiple transactions to create WAL tail
     for i in 1..5 {
         let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
-        manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-            node_id: i,
-            slot_offset: (i * 100) as u64,
-            node_data: vec![i as u8; 50],
-        })?;
+        manager.write_transaction_record(
+            tx_id,
+            V2WALRecord::NodeInsert {
+                node_id: i,
+                slot_offset: (i * 100) as u64,
+                node_data: vec![i as u8; 50],
+            },
+        )?;
         manager.commit_transaction(tx_id)?;
     }
 
@@ -385,12 +420,18 @@ fn test_lsn_bounded_export_validation() -> NativeResult<()> {
     };
 
     let exporter_result = V2Exporter::from_graph_file(&graph_path, config);
-    assert!(exporter_result.is_err(), "Should fail until V2Exporter is implemented");
+    assert!(
+        exporter_result.is_err(),
+        "Should fail until V2Exporter is implemented"
+    );
 
     // Even if exporter creation succeeded, LSN-bounded export should fail
     if let Ok(exporter) = exporter_result {
         let lsn_result = exporter.export_lsn_bounded(1, 100);
-        assert!(lsn_result.is_err(), "Should fail until LSN-bounded export is implemented");
+        assert!(
+            lsn_result.is_err(),
+            "Should fail until LSN-bounded export is implemented"
+        );
     }
 
     Ok(())
@@ -411,12 +452,18 @@ fn test_manifest_integrity_validation() -> NativeResult<()> {
 
     // Try to read manifest - should fail due to corruption
     let read_result = ManifestSerializer::read_from_file(&manifest_path);
-    assert!(read_result.is_err(), "Should fail due to corrupted manifest");
+    assert!(
+        read_result.is_err(),
+        "Should fail due to corrupted manifest"
+    );
 
     // Even if we could read it, validation should catch corruption
     if let Ok(_manifest) = read_result {
         let validation_result = _manifest.validate();
-        assert!(validation_result.is_err(), "Should detect manifest corruption");
+        assert!(
+            validation_result.is_err(),
+            "Should detect manifest corruption"
+        );
     }
 
     Ok(())
@@ -467,7 +514,10 @@ fn test_bulk_ingest_integration() -> NativeResult<()> {
 
     // Should fail initially but be designed for bulk ingest optimization
     let result = V2Importer::from_export_dir(&export_dir, &target_path, config);
-    assert!(result.is_err(), "Should fail until import system is implemented");
+    assert!(
+        result.is_err(),
+        "Should fail until import system is implemented"
+    );
 
     Ok(())
 }
@@ -494,30 +544,38 @@ fn test_recovery_state_detection_accuracy() -> NativeResult<()> {
 
     // Test clean shutdown detection
     let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-        node_id: 1,
-        slot_offset: 0,
-        node_data: vec![1, 2, 3],
-    })?;
+    manager.write_transaction_record(
+        tx_id,
+        V2WALRecord::NodeInsert {
+            node_id: 1,
+            slot_offset: 0,
+            node_data: vec![1, 2, 3],
+        },
+    )?;
     manager.commit_transaction(tx_id)?;
     manager.force_checkpoint()?;
 
     // Verify recovery state detection should work
-    let recovery_context = RecoveryContext::analyze_files(&wal_path, &graph_path, &checkpoint_path)?;
+    let recovery_context =
+        RecoveryContext::analyze_files(&wal_path, &graph_path, &checkpoint_path)?;
     assert_eq!(recovery_context.state, ExplicitRecoveryState::CleanShutdown);
     assert_eq!(recovery_context.authority, Authority::GraphFile);
 
     // Test dirty shutdown detection
     let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
-    manager.write_transaction_record(tx_id, V2WALRecord::NodeInsert {
-        node_id: 2,
-        slot_offset: 0,
-        node_data: vec![4, 5, 6],
-    })?;
+    manager.write_transaction_record(
+        tx_id,
+        V2WALRecord::NodeInsert {
+            node_id: 2,
+            slot_offset: 0,
+            node_data: vec![4, 5, 6],
+        },
+    )?;
     // Don't commit - simulate crash
     drop(manager);
 
-    let recovery_context = RecoveryContext::analyze_files(&wal_path, &graph_path, &checkpoint_path)?;
+    let recovery_context =
+        RecoveryContext::analyze_files(&wal_path, &graph_path, &checkpoint_path)?;
     assert_eq!(recovery_context.state, ExplicitRecoveryState::DirtyShutdown);
     assert_eq!(recovery_context.authority, Authority::WAL);
 

@@ -177,7 +177,9 @@ pub enum NativeBackendError {
     #[error("Migration failed: {0}")]
     MigrationFailed(String),
 
-    #[error("Transaction ID exhaustion: current ID {current_id}, {remaining} IDs remaining before wraparound")]
+    #[error(
+        "Transaction ID exhaustion: current ID {current_id}, {remaining} IDs remaining before wraparound"
+    )]
     TransactionIdExhaustion { current_id: u64, remaining: u64 },
 
     #[error("WAL contiguity violation: {0}")]
@@ -206,9 +208,7 @@ impl From<crate::backend::native::v2::wal::checkpoint::errors::CheckpointError>
     }
 }
 
-impl From<crate::backend::native::v2::wal::recovery::errors::RecoveryError>
-    for NativeBackendError
-{
+impl From<crate::backend::native::v2::wal::recovery::errors::RecoveryError> for NativeBackendError {
     fn from(error: crate::backend::native::v2::wal::recovery::errors::RecoveryError) -> Self {
         Self::Recovery(format!("{:?}: {}", error.kind, error.message))
     }

@@ -158,7 +158,7 @@ pub use crate::hnsw::distance_functions::{
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_distance_metric_display() {
         assert_eq!(DistanceMetric::Cosine.to_string(), "cosine");

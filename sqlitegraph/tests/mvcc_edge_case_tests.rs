@@ -7,10 +7,7 @@
 //! These tests verify that MVCC-lite snapshots handle edge cases correctly
 //! including empty graphs, large graphs, rapid creation/destruction, and
 /// special scenarios like transaction rollbacks and deleted nodes.
-
-use sqlitegraph::{
-    GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError,
-};
+use sqlitegraph::{GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError};
 use std::time::{Duration, Instant};
 
 //
@@ -289,7 +286,10 @@ fn test_large_graph_snapshot_performance() -> Result<(), SqliteGraphError> {
     let snapshot = graph.acquire_snapshot()?;
     let duration = start.elapsed();
 
-    println!("Snapshot acquisition for {} nodes: {:?}", num_nodes, duration);
+    println!(
+        "Snapshot acquisition for {} nodes: {:?}",
+        num_nodes, duration
+    );
 
     // Verify snapshot is valid
     assert!(snapshot.node_count() > 0);
@@ -327,7 +327,10 @@ fn test_rapid_snapshot_lifecycle() -> Result<(), SqliteGraphError> {
     }
 
     let duration = start.elapsed();
-    println!("Created and dropped {} snapshots in {:?}", iterations, duration);
+    println!(
+        "Created and dropped {} snapshots in {:?}",
+        iterations, duration
+    );
 
     // Final snapshot should still work
     let final_snapshot = graph.acquire_snapshot()?;
@@ -988,7 +991,10 @@ fn test_partial_modification_state() -> Result<(), SqliteGraphError> {
 
     // Verify state is consistent
     let final_count = node_count(&graph)?;
-    assert!(final_count > initial_count, "Successful inserts should persist");
+    assert!(
+        final_count > initial_count,
+        "Successful inserts should persist"
+    );
 
     // Verify graph is still functional
     let _ = graph.acquire_snapshot()?;

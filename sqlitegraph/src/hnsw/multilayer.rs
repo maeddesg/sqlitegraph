@@ -689,7 +689,7 @@ impl MultiLayerNodeManager {
 mod tests {
     use super::*;
     use crate::hnsw::hnsw_config;
-  use rand::rngs::StdRng;
+    use rand::rngs::StdRng;
 
     #[test]
     fn test_layer_mappings_basic_operations() {

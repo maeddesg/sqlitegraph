@@ -3,12 +3,12 @@
 //! This module provides validation operations for cluster-related WAL records:
 //! - ClusterCreate: Validate EdgeCluster deserialization and integrity
 
-use crate::backend::native::v2::{Direction, EdgeCluster};
 use crate::backend::native::v2::wal::recovery::errors::RecoveryResult;
 use crate::backend::native::v2::wal::recovery::validator::{
-    ValidationResult, ValidationSeverity, V2_CLUSTER_ALIGNMENT, MAX_CLUSTER_SIZE,
-    MAX_EDGES_PER_CLUSTER,
+    MAX_CLUSTER_SIZE, MAX_EDGES_PER_CLUSTER, V2_CLUSTER_ALIGNMENT, ValidationResult,
+    ValidationSeverity,
 };
+use crate::backend::native::v2::{Direction, EdgeCluster};
 
 use super::super::TransactionValidator;
 

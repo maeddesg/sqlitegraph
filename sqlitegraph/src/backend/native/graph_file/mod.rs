@@ -47,14 +47,11 @@ use std::path::Path; // May be used in feature-gated code or re-exports
 use crate::backend::native::{
     persistent_header::PersistentHeaderV2,
     transaction_state::TransactionState,
-    types::{
-        NativeBackendError, NativeNodeId, NativeResult,
-    },
+    types::{NativeBackendError, NativeNodeId, NativeResult},
 };
 
 #[cfg(feature = "v2_experimental")]
 use memmap2::MmapMut;
-
 
 // Exported constants for parent module
 pub const DEFAULT_NODE_DATA_START: u64 = 1024;

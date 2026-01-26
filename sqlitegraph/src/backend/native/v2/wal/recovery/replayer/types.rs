@@ -3,7 +3,7 @@
 //! This module contains all types, configurations, and data structures
 //! used by the V2 WAL recovery replayer system.
 
-use crate::backend::native::{NativeNodeId};
+use crate::backend::native::NativeNodeId;
 use crate::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -45,7 +45,10 @@ pub struct ReplayResult {
     /// Successfully replayed operations
     pub successful_operations: u64,
     /// Failed operations with details
-    pub failed_operations: Vec<(crate::backend::native::v2::wal::V2WALRecord, crate::backend::native::v2::wal::recovery::errors::RecoveryError)>,
+    pub failed_operations: Vec<(
+        crate::backend::native::v2::wal::V2WALRecord,
+        crate::backend::native::v2::wal::recovery::errors::RecoveryError,
+    )>,
     /// Replay statistics snapshot
     pub statistics: StatisticsSnapshot,
     /// Any warnings encountered
@@ -101,10 +104,10 @@ impl ReplayStatistics {
 
     /// Get the total number of operations performed
     pub fn total_operations(&self) -> u64 {
-        self.node_operations.load(Ordering::Relaxed) +
-        self.edge_operations.load(Ordering::Relaxed) +
-        self.string_operations.load(Ordering::Relaxed) +
-        self.free_space_operations.load(Ordering::Relaxed)
+        self.node_operations.load(Ordering::Relaxed)
+            + self.edge_operations.load(Ordering::Relaxed)
+            + self.string_operations.load(Ordering::Relaxed)
+            + self.free_space_operations.load(Ordering::Relaxed)
     }
 
     /// Record a node operation (lock-free)
@@ -146,7 +149,7 @@ impl ReplayStatistics {
                 current_max,
                 operation_time_ms,
                 Ordering::Relaxed,
-                Ordering::Relaxed
+                Ordering::Relaxed,
             ) {
                 Ok(_) => break,
                 Err(new_max) => current_max = new_max,
@@ -215,8 +218,10 @@ pub struct StatisticsSnapshot {
 impl StatisticsSnapshot {
     /// Get the total number of operations performed
     pub fn total_operations(&self) -> u64 {
-        self.node_operations + self.edge_operations +
-        self.string_operations + self.free_space_operations
+        self.node_operations
+            + self.edge_operations
+            + self.string_operations
+            + self.free_space_operations
     }
 }
 
@@ -334,7 +339,12 @@ impl RollbackOperation {
 
     /// Check if this operation affects node data
     pub fn affects_nodes(&self) -> bool {
-        matches!(self, RollbackOperation::NodeInsert { .. } | RollbackOperation::NodeUpdate { .. } | RollbackOperation::NodeDelete { .. })
+        matches!(
+            self,
+            RollbackOperation::NodeInsert { .. }
+                | RollbackOperation::NodeUpdate { .. }
+                | RollbackOperation::NodeDelete { .. }
+        )
     }
 
     /// Check if this operation affects string data
@@ -344,17 +354,29 @@ impl RollbackOperation {
 
     /// Check if this operation affects free space
     pub fn affects_free_space(&self) -> bool {
-        matches!(self, RollbackOperation::FreeSpaceAllocate { .. } | RollbackOperation::FreeSpaceDeallocate { .. })
+        matches!(
+            self,
+            RollbackOperation::FreeSpaceAllocate { .. }
+                | RollbackOperation::FreeSpaceDeallocate { .. }
+        )
     }
 
     /// Check if this operation affects edge data
     pub fn affects_edges(&self) -> bool {
-        matches!(self, RollbackOperation::EdgeInsert { .. } | RollbackOperation::EdgeUpdate { .. } | RollbackOperation::EdgeDelete { .. })
+        matches!(
+            self,
+            RollbackOperation::EdgeInsert { .. }
+                | RollbackOperation::EdgeUpdate { .. }
+                | RollbackOperation::EdgeDelete { .. }
+        )
     }
 
     /// Check if this operation affects KV data
     pub fn affects_kv(&self) -> bool {
-        matches!(self, RollbackOperation::KvSet { .. } | RollbackOperation::KvDelete { .. })
+        matches!(
+            self,
+            RollbackOperation::KvSet { .. } | RollbackOperation::KvDelete { .. }
+        )
     }
 }
 
@@ -446,7 +468,10 @@ mod tests {
         assert!(!edge_insert.affects_free_space());
 
         let edge_update = RollbackOperation::EdgeUpdate {
-            cluster_key: (100, crate::backend::native::v2::edge_cluster::Direction::Outgoing),
+            cluster_key: (
+                100,
+                crate::backend::native::v2::edge_cluster::Direction::Outgoing,
+            ),
             position: 2,
             old_edge: vec![4, 5, 6],
             new_edge: vec![7, 8, 9],
@@ -472,7 +497,10 @@ mod tests {
             block_size: 1024,
             block_type: 2,
         };
-        assert_eq!(free_space_deallocate.operation_name(), "FreeSpaceDeallocate");
+        assert_eq!(
+            free_space_deallocate.operation_name(),
+            "FreeSpaceDeallocate"
+        );
         assert!(!free_space_deallocate.affects_nodes());
         assert!(!free_space_deallocate.affects_strings());
         assert!(free_space_deallocate.affects_free_space());

@@ -4,8 +4,8 @@
 //! sequential cluster optimization. The API is strictly advisory - failure falls back
 //! gracefully to normal allocation without affecting correctness.
 
-use std::collections::BTreeMap;
 use crate::backend::native::v2::wal::ContiguousRegion;
+use std::collections::BTreeMap;
 
 /// Minimum chain length to trigger contiguous allocation.
 ///
@@ -302,10 +302,7 @@ impl FreeSpaceManager {
         let mut to_remove = Vec::new();
 
         // Check if we can merge with previous block
-        if let Some((&prev_offset, &prev_size)) = self.free_blocks
-            .range(..offset)
-            .next_back()
-        {
+        if let Some((&prev_offset, &prev_size)) = self.free_blocks.range(..offset).next_back() {
             if prev_offset + prev_size == offset {
                 // Merge with previous block
                 merged_offset = prev_offset;
@@ -315,10 +312,7 @@ impl FreeSpaceManager {
         }
 
         // Check if we can merge with next block
-        if let Some((&next_offset, &next_size)) = self.free_blocks
-            .range(offset + size..)
-            .next()
-        {
+        if let Some((&next_offset, &next_size)) = self.free_blocks.range(offset + size..).next() {
             if offset + size == next_offset {
                 // Merge with next block
                 merged_size += next_size;
@@ -344,11 +338,7 @@ impl FreeSpaceManager {
     ///
     /// On success: Region is reserved (not allocated) until commit.
     /// This is advisory only - failure falls back to normal allocation.
-    pub fn try_reserve_contiguous(
-        &mut self,
-        bytes: u64,
-        alignment: u64,
-    ) -> Option<Region> {
+    pub fn try_reserve_contiguous(&mut self, bytes: u64, alignment: u64) -> Option<Region> {
         // Find all blocks that can satisfy the size requirement
         let mut candidates: Vec<_> = self
             .free_blocks
@@ -386,7 +376,8 @@ impl FreeSpaceManager {
         let region = Region::new(*aligned_offset, bytes);
 
         // Reserve the region (don't allocate yet)
-        self.reserved_regions.push(ContiguousAllocation::new(region.clone(), 0));
+        self.reserved_regions
+            .push(ContiguousAllocation::new(region.clone(), 0));
 
         // Remove the reserved space from free blocks
         self.free_blocks.remove(block_offset);
@@ -457,7 +448,8 @@ impl FreeSpaceManager {
 
     /// Mark a reserved region as committed
     pub fn commit_contiguous(&mut self, region: &Region, tx_id: u64) -> Result<(), FreeSpaceError> {
-        if let Some(allocation) = self.reserved_regions
+        if let Some(allocation) = self
+            .reserved_regions
             .iter_mut()
             .find(|r| r.region.start_offset == region.start_offset)
         {
@@ -473,13 +465,15 @@ impl FreeSpaceManager {
     /// Idempotent: safe to call multiple times on the same region.
     pub fn rollback_contiguous(&mut self, region: &Region) {
         // Check if region was actually reserved
-        let was_reserved = self.reserved_regions
+        let was_reserved = self
+            .reserved_regions
             .iter()
             .any(|r| r.region.start_offset == region.start_offset);
 
         if was_reserved {
             // Remove from reserved regions
-            self.reserved_regions.retain(|r| r.region.start_offset != region.start_offset);
+            self.reserved_regions
+                .retain(|r| r.region.start_offset != region.start_offset);
 
             // Return to free pool (will coalesce if adjacent)
             self.add_free_block(region.start_offset, region.total_size);
@@ -489,7 +483,8 @@ impl FreeSpaceManager {
 
     /// Remove a committed region from tracking (fully allocated)
     pub fn remove_committed_region(&mut self, region: &Region) {
-        self.reserved_regions.retain(|r| r.region.start_offset != region.start_offset);
+        self.reserved_regions
+            .retain(|r| r.region.start_offset != region.start_offset);
     }
 
     /// Get the current file size
@@ -547,12 +542,16 @@ impl FreeSpaceManager {
     /// 3. Committed allocations: removed from free pool (permanent)
     /// 4. Uncommitted allocations: returned to free pool (rollback)
     /// 5. Explicit RollbackContiguous: returned to free pool immediately
-    pub fn recover_from_wal_records(&mut self, wal_records: &[crate::backend::native::v2::wal::V2WALRecord]) {
+    pub fn recover_from_wal_records(
+        &mut self,
+        wal_records: &[crate::backend::native::v2::wal::V2WALRecord],
+    ) {
         use crate::backend::native::v2::wal::V2WALRecord;
 
         // Track allocation state by transaction ID
         let mut committed_txns: std::collections::HashSet<u64> = std::collections::HashSet::new();
-        let mut rolled_back_regions: std::collections::HashSet<u64> = std::collections::HashSet::new();
+        let mut rolled_back_regions: std::collections::HashSet<u64> =
+            std::collections::HashSet::new();
 
         // First pass: identify committed transactions and rolled back regions
         for record in wal_records {
@@ -685,7 +684,9 @@ impl FreeSpaceManager {
         mut log_wal: F,
     ) -> Option<Region>
     where
-        F: FnMut(crate::backend::native::v2::wal::V2WALRecord) -> Result<(), crate::backend::native::types::NativeBackendError>,
+        F: FnMut(
+            crate::backend::native::v2::wal::V2WALRecord,
+        ) -> Result<(), crate::backend::native::types::NativeBackendError>,
     {
         // Try to reserve the region first
         let region = self.try_reserve_contiguous(bytes, alignment)?;
@@ -709,7 +710,11 @@ impl FreeSpaceManager {
 
         // Track as allocated (but not committed yet)
         // Update the transaction ID on the reserved region
-        if let Some(allocation) = self.reserved_regions.iter_mut().find(|r| r.region.start_offset == region.start_offset) {
+        if let Some(allocation) = self
+            .reserved_regions
+            .iter_mut()
+            .find(|r| r.region.start_offset == region.start_offset)
+        {
             allocation.allocated_at_tx = txn_id;
         }
 
@@ -729,7 +734,9 @@ impl FreeSpaceManager {
         mut log_wal: F,
     ) -> Result<(), FreeSpaceError>
     where
-        F: FnMut(crate::backend::native::v2::wal::V2WALRecord) -> Result<(), crate::backend::native::types::NativeBackendError>,
+        F: FnMut(
+            crate::backend::native::v2::wal::V2WALRecord,
+        ) -> Result<(), crate::backend::native::types::NativeBackendError>,
     {
         // Log to WAL first (write-ahead logging)
         let wal_record = crate::backend::native::v2::wal::V2WALRecord::CommitContiguous {
@@ -737,10 +744,9 @@ impl FreeSpaceManager {
             region: region.to_wal_region(),
         };
 
-        log_wal(wal_record)
-            .map_err(|e| FreeSpaceError::InconsistentState {
-                details: format!("WAL logging failed for commit: {}", e),
-            })?;
+        log_wal(wal_record).map_err(|e| FreeSpaceError::InconsistentState {
+            details: format!("WAL logging failed for commit: {}", e),
+        })?;
 
         // Then commit the region
         self.commit_contiguous(region, txn_id)
@@ -751,16 +757,15 @@ impl FreeSpaceManager {
     /// Logs to WAL before modifying state (write-ahead logging pattern).
     ///
     /// Idempotent: safe to call multiple times on the same region.
-    pub fn rollback_contiguous_with_wal<F>(
-        &mut self,
-        region: &Region,
-        mut log_wal: F,
-    )
+    pub fn rollback_contiguous_with_wal<F>(&mut self, region: &Region, mut log_wal: F)
     where
-        F: FnMut(crate::backend::native::v2::wal::V2WALRecord) -> Result<(), crate::backend::native::types::NativeBackendError>,
+        F: FnMut(
+            crate::backend::native::v2::wal::V2WALRecord,
+        ) -> Result<(), crate::backend::native::types::NativeBackendError>,
     {
         // Check if region was actually reserved
-        let was_reserved = self.reserved_regions
+        let was_reserved = self
+            .reserved_regions
             .iter()
             .any(|r| r.region.start_offset == region.start_offset);
 
@@ -784,7 +789,11 @@ impl FreeSpaceManager {
     ///
     /// This allows the caller to construct WAL records without invoking callbacks,
     /// useful for batched WAL operations.
-    pub fn create_allocate_wal_record(&self, region: &Region, txn_id: u64) -> crate::backend::native::v2::wal::V2WALRecord {
+    pub fn create_allocate_wal_record(
+        &self,
+        region: &Region,
+        txn_id: u64,
+    ) -> crate::backend::native::v2::wal::V2WALRecord {
         crate::backend::native::v2::wal::V2WALRecord::AllocateContiguous {
             txn_id,
             region: region.to_wal_region(),
@@ -796,7 +805,11 @@ impl FreeSpaceManager {
     }
 
     /// Create a WAL record for commit (for external logging).
-    pub fn create_commit_wal_record(&self, region: &Region, txn_id: u64) -> crate::backend::native::v2::wal::V2WALRecord {
+    pub fn create_commit_wal_record(
+        &self,
+        region: &Region,
+        txn_id: u64,
+    ) -> crate::backend::native::v2::wal::V2WALRecord {
         crate::backend::native::v2::wal::V2WALRecord::CommitContiguous {
             txn_id,
             region: region.to_wal_region(),
@@ -804,7 +817,10 @@ impl FreeSpaceManager {
     }
 
     /// Create a WAL record for rollback (for external logging).
-    pub fn create_rollback_wal_record(&self, region: &Region) -> crate::backend::native::v2::wal::V2WALRecord {
+    pub fn create_rollback_wal_record(
+        &self,
+        region: &Region,
+    ) -> crate::backend::native::v2::wal::V2WALRecord {
         crate::backend::native::v2::wal::V2WALRecord::RollbackContiguous {
             region: region.to_wal_region(),
         }
@@ -901,9 +917,9 @@ mod tests {
 
         // Create fragmented free space
         fsm.free_blocks.clear();
-        fsm.add_free_block(0, 4096);      // 4KB
-        fsm.add_free_block(4096, 4096);  // 4KB
-        fsm.add_free_block(8192, 4096);  // 4KB
+        fsm.add_free_block(0, 4096); // 4KB
+        fsm.add_free_block(4096, 4096); // 4KB
+        fsm.add_free_block(8192, 4096); // 4KB
 
         // Total 12KB free, but largest contiguous is only 4KB
         // Try to reserve 10KB (should fail)
@@ -1652,7 +1668,11 @@ mod tests {
         let wal_record = fsm.create_allocate_wal_record(&region, 100);
 
         match wal_record {
-            crate::backend::native::v2::wal::V2WALRecord::AllocateContiguous { txn_id, region: wal_region, timestamp } => {
+            crate::backend::native::v2::wal::V2WALRecord::AllocateContiguous {
+                txn_id,
+                region: wal_region,
+                timestamp,
+            } => {
                 assert_eq!(txn_id, 100);
                 assert_eq!(wal_region.start_offset, 1000);
                 assert_eq!(wal_region.total_size, 4096);
@@ -1670,7 +1690,10 @@ mod tests {
         let wal_record = fsm.create_commit_wal_record(&region, 200);
 
         match wal_record {
-            crate::backend::native::v2::wal::V2WALRecord::CommitContiguous { txn_id, region: wal_region } => {
+            crate::backend::native::v2::wal::V2WALRecord::CommitContiguous {
+                txn_id,
+                region: wal_region,
+            } => {
                 assert_eq!(txn_id, 200);
                 assert_eq!(wal_region.start_offset, 2000);
                 assert_eq!(wal_region.total_size, 8192);
@@ -1687,7 +1710,9 @@ mod tests {
         let wal_record = fsm.create_rollback_wal_record(&region);
 
         match wal_record {
-            crate::backend::native::v2::wal::V2WALRecord::RollbackContiguous { region: wal_region } => {
+            crate::backend::native::v2::wal::V2WALRecord::RollbackContiguous {
+                region: wal_region,
+            } => {
                 assert_eq!(wal_region.start_offset, 3000);
                 assert_eq!(wal_region.total_size, 4096);
             }
@@ -1700,15 +1725,10 @@ mod tests {
         let mut fsm = FreeSpaceManager::new(1_000_000);
         let mut wal_records = Vec::new();
 
-        let region = fsm.try_reserve_contiguous_with_wal(
-            10 * 4096,
-            4096,
-            100,
-            |wal_record| {
-                wal_records.push(wal_record.clone());
-                Ok(())
-            }
-        );
+        let region = fsm.try_reserve_contiguous_with_wal(10 * 4096, 4096, 100, |wal_record| {
+            wal_records.push(wal_record.clone());
+            Ok(())
+        });
 
         assert!(region.is_some());
         assert_eq!(wal_records.len(), 1);
@@ -1737,7 +1757,7 @@ mod tests {
             |wal_record| {
                 wal_records.push(wal_record);
                 Ok(())
-            }
+            },
         );
 
         assert!(region.is_none());
@@ -1748,17 +1768,12 @@ mod tests {
     fn test_try_reserve_contiguous_with_wal_logging_failure_rollback() {
         let mut fsm = FreeSpaceManager::new(1_000_000);
 
-        let region = fsm.try_reserve_contiguous_with_wal(
-            10 * 4096,
-            4096,
-            100,
-            |_wal_record| {
-                // Simulate WAL logging failure
-                Err(NativeBackendError::CorruptStringTable {
-                    reason: "WAL logging failed".to_string(),
-                })
-            }
-        );
+        let region = fsm.try_reserve_contiguous_with_wal(10 * 4096, 4096, 100, |_wal_record| {
+            // Simulate WAL logging failure
+            Err(NativeBackendError::CorruptStringTable {
+                reason: "WAL logging failed".to_string(),
+            })
+        });
 
         assert!(region.is_none());
         // Free space should be restored (reservation rolled back)
@@ -1771,14 +1786,10 @@ mod tests {
         let region = fsm.try_reserve_contiguous(10 * 4096, 4096).unwrap();
         let mut wal_records = Vec::new();
 
-        let result = fsm.commit_contiguous_with_wal(
-            &region,
-            100,
-            |wal_record| {
-                wal_records.push(wal_record);
-                Ok(())
-            }
-        );
+        let result = fsm.commit_contiguous_with_wal(&region, 100, |wal_record| {
+            wal_records.push(wal_record);
+            Ok(())
+        });
 
         assert!(result.is_ok());
         assert_eq!(wal_records.len(), 1);
@@ -1800,14 +1811,10 @@ mod tests {
         let region = Region::new(1000, 4096); // Never reserved
         let mut wal_records = Vec::new();
 
-        let result = fsm.commit_contiguous_with_wal(
-            &region,
-            100,
-            |wal_record| {
-                wal_records.push(wal_record);
-                Ok(())
-            }
-        );
+        let result = fsm.commit_contiguous_with_wal(&region, 100, |wal_record| {
+            wal_records.push(wal_record);
+            Ok(())
+        });
 
         // WAL is written first (write-ahead logging), then error is detected
         assert!(matches!(result, Err(FreeSpaceError::RegionNotFound)));
@@ -1820,13 +1827,10 @@ mod tests {
         let region = fsm.try_reserve_contiguous(10 * 4096, 4096).unwrap();
         let mut wal_records = Vec::new();
 
-        fsm.rollback_contiguous_with_wal(
-            &region,
-            |wal_record| {
-                wal_records.push(wal_record);
-                Ok(())
-            }
-        );
+        fsm.rollback_contiguous_with_wal(&region, |wal_record| {
+            wal_records.push(wal_record);
+            Ok(())
+        });
 
         assert_eq!(wal_records.len(), 1);
 
@@ -1849,26 +1853,20 @@ mod tests {
         let mut wal_records = Vec::new();
 
         // Rollback once
-        fsm.rollback_contiguous_with_wal(
-            &region,
-            |wal_record| {
-                wal_records.push(wal_record);
-                Ok(())
-            }
-        );
+        fsm.rollback_contiguous_with_wal(&region, |wal_record| {
+            wal_records.push(wal_record);
+            Ok(())
+        });
 
         assert_eq!(wal_records.len(), 1);
         assert!(!fsm.is_region_reserved(&region));
 
         // Rollback again - should be no-op
         let mut wal_records2 = Vec::new();
-        fsm.rollback_contiguous_with_wal(
-            &region,
-            |wal_record| {
-                wal_records2.push(wal_record);
-                Ok(())
-            }
-        );
+        fsm.rollback_contiguous_with_wal(&region, |wal_record| {
+            wal_records2.push(wal_record);
+            Ok(())
+        });
 
         assert_eq!(wal_records2.len(), 0); // No WAL record for non-existent region
         assert_eq!(fsm.largest_contiguous_free(), 1_000_000);
@@ -1880,47 +1878,38 @@ mod tests {
         let mut wal_records = Vec::new();
 
         // Reserve with WAL
-        let region = fsm.try_reserve_contiguous_with_wal(
-            10 * 4096,
-            4096,
-            100,
-            |wal_record| {
-                wal_records.push(wal_record);
-                Ok(())
-            }
-        );
+        let region = fsm.try_reserve_contiguous_with_wal(10 * 4096, 4096, 100, |wal_record| {
+            wal_records.push(wal_record);
+            Ok(())
+        });
 
         assert!(region.is_some());
         let r = region.unwrap();
         assert_eq!(wal_records.len(), 1);
 
         // Commit with WAL
-        fsm.commit_contiguous_with_wal(
-            &r,
-            100,
-            |wal_record| {
-                wal_records.push(wal_record);
-                Ok(())
-            }
-        );
+        fsm.commit_contiguous_with_wal(&r, 100, |wal_record| {
+            wal_records.push(wal_record);
+            Ok(())
+        });
 
         assert_eq!(wal_records.len(), 2);
 
         // Verify WAL record types
         match &wal_records[0] {
-            crate::backend::native::v2::wal::V2WALRecord::AllocateContiguous { .. } => {},
+            crate::backend::native::v2::wal::V2WALRecord::AllocateContiguous { .. } => {}
             _ => panic!("Expected AllocateContiguous"),
         }
 
         match &wal_records[1] {
-            crate::backend::native::v2::wal::V2WALRecord::CommitContiguous { .. } => {},
+            crate::backend::native::v2::wal::V2WALRecord::CommitContiguous { .. } => {}
             _ => panic!("Expected CommitContiguous"),
         }
     }
 
     // === 40-11: WAL Replay Tests ===
 
-    use crate::backend::native::v2::wal::{V2WALRecord, ContiguousRegion};
+    use crate::backend::native::v2::wal::{ContiguousRegion, V2WALRecord};
 
     #[test]
     fn test_wal_replay_committed_allocation_preserved() {

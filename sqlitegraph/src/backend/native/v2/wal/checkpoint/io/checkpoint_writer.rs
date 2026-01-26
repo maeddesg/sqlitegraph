@@ -3,9 +3,9 @@
 //! This module provides checkpoint file writing operations including headers,
 //! progress tracking, and completion markers.
 
+use crate::backend::native::v2::wal::checkpoint::constants::*;
 use crate::backend::native::v2::wal::checkpoint::core::CheckpointProgress;
 use crate::backend::native::v2::wal::checkpoint::errors::{CheckpointError, CheckpointResult};
-use crate::backend::native::v2::wal::checkpoint::constants::*;
 use std::io::{Seek, SeekFrom, Write};
 
 /// Checkpoint file writer for structured checkpoint file operations
@@ -32,31 +32,23 @@ impl CheckpointWriter {
             })?;
 
         // Write LSN range
-        writer
-            .write_all(&lsn_range.0.to_le_bytes())
-            .map_err(|e| {
-                CheckpointError::io(format!("Failed to write checkpoint start LSN: {}", e))
-            })?;
+        writer.write_all(&lsn_range.0.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write checkpoint start LSN: {}", e))
+        })?;
 
-        writer
-            .write_all(&lsn_range.1.to_le_bytes())
-            .map_err(|e| {
-                CheckpointError::io(format!("Failed to write checkpoint end LSN: {}", e))
-            })?;
+        writer.write_all(&lsn_range.1.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write checkpoint end LSN: {}", e))
+        })?;
 
         // Write timestamp
-        writer
-            .write_all(&timestamp.to_le_bytes())
-            .map_err(|e| {
-                CheckpointError::io(format!("Failed to write checkpoint timestamp: {}", e))
-            })?;
+        writer.write_all(&timestamp.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write checkpoint timestamp: {}", e))
+        })?;
 
         // Write block count
-        writer
-            .write_all(&block_count.to_le_bytes())
-            .map_err(|e| {
-                CheckpointError::io(format!("Failed to write checkpoint block count: {}", e))
-            })?;
+        writer.write_all(&block_count.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write checkpoint block count: {}", e))
+        })?;
 
         // Write V2-specific metadata
         Self::write_v2_metadata(writer)?;
@@ -134,19 +126,23 @@ impl CheckpointWriter {
 
         // Write progress timestamp
         let elapsed = progress.checkpoint_start.elapsed().as_secs();
-        writer
-            .write_all(&elapsed.to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write progress timestamp: {}", e)))?;
+        writer.write_all(&elapsed.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write progress timestamp: {}", e))
+        })?;
 
         // Write completion percentage
         writer
             .write_all(&(progress.completion_percentage as u32).to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write completion percentage: {}", e)))?;
+            .map_err(|e| {
+                CheckpointError::io(format!("Failed to write completion percentage: {}", e))
+            })?;
 
         // Write processed records
         writer
             .write_all(&progress.processed_records.to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write processed records: {}", e)))?;
+            .map_err(|e| {
+                CheckpointError::io(format!("Failed to write processed records: {}", e))
+            })?;
 
         // Write flushed blocks
         writer
@@ -168,22 +164,26 @@ impl CheckpointWriter {
 
         // Write final statistics
         let elapsed = progress.checkpoint_start.elapsed().as_secs();
-        writer
-            .write_all(&elapsed.to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write completion timestamp: {}", e)))?;
+        writer.write_all(&elapsed.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write completion timestamp: {}", e))
+        })?;
 
         writer
             .write_all(&progress.processed_records.to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write final processed records: {}", e)))?;
+            .map_err(|e| {
+                CheckpointError::io(format!("Failed to write final processed records: {}", e))
+            })?;
 
         writer
             .write_all(&progress.flushed_blocks.to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write final flushed blocks: {}", e)))?;
+            .map_err(|e| {
+                CheckpointError::io(format!("Failed to write final flushed blocks: {}", e))
+            })?;
 
         // Write completion status (100% = success)
-        writer
-            .write_all(&100u32.to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write completion status: {}", e)))?;
+        writer.write_all(&100u32.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write completion status: {}", e))
+        })?;
 
         Ok(())
     }

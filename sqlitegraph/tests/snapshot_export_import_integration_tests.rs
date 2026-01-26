@@ -7,14 +7,14 @@ use sqlitegraph::backend::native::{
     graph_file::GraphFile,
     types::{NativeBackendError, NativeResult},
     v2::{
-        export::{ExportFactory, SnapshotExporter, SnapshotExportConfig},
-        import::{SnapshotImporter, SnapshotImportConfig},
+        export::{ExportFactory, SnapshotExportConfig, SnapshotExporter},
+        import::{SnapshotImportConfig, SnapshotImporter},
         planner::{ExportPlanner, PlannerDecision},
     },
 };
+use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::{NamedTempFile, TempDir};
-use std::fs;
 
 /// Integration test helper to create a stable graph file with test data
 fn create_stable_test_graph() -> NativeResult<(GraphFile, PathBuf)> {
@@ -51,7 +51,10 @@ fn test_snapshot_export_import_chain() -> NativeResult<()> {
 
     // Phase 2: Planner analysis should recommend snapshot
     let planner_decision = ExportPlanner::analyze_export_strategy(&original_path)?;
-    assert!(planner_decision.export_mode == sqlitegraph::backend::native::v2::export::ExportMode::Snapshot);
+    assert!(
+        planner_decision.export_mode
+            == sqlitegraph::backend::native::v2::export::ExportMode::Snapshot
+    );
     assert!(planner_decision.graph_stable);
 
     // Phase 3: Export snapshot
@@ -88,7 +91,8 @@ fn test_snapshot_export_import_chain() -> NativeResult<()> {
         overwrite_existing: false,
     };
 
-    let importer = SnapshotImporter::from_export_dir(export_dir.path(), &import_path, import_config)?;
+    let importer =
+        SnapshotImporter::from_export_dir(export_dir.path(), &import_path, import_config)?;
     let import_result = importer.import()?;
 
     // Verify import success
@@ -108,7 +112,10 @@ fn test_snapshot_export_import_chain() -> NativeResult<()> {
 
     // Phase 7: Verify no WAL interference
     let wal_path = import_path.with_extension("wal");
-    assert!(!wal_path.exists(), "WAL should not exist after snapshot import");
+    assert!(
+        !wal_path.exists(),
+        "WAL should not exist after snapshot import"
+    );
 
     // Phase 8: Verify restored graph is immediately usable
     assert!(!restored_graph.is_transaction_active());
@@ -145,7 +152,9 @@ fn test_multiple_snapshot_cycles_consistency() -> NativeResult<()> {
         fs::remove_file(&current_path)?;
 
         // Import to new location
-        let import_path = export_dir.path().join(format!("cycle_{}_restored.v2", cycle));
+        let import_path = export_dir
+            .path()
+            .join(format!("cycle_{}_restored.v2", cycle));
         let import_config = SnapshotImportConfig {
             target_graph_path: import_path.clone(),
             export_dir_path: export_dir.path().to_path_buf(),
@@ -155,7 +164,8 @@ fn test_multiple_snapshot_cycles_consistency() -> NativeResult<()> {
             overwrite_existing: false,
         };
 
-        let importer = SnapshotImporter::from_export_dir(export_dir.path(), &import_path, import_config)?;
+        let importer =
+            SnapshotImporter::from_export_dir(export_dir.path(), &import_path, import_config)?;
         let import_result = importer.import()?;
 
         // Verify cycle success
@@ -183,7 +193,8 @@ fn test_wal_export_paths_unmodified() -> NativeResult<()> {
     let export_dir = TempDir::new().map_err(|e| NativeBackendError::Io(e))?;
 
     // Test checkpoint-aligned export
-    let checkpoint_result = ExportFactory::create_checkpoint_aligned_exporter(&graph_path, export_dir.path());
+    let checkpoint_result =
+        ExportFactory::create_checkpoint_aligned_exporter(&graph_path, export_dir.path());
     // This should either succeed or fail with existing error patterns
 
     // Test full export
@@ -215,7 +226,10 @@ fn test_planner_deterministic_behavior() -> NativeResult<()> {
 
     // Quick check should be consistent with full analysis
     let snapshot_advisable = ExportPlanner::is_snapshot_advisable(&graph_path)?;
-    let should_be_snapshot = matches!(decision1.export_mode, sqlitegraph::backend::native::v2::export::ExportMode::Snapshot);
+    let should_be_snapshot = matches!(
+        decision1.export_mode,
+        sqlitegraph::backend::native::v2::export::ExportMode::Snapshot
+    );
     assert_eq!(snapshot_advisable, should_be_snapshot);
 
     drop(graph_file);
@@ -235,7 +249,10 @@ fn test_snapshot_import_bypasses_wal_recovery() -> NativeResult<()> {
     let export_result = exporter.export_snapshot()?;
 
     // Import snapshot
-    let import_path = TempDir::new().map_err(|e| NativeBackendError::Io(e))?.path().join("imported.v2");
+    let import_path = TempDir::new()
+        .map_err(|e| NativeBackendError::Io(e))?
+        .path()
+        .join("imported.v2");
     let import_config = SnapshotImportConfig {
         target_graph_path: import_path.clone(),
         export_dir_path: export_dir.path().to_path_buf(),
@@ -245,7 +262,8 @@ fn test_snapshot_import_bypasses_wal_recovery() -> NativeResult<()> {
         overwrite_existing: false,
     };
 
-    let importer = SnapshotImporter::from_export_dir(export_dir.path(), &import_path, import_config)?;
+    let importer =
+        SnapshotImporter::from_export_dir(export_dir.path(), &import_path, import_config)?;
     let import_result = importer.import()?;
 
     // Critical verification: WAL recovery logic should NOT be triggered
@@ -253,7 +271,10 @@ fn test_snapshot_import_bypasses_wal_recovery() -> NativeResult<()> {
 
     // 1. No WAL files should exist
     let wal_path = import_path.with_extension("wal");
-    assert!(!wal_path.exists(), "WAL file should not exist after snapshot import");
+    assert!(
+        !wal_path.exists(),
+        "WAL file should not exist after snapshot import"
+    );
 
     // 2. Recovery state should be CleanShutdown (no recovery needed)
     assert!(import_result.final_recovery_state == sqlitegraph::backend::native::v2::wal::recovery::states::RecoveryState::CleanShutdown);
@@ -278,7 +299,10 @@ fn test_snapshot_export_requires_stable_state() -> NativeResult<()> {
 
     // Planner should not recommend snapshot
     let planner_decision = ExportPlanner::analyze_export_strategy(&graph_path)?;
-    assert!(!matches!(planner_decision.export_mode, sqlitegraph::backend::native::v2::export::ExportMode::Snapshot));
+    assert!(!matches!(
+        planner_decision.export_mode,
+        sqlitegraph::backend::native::v2::export::ExportMode::Snapshot
+    ));
 
     // Quick check should also return false
     let snapshot_advisable = ExportPlanner::is_snapshot_advisable(&graph_path)?;
@@ -299,7 +323,8 @@ fn test_snapshot_error_handling() -> NativeResult<()> {
     let import_path = empty_dir.path().join("imported.v2");
     let import_config = SnapshotImportConfig::default();
 
-    let import_result = SnapshotImporter::from_export_dir(empty_dir.path(), &import_path, import_config);
+    let import_result =
+        SnapshotImporter::from_export_dir(empty_dir.path(), &import_path, import_config);
     assert!(import_result.is_err());
 
     // Test import with non-snapshot export (if we had one)
@@ -339,7 +364,8 @@ fn test_snapshot_large_file_handling() -> NativeResult<()> {
         overwrite_existing: false,
     };
 
-    let importer = SnapshotImporter::from_export_dir(export_dir.path(), &import_path, import_config)?;
+    let importer =
+        SnapshotImporter::from_export_dir(export_dir.path(), &import_path, import_config)?;
     let import_result = importer.import()?;
 
     assert!(import_result.snapshot_size_bytes == export_result.snapshot_size_bytes);
@@ -386,7 +412,10 @@ fn test_snapshot_concurrent_access() -> NativeResult<()> {
     assert!(export_result2.snapshot_path.exists());
 
     // Snapshots should be identical in size (same source)
-    assert_eq!(export_result1.snapshot_size_bytes, export_result2.snapshot_size_bytes);
+    assert_eq!(
+        export_result1.snapshot_size_bytes,
+        export_result2.snapshot_size_bytes
+    );
 
     Ok(())
 }

@@ -10,7 +10,8 @@ use crate::backend::native::{NativeBackendError, NativeEdgeId, NativeNodeId, Nat
 use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-#[allow(unused_imports)] // False positive: UNIX_EPOCH is used as SystemTime::UNIX_EPOCH on lines 485, 615, 893
+#[allow(unused_imports)]
+// False positive: UNIX_EPOCH is used as SystemTime::UNIX_EPOCH on lines 485, 615, 893
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Transaction identifier with uniqueness guarantees
@@ -207,11 +208,7 @@ impl V2LockManager {
     }
 
     /// Release lock for transaction
-    pub fn release_lock(
-        &self,
-        tx_id: TransactionId,
-        resource_id: ResourceId,
-    ) -> NativeResult<()> {
+    pub fn release_lock(&self, tx_id: TransactionId, resource_id: ResourceId) -> NativeResult<()> {
         let mut lock_table = self.lock_table.write();
         if let Some(entry) = lock_table.get_mut(&resource_id) {
             entry.1.remove(&tx_id);
@@ -235,13 +232,11 @@ impl V2LockManager {
         let mut to_remove = Vec::new();
 
         for (i, request) in wait_queue.iter().enumerate() {
-            if self
-                .acquire_lock(
-                    request.transaction_id,
-                    request.resource_id,
-                    request.lock_type,
-                )?
-            {
+            if self.acquire_lock(
+                request.transaction_id,
+                request.resource_id,
+                request.lock_type,
+            )? {
                 to_remove.push(i);
             }
         }
@@ -330,7 +325,12 @@ impl DeadlockDetector {
         let mut visited = HashSet::new();
         let mut recursion_stack = HashSet::new();
 
-        Ok(self.has_cycle_util(start_tx, &mut visited, &mut recursion_stack, &wait_for_graph))
+        Ok(self.has_cycle_util(
+            start_tx,
+            &mut visited,
+            &mut recursion_stack,
+            &wait_for_graph,
+        ))
     }
 
     /// DFS utility for cycle detection
@@ -392,7 +392,13 @@ impl DeadlockDetector {
         let mut path = Vec::new();
         let mut recursion_stack = HashSet::new();
 
-        if self.find_cycle_path(start_tx, &mut visited, &mut recursion_stack, &mut path, &wait_for_graph) {
+        if self.find_cycle_path(
+            start_tx,
+            &mut visited,
+            &mut recursion_stack,
+            &mut path,
+            &wait_for_graph,
+        ) {
             Ok(path)
         } else {
             Ok(Vec::new())
@@ -426,7 +432,8 @@ impl DeadlockDetector {
 
         if let Some(waiting_for) = wait_for_graph.get(&tx_id) {
             for &waiting_tx in waiting_for {
-                if self.find_cycle_path(waiting_tx, visited, recursion_stack, path, wait_for_graph) {
+                if self.find_cycle_path(waiting_tx, visited, recursion_stack, path, wait_for_graph)
+                {
                     return true;
                 }
             }
@@ -441,17 +448,12 @@ impl DeadlockDetector {
     ///
     /// Removes entries for transactions that are no longer active.
     /// Should be called periodically (e.g., after every 1000 transactions).
-    pub fn cleanup_stale_transactions(
-        &self,
-        active_ids: &HashSet<TransactionId>,
-    ) -> usize {
+    pub fn cleanup_stale_transactions(&self, active_ids: &HashSet<TransactionId>) -> usize {
         let mut wait_for_graph = self.wait_for_graph.write();
         let initial_size = wait_for_graph.len();
 
         // Remove entries for non-active transactions
-        wait_for_graph.retain(|tx_id, _waiting_for| {
-            active_ids.contains(tx_id)
-        });
+        wait_for_graph.retain(|tx_id, _waiting_for| active_ids.contains(tx_id));
 
         // Also clean up references to non-active transactions
         for waiting_set in wait_for_graph.values_mut() {
@@ -479,7 +481,9 @@ impl DeadlockDetector {
 
     /// Get the wait-for graph for testing purposes
     #[cfg(test)]
-    pub fn wait_for_graph_for_test(&self) -> &Arc<RwLock<HashMap<TransactionId, HashSet<TransactionId>>>> {
+    pub fn wait_for_graph_for_test(
+        &self,
+    ) -> &Arc<RwLock<HashMap<TransactionId, HashSet<TransactionId>>>> {
         &self.wait_for_graph
     }
 }
@@ -590,7 +594,7 @@ impl IsolationManager {
         &self,
         tx_id: TransactionId,
         resource_id: ResourceId,
-        _lock_type: LockType,     // TODO: Implement lock type validation
+        _lock_type: LockType, // TODO: Implement lock type validation
     ) -> NativeResult<()> {
         let transaction_isolation = self.transaction_isolation.read();
 
@@ -762,7 +766,9 @@ impl V2TransactionCoordinator {
                 let cycle = self.deadlock_detector.get_cycle(tx_id)?;
                 let active = self.active_transactions.read();
 
-                let victim = self.deadlock_detector.select_victim(&cycle, &active)
+                let victim = self
+                    .deadlock_detector
+                    .select_victim(&cycle, &active)
                     .ok_or_else(|| NativeBackendError::CorruptionDetected {
                         context: "Deadlock detected but no victim found".to_string(),
                         source: None,
@@ -799,11 +805,7 @@ impl V2TransactionCoordinator {
     }
 
     /// Release lock held by transaction
-    pub fn release_lock(
-        &self,
-        tx_id: TransactionId,
-        resource_id: ResourceId,
-    ) -> NativeResult<()> {
+    pub fn release_lock(&self, tx_id: TransactionId, resource_id: ResourceId) -> NativeResult<()> {
         self.lock_manager.release_lock(tx_id, resource_id)?;
 
         // Update transaction context
@@ -999,10 +1001,7 @@ impl V2TransactionCoordinator {
     }
 
     /// Get transaction status
-    pub fn get_transaction_status(
-        &self,
-        tx_id: TransactionId,
-    ) -> NativeResult<TransactionState> {
+    pub fn get_transaction_status(&self, tx_id: TransactionId) -> NativeResult<TransactionState> {
         let active = self.active_transactions.read();
         if let Some(context) = active.get(&tx_id) {
             Ok(context.state)
@@ -1063,11 +1062,9 @@ impl V2TransactionCoordinator {
 
         // Trigger cleanup if graph is large (prevent unbounded growth)
         if self.deadlock_detector.needs_cleanup(1000) {
-            let active_ids: HashSet<_> = self.active_transactions.read()
-                .keys()
-                .copied()
-                .collect();
-            self.deadlock_detector.cleanup_stale_transactions(&active_ids);
+            let active_ids: HashSet<_> = self.active_transactions.read().keys().copied().collect();
+            self.deadlock_detector
+                .cleanup_stale_transactions(&active_ids);
         }
 
         Ok(())
@@ -1156,7 +1153,7 @@ impl TwoPhaseCommitCoordinator {
             timestamp: SystemTime::now(),
         };
 
-        self.wal_manager.write_record(prepare_record)?;  // LSN not needed in current implementation
+        self.wal_manager.write_record(prepare_record)?; // LSN not needed in current implementation
 
         // Flush WAL to ensure durability
         self.wal_manager.flush()?;
@@ -1283,7 +1280,9 @@ impl TwoPhaseCommitCoordinator {
     /// Validate a single WAL record for constraint compliance
     fn validate_record_constraints(&self, record: &V2WALRecord, index: usize) -> NativeResult<()> {
         match record {
-            V2WALRecord::NodeInsert { node_id, node_data, .. } => {
+            V2WALRecord::NodeInsert {
+                node_id, node_data, ..
+            } => {
                 if *node_id <= 0 {
                     return Err(NativeBackendError::InvalidParameter {
                         context: format!(
@@ -1304,7 +1303,12 @@ impl TwoPhaseCommitCoordinator {
                 }
             }
 
-            V2WALRecord::NodeUpdate { node_id, old_data, new_data, .. } => {
+            V2WALRecord::NodeUpdate {
+                node_id,
+                old_data,
+                new_data,
+                ..
+            } => {
                 if *node_id <= 0 {
                     return Err(NativeBackendError::InvalidParameter {
                         context: format!(
@@ -1327,7 +1331,13 @@ impl TwoPhaseCommitCoordinator {
                 }
             }
 
-            V2WALRecord::ClusterCreate { node_id, cluster_offset, cluster_size, edge_data, .. } => {
+            V2WALRecord::ClusterCreate {
+                node_id,
+                cluster_offset,
+                cluster_size,
+                edge_data,
+                ..
+            } => {
                 if *node_id <= 0 {
                     return Err(NativeBackendError::InvalidParameter {
                         context: format!(
@@ -1380,7 +1390,9 @@ impl TwoPhaseCommitCoordinator {
                 }
             }
 
-            V2WALRecord::EdgeUpdate { old_edge, new_edge, .. } => {
+            V2WALRecord::EdgeUpdate {
+                old_edge, new_edge, ..
+            } => {
                 if old_edge.neighbor_id <= 0 {
                     return Err(NativeBackendError::InvalidParameter {
                         context: format!(
@@ -1413,7 +1425,11 @@ impl TwoPhaseCommitCoordinator {
                 }
             }
 
-            V2WALRecord::FreeSpaceAllocate { block_offset, block_size, .. } => {
+            V2WALRecord::FreeSpaceAllocate {
+                block_offset,
+                block_size,
+                ..
+            } => {
                 if *block_size == 0 {
                     return Err(NativeBackendError::InvalidParameter {
                         context: format!(
@@ -1436,7 +1452,11 @@ impl TwoPhaseCommitCoordinator {
                 }
             }
 
-            V2WALRecord::FreeSpaceDeallocate { block_offset, block_size, .. } => {
+            V2WALRecord::FreeSpaceDeallocate {
+                block_offset,
+                block_size,
+                ..
+            } => {
                 if *block_size == 0 {
                     return Err(NativeBackendError::InvalidParameter {
                         context: format!(
@@ -1459,7 +1479,11 @@ impl TwoPhaseCommitCoordinator {
                 }
             }
 
-            V2WALRecord::StringInsert { string_id, string_value, .. } => {
+            V2WALRecord::StringInsert {
+                string_id,
+                string_value,
+                ..
+            } => {
                 if *string_id == 0 {
                     return Err(NativeBackendError::InvalidParameter {
                         context: format!(
@@ -1550,7 +1574,9 @@ impl TwoPhaseCommitCoordinator {
                 }
             }
 
-            V2WALRecord::KvDelete { key, old_version, .. } => {
+            V2WALRecord::KvDelete {
+                key, old_version, ..
+            } => {
                 // Validate KV delete records
                 if key.is_empty() {
                     return Err(NativeBackendError::InvalidParameter {
@@ -1688,8 +1714,14 @@ mod tests {
         assert!(result.is_err(), "Should reject misaligned cluster_offset");
 
         if let Err(NativeBackendError::InvalidParameter { context, .. }) = result {
-            assert!(context.contains("cluster_offset"), "Error should mention cluster_offset");
-            assert!(context.contains("aligned"), "Error should mention alignment");
+            assert!(
+                context.contains("cluster_offset"),
+                "Error should mention cluster_offset"
+            );
+            assert!(
+                context.contains("aligned"),
+                "Error should mention alignment"
+            );
         } else {
             panic!("Expected InvalidParameter error");
         }
@@ -1723,7 +1755,9 @@ mod tests {
     // These mirror the logic in TwoPhaseCommitCoordinator::validate_record_constraints
     fn validate_node_insert_constraint(record: &V2WALRecord) -> NativeResult<()> {
         match record {
-            V2WALRecord::NodeInsert { node_id, node_data, .. } => {
+            V2WALRecord::NodeInsert {
+                node_id, node_data, ..
+            } => {
                 if *node_id <= 0 {
                     return Err(NativeBackendError::InvalidParameter {
                         context: format!("Invalid node_id {} (must be > 0)", node_id),
@@ -1860,11 +1894,17 @@ mod tests {
 
         // Cycle should be non-empty and contain the starting transaction
         assert!(!cycle.is_empty(), "Cycle should not be empty");
-        assert!(cycle.contains(&1), "Cycle should contain the starting transaction (1)");
+        assert!(
+            cycle.contains(&1),
+            "Cycle should contain the starting transaction (1)"
+        );
 
         // For a simple 3-node cycle, we should find at least some nodes
         // The exact path depends on DFS traversal order
-        assert!(cycle.len() >= 1, "Cycle should contain at least one transaction");
+        assert!(
+            cycle.len() >= 1,
+            "Cycle should contain at least one transaction"
+        );
     }
 
     #[test]
@@ -1882,7 +1922,10 @@ mod tests {
 
         // get_cycle should return empty vec
         let cycle = detector.get_cycle(1).unwrap();
-        assert!(cycle.is_empty(), "get_cycle should return empty when no cycle");
+        assert!(
+            cycle.is_empty(),
+            "get_cycle should return empty when no cycle"
+        );
     }
 
     #[test]
@@ -1913,12 +1956,20 @@ mod tests {
         // Acquire Exclusive lock on Node(1) for transaction 1
         let tx1 = 1;
         let node1 = ResourceId::Node(1);
-        assert!(lock_manager.acquire_lock(tx1, node1, LockType::Exclusive).unwrap());
+        assert!(
+            lock_manager
+                .acquire_lock(tx1, node1, LockType::Exclusive)
+                .unwrap()
+        );
 
         // Acquire Exclusive lock on Node(2) for transaction 2 - different resource, should succeed
         let tx2 = 2;
         let node2 = ResourceId::Node(2);
-        assert!(lock_manager.acquire_lock(tx2, node2, LockType::Exclusive).unwrap());
+        assert!(
+            lock_manager
+                .acquire_lock(tx2, node2, LockType::Exclusive)
+                .unwrap()
+        );
 
         // Both transactions should have their locks
         let lock_table = lock_manager.lock_table_for_test().read();
@@ -1937,12 +1988,20 @@ mod tests {
         // T1 locks cluster 0
         let tx1 = 1;
         let cluster0 = ResourceId::Cluster(0);
-        assert!(lock_manager.acquire_lock(tx1, cluster0, LockType::Exclusive).unwrap());
+        assert!(
+            lock_manager
+                .acquire_lock(tx1, cluster0, LockType::Exclusive)
+                .unwrap()
+        );
 
         // T2 locks cluster 1 - different resource, should succeed
         let tx2 = 2;
         let cluster1 = ResourceId::Cluster(1);
-        assert!(lock_manager.acquire_lock(tx2, cluster1, LockType::Exclusive).unwrap());
+        assert!(
+            lock_manager
+                .acquire_lock(tx2, cluster1, LockType::Exclusive)
+                .unwrap()
+        );
 
         // Both transactions should have their respective cluster locks
         let lock_table = lock_manager.lock_table_for_test().read();
@@ -1959,17 +2018,29 @@ mod tests {
         // T1 locks Node(1)
         let tx1 = 1;
         let node1 = ResourceId::Node(1);
-        assert!(lock_manager.acquire_lock(tx1, node1, LockType::Exclusive).unwrap());
+        assert!(
+            lock_manager
+                .acquire_lock(tx1, node1, LockType::Exclusive)
+                .unwrap()
+        );
 
         // T2 locks Cluster(0) - different type, should succeed
         let tx2 = 2;
         let cluster0 = ResourceId::Cluster(0);
-        assert!(lock_manager.acquire_lock(tx2, cluster0, LockType::Exclusive).unwrap());
+        assert!(
+            lock_manager
+                .acquire_lock(tx2, cluster0, LockType::Exclusive)
+                .unwrap()
+        );
 
         // T3 locks StringTable(1) - different type, should succeed
         let tx3 = 3;
         let string_table = ResourceId::StringTable(1);
-        assert!(lock_manager.acquire_lock(tx3, string_table, LockType::Exclusive).unwrap());
+        assert!(
+            lock_manager
+                .acquire_lock(tx3, string_table, LockType::Exclusive)
+                .unwrap()
+        );
 
         // All three transactions should have their locks
         let lock_table = lock_manager.lock_table_for_test().read();
@@ -2073,7 +2144,10 @@ mod tests {
         // Verify that the remaining entry has no stale references
         let graph = detector.wait_for_graph_for_test().read();
         if let Some(waiting_for) = graph.get(&1) {
-            assert!(waiting_for.is_empty(), "Transaction 1 should have no wait references after cleanup");
+            assert!(
+                waiting_for.is_empty(),
+                "Transaction 1 should have no wait references after cleanup"
+            );
         }
     }
 }

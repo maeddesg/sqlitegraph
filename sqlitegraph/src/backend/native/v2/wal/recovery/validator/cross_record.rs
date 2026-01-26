@@ -9,7 +9,7 @@ use crate::backend::native::v2::wal::V2WALRecord;
 use crate::backend::native::v2::wal::recovery::core::TransactionState;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryResult;
 use crate::backend::native::v2::wal::recovery::validator::{
-    V2_CLUSTER_ALIGNMENT, MAX_RECORDS_PER_TRANSACTION, MAX_TRANSACTION_ALLOCATION,
+    MAX_RECORDS_PER_TRANSACTION, MAX_TRANSACTION_ALLOCATION, V2_CLUSTER_ALIGNMENT,
 };
 
 use std::collections::{HashMap, HashSet};

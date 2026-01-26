@@ -28,10 +28,8 @@
 
 use std::time::Duration;
 
-use criterion::{black_box, BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
-use sqlitegraph::backend::native::{
-    adjacency::are_clusters_contiguous,
-};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use sqlitegraph::backend::native::adjacency::are_clusters_contiguous;
 
 /// Common benchmark configuration
 const MEASURE: Duration = Duration::from_millis(500);
@@ -62,15 +60,11 @@ fn bench_contiguous_clusters(criterion: &mut Criterion) {
 
         let total_bytes = current_offset - 1024;
         group.throughput(Throughput::Bytes(total_bytes));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &_count| {
-                b.iter(|| {
-                    black_box(are_clusters_contiguous(black_box(&offsets)));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
+            b.iter(|| {
+                black_box(are_clusters_contiguous(black_box(&offsets)));
+            });
+        });
     }
 
     group.finish();
@@ -102,15 +96,11 @@ fn bench_gapped_clusters_fixed(criterion: &mut Criterion) {
 
         let total_bytes = current_offset - 1024;
         group.throughput(Throughput::Bytes(total_bytes));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &_count| {
-                b.iter(|| {
-                    black_box(are_clusters_contiguous(black_box(&offsets)));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
+            b.iter(|| {
+                black_box(are_clusters_contiguous(black_box(&offsets)));
+            });
+        });
     }
 
     group.finish();
@@ -144,15 +134,11 @@ fn bench_gapped_clusters_variable(criterion: &mut Criterion) {
 
         let total_bytes = current_offset - 1024;
         group.throughput(Throughput::Bytes(total_bytes));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &_count| {
-                b.iter(|| {
-                    black_box(are_clusters_contiguous(black_box(&offsets)));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
+            b.iter(|| {
+                black_box(are_clusters_contiguous(black_box(&offsets)));
+            });
+        });
     }
 
     group.finish();
@@ -200,7 +186,8 @@ fn bench_random_gaps(criterion: &mut Criterion) {
         }
 
         let total_bytes = current_offset - 1024;
-        let actual_frag = target_gap_bytes as f64 / (cluster_bytes as f64 + target_gap_bytes as f64);
+        let actual_frag =
+            target_gap_bytes as f64 / (cluster_bytes as f64 + target_gap_bytes as f64);
 
         group.throughput(Throughput::Bytes(total_bytes));
         group.bench_with_input(
@@ -241,15 +228,11 @@ fn bench_worst_case_fragmentation(criterion: &mut Criterion) {
 
         let total_bytes = current_offset - 1024;
         group.throughput(Throughput::Bytes(total_bytes));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &_count| {
-                b.iter(|| {
-                    black_box(are_clusters_contiguous(black_box(&offsets)));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
+            b.iter(|| {
+                black_box(are_clusters_contiguous(black_box(&offsets)));
+            });
+        });
     }
 
     group.finish();

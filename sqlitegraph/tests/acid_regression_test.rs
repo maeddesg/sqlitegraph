@@ -25,9 +25,7 @@
 //! Once 38-04 (WAL filtering) is complete and implementations are updated, these tests
 //! should compile and verify snapshot isolation works correctly.
 
-use sqlitegraph::{
-    snapshot::SnapshotId,
-};
+use sqlitegraph::snapshot::SnapshotId;
 
 // Note: These tests verify SnapshotId type functionality (38-02 - COMPLETE).
 // Full integration tests are blocked until implementations match trait signature (38-04).
@@ -43,8 +41,15 @@ use sqlitegraph::{
 #[test]
 fn test_snapshot_id_current() {
     let snapshot = SnapshotId::current();
-    assert!(snapshot.is_valid(), "Current snapshot should always be valid");
-    assert_eq!(snapshot.as_u64(), 0, "Current implementation returns 0 (all committed data)");
+    assert!(
+        snapshot.is_valid(),
+        "Current snapshot should always be valid"
+    );
+    assert_eq!(
+        snapshot.as_u64(),
+        0,
+        "Current implementation returns 0 (all committed data)"
+    );
 }
 
 /// Verify SnapshotId can be created from explicit transaction ID

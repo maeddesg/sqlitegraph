@@ -9,10 +9,8 @@
 
 use serde_json::json;
 use sqlitegraph::{
-    backend::BackendDirection,
-    bfs,
-    multi_hop, multi_hop::ChainStep,
-    GraphEdge, GraphEntity, SqliteGraph,
+    GraphEdge, GraphEntity, SqliteGraph, backend::BackendDirection, bfs, multi_hop,
+    multi_hop::ChainStep,
 };
 
 /// Helper to insert an entity
@@ -146,7 +144,10 @@ fn test_cache_statistics_accuracy() {
 
     // Node 4 should appear only once (BFS deduplication via visited set)
     let count_4 = result.iter().filter(|&&n| n == node4).count();
-    assert_eq!(count_4, 1, "Node 4 should appear exactly once despite two paths");
+    assert_eq!(
+        count_4, 1,
+        "Node 4 should appear exactly once despite two paths"
+    );
 
     // TraversalCacheStats unit tests in cache.rs verify:
     // - hit_rate() returns 0.0 when no operations performed
@@ -191,7 +192,11 @@ fn test_chain_graph_zero_cache_hit_rate() {
     let result = bfs::bfs_neighbors(&graph, node_ids[0], 5).expect("BFS should complete");
 
     // Should find all nodes in chain up to depth 5
-    assert_eq!(result.len(), 6, "Should find 6 nodes (start + 5) in chain at depth 5");
+    assert_eq!(
+        result.len(),
+        6,
+        "Should find 6 nodes (start + 5) in chain at depth 5"
+    );
 
     // Verify nodes are in correct order (chain traversal is deterministic)
     assert_eq!(result[0], node_ids[0], "First node should be start node");
@@ -324,12 +329,16 @@ fn test_cache_with_chain_query() {
     ];
 
     // Run chain query
-    let result = multi_hop::chain_query(&graph, node1, &chain).expect("chain query should complete");
+    let result =
+        multi_hop::chain_query(&graph, node1, &chain).expect("chain query should complete");
 
     // chain_query returns only the end nodes after following the chain
     // From node1, two outgoing steps reach node4 via both paths
     // The result is deduped (sorted and dedup in chain_query)
-    assert!(result.contains(&node4), "Should contain node 4 (end of chain)");
+    assert!(
+        result.contains(&node4),
+        "Should contain node 4 (end of chain)"
+    );
 
     // Result should be just [4] since both paths converge at node4
     assert_eq!(result.len(), 1, "Should have exactly 1 unique end node");

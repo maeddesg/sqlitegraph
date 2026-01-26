@@ -750,7 +750,7 @@ mod tests {
         // We can't test the actual functionality without a graph file,
         // but we can verify the method exists by checking it compiles
         // This test passes if the code compiles successfully
-        let _method_exists =TraversalContext::get_cluster_info;
+        let _method_exists = TraversalContext::get_cluster_info;
         let _ = &ctx; // Use ctx to avoid unused variable warning
         let _ = _method_exists; // Use to avoid unused variable warning
     }

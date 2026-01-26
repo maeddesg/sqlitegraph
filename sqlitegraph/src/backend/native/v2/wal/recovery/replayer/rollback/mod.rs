@@ -13,20 +13,20 @@
 //! - **header_ops**: Header rollback operations (update)
 //! - **free_space_ops**: Free space rollback operations (allocate, deallocate)
 
-use crate::backend::native::{GraphFile, NodeStore};
-use crate::backend::native::v2::{StringTable, FreeSpaceManager};
 use super::types::RollbackOperation;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryError;
+use crate::backend::native::v2::{FreeSpaceManager, StringTable};
+use crate::backend::native::{GraphFile, NodeStore};
 use crate::debug::{debug_log, error_log};
 use std::sync::{Arc, Mutex, RwLock};
 
 // Re-export rollback operation modules
-pub mod node_ops;
-pub mod edge_ops;
 pub mod cluster_ops;
-pub mod string_ops;
-pub mod header_ops;
+pub mod edge_ops;
 pub mod free_space_ops;
+pub mod header_ops;
+pub mod node_ops;
+pub mod string_ops;
 
 // Re-export summary type
 pub use self::node_ops::RollbackSummary;
@@ -89,16 +89,30 @@ impl RollbackSystem {
             return Ok(());
         }
 
-        debug_log!("Persisting rollback state: {} operations in memory", self.operations.len());
-        debug_log!("Executing rollback with {} operations", self.operations.len());
+        debug_log!(
+            "Persisting rollback state: {} operations in memory",
+            self.operations.len()
+        );
+        debug_log!(
+            "Executing rollback with {} operations",
+            self.operations.len()
+        );
 
         // Apply rollback operations in reverse order (LIFO)
-        for (_index, operation) in self.operations.iter().rev().enumerate() {
-            debug_log!("Applying rollback operation {}/{}: {}",
-                   index + 1, self.operations.len(), operation.operation_name());
+        for (index, operation) in self.operations.iter().rev().enumerate() {
+            debug_log!(
+                "Applying rollback operation {}/{}: {}",
+                index + 1,
+                self.operations.len(),
+                operation.operation_name()
+            );
 
             if let Err(e) = self.apply_rollback_operation(operation) {
-                error_log!("Failed to apply rollback operation {}: {}", operation.operation_name(), e);
+                error_log!(
+                    "Failed to apply rollback operation {}: {}",
+                    operation.operation_name(),
+                    e
+                );
                 // Continue with remaining operations even if one fails
             }
         }
@@ -116,32 +130,105 @@ impl RollbackSystem {
             RollbackOperation::NodeUpdate { node_id, old_data } => {
                 node_ops::rollback_node_update(self, *node_id, old_data)?;
             }
-            RollbackOperation::NodeDelete { node_id, slot_offset, old_data, outgoing_edges, incoming_edges } => {
-                node_ops::rollback_node_delete(self, *node_id, *slot_offset, old_data.clone(), outgoing_edges.clone(), incoming_edges.clone())?;
+            RollbackOperation::NodeDelete {
+                node_id,
+                slot_offset,
+                old_data,
+                outgoing_edges,
+                incoming_edges,
+            } => {
+                node_ops::rollback_node_delete(
+                    self,
+                    *node_id,
+                    *slot_offset,
+                    old_data.clone(),
+                    outgoing_edges.clone(),
+                    incoming_edges.clone(),
+                )?;
             }
-            RollbackOperation::StringInsert { string_id, string_value } => {
+            RollbackOperation::StringInsert {
+                string_id,
+                string_value,
+            } => {
                 string_ops::rollback_string_insert(self, *string_id, string_value)?;
             }
-            RollbackOperation::HeaderUpdate { header_offset, new_data: _new_data, old_data } => {
+            RollbackOperation::HeaderUpdate {
+                header_offset,
+                new_data: _new_data,
+                old_data,
+            } => {
                 header_ops::rollback_header_update(self, *header_offset, old_data)?;
             }
-            RollbackOperation::EdgeInsert { cluster_key, insertion_point, edge_record, cluster_offset, cluster_size } => {
-                edge_ops::rollback_edge_insert(self, *cluster_key, *insertion_point, edge_record, *cluster_offset, *cluster_size)?;
+            RollbackOperation::EdgeInsert {
+                cluster_key,
+                insertion_point,
+                edge_record,
+                cluster_offset,
+                cluster_size,
+            } => {
+                edge_ops::rollback_edge_insert(
+                    self,
+                    *cluster_key,
+                    *insertion_point,
+                    edge_record,
+                    *cluster_offset,
+                    *cluster_size,
+                )?;
             }
-            RollbackOperation::EdgeUpdate { cluster_key, position, old_edge, new_edge: _new_edge } => {
+            RollbackOperation::EdgeUpdate {
+                cluster_key,
+                position,
+                old_edge,
+                new_edge: _new_edge,
+            } => {
                 edge_ops::rollback_edge_update(self, *cluster_key, *position, old_edge)?;
             }
-            RollbackOperation::EdgeDelete { cluster_key, position, old_edge } => {
+            RollbackOperation::EdgeDelete {
+                cluster_key,
+                position,
+                old_edge,
+            } => {
                 edge_ops::rollback_edge_delete(self, *cluster_key, *position, old_edge)?;
             }
-            RollbackOperation::ClusterCreate { node_id, direction, cluster_offset, cluster_size, cluster_data } => {
-                cluster_ops::rollback_cluster_create(self, *node_id, *direction, *cluster_offset, *cluster_size, cluster_data.clone())?;
+            RollbackOperation::ClusterCreate {
+                node_id,
+                direction,
+                cluster_offset,
+                cluster_size,
+                cluster_data,
+            } => {
+                cluster_ops::rollback_cluster_create(
+                    self,
+                    *node_id,
+                    *direction,
+                    *cluster_offset,
+                    *cluster_size,
+                    cluster_data.clone(),
+                )?;
             }
-            RollbackOperation::FreeSpaceAllocate { block_offset, block_size, block_type } => {
-                free_space_ops::rollback_free_space_allocate(self, *block_offset, *block_size, *block_type)?;
+            RollbackOperation::FreeSpaceAllocate {
+                block_offset,
+                block_size,
+                block_type,
+            } => {
+                free_space_ops::rollback_free_space_allocate(
+                    self,
+                    *block_offset,
+                    *block_size,
+                    *block_type,
+                )?;
             }
-            RollbackOperation::FreeSpaceDeallocate { block_offset, block_size, block_type } => {
-                free_space_ops::rollback_free_space_deallocate(self, *block_offset, *block_size, *block_type)?;
+            RollbackOperation::FreeSpaceDeallocate {
+                block_offset,
+                block_size,
+                block_type,
+            } => {
+                free_space_ops::rollback_free_space_deallocate(
+                    self,
+                    *block_offset,
+                    *block_size,
+                    *block_type,
+                )?;
             }
             // KV rollback operations - placeholder for future transaction rollback support
             RollbackOperation::KvSet { .. } => {

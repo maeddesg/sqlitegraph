@@ -157,20 +157,10 @@ pub fn decode_persistent_header(bytes: &[u8]) -> NativeResult<PersistentHeaderV2
     } else {
         // v3+ format: 4-byte schema_version + 4-byte reserved
         let sv_slice = get_slice_safe(bytes, offset, 4)?;
-        let sv = u32::from_be_bytes([
-            sv_slice[0],
-            sv_slice[1],
-            sv_slice[2],
-            sv_slice[3],
-        ]);
+        let sv = u32::from_be_bytes([sv_slice[0], sv_slice[1], sv_slice[2], sv_slice[3]]);
         offset += 4;
         let res_slice = get_slice_safe(bytes, offset, 4)?;
-        let res = u32::from_be_bytes([
-            res_slice[0],
-            res_slice[1],
-            res_slice[2],
-            res_slice[3],
-        ]);
+        let res = u32::from_be_bytes([res_slice[0], res_slice[1], res_slice[2], res_slice[3]]);
         offset += 4;
         (sv, res)
     };
@@ -406,7 +396,9 @@ mod tests {
         v2_header_bytes[8..12].copy_from_slice(&2u32.to_be_bytes());
 
         // Write flags
-        v2_header_bytes[12..16].copy_from_slice(&crate::backend::native::constants::DEFAULT_FEATURE_FLAGS.to_be_bytes());
+        v2_header_bytes[12..16].copy_from_slice(
+            &crate::backend::native::constants::DEFAULT_FEATURE_FLAGS.to_be_bytes(),
+        );
 
         // Write node_count = 100
         v2_header_bytes[16..24].copy_from_slice(&100u64.to_be_bytes());

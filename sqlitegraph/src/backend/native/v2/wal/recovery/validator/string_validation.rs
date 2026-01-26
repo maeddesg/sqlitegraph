@@ -5,7 +5,7 @@
 
 use crate::backend::native::v2::wal::recovery::errors::RecoveryResult;
 use crate::backend::native::v2::wal::recovery::validator::{
-    ValidationResult, ValidationSeverity, MAX_STRING_LENGTH,
+    MAX_STRING_LENGTH, ValidationResult, ValidationSeverity,
 };
 
 use super::super::TransactionValidator;

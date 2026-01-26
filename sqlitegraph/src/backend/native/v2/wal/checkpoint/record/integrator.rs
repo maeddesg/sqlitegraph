@@ -53,9 +53,7 @@ mod store_helpers {
     /// - Stores are accessed through Mutex guards, preventing use-after-free
     pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static> {
         // SAFETY: See function-level safety documentation
-        unsafe {
-            NodeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file))
-        }
+        unsafe { NodeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file)) }
     }
 
     /// # Safety
@@ -69,9 +67,7 @@ mod store_helpers {
     /// - Stores are accessed through Mutex guards, preventing use-after-free
     pub unsafe fn create_edge_store(graph_file: &mut GraphFile) -> EdgeStore<'static> {
         // SAFETY: See function-level safety documentation
-        unsafe {
-            EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file))
-        }
+        unsafe { EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file)) }
     }
 }
 
@@ -160,40 +156,20 @@ impl V2GraphIntegrator {
                 cluster_key: (node_id, direction),
                 edge_record,
                 insertion_point: _,
-            } => {
-                self.apply_edge_insert_v2(
-                    *node_id,
-                    *direction,
-                    edge_record.clone(),
-                    lsn,
-                )
-            }
+            } => self.apply_edge_insert_v2(*node_id, *direction, edge_record.clone(), lsn),
 
             V2WALRecord::EdgeUpdate {
                 cluster_key: (node_id, direction),
                 old_edge: _,
                 new_edge,
                 position: _,
-            } => {
-                self.apply_edge_update_v2(
-                    *node_id,
-                    *direction,
-                    new_edge.clone(),
-                    lsn,
-                )
-            }
+            } => self.apply_edge_update_v2(*node_id, *direction, new_edge.clone(), lsn),
 
             V2WALRecord::EdgeDelete {
                 cluster_key: (node_id, direction),
                 old_edge: _,
                 position: _,
-            } => {
-                self.apply_edge_delete_v2(
-                    *node_id,
-                    *direction,
-                    lsn,
-                )
-            }
+            } => self.apply_edge_delete_v2(*node_id, *direction, lsn),
 
             // Cluster operations (existing)
             V2WALRecord::ClusterCreate {
@@ -202,16 +178,14 @@ impl V2GraphIntegrator {
                 cluster_offset,
                 cluster_size,
                 edge_data,
-            } => {
-                self.apply_cluster_create(
-                    (*node_id).try_into().unwrap(),
-                    *direction,
-                    *cluster_offset,
-                    *cluster_size,
-                    edge_data,
-                    lsn,
-                )
-            }
+            } => self.apply_cluster_create(
+                (*node_id).try_into().unwrap(),
+                *direction,
+                *cluster_offset,
+                *cluster_size,
+                edge_data,
+                lsn,
+            ),
 
             // String table operations (existing)
             V2WALRecord::StringInsert {
@@ -227,128 +201,243 @@ impl V2GraphIntegrator {
             } => self.apply_free_space_allocate(*block_offset, *block_size, lsn),
 
             // Previously missing variants - add proper handling:
-            V2WALRecord::FreeSpaceDeallocate { block_offset, block_size, block_type: _ } => {
-                self.apply_free_space_deallocate(*block_offset, *block_size, lsn)
-            }
+            V2WALRecord::FreeSpaceDeallocate {
+                block_offset,
+                block_size,
+                block_type: _,
+            } => self.apply_free_space_deallocate(*block_offset, *block_size, lsn),
 
-            V2WALRecord::Checkpoint { checkpointed_lsn, timestamp } => {
-                self.apply_checkpoint_marker(*checkpointed_lsn, *timestamp, lsn)
-            }
+            V2WALRecord::Checkpoint {
+                checkpointed_lsn,
+                timestamp,
+            } => self.apply_checkpoint_marker(*checkpointed_lsn, *timestamp, lsn),
 
-            V2WALRecord::HeaderUpdate { header_offset, old_data: _, new_data } => {
-                self.apply_header_update(*header_offset, new_data, lsn)
-            }
+            V2WALRecord::HeaderUpdate {
+                header_offset,
+                old_data: _,
+                new_data,
+            } => self.apply_header_update(*header_offset, new_data, lsn),
 
-            V2WALRecord::SegmentEnd { segment_lsn, checksum } => {
-                self.apply_segment_end(*segment_lsn, *checksum, lsn)
-            }
+            V2WALRecord::SegmentEnd {
+                segment_lsn,
+                checksum,
+            } => self.apply_segment_end(*segment_lsn, *checksum, lsn),
 
             V2WALRecord::TransactionBegin { tx_id, timestamp } => {
                 // Transaction begin markers are handled at higher level
                 // Just log for now
-                println!("V2 Transaction Begin: tx_id {} timestamp {}", tx_id, timestamp);
+                println!(
+                    "V2 Transaction Begin: tx_id {} timestamp {}",
+                    tx_id, timestamp
+                );
                 Ok(())
             }
 
             V2WALRecord::TransactionCommit { tx_id, timestamp } => {
                 // Transaction commit markers are handled at higher level
                 // Just log for now
-                println!("V2 Transaction Commit: tx_id {} timestamp {}", tx_id, timestamp);
+                println!(
+                    "V2 Transaction Commit: tx_id {} timestamp {}",
+                    tx_id, timestamp
+                );
                 Ok(())
             }
 
             V2WALRecord::TransactionRollback { tx_id, timestamp } => {
                 // Transaction rollback markers are handled at higher level
                 // Just log for now
-                println!("V2 Transaction Rollback: tx_id {} timestamp {}", tx_id, timestamp);
+                println!(
+                    "V2 Transaction Rollback: tx_id {} timestamp {}",
+                    tx_id, timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::TransactionPrepare { tx_id, timestamp, record_count } => {
+            V2WALRecord::TransactionPrepare {
+                tx_id,
+                timestamp,
+                record_count,
+            } => {
                 // Two-phase commit prepare phase
-                println!("V2 Transaction Prepare: tx_id {} timestamp {:?} record_count {}", tx_id, timestamp, record_count);
+                println!(
+                    "V2 Transaction Prepare: tx_id {} timestamp {:?} record_count {}",
+                    tx_id, timestamp, record_count
+                );
                 Ok(())
             }
 
-            V2WALRecord::TransactionAbort { tx_id, timestamp, abort_reason } => {
+            V2WALRecord::TransactionAbort {
+                tx_id,
+                timestamp,
+                abort_reason,
+            } => {
                 // Two-phase commit abort
-                println!("V2 Transaction Abort: tx_id {} timestamp {:?} reason {}", tx_id, timestamp, abort_reason);
+                println!(
+                    "V2 Transaction Abort: tx_id {} timestamp {:?} reason {}",
+                    tx_id, timestamp, abort_reason
+                );
                 Ok(())
             }
 
-            V2WALRecord::SavepointCreate { tx_id, savepoint_id, timestamp } => {
+            V2WALRecord::SavepointCreate {
+                tx_id,
+                savepoint_id,
+                timestamp,
+            } => {
                 // Savepoint creation
-                println!("V2 Savepoint Create: tx_id {} savepoint_id {} timestamp {:?}", tx_id, savepoint_id, timestamp);
+                println!(
+                    "V2 Savepoint Create: tx_id {} savepoint_id {} timestamp {:?}",
+                    tx_id, savepoint_id, timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::SavepointRollback { tx_id, savepoint_id, timestamp } => {
+            V2WALRecord::SavepointRollback {
+                tx_id,
+                savepoint_id,
+                timestamp,
+            } => {
                 // Savepoint rollback
-                println!("V2 Savepoint Rollback: tx_id {} savepoint_id {} timestamp {:?}", tx_id, savepoint_id, timestamp);
+                println!(
+                    "V2 Savepoint Rollback: tx_id {} savepoint_id {} timestamp {:?}",
+                    tx_id, savepoint_id, timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::SavepointRelease { tx_id, savepoint_id, timestamp } => {
+            V2WALRecord::SavepointRelease {
+                tx_id,
+                savepoint_id,
+                timestamp,
+            } => {
                 // Savepoint release
-                println!("V2 Savepoint Release: tx_id {} savepoint_id {} timestamp {:?}", tx_id, savepoint_id, timestamp);
+                println!(
+                    "V2 Savepoint Release: tx_id {} savepoint_id {} timestamp {:?}",
+                    tx_id, savepoint_id, timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::BackupCreate { backup_id, backup_path, timestamp } => {
+            V2WALRecord::BackupCreate {
+                backup_id,
+                backup_path,
+                timestamp,
+            } => {
                 // Backup creation
-                println!("V2 Backup Create: id {} path {} timestamp {:?}", backup_id, backup_path.display(), timestamp);
+                println!(
+                    "V2 Backup Create: id {} path {} timestamp {:?}",
+                    backup_id,
+                    backup_path.display(),
+                    timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::BackupRestore { backup_id, backup_path, target_path, timestamp } => {
+            V2WALRecord::BackupRestore {
+                backup_id,
+                backup_path,
+                target_path,
+                timestamp,
+            } => {
                 // Backup restore
-                println!("V2 Backup Restore: id {} source {} target {} timestamp {:?}", backup_id, backup_path.display(), target_path.display(), timestamp);
+                println!(
+                    "V2 Backup Restore: id {} source {} target {} timestamp {:?}",
+                    backup_id,
+                    backup_path.display(),
+                    target_path.display(),
+                    timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::LockAcquire { tx_id, resource_id, lock_type, timestamp } => {
+            V2WALRecord::LockAcquire {
+                tx_id,
+                resource_id,
+                lock_type,
+                timestamp,
+            } => {
                 // Lock acquisition
-                println!("V2 Lock Acquire: tx_id {} resource {} type {} timestamp {:?}", tx_id, resource_id, lock_type, timestamp);
+                println!(
+                    "V2 Lock Acquire: tx_id {} resource {} type {} timestamp {:?}",
+                    tx_id, resource_id, lock_type, timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::LockRelease { tx_id, resource_id, timestamp } => {
+            V2WALRecord::LockRelease {
+                tx_id,
+                resource_id,
+                timestamp,
+            } => {
                 // Lock release
-                println!("V2 Lock Release: tx_id {} resource {} timestamp {:?}", tx_id, resource_id, timestamp);
+                println!(
+                    "V2 Lock Release: tx_id {} resource {} timestamp {:?}",
+                    tx_id, resource_id, timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::IndexUpdate { index_id, operation_type, key_data, timestamp } => {
+            V2WALRecord::IndexUpdate {
+                index_id,
+                operation_type,
+                key_data,
+                timestamp,
+            } => {
                 // Index update
-                println!("V2 Index Update: index {} operation {} data_len {} timestamp {:?}", index_id, operation_type, key_data.len(), timestamp);
+                println!(
+                    "V2 Index Update: index {} operation {} data_len {} timestamp {:?}",
+                    index_id,
+                    operation_type,
+                    key_data.len(),
+                    timestamp
+                );
                 Ok(())
             }
 
-            V2WALRecord::StatisticsUpdate { stats_type, stats_data, timestamp } => {
+            V2WALRecord::StatisticsUpdate {
+                stats_type,
+                stats_data,
+                timestamp,
+            } => {
                 // Statistics update
-                println!("V2 Statistics Update: type {} data_len {} timestamp {:?}", stats_type, stats_data.len(), timestamp);
+                println!(
+                    "V2 Statistics Update: type {} data_len {} timestamp {:?}",
+                    stats_type,
+                    stats_data.len(),
+                    timestamp
+                );
                 Ok(())
             }
 
             // Contiguous allocation operations
-            V2WALRecord::AllocateContiguous { txn_id, region, timestamp } => {
+            V2WALRecord::AllocateContiguous {
+                txn_id,
+                region,
+                timestamp,
+            } => {
                 // Contiguous region allocation - log for checkpoint
-                println!("V2 AllocateContiguous: tx_id {} region offset={} size={} timestamp={}",
-                    txn_id, region.start_offset, region.total_size, timestamp);
+                println!(
+                    "V2 AllocateContiguous: tx_id {} region offset={} size={} timestamp={}",
+                    txn_id, region.start_offset, region.total_size, timestamp
+                );
                 Ok(())
             }
 
             V2WALRecord::CommitContiguous { txn_id, region } => {
                 // Contiguous region commit
-                println!("V2 CommitContiguous: tx_id {} region offset={} size={}",
-                    txn_id, region.start_offset, region.total_size);
+                println!(
+                    "V2 CommitContiguous: tx_id {} region offset={} size={}",
+                    txn_id, region.start_offset, region.total_size
+                );
                 Ok(())
             }
 
             V2WALRecord::RollbackContiguous { region } => {
                 // Contiguous region rollback
-                println!("V2 RollbackContiguous: region offset={} size={}",
-                    region.start_offset, region.total_size);
+                println!(
+                    "V2 RollbackContiguous: region offset={} size={}",
+                    region.start_offset, region.total_size
+                );
                 Ok(())
             }
 
@@ -360,10 +449,16 @@ impl V2GraphIntegrator {
                 Ok(())
             }
 
-            V2WALRecord::KvDelete { key, old_version, .. } => {
+            V2WALRecord::KvDelete {
+                key, old_version, ..
+            } => {
                 // KV delete operations are handled by the KV store during recovery
                 // Log for checkpoint awareness
-                println!("V2 KvDelete: key_len={} old_version={}", key.len(), old_version);
+                println!(
+                    "V2 KvDelete: key_len={} old_version={}",
+                    key.len(),
+                    old_version
+                );
                 Ok(())
             }
         }
@@ -378,15 +473,17 @@ impl V2GraphIntegrator {
         __lsn: u64,
     ) -> CheckpointResult<()> {
         // Create NodeRecordV2 from WAL data
-        let node_record = NodeRecordV2::from_wal_data(node_id, slot_offset, node_data).map_err(|e| {
-            CheckpointError::v2_integration(format!("Failed to create NodeRecordV2: {}", e))
-        })?;
+        let node_record =
+            NodeRecordV2::from_wal_data(node_id, slot_offset, node_data).map_err(|e| {
+                CheckpointError::v2_integration(format!("Failed to create NodeRecordV2: {}", e))
+            })?;
 
         // Apply node insertion to node store
         {
-            let mut node_store = self.node_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock node store: {}", e))
-            })?;
+            let mut node_store = self
+                .node_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock node store: {}", e)))?;
 
             node_store.write_node_v2(&node_record).map_err(|e| {
                 CheckpointError::v2_integration(format!("Failed to insert node: {}", e))
@@ -408,15 +505,20 @@ impl V2GraphIntegrator {
         __lsn: u64,
     ) -> CheckpointResult<()> {
         // Create updated NodeRecordV2 from WAL data
-        let node_record = NodeRecordV2::from_wal_data(node_id, slot_offset, new_data).map_err(|e| {
-            CheckpointError::v2_integration(format!("Failed to create updated NodeRecordV2: {}", e))
-        })?;
+        let node_record =
+            NodeRecordV2::from_wal_data(node_id, slot_offset, new_data).map_err(|e| {
+                CheckpointError::v2_integration(format!(
+                    "Failed to create updated NodeRecordV2: {}",
+                    e
+                ))
+            })?;
 
         // Apply node update to node store
         {
-            let mut node_store = self.node_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock node store: {}", e))
-            })?;
+            let mut node_store = self
+                .node_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock node store: {}", e)))?;
 
             node_store.write_node_v2(&node_record).map_err(|e| {
                 CheckpointError::v2_integration(format!("Failed to update node: {}", e))
@@ -430,12 +532,18 @@ impl V2GraphIntegrator {
     }
 
     /// Apply node delete record to V2 graph file
-    fn apply_node_delete(&mut self, node_id: i64, _slot_offset: u64, _lsn: u64) -> CheckpointResult<()> {
+    fn apply_node_delete(
+        &mut self,
+        node_id: i64,
+        _slot_offset: u64,
+        _lsn: u64,
+    ) -> CheckpointResult<()> {
         // Delete node from node store
         {
-            let mut node_store = self.node_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock node store: {}", e))
-            })?;
+            let mut node_store = self
+                .node_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock node store: {}", e)))?;
 
             node_store.delete_node(node_id).map_err(|e| {
                 CheckpointError::v2_integration(format!("Failed to delete node: {}", e))
@@ -462,9 +570,10 @@ impl V2GraphIntegrator {
     ) -> CheckpointResult<()> {
         // Apply edge insertion to edge store
         {
-            let mut edge_store = self.edge_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock edge store: {}", e))
-            })?;
+            let mut edge_store = self
+                .edge_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock edge store: {}", e)))?;
 
             // Create a new edge ID
             let edge_id = edge_store.allocate_edge_id();
@@ -504,9 +613,10 @@ impl V2GraphIntegrator {
     ) -> CheckpointResult<()> {
         // Apply edge update to edge store
         {
-            let mut edge_store = self.edge_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock edge store: {}", e))
-            })?;
+            let mut edge_store = self
+                .edge_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock edge store: {}", e)))?;
 
             // Find the existing edge between source and target nodes
             // In a full implementation, this would scan edges to find the matching one
@@ -524,7 +634,10 @@ impl V2GraphIntegrator {
 
             // Write the updated edge record
             edge_store.write_edge(&edge_record).map_err(|e| {
-                CheckpointError::v2_integration(format!("Failed to write updated edge record: {}", e))
+                CheckpointError::v2_integration(format!(
+                    "Failed to write updated edge record: {}",
+                    e
+                ))
             })?;
 
             println!(
@@ -546,9 +659,10 @@ impl V2GraphIntegrator {
     ) -> CheckpointResult<()> {
         // Apply edge deletion to edge store
         {
-            let _edge_store = self.edge_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock edge store: {}", e))
-            })?;
+            let _edge_store = self
+                .edge_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock edge store: {}", e)))?;
 
             // In a full implementation, we would find the edge ID for the source->target edge
             // and call edge_store.delete_edge(edge_id). For now, we log the operation.
@@ -586,12 +700,14 @@ impl V2GraphIntegrator {
 
         // For now, we just validate the cluster parameters
         if cluster_size == 0 {
-            return Err(CheckpointError::validation("Cluster size cannot be zero".to_string()));
+            return Err(CheckpointError::validation(
+                "Cluster size cannot be zero".to_string(),
+            ));
         }
 
         if cluster_offset % 4096 != 0 {
             return Err(CheckpointError::validation(
-                "Cluster offset must be aligned to block boundary".to_string()
+                "Cluster offset must be aligned to block boundary".to_string(),
             ));
         }
 
@@ -600,10 +716,16 @@ impl V2GraphIntegrator {
     }
 
     /// Apply string insert record
-    fn apply_string_insert(&mut self, string_id: u32, string_value: &str, _lsn: u64) -> CheckpointResult<()> {
-        let mut string_table = self.string_table.lock().map_err(|e| {
-            CheckpointError::state(format!("Failed to lock string table: {}", e))
-        })?;
+    fn apply_string_insert(
+        &mut self,
+        string_id: u32,
+        string_value: &str,
+        _lsn: u64,
+    ) -> CheckpointResult<()> {
+        let mut string_table = self
+            .string_table
+            .lock()
+            .map_err(|e| CheckpointError::state(format!("Failed to lock string table: {}", e)))?;
 
         // Use StringTable.get_or_add_offset() to add or retrieve the string offset
         let offset = string_table.get_or_add_offset(string_value).map_err(|e| {
@@ -624,7 +746,12 @@ impl V2GraphIntegrator {
     }
 
     /// Apply free space allocation record
-    fn apply_free_space_allocate(&mut self, region_offset: u64, region_size: u32, _lsn: u64) -> CheckpointResult<()> {
+    fn apply_free_space_allocate(
+        &mut self,
+        region_offset: u64,
+        region_size: u32,
+        _lsn: u64,
+    ) -> CheckpointResult<()> {
         let _free_space_manager = self.free_space_manager.lock().map_err(|e| {
             CheckpointError::state(format!("Failed to lock free space manager: {}", e))
         })?;
@@ -636,7 +763,9 @@ impl V2GraphIntegrator {
 
         // Validate the allocation parameters
         if region_size == 0 {
-            return Err(CheckpointError::validation("Free space allocation size cannot be zero".to_string()));
+            return Err(CheckpointError::validation(
+                "Free space allocation size cannot be zero".to_string(),
+            ));
         }
 
         println!(
@@ -661,9 +790,10 @@ impl V2GraphIntegrator {
     ) -> CheckpointResult<()> {
         // Apply edge insertion to edge store using V2 clustered format
         {
-            let mut edge_store = self.edge_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock edge store: {}", e))
-            })?;
+            let mut edge_store = self
+                .edge_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock edge store: {}", e)))?;
 
             // Allocate a new edge ID
             let edge_id = edge_store.allocate_edge_id();
@@ -680,7 +810,10 @@ impl V2GraphIntegrator {
 
             // Write the edge record
             edge_store.write_edge(&legacy_edge_record).map_err(|e| {
-                CheckpointError::v2_integration(format!("Failed to write edge record from CompactEdgeRecord: {}", e))
+                CheckpointError::v2_integration(format!(
+                    "Failed to write edge record from CompactEdgeRecord: {}",
+                    e
+                ))
             })?;
 
             println!(
@@ -702,9 +835,10 @@ impl V2GraphIntegrator {
     ) -> CheckpointResult<()> {
         // Apply edge update to edge store using V2 clustered format
         {
-            let mut edge_store = self.edge_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock edge store: {}", e))
-            })?;
+            let mut edge_store = self
+                .edge_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock edge store: {}", e)))?;
 
             // Allocate a new edge ID for the updated edge
             let edge_id = edge_store.allocate_edge_id();
@@ -721,7 +855,10 @@ impl V2GraphIntegrator {
 
             // Write the updated edge record
             edge_store.write_edge(&legacy_edge_record).map_err(|e| {
-                CheckpointError::v2_integration(format!("Failed to write updated edge record from CompactEdgeRecord: {}", e))
+                CheckpointError::v2_integration(format!(
+                    "Failed to write updated edge record from CompactEdgeRecord: {}",
+                    e
+                ))
             })?;
 
             println!(
@@ -742,9 +879,10 @@ impl V2GraphIntegrator {
     ) -> CheckpointResult<()> {
         // Apply edge deletion to edge store using V2 clustered format
         {
-            let _edge_store = self.edge_store.lock().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock edge store: {}", e))
-            })?;
+            let _edge_store = self
+                .edge_store
+                .lock()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock edge store: {}", e)))?;
 
             // In a full implementation, we would find the edge ID for the edge being deleted
             // and call edge_store.delete_edge(edge_id). For now, we log the operation.
@@ -766,22 +904,36 @@ impl V2GraphIntegrator {
     }
 
     /// Update string table from node data
-    fn update_string_table_from_node_data(&mut self, node_record: &NodeRecordV2) -> CheckpointResult<()> {
+    fn update_string_table_from_node_data(
+        &mut self,
+        node_record: &NodeRecordV2,
+    ) -> CheckpointResult<()> {
         // Extract string data from node record and update string table
         // This is a simplified implementation - full version would parse node data
-        let mut string_table = self.string_table.lock().map_err(|e| {
-            CheckpointError::state(format!("Failed to lock string table: {}", e))
-        })?;
+        let mut string_table = self
+            .string_table
+            .lock()
+            .map_err(|e| CheckpointError::state(format!("Failed to lock string table: {}", e)))?;
 
         // Add node kind to string table
-        let _kind_offset = string_table.get_or_add_offset(&node_record.kind).map_err(|e| {
-            CheckpointError::v2_integration(format!("Failed to add node kind to string table: {}", e))
-        })?;
+        let _kind_offset = string_table
+            .get_or_add_offset(&node_record.kind)
+            .map_err(|e| {
+                CheckpointError::v2_integration(format!(
+                    "Failed to add node kind to string table: {}",
+                    e
+                ))
+            })?;
 
         // Add node name to string table
-        let _name_offset = string_table.get_or_add_offset(&node_record.name).map_err(|e| {
-            CheckpointError::v2_integration(format!("Failed to add node name to string table: {}", e))
-        })?;
+        let _name_offset = string_table
+            .get_or_add_offset(&node_record.name)
+            .map_err(|e| {
+                CheckpointError::v2_integration(format!(
+                    "Failed to add node name to string table: {}",
+                    e
+                ))
+            })?;
 
         println!(
             "V2 String Table Update: node {} kind '{}' name '{}' - added to string table",
@@ -794,7 +946,12 @@ impl V2GraphIntegrator {
     }
 
     /// Apply free space deallocation record
-    fn apply_free_space_deallocate(&mut self, block_offset: u64, block_size: u32, _lsn: u64) -> CheckpointResult<()> {
+    fn apply_free_space_deallocate(
+        &mut self,
+        block_offset: u64,
+        block_size: u32,
+        _lsn: u64,
+    ) -> CheckpointResult<()> {
         let mut free_space_manager = self.free_space_manager.lock().map_err(|e| {
             CheckpointError::state(format!("Failed to lock free space manager: {}", e))
         })?;
@@ -813,13 +970,19 @@ impl V2GraphIntegrator {
     /// Apply checkpoint marker record
     /// Note: Checkpoint markers are metadata records that indicate a checkpoint was completed.
     /// The integrator logs this information but doesn't modify graph state.
-    fn apply_checkpoint_marker(&mut self, checkpointed_lsn: u64, timestamp: u64, _lsn: u64) -> CheckpointResult<()> {
+    fn apply_checkpoint_marker(
+        &mut self,
+        checkpointed_lsn: u64,
+        timestamp: u64,
+        _lsn: u64,
+    ) -> CheckpointResult<()> {
         // Update graph file header with checkpoint information if needed
         // For now, we log the checkpoint marker for debugging purposes
         {
-            let graph_file = self.graph_file.read().map_err(|e| {
-                CheckpointError::state(format!("Failed to lock graph file: {}", e))
-            })?;
+            let graph_file = self
+                .graph_file
+                .read()
+                .map_err(|e| CheckpointError::state(format!("Failed to lock graph file: {}", e)))?;
 
             println!(
                 "V2 Checkpoint Marker: checkpointed_lsn={} timestamp={} current_node_count={} current_edge_count={}",
@@ -838,10 +1001,16 @@ impl V2GraphIntegrator {
 
     /// Apply header update record
     /// Note: Header updates are applied directly to the graph file
-    fn apply_header_update(&mut self, header_offset: u64, new_data: &[u8], _lsn: u64) -> CheckpointResult<()> {
-        let mut graph_file = self.graph_file.write().map_err(|e| {
-            CheckpointError::state(format!("Failed to lock graph file: {}", e))
-        })?;
+    fn apply_header_update(
+        &mut self,
+        header_offset: u64,
+        new_data: &[u8],
+        _lsn: u64,
+    ) -> CheckpointResult<()> {
+        let mut graph_file = self
+            .graph_file
+            .write()
+            .map_err(|e| CheckpointError::state(format!("Failed to lock graph file: {}", e)))?;
 
         // Write the new header data directly to the file at the specified offset
         graph_file
@@ -855,7 +1024,10 @@ impl V2GraphIntegrator {
 
         // Sync the file to ensure the header update is persisted
         graph_file.sync().map_err(|e| {
-            CheckpointError::v2_integration(format!("Failed to sync file after header update: {}", e))
+            CheckpointError::v2_integration(format!(
+                "Failed to sync file after header update: {}",
+                e
+            ))
         })?;
 
         println!(
@@ -870,7 +1042,12 @@ impl V2GraphIntegrator {
     /// Apply segment end record
     /// Note: Segment end markers indicate the end of a WAL segment with a checksum for validation.
     /// The integrator logs this information for debugging and validation purposes.
-    fn apply_segment_end(&mut self, segment_lsn: u64, checksum: u32, _lsn: u64) -> CheckpointResult<()> {
+    fn apply_segment_end(
+        &mut self,
+        segment_lsn: u64,
+        checksum: u32,
+        _lsn: u64,
+    ) -> CheckpointResult<()> {
         // Log the segment end marker for debugging purposes
         // In a full implementation, this could validate the checksum against
         // the cumulative checksum of all records in the segment
@@ -900,14 +1077,15 @@ trait NodeRecordV2Ext {
 impl NodeRecordV2Ext for NodeRecordV2 {
     fn from_wal_data(node_id: i64, _slot_offset: u64, data: &[u8]) -> CheckpointResult<Self> {
         // Convert raw node_data to JSON format for NodeRecordV2::new()
-        let data_value = serde_json::from_slice::<serde_json::Value>(data)
-            .map_err(|e| CheckpointError::v2_integration(format!("Failed to parse node data as JSON: {}", e)))?;
+        let data_value = serde_json::from_slice::<serde_json::Value>(data).map_err(|e| {
+            CheckpointError::v2_integration(format!("Failed to parse node data as JSON: {}", e))
+        })?;
 
         Ok(NodeRecordV2::new(
             node_id,
-            "wal_import".to_string(),     // kind - could be derived from context
+            "wal_import".to_string(), // kind - could be derived from context
             format!("node_{}", node_id), // name - could be derived from context
-            data_value
+            data_value,
         ))
     }
 

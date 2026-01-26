@@ -4,11 +4,15 @@
 //! and basic file lifecycle operations for GraphFile instances.
 
 use crate::backend::native::{
-    constants::FLAG_V2_ATOMIC_COMMIT, constants::FLAG_V2_FRAMED_RECORDS,
-    graph_file::file_ops::FileOperations, graph_file::header::HeaderManager,
-    persistent_header::PersistentHeaderV2, transaction_state::TransactionState,
-    types::NativeBackendError, types::NativeResult,
-    v2::migration::{detect_format_version, migrate_file, FormatVersion},
+    constants::FLAG_V2_ATOMIC_COMMIT,
+    constants::FLAG_V2_FRAMED_RECORDS,
+    graph_file::file_ops::FileOperations,
+    graph_file::header::HeaderManager,
+    persistent_header::PersistentHeaderV2,
+    transaction_state::TransactionState,
+    types::NativeBackendError,
+    types::NativeResult,
+    v2::migration::{FormatVersion, detect_format_version, migrate_file},
 };
 use std::path::Path;
 
@@ -106,9 +110,7 @@ impl FileLifecycleManager {
                     supported_version: 3,
                 });
             }
-            Err(NativeBackendError::Io(ref e))
-                if e.kind() == std::io::ErrorKind::NotFound =>
-            {
+            Err(NativeBackendError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound => {
                 // File not found - continue to normal open which will return proper error
             }
             Err(e) => return Err(e),
@@ -142,7 +144,7 @@ impl FileLifecycleManager {
         let required_flags = FLAG_V2_FRAMED_RECORDS | FLAG_V2_ATOMIC_COMMIT;
         if (graph_file.persistent_header.flags & required_flags) != required_flags {
             return Err(NativeBackendError::UnsupportedVersion {
-                version: 1, // Any file without both V2 flags is unsupported
+                version: 1,           // Any file without both V2 flags is unsupported
                 supported_version: 3, // Updated to v3
             });
         }
@@ -346,10 +348,8 @@ mod tests {
     #[test]
     fn test_auto_migrate_v2_to_v3_on_open() {
         use crate::backend::native::{
-            constants::DEFAULT_FEATURE_FLAGS,
-            graph_file::encoding::encode_persistent_header,
-            graph_file::validation::GraphFileValidator,
-            persistent_header::PersistentHeaderV2,
+            constants::DEFAULT_FEATURE_FLAGS, graph_file::encoding::encode_persistent_header,
+            graph_file::validation::GraphFileValidator, persistent_header::PersistentHeaderV2,
             v2::V2_MAGIC,
         };
         use tempfile::NamedTempFile;
@@ -377,7 +377,10 @@ mod tests {
 
         // Write clean commit marker at offset 80 (right after header)
         let clean_marker = GraphFileValidator::clean_commit_marker();
-        v2_file.as_file_mut().write_all(&clean_marker.to_be_bytes()).unwrap();
+        v2_file
+            .as_file_mut()
+            .write_all(&clean_marker.to_be_bytes())
+            .unwrap();
 
         v2_file.as_file_mut().flush().unwrap();
         v2_file.as_file_mut().sync_all().unwrap();
@@ -387,14 +390,20 @@ mod tests {
         // Verify it's V2 format before opening
         use crate::backend::native::v2::migration::detect_format_version;
         let version_before = detect_format_version(file_path).unwrap();
-        assert!(matches!(version_before, crate::backend::native::v2::migration::FormatVersion::V2));
+        assert!(matches!(
+            version_before,
+            crate::backend::native::v2::migration::FormatVersion::V2
+        ));
 
         // Open the file - should trigger auto-migration
         let graph_file = FileLifecycleManager::open(file_path).unwrap();
 
         // After opening, the file should be V3 format
         let version_after = detect_format_version(file_path).unwrap();
-        assert!(matches!(version_after, crate::backend::native::v2::migration::FormatVersion::V3));
+        assert!(matches!(
+            version_after,
+            crate::backend::native::v2::migration::FormatVersion::V3
+        ));
 
         // GraphFile header should show V3
         assert_eq!(graph_file.persistent_header().version, 3);

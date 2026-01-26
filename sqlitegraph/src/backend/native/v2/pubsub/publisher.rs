@@ -15,8 +15,8 @@
 //! This means multiple threads can subscribe/unsubscribe concurrently.
 
 use crate::backend::native::v2::pubsub::{PubSubEvent, SubscriberId, SubscriptionFilter};
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 
 /// Publishes events to subscribers via channels
 ///
@@ -372,11 +372,17 @@ mod tests {
 
         // Subscriber 1 should only receive node event
         assert!(rx1.recv().unwrap().is_node_event());
-        assert!(rx1.recv_timeout(std::time::Duration::from_millis(100)).is_err());
+        assert!(
+            rx1.recv_timeout(std::time::Duration::from_millis(100))
+                .is_err()
+        );
 
         // Subscriber 2 should only receive edge event
         assert!(rx2.recv().unwrap().is_edge_event());
-        assert!(rx2.recv_timeout(std::time::Duration::from_millis(100)).is_err());
+        assert!(
+            rx2.recv_timeout(std::time::Duration::from_millis(100))
+                .is_err()
+        );
 
         // Subscriber 3 should receive both events
         assert!(rx3.recv().unwrap().is_node_event());

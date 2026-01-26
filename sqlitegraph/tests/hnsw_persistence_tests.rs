@@ -4,9 +4,9 @@
 
 use rusqlite::Connection;
 use sqlitegraph::{
+    SqliteGraph,
     hnsw::{DistanceMetric, HnswConfig, HnswIndex},
     schema::ensure_schema,
-    SqliteGraph,
 };
 use tempfile::TempDir;
 
@@ -69,7 +69,8 @@ fn test_hnsw_vector_persistence() {
             "SELECT id FROM hnsw_indexes WHERE name = ?",
             ["test_index"],
             |row| row.get::<_, i64>(0),
-        ).unwrap()
+        )
+        .unwrap()
     };
 
     // Manually insert vectors into database (simulating SQLiteVectorStorage)
@@ -81,7 +82,8 @@ fn test_hnsw_vector_persistence() {
                 "INSERT INTO hnsw_vectors (index_id, vector_data, metadata, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![index_id, vector_bytes, None::<String>, 1000, 1000],
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
 
@@ -115,7 +117,8 @@ fn test_hnsw_create_insert_close_reopen_search() {
             "SELECT id FROM hnsw_indexes WHERE name = ?",
             ["lifecycle_test"],
             |row| row.get::<_, i64>(0),
-        ).unwrap()
+        )
+        .unwrap()
     };
 
     // Manually insert vectors
@@ -128,7 +131,8 @@ fn test_hnsw_create_insert_close_reopen_search() {
                 "INSERT INTO hnsw_vectors (index_id, vector_data, metadata, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![index_id, vector_bytes, None::<String>, 1000, 1000],
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
 
@@ -145,7 +149,10 @@ fn test_hnsw_create_insert_close_reopen_search() {
 
         assert!(!results.is_empty(), "Search should return results");
         let (best_id, distance) = &results[0];
-        assert!(*distance < 5.0, "Distance should be small for similar vector");
+        assert!(
+            *distance < 5.0,
+            "Distance should be small for similar vector"
+        );
     }
 }
 
@@ -291,7 +298,8 @@ fn test_hnsw_graph_autoload() {
             "SELECT id FROM hnsw_indexes WHERE name = ?",
             ["autoload_test"],
             |row| row.get::<_, i64>(0),
-        ).unwrap()
+        )
+        .unwrap()
     };
 
     // Manually insert vectors
@@ -303,7 +311,8 @@ fn test_hnsw_graph_autoload() {
                 "INSERT INTO hnsw_vectors (index_id, vector_data, metadata, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![index_id, vector_bytes, None::<String>, 1000, 1000],
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
 
@@ -316,9 +325,11 @@ fn test_hnsw_graph_autoload() {
         assert_eq!(index_names, vec!["autoload_test".to_string()]);
 
         // Verify vectors loaded
-        graph.get_hnsw_index_ref("autoload_test", |hnsw| {
-            assert_eq!(hnsw.vector_count(), 2);
-            Ok::<(), sqlitegraph::SqliteGraphError>(())
-        }).unwrap();
+        graph
+            .get_hnsw_index_ref("autoload_test", |hnsw| {
+                assert_eq!(hnsw.vector_count(), 2);
+                Ok::<(), sqlitegraph::SqliteGraphError>(())
+            })
+            .unwrap();
     }
 }

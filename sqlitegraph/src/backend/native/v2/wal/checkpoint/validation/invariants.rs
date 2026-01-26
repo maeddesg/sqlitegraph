@@ -300,14 +300,13 @@ impl V2InvariantValidator {
 
         // If state is Complete, completed_checkpoints should reflect the completed work
         if matches!(state, CheckpointState::Complete) {
-            if manager_state.completed_checkpoints == 0
-                && manager_state.current_operation_id == 0
-            {
+            if manager_state.completed_checkpoints == 0 && manager_state.current_operation_id == 0 {
                 // This is only a violation if we've performed an operation
                 // (operation_id > 0 indicates a checkpoint was started)
                 violations.push(V2InvariantViolation {
                     violation_type: V2InvariantViolationType::V2MetadataCorruption,
-                    description: "Checkpoint state is Complete but no checkpoints recorded".to_string(),
+                    description: "Checkpoint state is Complete but no checkpoints recorded"
+                        .to_string(),
                     expected: Some("completed_checkpoints > 0 when state is Complete".to_string()),
                     actual: Some("completed_checkpoints = 0, state = Complete".to_string()),
                     critical: false,
@@ -472,8 +471,8 @@ impl V2InvariantValidator {
         all_violations.extend(alignment_result.violations);
 
         // Validate checkpoint state invariants (now with manager_state)
-        let state_result = self
-            .validate_checkpoint_state_invariants(checkpoint_state, manager_state)?;
+        let state_result =
+            self.validate_checkpoint_state_invariants(checkpoint_state, manager_state)?;
         all_violations.extend(state_result.violations);
 
         // Validate format compatibility
@@ -646,8 +645,7 @@ mod tests {
         let state = CheckpointState::default();
         let manager_state = CheckpointManagerState::default();
 
-        let result = validator
-            .validate_checkpoint_state_invariants(&state, &manager_state);
+        let result = validator.validate_checkpoint_state_invariants(&state, &manager_state);
         assert!(result.is_ok());
         let invariant_result = result.unwrap();
         assert!(invariant_result.invariants_held);
@@ -669,8 +667,7 @@ mod tests {
         let mut manager_state = CheckpointManagerState::default();
         manager_state.in_progress = false;
 
-        let result = validator
-            .validate_checkpoint_state_invariants(&state, &manager_state);
+        let result = validator.validate_checkpoint_state_invariants(&state, &manager_state);
         assert!(result.is_ok());
         let invariant_result = result.unwrap();
         assert!(invariant_result.invariants_held);
@@ -682,8 +679,7 @@ mod tests {
         manager_state.in_progress = true;
         manager_state.checkpoint_start_time = Some(std::time::Instant::now());
 
-        let result = validator
-            .validate_checkpoint_state_invariants(&state, &manager_state);
+        let result = validator.validate_checkpoint_state_invariants(&state, &manager_state);
         assert!(result.is_ok());
         let invariant_result = result.unwrap();
         assert!(invariant_result.invariants_held);
@@ -695,8 +691,7 @@ mod tests {
         manager_state.in_progress = false;
         manager_state.completed_checkpoints = 1;
 
-        let result = validator
-            .validate_checkpoint_state_invariants(&state, &manager_state);
+        let result = validator.validate_checkpoint_state_invariants(&state, &manager_state);
         assert!(result.is_ok());
         let invariant_result = result.unwrap();
         assert!(invariant_result.invariants_held);
@@ -720,17 +715,14 @@ mod tests {
         manager_state.current_state = CheckpointState::Idle;
         manager_state.in_progress = true;
 
-        let result = validator
-            .validate_checkpoint_state_invariants(&state, &manager_state);
+        let result = validator.validate_checkpoint_state_invariants(&state, &manager_state);
         assert!(result.is_ok());
         let invariant_result = result.unwrap();
         // Should have violation for Idle with in_progress=true
         assert!(!invariant_result.invariants_held);
         assert!(!invariant_result.violations.is_empty());
-        assert!(invariant_result
-            .violations
-            .iter()
-            .any(|v| v.critical && matches!(
+        assert!(invariant_result.violations.iter().any(|v| v.critical
+            && matches!(
                 v.violation_type,
                 V2InvariantViolationType::V2MetadataCorruption
             )));
@@ -753,8 +745,7 @@ mod tests {
         manager_state.current_state = CheckpointState::Processing;
         manager_state.in_progress = false;
 
-        let result = validator
-            .validate_checkpoint_state_invariants(&state, &manager_state);
+        let result = validator.validate_checkpoint_state_invariants(&state, &manager_state);
         assert!(result.is_ok());
         let invariant_result = result.unwrap();
         // Should have violation for active state with in_progress=false
@@ -780,8 +771,7 @@ mod tests {
         manager_state.in_progress = false;
         manager_state.failed_attempts = 1;
 
-        let result = validator
-            .validate_checkpoint_state_invariants(&state, &manager_state);
+        let result = validator.validate_checkpoint_state_invariants(&state, &manager_state);
         assert!(result.is_ok());
         let invariant_result = result.unwrap();
         assert!(invariant_result.invariants_held);

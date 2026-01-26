@@ -3,10 +3,10 @@
 //! Provides user-friendly backup functionality that creates consistent
 //! snapshots of the database including all data pages and WAL state.
 
-use crate::backend::native::types::{NativeResult, NativeBackendError};
+use crate::backend::native::types::{NativeBackendError, NativeResult};
 use crate::backend::native::v2::{
-    export::snapshot::{SnapshotExporter, SnapshotExportConfig},
-    wal::{V2WALManager, V2WALConfig},
+    export::snapshot::{SnapshotExportConfig, SnapshotExporter},
+    wal::{V2WALConfig, V2WALManager},
 };
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -123,10 +123,7 @@ pub struct BackupResult {
 /// - The graph file is corrupt
 /// - Backup directory cannot be created
 /// - File I/O fails during backup
-pub fn create_backup(
-    graph_path: &Path,
-    config: BackupConfig,
-) -> NativeResult<BackupResult> {
+pub fn create_backup(graph_path: &Path, config: BackupConfig) -> NativeResult<BackupResult> {
     let start = SystemTime::now();
     let backup_id = config.backup_id.clone().unwrap_or_else(|| {
         format!(

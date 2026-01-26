@@ -2,8 +2,8 @@
 //!
 //! Benchmarks HNSW to verify search performance across dataset sizes.
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
-use sqlitegraph::hnsw::{HnswConfig, DistanceMetric, HnswIndex};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use sqlitegraph::hnsw::{DistanceMetric, HnswConfig, HnswIndex};
 
 mod bench_utils;
 use bench_utils::{MEASURE, WARM_UP};
@@ -51,10 +51,8 @@ fn bench_hnsw_search_scaling(criterion: &mut Criterion) {
                     .map(|j| (j as f32 * 0.01).sin())
                     .collect::<Vec<_>>();
 
-                bencher.iter(|| {
-                    hnsw.search(&query, 10).unwrap()
-                });
-            }
+                bencher.iter(|| hnsw.search(&query, 10).unwrap());
+            },
         );
     }
 

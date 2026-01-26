@@ -3,10 +3,10 @@
 //! Compares sequential vs parallel WAL recovery performance
 //! to validate parallelization improvements.
 
-use std::time::Duration;
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use sqlitegraph::{GraphConfig, NodeSpec, open_graph};
 use std::fs;
-use criterion::{Criterion, criterion_group, criterion_main, BenchmarkId, Throughput};
-use sqlitegraph::{GraphConfig, open_graph, NodeSpec};
+use std::time::Duration;
 use tempfile::TempDir;
 
 mod bench_utils;
@@ -30,11 +30,10 @@ fn bench_sequential_recovery(criterion: &mut Criterion) {
                     || setup_recovery_benchmark(tx_count, 1),
                     |(db_path, _temp_dir)| {
                         // Measure recovery time (sequential with parallelism=1)
-                        let config = GraphConfig::native()
-                            .with_parallel_recovery(1); // Sequential
+                        let config = GraphConfig::native().with_parallel_recovery(1); // Sequential
 
-                        let _graph = open_graph(&db_path, &config)
-                            .expect("Failed to recover graph");
+                        let _graph =
+                            open_graph(&db_path, &config).expect("Failed to recover graph");
                         drop(_graph);
                     },
                     criterion::BatchSize::LargeInput,
@@ -61,11 +60,10 @@ fn bench_parallel_recovery(criterion: &mut Criterion) {
                     || setup_recovery_benchmark(tx_count, 4),
                     |(db_path, _temp_dir)| {
                         // Measure recovery time (parallel with parallelism=4)
-                        let config = GraphConfig::native()
-                            .with_parallel_recovery(4); // Parallel
+                        let config = GraphConfig::native().with_parallel_recovery(4); // Parallel
 
-                        let _graph = open_graph(&db_path, &config)
-                            .expect("Failed to recover graph");
+                        let _graph =
+                            open_graph(&db_path, &config).expect("Failed to recover graph");
                         drop(_graph);
                     },
                     criterion::BatchSize::LargeInput,
@@ -95,11 +93,10 @@ fn bench_parallelism_scaling(criterion: &mut Criterion) {
                     || setup_recovery_benchmark(transaction_count, parallelism),
                     |(db_path, _temp_dir)| {
                         // Measure recovery time with specified parallelism
-                        let config = GraphConfig::native()
-                            .with_parallel_recovery(parallelism);
+                        let config = GraphConfig::native().with_parallel_recovery(parallelism);
 
-                        let _graph = open_graph(&db_path, &config)
-                            .expect("Failed to recover graph");
+                        let _graph =
+                            open_graph(&db_path, &config).expect("Failed to recover graph");
                         drop(_graph);
                     },
                     criterion::BatchSize::LargeInput,
@@ -127,11 +124,10 @@ fn bench_throughput(criterion: &mut Criterion) {
                 b.iter_batched(
                     || setup_recovery_benchmark(tx_count, parallelism),
                     |(db_path, _temp_dir)| {
-                        let config = GraphConfig::native()
-                            .with_parallel_recovery(parallelism);
+                        let config = GraphConfig::native().with_parallel_recovery(parallelism);
 
-                        let _graph = open_graph(&db_path, &config)
-                            .expect("Failed to recover graph");
+                        let _graph =
+                            open_graph(&db_path, &config).expect("Failed to recover graph");
                         drop(_graph);
                     },
                     criterion::BatchSize::LargeInput,
@@ -148,13 +144,15 @@ fn bench_throughput(criterion: &mut Criterion) {
 /// Creates a graph with the specified number of transactions,
 /// then closes it to force WAL generation. Returns the database
 /// path and temp directory for cleanup.
-fn setup_recovery_benchmark(transaction_count: usize, _parallelism: usize) -> (std::path::PathBuf, TempDir) {
+fn setup_recovery_benchmark(
+    transaction_count: usize,
+    _parallelism: usize,
+) -> (std::path::PathBuf, TempDir) {
     let temp_dir = create_benchmark_temp_dir();
     let db_path = temp_dir.path().join("benchmark.db");
 
     // Create graph and generate WAL by inserting nodes
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     // Insert nodes to generate WAL records (each insert is a transaction)
     for i in 0..transaction_count {

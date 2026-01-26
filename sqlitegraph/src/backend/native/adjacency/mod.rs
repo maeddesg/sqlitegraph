@@ -35,11 +35,11 @@ mod iterator_impl;
 mod v2_clustered;
 
 mod helpers;
+#[cfg(debug_assertions)]
+mod instrumentation;
 mod linear_detector;
 mod sequential_buffer;
 mod sequential_cluster_reader;
-#[cfg(debug_assertions)]
-mod instrumentation;
 
 #[cfg(test)]
 mod tests;

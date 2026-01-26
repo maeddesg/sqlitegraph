@@ -16,7 +16,7 @@ use crate::backend::native::{
     types::{NativeBackendError, NativeResult},
     v2::export::ExportMode,
     v2::wal::recovery::states::{Authority, RecoveryState as ExplicitRecoveryState},
-  };
+};
 use std::path::Path;
 
 /// Planner decision result with reasoning
@@ -84,9 +84,7 @@ pub struct ExportPlanner;
 
 impl ExportPlanner {
     /// Analyze graph and WAL state to determine optimal export strategy
-    pub fn analyze_export_strategy(
-        graph_path: &Path,
-    ) -> NativeResult<PlannerDecision> {
+    pub fn analyze_export_strategy(graph_path: &Path) -> NativeResult<PlannerDecision> {
         // Step 1: Analyze WAL state
         let wal_state = Self::analyze_wal_state(graph_path)?;
 
@@ -182,7 +180,10 @@ impl ExportPlanner {
     }
 
     /// Apply pure rule-based decision table
-    fn apply_decision_rules(wal_state: &WalAnalysis, graph_stable: bool) -> (ExportMode, DecisionReason) {
+    fn apply_decision_rules(
+        wal_state: &WalAnalysis,
+        graph_stable: bool,
+    ) -> (ExportMode, DecisionReason) {
         // Decision Table (deterministic, no heuristics):
 
         // Rule 1: Perfect conditions → Snapshot
@@ -191,15 +192,20 @@ impl ExportPlanner {
         }
 
         // Rule 2: Clean WAL with stable graph → Snapshot
-        if graph_stable && wal_state.exists &&
-           wal_state.size_bytes == 0 &&
-           wal_state.recovery_state == ExplicitRecoveryState::CleanShutdown {
+        if graph_stable
+            && wal_state.exists
+            && wal_state.size_bytes == 0
+            && wal_state.recovery_state == ExplicitRecoveryState::CleanShutdown
+        {
             return (ExportMode::Snapshot, DecisionReason::SnapshotOptimal);
         }
 
         // Rule 3: Active transactions → WAL (cannot snapshot)
         if wal_state.has_active_transactions {
-            return (ExportMode::CheckpointAligned, DecisionReason::WalActiveTransactions);
+            return (
+                ExportMode::CheckpointAligned,
+                DecisionReason::WalActiveTransactions,
+            );
         }
 
         // Rule 4: Dirty WAL state → WAL (need recovery)
@@ -218,9 +224,11 @@ impl ExportPlanner {
         }
 
         // Rule 7: Clean WAL with stable graph but WAL has data → Snapshot (preferred)
-        if graph_stable && wal_state.exists &&
-           wal_state.size_bytes > 0 &&
-           wal_state.recovery_state == ExplicitRecoveryState::CleanShutdown {
+        if graph_stable
+            && wal_state.exists
+            && wal_state.size_bytes > 0
+            && wal_state.recovery_state == ExplicitRecoveryState::CleanShutdown
+        {
             return (ExportMode::Snapshot, DecisionReason::SnapshotRequired);
         }
 
@@ -246,7 +254,8 @@ mod tests {
         };
         let graph_stable = true;
 
-        let (export_mode, reasoning) = ExportPlanner::apply_decision_rules(&wal_state, graph_stable);
+        let (export_mode, reasoning) =
+            ExportPlanner::apply_decision_rules(&wal_state, graph_stable);
         assert_eq!(export_mode, ExportMode::Snapshot);
         assert_eq!(reasoning, DecisionReason::SnapshotOptimal);
     }
@@ -263,7 +272,8 @@ mod tests {
         };
         let graph_stable = true;
 
-        let (export_mode, reasoning) = ExportPlanner::apply_decision_rules(&wal_state, graph_stable);
+        let (export_mode, reasoning) =
+            ExportPlanner::apply_decision_rules(&wal_state, graph_stable);
         assert_eq!(export_mode, ExportMode::CheckpointAligned);
         assert_eq!(reasoning, DecisionReason::WalActiveTransactions);
     }
@@ -280,7 +290,8 @@ mod tests {
         };
         let graph_stable = true;
 
-        let (export_mode, reasoning) = ExportPlanner::apply_decision_rules(&wal_state, graph_stable);
+        let (export_mode, reasoning) =
+            ExportPlanner::apply_decision_rules(&wal_state, graph_stable);
         assert_eq!(export_mode, ExportMode::LsnBounded);
         assert_eq!(reasoning, DecisionReason::WalDirtyState);
     }
@@ -297,7 +308,8 @@ mod tests {
         };
         let graph_stable = false;
 
-        let (export_mode, reasoning) = ExportPlanner::apply_decision_rules(&wal_state, graph_stable);
+        let (export_mode, reasoning) =
+            ExportPlanner::apply_decision_rules(&wal_state, graph_stable);
         assert_eq!(export_mode, ExportMode::Full);
         assert_eq!(reasoning, DecisionReason::GraphCorruption);
     }

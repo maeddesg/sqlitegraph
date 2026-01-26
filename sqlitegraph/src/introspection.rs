@@ -310,17 +310,13 @@ impl From<IntrospectError> for SqliteGraphError {
 
 /// Get file size for a database path.
 pub fn get_file_size<P: AsRef<Path>>(path: P) -> Option<u64> {
-    std::fs::metadata(path.as_ref())
-        .ok()
-        .map(|m| m.len())
+    std::fs::metadata(path.as_ref()).ok().map(|m| m.len())
 }
 
 /// Get WAL file size for a database path.
 pub fn get_wal_size<P: AsRef<Path>>(path: P) -> Option<u64> {
     let wal_path = path.as_ref().with_extension("wal");
-    std::fs::metadata(wal_path)
-        .ok()
-        .map(|m| m.len())
+    std::fs::metadata(wal_path).ok().map(|m| m.len())
 }
 
 #[cfg(test)]

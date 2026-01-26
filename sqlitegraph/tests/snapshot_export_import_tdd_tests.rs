@@ -4,22 +4,22 @@
 //! All tests must FAIL initially, then pass after implementation.
 //! Tests use REAL graph files, actual file I/O, and assert exact invariants.
 
+use sqlitegraph::backend::native::v2::export::{
+    ExportFactory, ExportManifest, ExportMode, V2ExportConfig, V2Exporter,
+    snapshot::SnapshotExportConfig, snapshot::SnapshotExporter,
+};
+use sqlitegraph::backend::native::v2::import::{
+    ImportFactory, ImportMode, V2ImportConfig, V2Importer, snapshot::SnapshotImportConfig,
+    snapshot::SnapshotImporter,
+};
 use sqlitegraph::backend::native::{
     graph_file::GraphFile,
     types::{NativeBackendError, NativeResult},
 };
-use sqlitegraph::backend::native::v2::export::{
-    V2Exporter, V2ExportConfig, ExportMode, ExportManifest, ExportFactory,
-    snapshot::SnapshotExporter, snapshot::SnapshotExportConfig
-};
-use sqlitegraph::backend::native::v2::import::{
-    V2Importer, V2ImportConfig, ImportMode, ImportFactory,
-    snapshot::SnapshotImporter, snapshot::SnapshotImportConfig
-};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tempfile::{NamedTempFile, TempDir};
-use std::fs;
 
 /// Test helper to create a basic graph file with known content
 fn create_test_graph_file() -> NativeResult<(GraphFile, PathBuf)> {
@@ -64,10 +64,13 @@ mod snapshot_export_tests {
     #[test]
     fn test_snapshot_export_requires_stable_state() {
         // Create test graph
-        let (mut graph_file, graph_path) = create_test_graph_file().expect("Failed to create test graph");
+        let (mut graph_file, graph_path) =
+            create_test_graph_file().expect("Failed to create test graph");
 
         // Put graph in unstable state (active transaction)
-        graph_file.begin_transaction().expect("Failed to begin transaction");
+        graph_file
+            .begin_transaction()
+            .expect("Failed to begin transaction");
 
         // Attempt snapshot export using SnapshotExporter (not V2Exporter)
         let export_dir = TempDir::new().unwrap().keep();
@@ -85,11 +88,16 @@ mod snapshot_export_tests {
         // Should FAIL because graph has active transaction
         let result = exporter.export_snapshot();
 
-        assert!(result.is_err(), "Snapshot export should fail with active transaction");
+        assert!(
+            result.is_err(),
+            "Snapshot export should fail with active transaction"
+        );
 
         match result.unwrap_err() {
             NativeBackendError::InvalidState { context, .. } => {
-                assert!(context.contains("active transaction") || context.contains("unstable state"));
+                assert!(
+                    context.contains("active transaction") || context.contains("unstable state")
+                );
             }
             _ => panic!("Expected InvalidState error for active transaction"),
         }
@@ -98,7 +106,8 @@ mod snapshot_export_tests {
     /// Test: Snapshot export fails deterministically when invariants are violated
     #[test]
     fn test_snapshot_export_fails_with_corrupt_file() {
-        let (mut graph_file, graph_path) = create_test_graph_file().expect("Failed to create test graph");
+        let (mut graph_file, graph_path) =
+            create_test_graph_file().expect("Failed to create test graph");
 
         // Ensure stable state initially
         ensure_stable_state(&mut graph_file).expect("Failed to ensure stable state");
@@ -129,13 +138,16 @@ mod snapshot_export_tests {
         // Should FAIL because file is corrupt
         let result = exporter.export_snapshot();
 
-        assert!(result.is_err(), "Snapshot export should fail with corrupt file");
+        assert!(
+            result.is_err(),
+            "Snapshot export should fail with corrupt file"
+        );
 
         let error = result.unwrap_err();
         match error {
-            NativeBackendError::FileTooSmall { .. } |
-            NativeBackendError::InvalidMagic { .. } |
-            NativeBackendError::InvalidHeader { .. } => {
+            NativeBackendError::FileTooSmall { .. }
+            | NativeBackendError::InvalidMagic { .. }
+            | NativeBackendError::InvalidHeader { .. } => {
                 // Expected corruption errors
             }
             _ => panic!("Expected file corruption error, got: {:?}", error),
@@ -145,13 +157,17 @@ mod snapshot_export_tests {
     /// Test: Snapshot export succeeds with clean state and creates proper files
     #[test]
     fn test_snapshot_export_succeeds_with_clean_state() {
-        let (mut graph_file, graph_path) = create_test_graph_file().expect("Failed to create test graph");
+        let (mut graph_file, graph_path) =
+            create_test_graph_file().expect("Failed to create test graph");
 
         // Ensure clean, stable state
         ensure_stable_state(&mut graph_file).expect("Failed to ensure stable state");
 
         // Verify WAL is clean
-        assert!(is_wal_clean(&graph_path), "WAL should be clean for snapshot");
+        assert!(
+            is_wal_clean(&graph_path),
+            "WAL should be clean for snapshot"
+        );
 
         // Create export directory
         let export_dir = TempDir::new().unwrap().keep();
@@ -171,7 +187,10 @@ mod snapshot_export_tests {
         // Should succeed with clean state
         let result = exporter.export_snapshot();
 
-        assert!(result.is_ok(), "Snapshot export should succeed with clean state");
+        assert!(
+            result.is_ok(),
+            "Snapshot export should succeed with clean state"
+        );
 
         // Verify expected files were created
         let snapshot_file = export_dir.join("snapshot.v2");
@@ -184,7 +203,10 @@ mod snapshot_export_tests {
         let snapshot_size = snapshot_file.metadata().unwrap().len();
         let original_size = graph_path.metadata().unwrap().len();
 
-        assert_eq!(snapshot_size, original_size, "Snapshot should be same size as original");
+        assert_eq!(
+            snapshot_size, original_size,
+            "Snapshot should be same size as original"
+        );
 
         // Verify manifest can be read
         let manifest_content = fs::read_to_string(manifest_file).expect("Failed to read manifest");
@@ -194,7 +216,8 @@ mod snapshot_export_tests {
     /// Test: Snapshot export creates atomic, fsync'd files
     #[test]
     fn test_snapshot_export_atomicity() {
-        let (mut graph_file, graph_path) = create_test_graph_file().expect("Failed to create test graph");
+        let (mut graph_file, graph_path) =
+            create_test_graph_file().expect("Failed to create test graph");
         ensure_stable_state(&mut graph_file).expect("Failed to ensure stable state");
 
         let export_dir = TempDir::new().unwrap().keep();
@@ -240,7 +263,8 @@ mod snapshot_import_tests {
     #[test]
     fn test_snapshot_import_restores_byte_identically() {
         // Create original graph with known content
-        let (mut original_graph, original_path) = create_test_graph_file().expect("Failed to create original graph");
+        let (mut original_graph, original_path) =
+            create_test_graph_file().expect("Failed to create original graph");
         ensure_stable_state(&mut original_graph).expect("Failed to stabilize original graph");
 
         // Export snapshot
@@ -279,7 +303,10 @@ mod snapshot_import_tests {
         let original_bytes = fs::read(&original_path).expect("Failed to read original");
         let imported_bytes = fs::read(&import_path).expect("Failed to read imported");
 
-        assert_eq!(original_bytes, imported_bytes, "Imported graph should be byte-identical to original");
+        assert_eq!(
+            original_bytes, imported_bytes,
+            "Imported graph should be byte-identical to original"
+        );
 
         // Verify both graphs can be opened and have identical headers
         let original_opened = GraphFile::open(&original_path).expect("Failed to open original");
@@ -302,7 +329,8 @@ mod snapshot_import_tests {
 
         // Create and export snapshot
         {
-            let (mut original_graph, original_path) = create_test_graph_file().expect("Failed to create original graph");
+            let (mut original_graph, original_path) =
+                create_test_graph_file().expect("Failed to create original graph");
             ensure_stable_state(&mut original_graph).expect("Failed to stabilize original graph");
 
             let snapshot_config = SnapshotExportConfig {
@@ -337,12 +365,22 @@ mod snapshot_import_tests {
 
         // Verify WAL directory was not used (no WAL files should be created)
         let wal_path = import_path.with_extension("wal");
-        assert!(!wal_path.exists(), "WAL file should not exist after snapshot import");
+        assert!(
+            !wal_path.exists(),
+            "WAL file should not exist after snapshot import"
+        );
 
         // Verify imported graph is immediately usable without recovery
-        let mut imported_graph = GraphFile::open(&import_path).expect("Failed to open imported graph");
-        assert!(!imported_graph.is_transaction_active(), "No active transaction should exist");
-        assert!(imported_graph.verify_commit_marker().is_ok(), "Commit marker should be valid");
+        let mut imported_graph =
+            GraphFile::open(&import_path).expect("Failed to open imported graph");
+        assert!(
+            !imported_graph.is_transaction_active(),
+            "No active transaction should exist"
+        );
+        assert!(
+            imported_graph.verify_commit_marker().is_ok(),
+            "Commit marker should be valid"
+        );
     }
 
     /// Test: Snapshot import validates format/version/compatibility
@@ -352,7 +390,8 @@ mod snapshot_import_tests {
 
         // Create snapshot with current version
         {
-            let (mut original_graph, original_path) = create_test_graph_file().expect("Failed to create original graph");
+            let (mut original_graph, original_path) =
+                create_test_graph_file().expect("Failed to create original graph");
             ensure_stable_state(&mut original_graph).expect("Failed to stabilize original graph");
 
             let snapshot_config = SnapshotExportConfig {
@@ -373,7 +412,8 @@ mod snapshot_import_tests {
         let manifest_path = export_dir.join("export.manifest");
         if manifest_path.exists() {
             // Write invalid version to manifest
-            let mut manifest_data = fs::read_to_string(&manifest_path).expect("Failed to read manifest");
+            let mut manifest_data =
+                fs::read_to_string(&manifest_path).expect("Failed to read manifest");
             manifest_data = manifest_data.replace("\"version\":1", "\"version\":999");
             fs::write(&manifest_path, manifest_data).expect("Failed to write corrupted manifest");
         }
@@ -394,12 +434,15 @@ mod snapshot_import_tests {
         let import_result = importer.unwrap().import();
 
         // Should fail due to version incompatibility
-        assert!(import_result.is_err(), "Import should fail with incompatible version");
+        assert!(
+            import_result.is_err(),
+            "Import should fail with incompatible version"
+        );
 
         let import_error = import_result.unwrap_err();
         match import_error {
-            NativeBackendError::UnsupportedVersion { .. } |
-            NativeBackendError::InvalidParameter { .. } => {
+            NativeBackendError::UnsupportedVersion { .. }
+            | NativeBackendError::InvalidParameter { .. } => {
                 // Expected version/validation errors
             }
             _ => panic!("Expected version/validation error, got: {:?}", import_error),
@@ -414,7 +457,8 @@ mod snapshot_round_trip_tests {
     /// Test: Snapshot export + import round-trip integrity
     #[test]
     fn test_snapshot_export_import_round_trip() {
-        let (mut original_graph, original_path) = create_test_graph_file().expect("Failed to create original graph");
+        let (mut original_graph, original_path) =
+            create_test_graph_file().expect("Failed to create original graph");
         ensure_stable_state(&mut original_graph).expect("Failed to stabilize original graph");
 
         // Store original header data for later comparison (copy the data we need)
@@ -472,7 +516,10 @@ mod snapshot_round_trip_tests {
         assert_eq!(original_node_count, restored_header.node_count);
         assert_eq!(original_edge_count, restored_header.edge_count);
         assert_eq!(original_node_data_offset, restored_header.node_data_offset);
-        assert_eq!(original_free_space_offset, restored_header.free_space_offset);
+        assert_eq!(
+            original_free_space_offset,
+            restored_header.free_space_offset
+        );
         // Note: PersistentHeaderV2 doesn't have a checksum field - data integrity is validated through other means
     }
 
@@ -480,7 +527,8 @@ mod snapshot_round_trip_tests {
     #[test]
     fn test_multiple_snapshot_round_trips() {
         let mut current_path = {
-            let (mut graph, path) = create_test_graph_file().expect("Failed to create initial graph");
+            let (mut graph, path) =
+                create_test_graph_file().expect("Failed to create initial graph");
             ensure_stable_state(&mut graph).expect("Failed to stabilize initial graph");
             drop(graph);
             path
@@ -501,10 +549,17 @@ mod snapshot_round_trip_tests {
             let mut exporter = SnapshotExporter::new(&current_path, snapshot_config)
                 .expect("Failed to create snapshot exporter");
             let export_result = exporter.export_snapshot();
-            assert!(export_result.is_ok(), "Cycle {} export should succeed", cycle);
+            assert!(
+                export_result.is_ok(),
+                "Cycle {} export should succeed",
+                cycle
+            );
 
             // Import to new location
-            let new_path = TempDir::new().unwrap().keep().join(format!("cycle_{}.v2", cycle));
+            let new_path = TempDir::new()
+                .unwrap()
+                .keep()
+                .join(format!("cycle_{}.v2", cycle));
             let import_config = V2ImportConfig {
                 target_graph_path: new_path.clone(),
                 export_dir_path: export_dir.clone(),
@@ -514,10 +569,18 @@ mod snapshot_round_trip_tests {
             };
 
             let importer = V2Importer::from_export_dir(&export_dir, &new_path, import_config);
-            assert!(importer.is_ok(), "Cycle {} import creation should succeed", cycle);
+            assert!(
+                importer.is_ok(),
+                "Cycle {} import creation should succeed",
+                cycle
+            );
 
             let import_result = importer.unwrap().import();
-            assert!(import_result.is_ok(), "Cycle {} import should succeed", cycle);
+            assert!(
+                import_result.is_ok(),
+                "Cycle {} import should succeed",
+                cycle
+            );
 
             // Clean up old file and continue with new one
             fs::remove_file(&current_path).expect("Failed to remove old file");
@@ -526,8 +589,14 @@ mod snapshot_round_trip_tests {
 
         // Final graph should still be valid and consistent
         let mut final_graph = GraphFile::open(&current_path).expect("Failed to open final graph");
-        assert!(final_graph.validate_file_size().is_ok(), "Final graph should be consistent");
-        assert!(final_graph.verify_commit_marker().is_ok(), "Final graph should have valid commit marker");
+        assert!(
+            final_graph.validate_file_size().is_ok(),
+            "Final graph should be consistent"
+        );
+        assert!(
+            final_graph.verify_commit_marker().is_ok(),
+            "Final graph should have valid commit marker"
+        );
     }
 }
 
@@ -538,15 +607,20 @@ mod regression_tests {
     /// Regression test: Ensure WAL export paths are unchanged
     #[test]
     fn test_wal_export_paths_unchanged() {
-        let (mut graph_file, graph_path) = create_test_graph_file().expect("Failed to create test graph");
+        let (mut graph_file, graph_path) =
+            create_test_graph_file().expect("Failed to create test graph");
         ensure_stable_state(&mut graph_file).expect("Failed to stabilize graph");
 
         // Test existing WAL export modes still work
-        for export_mode in [ExportMode::CheckpointAligned, ExportMode::LsnBounded, ExportMode::Full] {
+        for export_mode in [
+            ExportMode::CheckpointAligned,
+            ExportMode::LsnBounded,
+            ExportMode::Full,
+        ] {
             let export_dir = TempDir::new().unwrap().keep();
             let export_config = V2ExportConfig {
                 export_path: export_dir.clone(),
-                include_wal_tail: true,  // For WAL exports, include tail
+                include_wal_tail: true, // For WAL exports, include tail
                 compression_enabled: false,
                 checksum_validation: true,
             };
@@ -572,12 +646,17 @@ mod regression_tests {
                     // Success is fine - verify expected files exist
                     assert!(export_dir.join("export.manifest").exists());
                 }
-                Err(NativeBackendError::CorruptStringTable { reason }) if reason.contains("not yet implemented") => {
+                Err(NativeBackendError::CorruptStringTable { reason })
+                    if reason.contains("not yet implemented") =>
+                {
                     // Expected for unimplemented functionality
                 }
                 Err(other) => {
                     // Other errors should be documented, not caused by Snapshot changes
-                    panic!("Unexpected error for WAL export mode {:?}: {:?}", export_mode, other);
+                    panic!(
+                        "Unexpected error for WAL export mode {:?}: {:?}",
+                        export_mode, other
+                    );
                 }
             }
         }

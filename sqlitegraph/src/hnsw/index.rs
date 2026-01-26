@@ -46,18 +46,17 @@
 //! }
 //! ```
 
-
 use rusqlite::OptionalExtension;
 
 use crate::hnsw::{
-        config::HnswConfig,
-        distance_metric::DistanceMetric,
-        errors::HnswError,
-        layer::HnswLayer,
-        multilayer::{LevelDistributor, MultiLayerNodeManager},
-        neighborhood::NeighborhoodSearch,
-        storage::{VectorStorage, VectorStorageStats},
-    };
+    config::HnswConfig,
+    distance_metric::DistanceMetric,
+    errors::HnswError,
+    layer::HnswLayer,
+    multilayer::{LevelDistributor, MultiLayerNodeManager},
+    neighborhood::NeighborhoodSearch,
+    storage::{VectorStorage, VectorStorageStats},
+};
 
 /// Main HNSW vector search index
 ///
@@ -275,7 +274,7 @@ mod tests {
             HnswConfigBuilder::new()
                 .dimension(3)
                 .max_layers(3)
-                .distance_metric(DistanceMetric::Euclidean)  // Use Euclidean to avoid zero magnitude issues
+                .distance_metric(DistanceMetric::Euclidean) // Use Euclidean to avoid zero magnitude issues
                 .build()
                 .unwrap(),
         )
@@ -340,12 +339,14 @@ mod tests {
             assert_eq!(index_names, vec!["persist_test".to_string()]);
 
             // Get the loaded index
-            let loaded_hnsw = graph2.get_hnsw_index_ref("persist_test", |hnsw| {
-                assert_eq!(hnsw.name(), "persist_test");
-                assert_eq!(hnsw.config().dimension, 128);
-                assert_eq!(hnsw.config().distance_metric, DistanceMetric::Euclidean);
-                hnsw.config().dimension
-            }).unwrap();
+            let loaded_hnsw = graph2
+                .get_hnsw_index_ref("persist_test", |hnsw| {
+                    assert_eq!(hnsw.name(), "persist_test");
+                    assert_eq!(hnsw.config().dimension, 128);
+                    assert_eq!(hnsw.config().distance_metric, DistanceMetric::Euclidean);
+                    hnsw.config().dimension
+                })
+                .unwrap();
 
             assert_eq!(loaded_hnsw, 128);
         }
@@ -479,22 +480,24 @@ mod tests {
             assert_eq!(index_names, vec!["e2e_test".to_string()]);
 
             // Get the loaded index
-            let loaded_count = graph.get_hnsw_index_ref("e2e_test", |hnsw| {
-                // Verify all vectors were loaded
-                assert_eq!(hnsw.vector_count(), 5);
+            let loaded_count = graph
+                .get_hnsw_index_ref("e2e_test", |hnsw| {
+                    // Verify all vectors were loaded
+                    assert_eq!(hnsw.vector_count(), 5);
 
-                // Verify we can retrieve a vector
-                let (vector, metadata) = hnsw.get_vector(1).unwrap().unwrap();
-                assert_eq!(vector, vec![0.0, 0.0, 0.0]);
-                assert_eq!(metadata, serde_json::json!({"label": "vector_0"}));
+                    // Verify we can retrieve a vector
+                    let (vector, metadata) = hnsw.get_vector(1).unwrap().unwrap();
+                    assert_eq!(vector, vec![0.0, 0.0, 0.0]);
+                    assert_eq!(metadata, serde_json::json!({"label": "vector_0"}));
 
-                // Verify search works (graph was rebuilt)
-                let query = vec![2.0, 4.0, 6.0];
-                let results = hnsw.search(&query, 3).unwrap();
-                assert!(!results.is_empty());
+                    // Verify search works (graph was rebuilt)
+                    let query = vec![2.0, 4.0, 6.0];
+                    let results = hnsw.search(&query, 3).unwrap();
+                    assert!(!results.is_empty());
 
-                hnsw.vector_count()
-            }).unwrap();
+                    hnsw.vector_count()
+                })
+                .unwrap();
 
             assert_eq!(loaded_count, 5);
         }
@@ -521,7 +524,10 @@ mod tests {
         let mut hnsw = HnswIndex::new("test_multilayer_dist", config).unwrap();
 
         // Verify level distributor was initialized
-        assert!(hnsw.has_level_distributor(), "LevelDistributor should be initialized in multi-layer mode");
+        assert!(
+            hnsw.has_level_distributor(),
+            "LevelDistributor should be initialized in multi-layer mode"
+        );
 
         // Sample 1000 levels directly from the distributor to verify distribution
         use crate::hnsw::multilayer::LevelDistributor;
@@ -592,7 +598,10 @@ mod tests {
         let hnsw = HnswIndex::new("test_single_layer", config.clone()).unwrap();
 
         // Verify level distributor is NOT initialized in single-layer mode
-        assert!(!hnsw.has_level_distributor(), "LevelDistributor should not be initialized in single-layer mode");
+        assert!(
+            !hnsw.has_level_distributor(),
+            "LevelDistributor should not be initialized in single-layer mode"
+        );
 
         // Insert 100 vectors
         let test_vector = vec![1.0, 0.0, 0.0, 0.0];
@@ -604,12 +613,24 @@ mod tests {
         let stats = hnsw_mut.statistics().unwrap();
 
         // In single-layer mode, all vectors should only be in layer 0
-        assert_eq!(stats.layer_stats[0].0, 100, "Layer 0 should have 100 vectors");
+        assert_eq!(
+            stats.layer_stats[0].0, 100,
+            "Layer 0 should have 100 vectors"
+        );
 
         // Higher layers should be empty
-        assert_eq!(stats.layer_stats[1].0, 0, "Layer 1 should be empty in single-layer mode");
-        assert_eq!(stats.layer_stats[2].0, 0, "Layer 2 should be empty in single-layer mode");
-        assert_eq!(stats.layer_stats[3].0, 0, "Layer 3 should be empty in single-layer mode");
+        assert_eq!(
+            stats.layer_stats[1].0, 0,
+            "Layer 1 should be empty in single-layer mode"
+        );
+        assert_eq!(
+            stats.layer_stats[2].0, 0,
+            "Layer 2 should be empty in single-layer mode"
+        );
+        assert_eq!(
+            stats.layer_stats[3].0, 0,
+            "Layer 3 should be empty in single-layer mode"
+        );
     }
 
     #[test]
@@ -623,7 +644,7 @@ mod tests {
             ef_search: 50,
             ml: 16,
             distance_metric: DistanceMetric::Euclidean,
-            enable_multilayer: true,   // Test multi-layer recall
+            enable_multilayer: true, // Test multi-layer recall
             multilayer_level_distribution_base: Some(16),
             multilayer_deterministic_seed: Some(42),
         };
@@ -645,9 +666,7 @@ mod tests {
 
         // HNSW approximate results
         let hnsw_results = hnsw.search(query, k).unwrap();
-        let hnsw_ids: HashSet<_> = hnsw_results.iter()
-            .map(|(id, _)| *id)
-            .collect();
+        let hnsw_ids: HashSet<_> = hnsw_results.iter().map(|(id, _)| *id).collect();
 
         // Exact nearest neighbors (brute force)
         fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
@@ -658,7 +677,8 @@ mod tests {
                 .sqrt()
         }
 
-        let mut exact_results: Vec<_> = vectors.iter()
+        let mut exact_results: Vec<_> = vectors
+            .iter()
             .enumerate()
             .map(|(i, v)| (i as u64 + 1, euclidean_distance(query, v)))
             .collect();
@@ -678,10 +698,7 @@ mod tests {
             }
         }
 
-        let exact_ids: HashSet<_> = exact_results.iter()
-            .take(k)
-            .map(|(id, _)| *id)
-            .collect();
+        let exact_ids: HashSet<_> = exact_results.iter().take(k).map(|(id, _)| *id).collect();
 
         // Count overlap
         let overlap = hnsw_ids.intersection(&exact_ids).count();
@@ -690,7 +707,11 @@ mod tests {
         println!("HNSW results: {:?}", hnsw_results);
         println!("Exact top {}: {:?}", k, exact_ids);
         println!("Recall: {:.1}% ({}/{})", recall, overlap, k);
-        assert!(recall >= 90.0, "Recall {:.1}% is below 90% threshold", recall);
+        assert!(
+            recall >= 90.0,
+            "Recall {:.1}% is below 90% threshold",
+            recall
+        );
     }
 
     #[test]
@@ -742,24 +763,30 @@ mod tests {
         // Linear scaling would be 10x (1000/100), logarithmic is typically < 5x
         let ratio_100_to_1000 = search_times[1].1 as f64 / search_times[0].1 as f64;
         println!("Time ratio (1000/100): {:.2}x", ratio_100_to_1000);
-        assert!(ratio_100_to_1000 < 10.0,
-                "Search time ratio {:.2}x suggests worse than log scaling; expected < 10x for O(log N)",
-                ratio_100_to_1000);
+        assert!(
+            ratio_100_to_1000 < 10.0,
+            "Search time ratio {:.2}x suggests worse than log scaling; expected < 10x for O(log N)",
+            ratio_100_to_1000
+        );
 
         // Verify logarithmic scaling: T(10000) / T(1000) should be < 10
         // Linear scaling would be 10x (10000/1000), but log should be better
         let ratio_1000_to_10000 = search_times[2].1 as f64 / search_times[1].1 as f64;
         println!("Time ratio (10000/1000): {:.2}x", ratio_1000_to_10000);
-        assert!(ratio_1000_to_10000 < 10.0,
-                "Search time ratio {:.2}x suggests worse than log scaling; expected < 10x for O(log N)",
-                ratio_1000_to_10000);
+        assert!(
+            ratio_1000_to_10000 < 10.0,
+            "Search time ratio {:.2}x suggests worse than log scaling; expected < 10x for O(log N)",
+            ratio_1000_to_10000
+        );
 
         // Most importantly: overall T(10000) / T(100) should be MUCH better than linear (100x)
         let overall_ratio = search_times[2].1 as f64 / search_times[0].1 as f64;
         println!("Overall time ratio (10000/100): {:.2}x", overall_ratio);
-        assert!(overall_ratio < 50.0,
-                "Overall search time ratio {:.2}x suggests linear scaling; expected < 50x for O(log N) (linear would be 100x)",
-                overall_ratio);
+        assert!(
+            overall_ratio < 50.0,
+            "Overall search time ratio {:.2}x suggests linear scaling; expected < 50x for O(log N) (linear would be 100x)",
+            overall_ratio
+        );
     }
 
     #[test]
@@ -792,21 +819,34 @@ mod tests {
         println!("Layer stats: {:?}", stats.layer_stats);
 
         // All 100 vectors should be in layer 0 (base layer)
-        assert_eq!(stats.layer_stats[0].0, 100, "Layer 0 should have all 100 vectors");
+        assert_eq!(
+            stats.layer_stats[0].0, 100,
+            "Layer 0 should have all 100 vectors"
+        );
 
         // Layer 1 should have some vectors (approximately 100/16 = 6-7)
         // With seed 42 and exponential distribution, we expect ~6 vectors in layer 1
         let layer1_count = stats.layer_stats[1].0;
-        assert!(layer1_count > 0 && layer1_count < 20,
-                "Layer 1 should have some vectors (got {}), but not all", layer1_count);
+        assert!(
+            layer1_count > 0 && layer1_count < 20,
+            "Layer 1 should have some vectors (got {}), but not all",
+            layer1_count
+        );
 
         // Verify higher layers have fewer or equal nodes than lower layers
-        assert!(stats.layer_stats[0].0 >= stats.layer_stats[1].0,
-                "Layer 0 should have >= Layer 1");
-        assert!(stats.layer_stats[1].0 >= stats.layer_stats[2].0,
-                "Layer 1 should have >= Layer 2");
+        assert!(
+            stats.layer_stats[0].0 >= stats.layer_stats[1].0,
+            "Layer 0 should have >= Layer 1"
+        );
+        assert!(
+            stats.layer_stats[1].0 >= stats.layer_stats[2].0,
+            "Layer 1 should have >= Layer 2"
+        );
 
         // Verify multi-layer mode is enabled
-        assert!(hnsw.has_level_distributor(), "LevelDistributor should be initialized");
+        assert!(
+            hnsw.has_level_distributor(),
+            "LevelDistributor should be initialized"
+        );
     }
 }

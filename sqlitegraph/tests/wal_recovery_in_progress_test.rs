@@ -6,8 +6,8 @@
 //! 2. IN_PROGRESS transactions are NOT replayed (committed=false)
 //! 3. Database state is preserved as if the transaction never happened
 
-use sqlitegraph::backend::native::v2::wal::recovery::core::TransactionState;
 use sqlitegraph::backend::native::v2::wal::V2WALRecord;
+use sqlitegraph::backend::native::v2::wal::recovery::core::TransactionState;
 use tempfile::tempdir;
 
 /// Test that uncommitted transactions are filtered out during replay
@@ -23,13 +23,11 @@ fn test_uncommitted_transactions_filtered() {
             tx_id: 1,
             start_lsn: 1,
             commit_lsn: Some(10),
-            records: vec![
-                V2WALRecord::NodeInsert {
-                    node_id: 1,
-                    slot_offset: 1000,
-                    node_data: vec![1, 2, 3],
-                },
-            ],
+            records: vec![V2WALRecord::NodeInsert {
+                node_id: 1,
+                slot_offset: 1000,
+                node_data: vec![1, 2, 3],
+            }],
             committed: true,
             timestamp: 0,
         },
@@ -37,15 +35,13 @@ fn test_uncommitted_transactions_filtered() {
         TransactionState {
             tx_id: 2,
             start_lsn: 11,
-            commit_lsn: None,  // No commit LSN = IN_PROGRESS
-            records: vec![
-                V2WALRecord::NodeInsert {
-                    node_id: 2,
-                    slot_offset: 2000,
-                    node_data: vec![4, 5, 6],
-                },
-            ],
-            committed: false,  // IN_PROGRESS transactions have committed=false
+            commit_lsn: None, // No commit LSN = IN_PROGRESS
+            records: vec![V2WALRecord::NodeInsert {
+                node_id: 2,
+                slot_offset: 2000,
+                node_data: vec![4, 5, 6],
+            }],
+            committed: false, // IN_PROGRESS transactions have committed=false
             timestamp: 0,
         },
         // Rolled back transaction - should NOT be replayed
@@ -53,14 +49,12 @@ fn test_uncommitted_transactions_filtered() {
             tx_id: 3,
             start_lsn: 21,
             commit_lsn: Some(30),
-            records: vec![
-                V2WALRecord::NodeInsert {
-                    node_id: 3,
-                    slot_offset: 3000,
-                    node_data: vec![7, 8, 9],
-                },
-            ],
-            committed: false,  // Explicitly rolled back
+            records: vec![V2WALRecord::NodeInsert {
+                node_id: 3,
+                slot_offset: 3000,
+                node_data: vec![7, 8, 9],
+            }],
+            committed: false, // Explicitly rolled back
             timestamp: 0,
         },
     ];
@@ -72,8 +66,15 @@ fn test_uncommitted_transactions_filtered() {
         .collect();
 
     // Verify only TX 1 (committed) is included
-    assert_eq!(committed_transactions.len(), 1, "Only committed transactions should be replayed");
-    assert_eq!(committed_transactions[0].tx_id, 1, "TX 1 should be included");
+    assert_eq!(
+        committed_transactions.len(),
+        1,
+        "Only committed transactions should be replayed"
+    );
+    assert_eq!(
+        committed_transactions[0].tx_id, 1,
+        "TX 1 should be included"
+    );
 }
 
 /// Test that finalize_incomplete_transactions marks IN_PROGRESS correctly
@@ -93,14 +94,17 @@ fn test_finalize_incomplete_transactions_behavior() {
     // Insert an IN_PROGRESS transaction (as would happen during WAL scanning)
     {
         let mut active = active_transactions.lock();
-        active.insert(1, TransactionState {
-            tx_id: 1,
-            start_lsn: 1,
-            commit_lsn: None,  // No commit yet = IN_PROGRESS
-            records: vec![],
-            committed: false,  // IN_PROGRESS transactions start as uncommitted
-            timestamp: 0,
-        });
+        active.insert(
+            1,
+            TransactionState {
+                tx_id: 1,
+                start_lsn: 1,
+                commit_lsn: None, // No commit yet = IN_PROGRESS
+                records: vec![],
+                committed: false, // IN_PROGRESS transactions start as uncommitted
+                timestamp: 0,
+            },
+        );
     }
 
     // Simulate finalize_incomplete_transactions behavior
@@ -119,10 +123,20 @@ fn test_finalize_incomplete_transactions_behavior() {
     }
 
     // Verify the IN_PROGRESS transaction was finalized
-    assert_eq!(finalized_transactions.len(), 1, "IN_PROGRESS transaction should be finalized");
+    assert_eq!(
+        finalized_transactions.len(),
+        1,
+        "IN_PROGRESS transaction should be finalized"
+    );
     assert_eq!(finalized_transactions[0].tx_id, 1);
-    assert_eq!(finalized_transactions[0].committed, false, "Should remain uncommitted");
-    assert_eq!(finalized_transactions[0].commit_lsn, None, "Should have no commit LSN");
+    assert_eq!(
+        finalized_transactions[0].committed, false,
+        "Should remain uncommitted"
+    );
+    assert_eq!(
+        finalized_transactions[0].commit_lsn, None,
+        "Should have no commit LSN"
+    );
     assert_eq!(warnings.len(), 1);
     assert!(warnings[0].contains("Incomplete transaction TX 1 recovered"));
 }
@@ -137,7 +151,7 @@ fn test_transaction_state_initialization() {
         start_lsn: 100,
         commit_lsn: None,
         records: vec![],
-        committed: false,  // IN_PROGRESS = not committed
+        committed: false, // IN_PROGRESS = not committed
         timestamp: 1234567890,
     };
 
@@ -150,7 +164,10 @@ fn test_transaction_state_initialization() {
 
     // Verify this transaction would be filtered out during replay
     let should_replay = tx_state.committed && tx_state.commit_lsn.is_some();
-    assert!(!should_replay, "IN_PROGRESS transactions should not be replayed");
+    assert!(
+        !should_replay,
+        "IN_PROGRESS transactions should not be replayed"
+    );
 }
 
 /// Test committed transaction passes the filter
@@ -159,9 +176,9 @@ fn test_committed_transaction_passes_filter() {
     let tx_state = TransactionState {
         tx_id: 1,
         start_lsn: 1,
-        commit_lsn: Some(10),  // Has commit LSN
+        commit_lsn: Some(10), // Has commit LSN
         records: vec![],
-        committed: true,  // Explicitly committed
+        committed: true, // Explicitly committed
         timestamp: 0,
     };
 
@@ -218,7 +235,11 @@ fn test_multiple_in_progress_transactions_filtered() {
         .filter(|tx| tx.committed && tx.commit_lsn.is_some())
         .collect();
 
-    assert_eq!(committed_transactions.len(), 2, "Only TX 1 and TX 4 should pass filter");
+    assert_eq!(
+        committed_transactions.len(),
+        2,
+        "Only TX 1 and TX 4 should pass filter"
+    );
     assert_eq!(committed_transactions[0].tx_id, 1);
     assert_eq!(committed_transactions[1].tx_id, 4);
 }
@@ -231,15 +252,18 @@ fn test_committed_without_commit_lsn_filtered() {
     let tx_state = TransactionState {
         tx_id: 1,
         start_lsn: 1,
-        commit_lsn: None,  // No commit LSN
+        commit_lsn: None, // No commit LSN
         records: vec![],
-        committed: true,  // But marked as committed
+        committed: true, // But marked as committed
         timestamp: 0,
     };
 
     // The filter requires BOTH conditions
     let should_replay = tx_state.committed && tx_state.commit_lsn.is_some();
-    assert!(!should_replay, "Transactions without commit_lsn should not replay");
+    assert!(
+        !should_replay,
+        "Transactions without commit_lsn should not replay"
+    );
 }
 
 /// Test rollback transaction state
@@ -248,13 +272,16 @@ fn test_rollback_transaction_state() {
     let tx_state = TransactionState {
         tx_id: 1,
         start_lsn: 1,
-        commit_lsn: Some(10),  // Has LSN (rollback record)
+        commit_lsn: Some(10), // Has LSN (rollback record)
         records: vec![],
-        committed: false,  // Rolled back
+        committed: false, // Rolled back
         timestamp: 0,
     };
 
     // Verify rolled back transaction is NOT replayed
     let should_replay = tx_state.committed && tx_state.commit_lsn.is_some();
-    assert!(!should_replay, "Rolled back transactions should not be replayed");
+    assert!(
+        !should_replay,
+        "Rolled back transactions should not be replayed"
+    );
 }

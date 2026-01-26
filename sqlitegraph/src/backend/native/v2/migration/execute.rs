@@ -115,20 +115,18 @@ pub fn migrate_file(path: &Path) -> NativeResult<MigrationResult> {
     }
 
     if version != 2 {
-        return Err(NativeBackendError::MigrationFailed(
-            format!(
-                "Unsupported migration from version {} to version 3. Only V2->V3 migration is supported.",
-                version
-            ),
-        ));
+        return Err(NativeBackendError::MigrationFailed(format!(
+            "Unsupported migration from version {} to version 3. Only V2->V3 migration is supported.",
+            version
+        )));
     }
 
     // Step 3: Create backup using atomic file operations
     AtomicFileOperations::new()
         .atomic_copy_file(path, &backup_path)
-        .map_err(|e| NativeBackendError::MigrationFailed(
-            format!("Backup creation failed: {:?}", e),
-        ))?;
+        .map_err(|e| {
+            NativeBackendError::MigrationFailed(format!("Backup creation failed: {:?}", e))
+        })?;
 
     // Step 4: Perform migration
     let migrate_result = migrate_v2_to_v3_internal(path, &file_content);
@@ -157,9 +155,10 @@ pub fn migrate_file(path: &Path) -> NativeResult<MigrationResult> {
             // Verification failed - rollback
             let _ = rollback_migration(&backup_path, path);
             let _ = std::fs::remove_file(&backup_path);
-            Err(NativeBackendError::MigrationFailed(
-                format!("Verification failed: {:?}", e),
-            ))
+            Err(NativeBackendError::MigrationFailed(format!(
+                "Verification failed: {:?}",
+                e
+            )))
         }
     }
 }
@@ -195,15 +194,15 @@ fn read_file_with_version(path: &Path) -> NativeResult<(u32, Vec<u8>)> {
 /// (4-byte schema_version + 4-byte reserved). The rest of the file remains unchanged.
 fn migrate_v2_to_v3_internal(path: &Path, content: &[u8]) -> NativeResult<()> {
     // Decode header
-    let header = decode_persistent_header(content)
-        .map_err(|e| NativeBackendError::MigrationFailed(
-            format!("Failed to decode header: {:?}", e),
-        ))?;
+    let header = decode_persistent_header(content).map_err(|e| {
+        NativeBackendError::MigrationFailed(format!("Failed to decode header: {:?}", e))
+    })?;
 
     if header.version != 2 {
-        return Err(NativeBackendError::MigrationFailed(
-            format!("Expected V2 file, found V{}", header.version),
-        ));
+        return Err(NativeBackendError::MigrationFailed(format!(
+            "Expected V2 file, found V{}",
+            header.version
+        )));
     }
 
     // Create new header with version 3
@@ -212,16 +211,16 @@ fn migrate_v2_to_v3_internal(path: &Path, content: &[u8]) -> NativeResult<()> {
     // schema_version and reserved are already correct from decode
 
     // Encode new header
-    let encoded_header = encode_persistent_header(&new_header)
-        .map_err(|e| NativeBackendError::MigrationFailed(
-            format!("Failed to encode header: {:?}", e),
-        ))?;
+    let encoded_header = encode_persistent_header(&new_header).map_err(|e| {
+        NativeBackendError::MigrationFailed(format!("Failed to encode header: {:?}", e))
+    })?;
 
     // Create new content with updated header
     if encoded_header.len() != 80 {
-        return Err(NativeBackendError::MigrationFailed(
-            format!("Encoded header size is {} bytes, expected 80", encoded_header.len()),
-        ));
+        return Err(NativeBackendError::MigrationFailed(format!(
+            "Encoded header size is {} bytes, expected 80",
+            encoded_header.len()
+        )));
     }
 
     let mut new_content = content.to_vec();
@@ -231,26 +230,25 @@ fn migrate_v2_to_v3_internal(path: &Path, content: &[u8]) -> NativeResult<()> {
 
     // Write to temporary file
     let temp_path = path.with_extension("tmp");
-    std::fs::write(&temp_path, &new_content)
-        .map_err(|e| NativeBackendError::MigrationFailed(
-            format!("Failed to write temp file: {:?}", e),
-        ))?;
+    std::fs::write(&temp_path, &new_content).map_err(|e| {
+        NativeBackendError::MigrationFailed(format!("Failed to write temp file: {:?}", e))
+    })?;
 
     // Sync temp file
-    sync_file(&temp_path).map_err(|e| NativeBackendError::MigrationFailed(
-        format!("Failed to sync temp file: {:?}", e),
-    ))?;
+    sync_file(&temp_path).map_err(|e| {
+        NativeBackendError::MigrationFailed(format!("Failed to sync temp file: {:?}", e))
+    })?;
 
     // Atomic rename
-    std::fs::rename(&temp_path, path).map_err(|e| NativeBackendError::MigrationFailed(
-        format!("Failed to rename temp file: {:?}", e),
-    ))?;
+    std::fs::rename(&temp_path, path).map_err(|e| {
+        NativeBackendError::MigrationFailed(format!("Failed to rename temp file: {:?}", e))
+    })?;
 
     // Sync parent directory
     if let Some(parent) = path.parent() {
-        sync_directory(parent).map_err(|e| NativeBackendError::MigrationFailed(
-            format!("Failed to sync parent directory: {:?}", e),
-        ))?;
+        sync_directory(parent).map_err(|e| {
+            NativeBackendError::MigrationFailed(format!("Failed to sync parent directory: {:?}", e))
+        })?;
     }
 
     Ok(())
@@ -260,23 +258,19 @@ fn migrate_v2_to_v3_internal(path: &Path, content: &[u8]) -> NativeResult<()> {
 ///
 /// Reopens the file and verifies the header is in the expected format.
 fn verify_migration(path: &Path, expected_version: u32) -> NativeResult<()> {
-    let content = std::fs::read(path).map_err(|e| NativeBackendError::MigrationFailed(
-        format!("Failed to read migrated file: {:?}", e),
-    ))?;
+    let content = std::fs::read(path).map_err(|e| {
+        NativeBackendError::MigrationFailed(format!("Failed to read migrated file: {:?}", e))
+    })?;
 
     let header = decode_persistent_header(&content).map_err(|e| {
-        NativeBackendError::MigrationFailed(
-            format!("Failed to decode migrated header: {:?}", e),
-        )
+        NativeBackendError::MigrationFailed(format!("Failed to decode migrated header: {:?}", e))
     })?;
 
     if header.version != expected_version {
-        return Err(NativeBackendError::MigrationFailed(
-            format!(
-                "Version mismatch after migration: expected {}, found {}",
-                expected_version, header.version
-            ),
-        ));
+        return Err(NativeBackendError::MigrationFailed(format!(
+            "Version mismatch after migration: expected {}, found {}",
+            expected_version, header.version
+        )));
     }
 
     Ok(())
@@ -294,9 +288,10 @@ fn rollback_migration(backup_path: &Path, original_path: &Path) -> NativeResult<
              Original file may be in inconsistent state.",
             e
         );
-        return Err(NativeBackendError::MigrationFailed(
-            format!("Rollback failed: {:?}", e),
-        ));
+        return Err(NativeBackendError::MigrationFailed(format!(
+            "Rollback failed: {:?}",
+            e
+        )));
     }
     Ok(())
 }
@@ -310,11 +305,10 @@ fn sync_file(path: &Path) -> NativeResult<()> {
         .open(path)
         .map_err(|e| NativeBackendError::Io(e))?;
 
-    file.sync_all()
-        .map_err(|e| NativeBackendError::IoError {
-            context: format!("Failed to sync file: {:?}", path),
-            source: e,
-        })
+    file.sync_all().map_err(|e| NativeBackendError::IoError {
+        context: format!("Failed to sync file: {:?}", path),
+        source: e,
+    })
 }
 
 /// Sync directory to disk
@@ -326,12 +320,10 @@ fn sync_directory(path: &Path) -> NativeResult<()> {
         .write(true)
         .open(path)
     {
-        Ok(dir) => {
-            dir.sync_all().map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to sync directory: {:?}", path),
-                source: e,
-            })
-        }
+        Ok(dir) => dir.sync_all().map_err(|e| NativeBackendError::IoError {
+            context: format!("Failed to sync directory: {:?}", path),
+            source: e,
+        }),
         Err(_) => {
             // Directory sync not supported on this filesystem
             Ok(())
@@ -345,7 +337,7 @@ mod tests {
     use crate::backend::native::{
         constants::DEFAULT_FEATURE_FLAGS,
         persistent_header::PersistentHeaderV2,
-        v2::{V2_MAGIC, V2_FORMAT_VERSION},
+        v2::{V2_FORMAT_VERSION, V2_MAGIC},
     };
     use std::io::Write;
     use tempfile::NamedTempFile;
@@ -373,7 +365,9 @@ mod tests {
         file.as_file_mut().write_all(&encoded).unwrap();
 
         // Write some dummy data after header
-        file.as_file_mut().write_all(b"DUMMY_DATA_AFTER_HEADER").unwrap();
+        file.as_file_mut()
+            .write_all(b"DUMMY_DATA_AFTER_HEADER")
+            .unwrap();
         file.as_file_mut().flush().unwrap();
         file.as_file_mut().sync_all().unwrap();
 
@@ -403,7 +397,9 @@ mod tests {
         file.as_file_mut().write_all(&encoded).unwrap();
 
         // Write some dummy data after header
-        file.as_file_mut().write_all(b"DUMMY_DATA_AFTER_HEADER").unwrap();
+        file.as_file_mut()
+            .write_all(b"DUMMY_DATA_AFTER_HEADER")
+            .unwrap();
         file.as_file_mut().flush().unwrap();
         file.as_file_mut().sync_all().unwrap();
 

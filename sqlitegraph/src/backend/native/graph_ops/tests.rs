@@ -141,13 +141,7 @@ fn test_bfs_cache_evaporates() {
 
     // Create edges
     for i in 1..4 {
-        let edge = EdgeRecord::new(
-            i,
-            i,
-            i + 1,
-            "test".to_string(),
-            serde_json::json!({}),
-        );
+        let edge = EdgeRecord::new(i, i, i + 1, "test".to_string(), serde_json::json!({}));
         let mut edge_store = EdgeStore::new(&mut graph_file);
         edge_store.write_edge(&edge).unwrap();
     }
@@ -164,7 +158,10 @@ fn test_bfs_cache_evaporates() {
     // Third BFS from different start node
     let result3 = native_bfs(&mut graph_file, 3, 1).unwrap();
     let expected3: Vec<NativeNodeId> = vec![4];
-    assert_eq!(result3, expected3, "Third BFS from node 3 should return node 4");
+    assert_eq!(
+        result3, expected3,
+        "Third BFS from node 3 should return node 4"
+    );
 
     // All BFS calls produce correct results, proving cache doesn't cause cross-call pollution
 }
@@ -202,13 +199,7 @@ fn test_bfs_cache_cycles() {
     }
 
     // Cycle edge: 4->2
-    let cycle_edge = EdgeRecord::new(
-        5,
-        4,
-        2,
-        "test".to_string(),
-        serde_json::json!({}),
-    );
+    let cycle_edge = EdgeRecord::new(5, 4, 2, "test".to_string(), serde_json::json!({}));
     let mut edge_store = EdgeStore::new(&mut graph_file);
     edge_store.write_edge(&cycle_edge).unwrap();
 
@@ -222,7 +213,10 @@ fn test_bfs_cache_cycles() {
 
     // Node 4 should appear only once in result (BFS deduplication via visited set)
     let count_4 = result.iter().filter(|&&n| n == 4).count();
-    assert_eq!(count_4, 1, "Node 4 should appear exactly once despite two paths");
+    assert_eq!(
+        count_4, 1,
+        "Node 4 should appear exactly once despite two paths"
+    );
 }
 
 #[test]
@@ -245,13 +239,7 @@ fn test_bfs_unchanged_behavior() {
 
     // Star edges from center node 1
     for i in 2..=5 {
-        let edge = EdgeRecord::new(
-            i,
-            1,
-            i,
-            "test".to_string(),
-            serde_json::json!({}),
-        );
+        let edge = EdgeRecord::new(i, 1, i, "test".to_string(), serde_json::json!({}));
         let mut edge_store = EdgeStore::new(&mut graph_file);
         edge_store.write_edge(&edge).unwrap();
     }
@@ -262,15 +250,25 @@ fn test_bfs_unchanged_behavior() {
     expected.sort();
     let mut result_sorted = result.clone();
     result_sorted.sort();
-    assert_eq!(result_sorted, expected, "BFS depth 1 should return all direct neighbors");
+    assert_eq!(
+        result_sorted, expected,
+        "BFS depth 1 should return all direct neighbors"
+    );
 
     // BFS depth 0 should return just start node
     let result_zero = native_bfs(&mut graph_file, 1, 0).unwrap();
-    assert_eq!(result_zero, vec![1], "BFS depth 0 should return start node only");
+    assert_eq!(
+        result_zero,
+        vec![1],
+        "BFS depth 0 should return start node only"
+    );
 
     // BFS from leaf node (no outgoing edges) should return empty
     let result_leaf = native_bfs(&mut graph_file, 2, 2).unwrap();
-    assert!(result_leaf.is_empty(), "BFS from leaf node should return empty");
+    assert!(
+        result_leaf.is_empty(),
+        "BFS from leaf node should return empty"
+    );
 }
 
 // K-hop cache tests
@@ -313,13 +311,19 @@ fn test_k_hop_cache_evaporation() {
     expected1.sort();
     let mut result1_sorted = result1.clone();
     result1_sorted.sort();
-    assert_eq!(result1_sorted, expected1, "First k-hop should return node 2");
+    assert_eq!(
+        result1_sorted, expected1,
+        "First k-hop should return node 2"
+    );
 
     // Second k-hop call with same parameters
     let result2 = native_k_hop(&mut graph_file, 1, 1, Direction::Outgoing).unwrap();
     let mut result2_sorted = result2.clone();
     result2_sorted.sort();
-    assert_eq!(result2_sorted, expected1, "Second k-hop should return same result");
+    assert_eq!(
+        result2_sorted, expected1,
+        "Second k-hop should return same result"
+    );
 
     // Third k-hop call with different parameters
     let result3 = native_k_hop(&mut graph_file, 2, 1, Direction::Outgoing).unwrap();
@@ -327,7 +331,10 @@ fn test_k_hop_cache_evaporation() {
     expected3.sort();
     let mut result3_sorted = result3.clone();
     result3_sorted.sort();
-    assert_eq!(result3_sorted, expected3, "Third k-hop from node 2 should return node 3");
+    assert_eq!(
+        result3_sorted, expected3,
+        "Third k-hop from node 2 should return node 3"
+    );
 
     // All k-hop calls produce correct results, proving cache doesn't cause cross-call pollution
 }
@@ -376,7 +383,10 @@ fn test_k_hop_cache_effectiveness() {
 
     // Node 4 should appear only once (k-hop deduplicates via visited set)
     let count_4 = result.iter().filter(|&&n| n == 4).count();
-    assert_eq!(count_4, 1, "Node 4 should appear exactly once despite two paths");
+    assert_eq!(
+        count_4, 1,
+        "Node 4 should appear exactly once despite two paths"
+    );
 
     // Result correctness proves cache doesn't break k-hop semantics
 }
@@ -418,17 +428,29 @@ fn test_shortest_path_cache_evaporation() {
     // First shortest path call
     let result1 = native_shortest_path(&mut graph_file, 1, 4).unwrap();
     assert!(result1.is_some(), "Should find a path from 1 to 4");
-    assert_eq!(result1.unwrap(), vec![1, 2, 3, 4], "First shortest path should be [1,2,3,4]");
+    assert_eq!(
+        result1.unwrap(),
+        vec![1, 2, 3, 4],
+        "First shortest path should be [1,2,3,4]"
+    );
 
     // Second shortest path call with same parameters
     let result2 = native_shortest_path(&mut graph_file, 1, 4).unwrap();
     assert!(result2.is_some(), "Should find a path from 1 to 4");
-    assert_eq!(result2.unwrap(), vec![1, 2, 3, 4], "Second shortest path should be [1,2,3,4]");
+    assert_eq!(
+        result2.unwrap(),
+        vec![1, 2, 3, 4],
+        "Second shortest path should be [1,2,3,4]"
+    );
 
     // Third shortest path call with different parameters
     let result3 = native_shortest_path(&mut graph_file, 2, 4).unwrap();
     assert!(result3.is_some(), "Should find a path from 2 to 4");
-    assert_eq!(result3.unwrap(), vec![2, 3, 4], "Third shortest path from 2 to 4 should be [2,3,4]");
+    assert_eq!(
+        result3.unwrap(),
+        vec![2, 3, 4],
+        "Third shortest path from 2 to 4 should be [2,3,4]"
+    );
 
     // All shortest path calls produce correct results, proving cache doesn't cause cross-call pollution
 }
@@ -473,7 +495,11 @@ fn test_shortest_path_cache_effectiveness() {
 
     // Either path [1,2,4] or [1,3,4] is valid (both are shortest paths of length 3)
     let valid_path = path == vec![1, 2, 4] || path == vec![1, 3, 4];
-    assert!(valid_path, "Path should be [1,2,4] or [1,3,4], got {:?}", path);
+    assert!(
+        valid_path,
+        "Path should be [1,2,4] or [1,3,4], got {:?}",
+        path
+    );
 
     // Path length should be 3
     assert_eq!(path.len(), 3, "Shortest path should have length 3");
@@ -538,13 +564,20 @@ fn test_chain_query_cache_evaporation() {
     expected1.sort();
     let mut result1_sorted = result1.clone();
     result1_sorted.sort();
-    assert_eq!(result1_sorted, expected1, "First chain query should return nodes [1,2,3,5,6], got {:?}", result1_sorted);
+    assert_eq!(
+        result1_sorted, expected1,
+        "First chain query should return nodes [1,2,3,5,6], got {:?}",
+        result1_sorted
+    );
 
     // Second chain query call with same parameters
     let result2 = native_chain_query(&mut graph_file, 1, &chain).unwrap();
     let mut result2_sorted = result2.clone();
     result2_sorted.sort();
-    assert_eq!(result2_sorted, expected1, "Second chain query should return same result");
+    assert_eq!(
+        result2_sorted, expected1,
+        "Second chain query should return same result"
+    );
 
     // Third chain query call from node 2 (single path chain)
     let result3 = native_chain_query(&mut graph_file, 2, &chain).unwrap();
@@ -552,7 +585,11 @@ fn test_chain_query_cache_evaporation() {
     expected3.sort();
     let mut result3_sorted = result3.clone();
     result3_sorted.sort();
-    assert_eq!(result3_sorted, expected3, "Third chain query from node 2 should return [2,3,4], got {:?}", result3_sorted);
+    assert_eq!(
+        result3_sorted, expected3,
+        "Third chain query from node 2 should return [2,3,4], got {:?}",
+        result3_sorted
+    );
 
     // All chain query calls produce correct results, proving cache doesn't cause cross-call pollution
 }
@@ -608,7 +645,10 @@ fn test_chain_query_cache_effectiveness() {
     assert!(result.contains(&1), "Should contain start node 1");
     assert!(result.contains(&2), "Should contain node 2 (first hop)");
     assert!(result.contains(&3), "Should contain node 3 (first hop)");
-    assert!(result.contains(&4), "Should contain node 4 (second hop via 1->2->4 or 1->3->4)");
+    assert!(
+        result.contains(&4),
+        "Should contain node 4 (second hop via 1->2->4 or 1->3->4)"
+    );
 
     // Node 4 appears twice because both paths (1->2->4 and 1->3->4) reach it
     // and chain query uses extend() without deduplication
@@ -616,7 +656,11 @@ fn test_chain_query_cache_effectiveness() {
     assert_eq!(count_4, 2, "Node 4 appears twice (once per path)");
 
     // Result length should be 5 (nodes 1, 2, 3, 4, 4)
-    assert_eq!(result.len(), 5, "Chain query should return 5 nodes (with 4 duplicated)");
+    assert_eq!(
+        result.len(),
+        5,
+        "Chain query should return 5 nodes (with 4 duplicated)"
+    );
 
     // Result correctness proves cache works for multi-step traversals
     // The cache prevents re-reading outgoing neighbors of node 1 when processing both paths

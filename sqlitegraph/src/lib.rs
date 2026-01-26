@@ -269,7 +269,9 @@ pub use snapshot::SnapshotId;
 
 // Re-export backend implementations
 pub use backend::{BackendDirection, ChainStep, GraphBackend};
-pub use backend::{BackupResult, EdgeSpec, NativeGraphBackend, NeighborQuery, NodeSpec, SqliteGraphBackend};
+pub use backend::{
+    BackupResult, EdgeSpec, NativeGraphBackend, NeighborQuery, NodeSpec, SqliteGraphBackend,
+};
 
 // Re-export backup API for convenience
 #[cfg(feature = "native-v2")]
@@ -277,20 +279,18 @@ pub use backend::native::v2::backup::{BackupConfig, create_backup as database_ba
 
 // Re-export restore API for convenience
 #[cfg(feature = "native-v2")]
-pub use backend::native::v2::restore::{RestoreConfig, RestoreResult, restore_backup as database_restore};
+pub use backend::native::v2::restore::{
+    RestoreConfig, RestoreResult, restore_backup as database_restore,
+};
 
 // Re-export WAL functionality for native backend
 #[cfg(feature = "native-v2")]
-pub use backend::native::v2::wal::{
-    V2WALConfig, V2WALManager,
-    IsolationLevel, WALManagerMetrics,
-};
+pub use backend::native::v2::wal::{IsolationLevel, V2WALConfig, V2WALManager, WALManagerMetrics};
 
 // Re-export WAL integration for advanced usage
 #[cfg(feature = "native-v2")]
 pub use backend::native::v2::wal::{
-    V2GraphWALIntegrator, GraphWALIntegrationConfig,
-    GraphOperationResult, OperationMetrics,
+    GraphOperationResult, GraphWALIntegrationConfig, OperationMetrics, V2GraphWALIntegrator,
 };
 
 // Re-export configuration and factory
@@ -304,19 +304,18 @@ pub use graph::{GraphEdge, GraphEntity, SqliteGraph};
 
 // Re-export graph algorithms
 pub use algo::{
-    betweenness_centrality, label_propagation, louvain_communities, pagerank,
-    betweenness_centrality_with_progress, louvain_communities_with_progress, pagerank_with_progress,
+    betweenness_centrality, betweenness_centrality_with_progress, label_propagation,
+    louvain_communities, louvain_communities_with_progress, pagerank, pagerank_with_progress,
 };
 
 // Re-export progress tracking
 pub use progress::{ConsoleProgress, NoProgress, ProgressCallback, ProgressState};
 
 // Re-export introspection API
-pub use introspection::{GraphIntrospection, EdgeCount, IntrospectError};
+pub use introspection::{EdgeCount, GraphIntrospection, IntrospectError};
 
 // Internal modules - not part of public API
 pub mod algo; // Public for tests
-pub mod progress; // Public for tests and progress API usage
 mod api_ergonomics;
 pub mod backend_selector;
 pub mod bfs; // Public for tests
@@ -327,6 +326,7 @@ pub mod graph_opt; // Public for tests
 pub mod index; // Public for tests
 pub mod multi_hop; // Public for tests
 mod pattern_engine_cache; // Already moved to core above
+pub mod progress; // Public for tests and progress API usage
 pub mod query_cache; // Public for internal use and tests
 mod reasoning; // Public for binary
 pub mod schema; // Public for tests // Public for tests
@@ -378,8 +378,11 @@ pub fn create_backup(
     db_path: &std::path::Path,
     backup_dir: &std::path::Path,
 ) -> Result<BackupResult, SqliteGraphError> {
-    let native_result = database_backup(db_path, crate::backend::native::v2::backup::BackupConfig::new(backup_dir))
-        .map_err(|e| SqliteGraphError::connection(e.to_string()))?;
+    let native_result = database_backup(
+        db_path,
+        crate::backend::native::v2::backup::BackupConfig::new(backup_dir),
+    )
+    .map_err(|e| SqliteGraphError::connection(e.to_string()))?;
     Ok(BackupResult {
         snapshot_path: native_result.snapshot_path,
         manifest_path: native_result.manifest_path,
@@ -420,8 +423,6 @@ pub fn restore_from_backup(
     target_path: &std::path::Path,
     overwrite: bool,
 ) -> Result<RestoreResult, SqliteGraphError> {
-    let config = RestoreConfig::new(backup_dir, target_path)
-        .with_overwrite(overwrite);
-    database_restore(config)
-        .map_err(|e| SqliteGraphError::connection(e.to_string()))
+    let config = RestoreConfig::new(backup_dir, target_path).with_overwrite(overwrite);
+    database_restore(config).map_err(|e| SqliteGraphError::connection(e.to_string()))
 }

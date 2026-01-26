@@ -14,11 +14,8 @@ use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sqlitegraph::backend::native::{
-    graph_file::GraphFile,
+    NativeNodeId, adjacency::SequentialReadBuffer, edge_store::EdgeStore, graph_file::GraphFile,
     node_store::NodeStore,
-    edge_store::EdgeStore,
-    adjacency::SequentialReadBuffer,
-    NativeNodeId,
 };
 use tempfile::TempDir;
 
@@ -50,7 +47,9 @@ fn create_chain_graph(size: usize, temp_dir: &TempDir) -> (GraphFile, Vec<Native
             format!("node_{}", i),
             serde_json::json!({"id": i}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -58,8 +57,8 @@ fn create_chain_graph(size: usize, temp_dir: &TempDir) -> (GraphFile, Vec<Native
     let mut edge_store = EdgeStore::new(&mut graph_file);
     for i in 0..size.saturating_sub(1) {
         let edge = sqlitegraph::backend::native::EdgeRecord::new(
-            i as i64 + 1, // edge_id
-            node_ids[i],   // from node i
+            i as i64 + 1,    // edge_id
+            node_ids[i],     // from node i
             node_ids[i + 1], // to node i+1
             "chain".to_string(),
             serde_json::json!({"order": i}),
@@ -83,7 +82,10 @@ fn bench_prefetch_windows(criterion: &mut Criterion) {
 
     for &window_size in &window_sizes {
         for &chain_size in &chain_sizes {
-            let bench_id = BenchmarkId::new(format!("window_{}/chain_{}", window_size, chain_size), chain_size);
+            let bench_id = BenchmarkId::new(
+                format!("window_{}/chain_{}", window_size, chain_size),
+                chain_size,
+            );
 
             group.bench_with_input(bench_id, &chain_size, |b, &_size| {
                 // Create graph in setup (outside iteration loop)
@@ -119,19 +121,23 @@ fn bench_prefetch_chain_sizes(criterion: &mut Criterion) {
     let chain_sizes = [50, 100, 200, 500];
 
     for &chain_size in &chain_sizes {
-        group.bench_with_input(BenchmarkId::from_parameter(chain_size), &chain_size, |b, &_size| {
-            let temp_dir = create_benchmark_temp_dir();
-            let (mut graph_file, node_ids) = create_chain_graph(chain_size, &temp_dir);
-            let start_node = node_ids[0];
+        group.bench_with_input(
+            BenchmarkId::from_parameter(chain_size),
+            &chain_size,
+            |b, &_size| {
+                let temp_dir = create_benchmark_temp_dir();
+                let (mut graph_file, node_ids) = create_chain_graph(chain_size, &temp_dir);
+                let start_node = node_ids[0];
 
-            b.iter(|| {
-                let mut buffer = SequentialReadBuffer::with_prefetch_window(8);
-                let _ = buffer.prefetch_from(&mut graph_file, start_node);
-                buffer.len()
-            });
+                b.iter(|| {
+                    let mut buffer = SequentialReadBuffer::with_prefetch_window(8);
+                    let _ = buffer.prefetch_from(&mut graph_file, start_node);
+                    buffer.len()
+                });
 
-            std::mem::forget(temp_dir);
-        });
+                std::mem::forget(temp_dir);
+            },
+        );
     }
 
     group.finish();

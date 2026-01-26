@@ -66,6 +66,6 @@ macro_rules! error_log {
 
 // Export macros for use in other modules
 pub(crate) use debug_log;
+pub(crate) use error_log;
 pub(crate) use info_log;
 pub(crate) use warn_log;
-pub(crate) use error_log;

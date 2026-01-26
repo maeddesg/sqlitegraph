@@ -11,17 +11,15 @@
 //! The checkpoint and recovery systems are partially implemented - tests verify the
 //! APIs exist and basic functionality works where supported.
 
-use sqlitegraph::backend::native::v2::wal::{
-    V2WALConfig, V2WALRecord, V2WALWriter, V2WALReader,
-};
-use sqlitegraph::backend::native::v2::wal::checkpoint::{
-    V2WALCheckpointManager, CheckpointStrategy,
-};
 use sqlitegraph::backend::native::v2::wal::checkpoint::strategies::{
     StrategyEvaluator, StrategyValidator,
 };
-use sqlitegraph::backend::native::v2::wal::recovery::{V2WALRecoveryEngine, RecoveryOptions};
-use sqlitegraph::backend::native::{NativeResult, GraphFile};
+use sqlitegraph::backend::native::v2::wal::checkpoint::{
+    CheckpointStrategy, V2WALCheckpointManager,
+};
+use sqlitegraph::backend::native::v2::wal::recovery::{RecoveryOptions, V2WALRecoveryEngine};
+use sqlitegraph::backend::native::v2::wal::{V2WALConfig, V2WALReader, V2WALRecord, V2WALWriter};
+use sqlitegraph::backend::native::{GraphFile, NativeResult};
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -100,7 +98,10 @@ fn test_v2_wal_checkpoint_creation_and_validation() -> NativeResult<()> {
     // Verify we can read back the WAL
     let reader = V2WALReader::open(&wal_path)?;
     let header = reader.header();
-    assert_eq!(header.magic, sqlitegraph::backend::native::v2::wal::V2WALHeader::MAGIC);
+    assert_eq!(
+        header.magic,
+        sqlitegraph::backend::native::v2::wal::V2WALHeader::MAGIC
+    );
     // Note: current_lsn in header is not updated on disk after initial creation.
     // The header is written once at file creation with current_lsn=1, and memory
     // increments are never flushed back. We verify header validity instead.
@@ -113,8 +114,15 @@ fn test_v2_wal_checkpoint_creation_and_validation() -> NativeResult<()> {
     )?;
 
     // Verify checkpoint manager state
-    assert_eq!(manager.get_state(), sqlitegraph::backend::native::v2::wal::checkpoint::core::CheckpointState::Idle);
-    assert_eq!(manager.get_last_checkpointed_lsn(), 0, "LSN should be tracked");
+    assert_eq!(
+        manager.get_state(),
+        sqlitegraph::backend::native::v2::wal::checkpoint::core::CheckpointState::Idle
+    );
+    assert_eq!(
+        manager.get_last_checkpointed_lsn(),
+        0,
+        "LSN should be tracked"
+    );
     assert!(!manager.is_checkpoint_in_progress());
 
     // Verify checkpoint manager can evaluate strategies
@@ -125,7 +133,10 @@ fn test_v2_wal_checkpoint_creation_and_validation() -> NativeResult<()> {
         0,
     )?;
     // Should not checkpoint yet (WAL is small)
-    assert!(!should_checkpoint, "Should not trigger checkpoint for small WAL");
+    assert!(
+        !should_checkpoint,
+        "Should not trigger checkpoint for small WAL"
+    );
 
     Ok(())
 }
@@ -190,7 +201,10 @@ fn test_checkpoint_strategies_v2_workloads() -> NativeResult<()> {
         )?;
 
         // Check that strategy evaluation returns valid result
-        assert!(trigger.is_some() || !should_trigger, "Should have trigger info or not trigger");
+        assert!(
+            trigger.is_some() || !should_trigger,
+            "Should have trigger info or not trigger"
+        );
     }
 
     // Test 2: TransactionCount strategy
@@ -232,11 +246,8 @@ fn test_checkpoint_strategies_v2_workloads() -> NativeResult<()> {
 
         // Verify evaluator works
         let evaluator = StrategyEvaluator::new(config);
-        let (should_trigger, trigger) = evaluator.should_checkpoint(
-            &strategy,
-            std::time::SystemTime::now(),
-            0,
-        )?;
+        let (should_trigger, trigger) =
+            evaluator.should_checkpoint(&strategy, std::time::SystemTime::now(), 0)?;
 
         // Check that strategy evaluation returns valid result
         assert!(trigger.is_some() || !should_trigger);
@@ -262,7 +273,11 @@ fn test_checkpoint_strategies_v2_workloads() -> NativeResult<()> {
     {
         let strategy = CheckpointStrategy::default();
         match strategy {
-            CheckpointStrategy::Adaptive { min_interval, max_wal_size, max_transactions } => {
+            CheckpointStrategy::Adaptive {
+                min_interval,
+                max_wal_size,
+                max_transactions,
+            } => {
                 assert!(min_interval.as_secs() > 0);
                 assert!(max_wal_size > 0);
                 assert!(max_transactions > 0);
@@ -327,7 +342,10 @@ fn test_v2_wal_crash_recovery_transaction_replay() -> NativeResult<()> {
     writer.shutdown()?;
 
     // Verify WAL file exists
-    assert!(wal_path.exists(), "WAL file should exist after crash simulation");
+    assert!(
+        wal_path.exists(),
+        "WAL file should exist after crash simulation"
+    );
 
     // Verify WAL has content for replay
     let wal_metadata = std::fs::metadata(&wal_path)?;
@@ -336,28 +354,33 @@ fn test_v2_wal_crash_recovery_transaction_replay() -> NativeResult<()> {
     // Simulate crash recovery by creating recovery engine
     let options = RecoveryOptions {
         perform_consistency_checks: false, // Skip for faster test
-        create_backup: false,               // No backup needed for test
+        create_backup: false,              // No backup needed for test
         ..Default::default()
     };
 
     // Create recovery engine - verifies API is functional
-    let recovery_engine = V2WALRecoveryEngine::create(
-        config.clone(),
-        graph_path.clone(),
-        options,
-    )?;
+    let recovery_engine = V2WALRecoveryEngine::create(config.clone(), graph_path.clone(), options)?;
 
     // Get recovery progress
     let progress = recovery_engine.get_progress();
-    assert_eq!(progress.state, sqlitegraph::backend::native::v2::wal::recovery::core::RecoveryState::Idle);
+    assert_eq!(
+        progress.state,
+        sqlitegraph::backend::native::v2::wal::recovery::core::RecoveryState::Idle
+    );
 
     // Verify recovery engine state
     let state = recovery_engine.get_state();
-    assert_eq!(state, sqlitegraph::backend::native::v2::wal::recovery::core::RecoveryState::Idle);
+    assert_eq!(
+        state,
+        sqlitegraph::backend::native::v2::wal::recovery::core::RecoveryState::Idle
+    );
 
     // Get metrics
     let metrics = recovery_engine.get_metrics();
-    assert_eq!(metrics.transactions_scanned, 0, "No transactions scanned yet");
+    assert_eq!(
+        metrics.transactions_scanned, 0,
+        "No transactions scanned yet"
+    );
     assert_eq!(metrics.committed_transactions_replayed, 0);
     assert_eq!(metrics.rolled_back_transactions, 0);
 
@@ -432,15 +455,14 @@ fn test_recovery_multiple_incomplete_transactions() -> NativeResult<()> {
         ..Default::default()
     };
 
-    let recovery_engine = V2WALRecoveryEngine::create(
-        config.clone(),
-        graph_path.clone(),
-        options,
-    )?;
+    let recovery_engine = V2WALRecoveryEngine::create(config.clone(), graph_path.clone(), options)?;
 
     // Verify recovery engine state
     let state = recovery_engine.get_state();
-    assert_eq!(state, sqlitegraph::backend::native::v2::wal::recovery::core::RecoveryState::Idle);
+    assert_eq!(
+        state,
+        sqlitegraph::backend::native::v2::wal::recovery::core::RecoveryState::Idle
+    );
 
     // Get metrics
     let metrics = recovery_engine.get_metrics();
@@ -512,7 +534,10 @@ fn test_checkpoint_recovery_integration_v2_graph() -> NativeResult<()> {
     )?;
 
     // Verify checkpoint manager is functional
-    assert_eq!(manager.get_state(), sqlitegraph::backend::native::v2::wal::checkpoint::core::CheckpointState::Idle);
+    assert_eq!(
+        manager.get_state(),
+        sqlitegraph::backend::native::v2::wal::checkpoint::core::CheckpointState::Idle
+    );
     assert!(!manager.is_checkpoint_in_progress());
 
     // Write more WAL records (post-checkpoint)
@@ -589,11 +614,7 @@ fn test_recovery_validation_consistency_checking() -> NativeResult<()> {
         ..Default::default()
     };
 
-    let recovery_engine = V2WALRecoveryEngine::create(
-        config,
-        graph_path.clone(),
-        options,
-    )?;
+    let recovery_engine = V2WALRecoveryEngine::create(config, graph_path.clone(), options)?;
 
     // Verify recovery engine has validation enabled
     let metrics = recovery_engine.get_metrics();
@@ -601,7 +622,10 @@ fn test_recovery_validation_consistency_checking() -> NativeResult<()> {
 
     // Verify state is Idle (ready to start recovery)
     let state = recovery_engine.get_state();
-    assert_eq!(state, sqlitegraph::backend::native::v2::wal::recovery::core::RecoveryState::Idle);
+    assert_eq!(
+        state,
+        sqlitegraph::backend::native::v2::wal::recovery::core::RecoveryState::Idle
+    );
 
     Ok(())
 }

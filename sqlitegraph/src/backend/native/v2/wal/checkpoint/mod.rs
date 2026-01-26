@@ -29,7 +29,8 @@
 //! - Cluster-aware dirty block tracking
 
 pub use self::core::{
-    CheckpointManagerState, CheckpointProgress, CheckpointState, DirtyBlockTracker, V2WALCheckpointManager,
+    CheckpointManagerState, CheckpointProgress, CheckpointState, DirtyBlockTracker,
+    V2WALCheckpointManager,
 };
 // Re-export from the new modularized structure
 pub use self::coordinator::CheckpointExecutor;
@@ -63,11 +64,11 @@ pub use self::validation::{
     ValidationStatus,
 };
 
+pub mod coordinator;
 /// Checkpoint module re-exports for backward compatibility
 pub mod core;
-pub mod operations;
-pub mod coordinator;
 pub mod io;
+pub mod operations;
 pub mod record;
 pub mod strategies;
 pub mod validation;
@@ -207,8 +208,8 @@ pub mod utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::native::NativeBackendError;
     use crate::backend::native::GraphFile;
+    use crate::backend::native::NativeBackendError;
     use std::time::Duration;
     use tempfile::tempdir;
 

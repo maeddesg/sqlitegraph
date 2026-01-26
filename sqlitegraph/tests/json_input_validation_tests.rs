@@ -40,7 +40,11 @@ fn test_malicious_json_payload_depth() {
     // Either our depth validation catches it, or serde_json's recursion limit does
     // Both are valid protections against deeply nested payloads
     assert!(
-        matches!(result, Err(JsonValidationError::DepthTooLarge { .. }) | Err(JsonValidationError::ParseError(_))),
+        matches!(
+            result,
+            Err(JsonValidationError::DepthTooLarge { .. })
+                | Err(JsonValidationError::ParseError(_))
+        ),
         "Expected DepthTooLarge or ParseError (recursion limit), got: {:?}",
         result
     );
@@ -75,7 +79,11 @@ fn test_payload_at_size_boundary() {
     // Create exactly 88 bytes of JSON (actual length of the string below)
     let payload = r#"{"a":"12345678901234567890123456789012345678901234567890123456789012345678901234567890"}"#;
     let actual_len = payload.len();
-    assert_eq!(actual_len, 88, "Payload length is {} not 88 as expected", actual_len);
+    assert_eq!(
+        actual_len, 88,
+        "Payload length is {} not 88 as expected",
+        actual_len
+    );
 
     let limits = JsonLimits {
         max_size: 88,
@@ -84,7 +92,11 @@ fn test_payload_at_size_boundary() {
 
     let result = parse_and_validate_json_str(payload, &limits);
     // Should pass - exactly at limit
-    assert!(result.is_ok(), "Expected success at size boundary, got: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Expected success at size boundary, got: {:?}",
+        result
+    );
 }
 
 /// Test: Payload just over size limit boundary
@@ -93,7 +105,11 @@ fn test_payload_just_over_size_boundary() {
     // Create 89 bytes of JSON (actual length + 1)
     let payload = r#"{"a":"123456789012345678901234567890123456789012345678901234567890123456789012345678901"}"#;
     let actual_len = payload.len();
-    assert_eq!(actual_len, 89, "Payload length is {} not 89 as expected", actual_len);
+    assert_eq!(
+        actual_len, 89,
+        "Payload length is {} not 89 as expected",
+        actual_len
+    );
 
     let limits = JsonLimits {
         max_size: 88,
@@ -103,7 +119,13 @@ fn test_payload_just_over_size_boundary() {
     let result = parse_and_validate_json_str(payload, &limits);
     // Should fail - just over limit
     assert!(
-        matches!(result, Err(JsonValidationError::SizeTooLarge { actual: 89, max: 88 })),
+        matches!(
+            result,
+            Err(JsonValidationError::SizeTooLarge {
+                actual: 89,
+                max: 88
+            })
+        ),
         "Expected SizeTooLarge error, got: {:?}",
         result
     );
@@ -171,7 +193,11 @@ fn test_unicode_payload() {
     let unicode_json = r#"{"emoji": "😀🎉", "chinese": "你好", "arabic": "مرحبا"}"#;
 
     let result = parse_and_validate_json_str(unicode_json, &limits);
-    assert!(result.is_ok(), "Unicode JSON should be valid, got: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Unicode JSON should be valid, got: {:?}",
+        result
+    );
 }
 
 /// Test: Empty payload edge case
@@ -300,7 +326,10 @@ fn test_valid_complex_json_within_limits() {
     }"#;
 
     let result = parse_and_validate_json_str(complex_json, &limits);
-    assert!(result.is_ok(), "Complex valid JSON should parse successfully");
+    assert!(
+        result.is_ok(),
+        "Complex valid JSON should parse successfully"
+    );
 
     // Verify structure is preserved
     let parsed = result.unwrap();

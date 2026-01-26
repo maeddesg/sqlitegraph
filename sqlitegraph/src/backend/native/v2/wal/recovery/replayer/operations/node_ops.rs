@@ -3,16 +3,12 @@
 //! This module provides node-specific replay operations including
 //! node insertion, update, and deletion with proper rollback support.
 
-use crate::backend::native::{
-    EdgeStore, NodeStore, NativeNodeId,
-    adjacency::Direction,
-};
-use crate::backend::native::v2::{
-    NodeRecordV2, EdgeCluster,
-    free_space::AllocationStrategy, FreeSpaceManager,
-};
 use crate::backend::native::v2::wal::recovery::errors::RecoveryError;
 use crate::backend::native::v2::wal::recovery::replayer::types::RollbackOperation;
+use crate::backend::native::v2::{
+    EdgeCluster, FreeSpaceManager, NodeRecordV2, free_space::AllocationStrategy,
+};
+use crate::backend::native::{EdgeStore, NativeNodeId, NodeStore, adjacency::Direction};
 use crate::debug::{debug_log, warn_log};
 
 impl super::DefaultReplayOperations {
@@ -20,24 +16,30 @@ impl super::DefaultReplayOperations {
     pub fn handle_node_insert(
         &self,
         node_id: u64,
-        _slot_offset: u64,
+        slot_offset: u64,
         node_data: &[u8],
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
-        debug_log!("Replaying node insert: node_id={}, slot_offset={}, data_size={}",
-               node_id, slot_offset, node_data.len());
+        debug_log!(
+            "Replaying node insert: node_id={}, slot_offset={}, data_size={}",
+            node_id,
+            slot_offset,
+            node_data.len()
+        );
 
         // Deserialize the node data
-        let node_record = crate::backend::native::v2::node_record_v2::NodeRecordV2::deserialize(node_data)
-            .map_err(|e| RecoveryError::io_error(
-                format!("Failed to deserialize node data: {}", e)
-            ))?;
+        let node_record =
+            crate::backend::native::v2::node_record_v2::NodeRecordV2::deserialize(node_data)
+                .map_err(|e| {
+                    RecoveryError::io_error(format!("Failed to deserialize node data: {}", e))
+                })?;
 
         // Validate node ID consistency
         if node_record.id != node_id as crate::backend::native::NativeNodeId {
-            return Err(RecoveryError::validation(
-                format!("Node ID mismatch: expected {}, got {}", node_id, node_record.id)
-            ));
+            return Err(RecoveryError::validation(format!(
+                "Node ID mismatch: expected {}, got {}",
+                node_id, node_record.id
+            )));
         }
 
         // Add rollback operation before making changes
@@ -48,16 +50,14 @@ impl super::DefaultReplayOperations {
 
         // Create NodeStore for this operation following proper SME methodology
         {
-            let mut graph_file = self.graph_file.write()
-                .map_err(|e| RecoveryError::io_error(
-                    format!("Failed to lock graph file: {}", e)
-                ))?;
+            let mut graph_file = self.graph_file.write().map_err(|e| {
+                RecoveryError::io_error(format!("Failed to lock graph file: {}", e))
+            })?;
 
             let mut node_store = NodeStore::new(&mut *graph_file);
-            node_store.write_node_v2(&node_record)
-                .map_err(|e| RecoveryError::io_error(
-                    format!("Failed to write node: {}", e)
-                ))?;
+            node_store
+                .write_node_v2(&node_record)
+                .map_err(|e| RecoveryError::io_error(format!("Failed to write node: {}", e)))?;
         } // graph_file lock and node_store are released here
 
         // Update statistics (lock-free)
@@ -77,26 +77,32 @@ impl super::DefaultReplayOperations {
         old_data: Option<&Vec<u8>>,
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
-        debug_log!("Replaying node update: node_id={}, data_size={}", node_id, new_data.len());
+        debug_log!(
+            "Replaying node update: node_id={}, data_size={}",
+            node_id,
+            new_data.len()
+        );
 
         // Validate input data
         if new_data.is_empty() {
             return Err(RecoveryError::validation(
-                "Node update data cannot be empty".to_string()
+                "Node update data cannot be empty".to_string(),
             ));
         }
 
         // Deserialize the new node data
-        let node_record = crate::backend::native::v2::node_record_v2::NodeRecordV2::deserialize(new_data)
-            .map_err(|e| RecoveryError::io_error(
-                format!("Failed to deserialize node data: {}", e)
-            ))?;
+        let node_record =
+            crate::backend::native::v2::node_record_v2::NodeRecordV2::deserialize(new_data)
+                .map_err(|e| {
+                    RecoveryError::io_error(format!("Failed to deserialize node data: {}", e))
+                })?;
 
         // Validate node ID consistency
         if node_record.id != node_id as crate::backend::native::NativeNodeId {
-            return Err(RecoveryError::validation(
-                format!("Node ID mismatch: expected {}, got {}", node_id, node_record.id)
-            ));
+            return Err(RecoveryError::validation(format!(
+                "Node ID mismatch: expected {}, got {}",
+                node_id, node_record.id
+            )));
         }
 
         // Add rollback operation before making changes
@@ -109,16 +115,14 @@ impl super::DefaultReplayOperations {
 
         // Create NodeStore for this operation following proper SME methodology
         {
-            let mut graph_file = self.graph_file.write()
-                .map_err(|e| RecoveryError::io_error(
-                    format!("Failed to lock graph file: {}", e)
-                ))?;
+            let mut graph_file = self.graph_file.write().map_err(|e| {
+                RecoveryError::io_error(format!("Failed to lock graph file: {}", e))
+            })?;
 
             let mut node_store = NodeStore::new(&mut *graph_file);
-            node_store.write_node_v2(&node_record)
-                .map_err(|e| RecoveryError::io_error(
-                    format!("Failed to write node update: {}", e)
-                ))?;
+            node_store.write_node_v2(&node_record).map_err(|e| {
+                RecoveryError::io_error(format!("Failed to write node update: {}", e))
+            })?;
         } // graph_file lock and node_store are released here
 
         // Update statistics (lock-free)
@@ -137,7 +141,11 @@ impl super::DefaultReplayOperations {
         old_data: Option<&Vec<u8>>,
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
-        debug_log!("Replaying node delete: node_id={}, slot_offset={}", node_id, slot_offset);
+        debug_log!(
+            "Replaying node delete: node_id={}, slot_offset={}",
+            node_id,
+            slot_offset
+        );
 
         // Step 1: Validate input parameters
         if node_id == 0 {
@@ -148,10 +156,12 @@ impl super::DefaultReplayOperations {
         // Step 2: Parse existing node data if provided, or retrieve from storage
         let node_record = if let Some(data) = old_data {
             // Deserialize NodeRecordV2 from provided old_data using binary deserialization
-            NodeRecordV2::deserialize(data)
-                .map_err(|e| RecoveryError::replay_failure(
-                    format!("Failed to deserialize NodeRecordV2 data: {}", e)
-                ))?
+            NodeRecordV2::deserialize(data).map_err(|e| {
+                RecoveryError::replay_failure(format!(
+                    "Failed to deserialize NodeRecordV2 data: {}",
+                    e
+                ))
+            })?
         } else {
             // For now, create a minimal node record - in real implementation would retrieve from storage
             warn_log!("No old_data provided for node delete - creating minimal rollback record");
@@ -159,7 +169,7 @@ impl super::DefaultReplayOperations {
                 node_id as i64,
                 "Unknown".to_string(),
                 "deleted_node".to_string(),
-                serde_json::Value::Null
+                serde_json::Value::Null,
             )
         };
 
@@ -176,48 +186,87 @@ impl super::DefaultReplayOperations {
 
         // Create NodeStore and FreeSpaceManager for this operation following proper SME methodology
         {
-            let mut graph_file = self.graph_file.write()
-                .map_err(|e| RecoveryError::io_error(format!("Failed to lock graph file: {}", e)))?;
+            let mut graph_file = self.graph_file.write().map_err(|e| {
+                RecoveryError::io_error(format!("Failed to lock graph file: {}", e))
+            })?;
 
             // Step 4.5: CAPTURE OUTGOING EDGES BEFORE DELETION
             if node_record.outgoing_edge_count > 0 {
-                debug_log!("Capturing {} outgoing edges before deletion", node_record.outgoing_edge_count);
+                debug_log!(
+                    "Capturing {} outgoing edges before deletion",
+                    node_record.outgoing_edge_count
+                );
                 // Read cluster data and deserialize to get edge records
-                if node_record.outgoing_cluster_offset != 0 && node_record.outgoing_cluster_size > 0 {
+                if node_record.outgoing_cluster_offset != 0 && node_record.outgoing_cluster_size > 0
+                {
                     let mut cluster_buffer = vec![0u8; node_record.outgoing_cluster_size as usize];
-                    graph_file.read_bytes(node_record.outgoing_cluster_offset, &mut cluster_buffer)
-                        .map_err(|e| RecoveryError::io_error(format!("Failed to read outgoing cluster: {}", e)))?;
+                    graph_file
+                        .read_bytes(node_record.outgoing_cluster_offset, &mut cluster_buffer)
+                        .map_err(|e| {
+                            RecoveryError::io_error(format!(
+                                "Failed to read outgoing cluster: {}",
+                                e
+                            ))
+                        })?;
 
-                    let cluster = EdgeCluster::deserialize(&cluster_buffer)
-                        .map_err(|e| RecoveryError::io_error(format!("Failed to deserialize outgoing cluster: {}", e)))?;
+                    let cluster = EdgeCluster::deserialize(&cluster_buffer).map_err(|e| {
+                        RecoveryError::io_error(format!(
+                            "Failed to deserialize outgoing cluster: {}",
+                            e
+                        ))
+                    })?;
 
                     captured_outgoing_edges = cluster.edges().to_vec();
-                    debug_log!("Captured {} outgoing edge records", captured_outgoing_edges.len());
+                    debug_log!(
+                        "Captured {} outgoing edge records",
+                        captured_outgoing_edges.len()
+                    );
                 }
             }
 
             // Step 4.6: CAPTURE INCOMING EDGES BEFORE DELETION
             if node_record.incoming_edge_count > 0 {
-                debug_log!("Capturing {} incoming edges before deletion", node_record.incoming_edge_count);
+                debug_log!(
+                    "Capturing {} incoming edges before deletion",
+                    node_record.incoming_edge_count
+                );
                 // Read cluster data and deserialize to get edge records
-                if node_record.incoming_cluster_offset != 0 && node_record.incoming_cluster_size > 0 {
+                if node_record.incoming_cluster_offset != 0 && node_record.incoming_cluster_size > 0
+                {
                     let mut cluster_buffer = vec![0u8; node_record.incoming_cluster_size as usize];
-                    graph_file.read_bytes(node_record.incoming_cluster_offset, &mut cluster_buffer)
-                        .map_err(|e| RecoveryError::io_error(format!("Failed to read incoming cluster: {}", e)))?;
+                    graph_file
+                        .read_bytes(node_record.incoming_cluster_offset, &mut cluster_buffer)
+                        .map_err(|e| {
+                            RecoveryError::io_error(format!(
+                                "Failed to read incoming cluster: {}",
+                                e
+                            ))
+                        })?;
 
-                    let cluster = EdgeCluster::deserialize(&cluster_buffer)
-                        .map_err(|e| RecoveryError::io_error(format!("Failed to deserialize incoming cluster: {}", e)))?;
+                    let cluster = EdgeCluster::deserialize(&cluster_buffer).map_err(|e| {
+                        RecoveryError::io_error(format!(
+                            "Failed to deserialize incoming cluster: {}",
+                            e
+                        ))
+                    })?;
 
                     captured_incoming_edges = cluster.edges().to_vec();
-                    debug_log!("Captured {} incoming edge records", captured_incoming_edges.len());
+                    debug_log!(
+                        "Captured {} incoming edge records",
+                        captured_incoming_edges.len()
+                    );
                 }
             }
 
             // Step 5: Handle edge cascade cleanup (if node has cluster references)
             // Do this BEFORE creating NodeStore to avoid borrow conflicts
             if node_record.outgoing_edge_count > 0 || node_record.incoming_edge_count > 0 {
-                debug_log!("Node {} has edges - performing cascade cleanup: outgoing={}, incoming={}",
-                       node_id, node_record.outgoing_edge_count, node_record.incoming_edge_count);
+                debug_log!(
+                    "Node {} has edges - performing cascade cleanup: outgoing={}, incoming={}",
+                    node_id,
+                    node_record.outgoing_edge_count,
+                    node_record.incoming_edge_count
+                );
 
                 // Create EdgeStore for edge deletion operations
                 let mut edge_store = EdgeStore::new(&mut *graph_file);
@@ -225,50 +274,75 @@ impl super::DefaultReplayOperations {
                 // Collect and delete outgoing edges (edges where from_id = node_id)
                 if node_record.outgoing_edge_count > 0 {
                     let outgoing_edges: Vec<(NativeNodeId, NativeNodeId)> = edge_store
-                        .iter_edges_with_ids(
-                            node_id as NativeNodeId,
-                            Direction::Outgoing
-                        )
+                        .iter_edges_with_ids(node_id as NativeNodeId, Direction::Outgoing)
                         .collect();
 
-                    let _outgoing_count = outgoing_edges.len();
+                    let outgoing_count = outgoing_edges.len();
                     for (edge_id, neighbor_id) in outgoing_edges {
                         // Mark edge as deleted (soft deletion)
                         if let Err(e) = edge_store.delete_edge(edge_id) {
-                            warn_log!("Failed to delete outgoing edge {} for node {} -> neighbor {}: {:?}",
-                                  edge_id, node_id, neighbor_id, e);
+                            warn_log!(
+                                "Failed to delete outgoing edge {} for node {} -> neighbor {}: {:?}",
+                                edge_id,
+                                node_id,
+                                neighbor_id,
+                                e
+                            );
                         } else {
-                            debug_log!("Deleted outgoing edge {} for node {} -> neighbor {}", edge_id, node_id, neighbor_id);
+                            debug_log!(
+                                "Deleted outgoing edge {} for node {} -> neighbor {}",
+                                edge_id,
+                                node_id,
+                                neighbor_id
+                            );
                         }
                     }
 
-                    debug_log!("Deleted {} outgoing edges for node {}", outgoing_count, node_id);
+                    debug_log!(
+                        "Deleted {} outgoing edges for node {}",
+                        outgoing_count,
+                        node_id
+                    );
                 }
 
                 // Collect and delete incoming edges (edges where to_id = node_id)
                 if node_record.incoming_edge_count > 0 {
                     let incoming_edges: Vec<(NativeNodeId, NativeNodeId)> = edge_store
-                        .iter_edges_with_ids(
-                            node_id as NativeNodeId,
-                            Direction::Incoming
-                        )
+                        .iter_edges_with_ids(node_id as NativeNodeId, Direction::Incoming)
                         .collect();
 
-                    let _incoming_count = incoming_edges.len();
+                    let incoming_count = incoming_edges.len();
                     for (edge_id, neighbor_id) in incoming_edges {
                         // Mark edge as deleted (soft deletion)
                         if let Err(e) = edge_store.delete_edge(edge_id) {
-                            warn_log!("Failed to delete incoming edge {} for node {} <- neighbor {}: {:?}",
-                                  edge_id, node_id, neighbor_id, e);
+                            warn_log!(
+                                "Failed to delete incoming edge {} for node {} <- neighbor {}: {:?}",
+                                edge_id,
+                                node_id,
+                                neighbor_id,
+                                e
+                            );
                         } else {
-                            debug_log!("Deleted incoming edge {} for node {} <- neighbor {}", edge_id, node_id, neighbor_id);
+                            debug_log!(
+                                "Deleted incoming edge {} for node {} <- neighbor {}",
+                                edge_id,
+                                node_id,
+                                neighbor_id
+                            );
                         }
                     }
 
-                    debug_log!("Deleted {} incoming edges for node {}", incoming_count, node_id);
+                    debug_log!(
+                        "Deleted {} incoming edges for node {}",
+                        incoming_count,
+                        node_id
+                    );
                 }
 
-                debug_log!("Successfully completed edge cascade cleanup for node {}", node_id);
+                debug_log!(
+                    "Successfully completed edge cascade cleanup for node {}",
+                    node_id
+                );
             }
 
             // Now create NodeStore and FreeSpaceManager for remaining operations
@@ -276,31 +350,49 @@ impl super::DefaultReplayOperations {
             let mut free_space_manager = FreeSpaceManager::new(AllocationStrategy::FirstFit);
 
             // Step 6: Clean up cluster references if they exist
-            if node_record.outgoing_cluster_offset != 0 || node_record.incoming_cluster_offset != 0 {
-                debug_log!("Cleaning up cluster references for node {}: outgoing_offset={}, incoming_offset={}",
-                       node_id, node_record.outgoing_cluster_offset, node_record.incoming_cluster_offset);
+            if node_record.outgoing_cluster_offset != 0 || node_record.incoming_cluster_offset != 0
+            {
+                debug_log!(
+                    "Cleaning up cluster references for node {}: outgoing_offset={}, incoming_offset={}",
+                    node_id,
+                    node_record.outgoing_cluster_offset,
+                    node_record.incoming_cluster_offset
+                );
 
                 // Deallocate outgoing cluster if it exists
-                if node_record.outgoing_cluster_offset != 0 && node_record.outgoing_cluster_size > 0 {
+                if node_record.outgoing_cluster_offset != 0 && node_record.outgoing_cluster_size > 0
+                {
                     free_space_manager.add_free_block(
+                        node_record.outgoing_cluster_offset,
+                        node_record.outgoing_cluster_size,
+                    );
+                    debug_log!(
+                        "Deallocated outgoing cluster: node_id={}, offset={}, size={}",
+                        node_id,
                         node_record.outgoing_cluster_offset,
                         node_record.outgoing_cluster_size
                     );
-                    debug_log!("Deallocated outgoing cluster: node_id={}, offset={}, size={}",
-                           node_id, node_record.outgoing_cluster_offset, node_record.outgoing_cluster_size);
                 }
 
                 // Deallocate incoming cluster if it exists
-                if node_record.incoming_cluster_offset != 0 && node_record.incoming_cluster_size > 0 {
+                if node_record.incoming_cluster_offset != 0 && node_record.incoming_cluster_size > 0
+                {
                     free_space_manager.add_free_block(
+                        node_record.incoming_cluster_offset,
+                        node_record.incoming_cluster_size,
+                    );
+                    debug_log!(
+                        "Deallocated incoming cluster: node_id={}, offset={}, size={}",
+                        node_id,
                         node_record.incoming_cluster_offset,
                         node_record.incoming_cluster_size
                     );
-                    debug_log!("Deallocated incoming cluster: node_id={}, offset={}, size={}",
-                           node_id, node_record.incoming_cluster_offset, node_record.incoming_cluster_size);
                 }
 
-                debug_log!("Successfully cleaned up cluster references for node {}", node_id);
+                debug_log!(
+                    "Successfully cleaned up cluster references for node {}",
+                    node_id
+                );
             }
 
             // Step 7: Deallocate node slot using FreeSpaceManager
@@ -308,14 +400,22 @@ impl super::DefaultReplayOperations {
                 // Estimate node size for deallocation (use reasonable default for now)
                 let estimated_node_size = std::mem::size_of::<NodeRecordV2>() as u32;
                 free_space_manager.add_free_block(slot_offset, estimated_node_size);
-                debug_log!("Deallocated node slot: offset={}, size={}", slot_offset, estimated_node_size);
+                debug_log!(
+                    "Deallocated node slot: offset={}, size={}",
+                    slot_offset,
+                    estimated_node_size
+                );
             }
 
             // Step 8: Remove node from node index using real NodeStore deletion
-            node_store.delete_node(node_id as NativeNodeId)
-                .map_err(|e| RecoveryError::io_error(
-                    format!("Failed to delete node {} from NodeStore: {}", node_id, e)
-                ))?;
+            node_store
+                .delete_node(node_id as NativeNodeId)
+                .map_err(|e| {
+                    RecoveryError::io_error(format!(
+                        "Failed to delete node {} from NodeStore: {}",
+                        node_id, e
+                    ))
+                })?;
         } // graph_file lock, node_store, and free_space_manager are released here
 
         // Step 8.5: Add rollback operation AFTER edge capture but AFTER lock release
@@ -332,8 +432,11 @@ impl super::DefaultReplayOperations {
         self.statistics.record_node_operation();
         self.statistics.record_bytes_written(old_data_len as u64);
 
-        debug_log!("Successfully completed node delete: node_id={}, rollback_data_count={}",
-               node_id, rollback_data.len());
+        debug_log!(
+            "Successfully completed node delete: node_id={}, rollback_data_count={}",
+            node_id,
+            rollback_data.len()
+        );
 
         Ok(())
     }
@@ -356,12 +459,7 @@ mod tests {
         let mut rollback_data = Vec::new();
 
         // Test basic node deletion with minimal parameters
-        let result = operations.handle_node_delete(
-            42,
-            4096,
-            None,
-            &mut rollback_data
-        );
+        let result = operations.handle_node_delete(42, 4096, None, &mut rollback_data);
 
         // Basic node delete should succeed (node_id != 0)
         assert!(result.is_ok(), "Basic node delete should succeed");
@@ -370,7 +468,12 @@ mod tests {
         assert_eq!(rollback_data.len(), 1, "Should record rollback operation");
 
         // Verify rollback operation structure
-        if let Some(RollbackOperation::NodeDelete { node_id, slot_offset, .. }) = rollback_data.first() {
+        if let Some(RollbackOperation::NodeDelete {
+            node_id,
+            slot_offset,
+            ..
+        }) = rollback_data.first()
+        {
             assert_eq!(*node_id, 42, "Rollback should preserve node ID");
             assert_eq!(*slot_offset, 4096, "Rollback should preserve slot offset");
         } else {
@@ -388,28 +491,33 @@ mod tests {
             123,
             "Document".to_string(),
             "test_doc".to_string(),
-            serde_json::json!({"content": "test data", "version": 1})
+            serde_json::json!({"content": "test data", "version": 1}),
         );
-        let serialized_data = test_node.serialize();  // Use binary serialization
+        let serialized_data = test_node.serialize(); // Use binary serialization
 
-        let result = operations.handle_node_delete(
-            123,
-            8192,
-            Some(&serialized_data),
-            &mut rollback_data
-        );
+        let result =
+            operations.handle_node_delete(123, 8192, Some(&serialized_data), &mut rollback_data);
 
         assert!(result.is_ok(), "Node delete with old data should succeed");
 
         // Should record rollback with preserved data
         assert_eq!(rollback_data.len(), 1, "Should record rollback operation");
 
-        if let Some(RollbackOperation::NodeDelete { node_id, slot_offset, old_data, .. }) = rollback_data.first() {
+        if let Some(RollbackOperation::NodeDelete {
+            node_id,
+            slot_offset,
+            old_data,
+            ..
+        }) = rollback_data.first()
+        {
             assert_eq!(*node_id, 123);
             assert_eq!(*slot_offset, 8192);
             // Verify old_data was preserved using binary serialization
             let restored_node = NodeRecordV2::deserialize(old_data);
-            assert!(restored_node.is_ok(), "Old data should be valid binary serialization");
+            assert!(
+                restored_node.is_ok(),
+                "Old data should be valid binary serialization"
+            );
             if let Ok(node) = restored_node {
                 assert_eq!(node.id, 123);
                 assert_eq!(node.kind, "Document");
@@ -430,14 +538,18 @@ mod tests {
             999999, // Non-existent node ID
             4096,
             None,
-            &mut rollback_data
+            &mut rollback_data,
         );
 
         // Should handle gracefully - node deletion should succeed even if node doesn't exist
         assert!(result.is_ok(), "Should handle non-existent node gracefully");
 
         // Should still record rollback operation
-        assert_eq!(rollback_data.len(), 1, "Should record rollback operation even for non-existent node");
+        assert_eq!(
+            rollback_data.len(),
+            1,
+            "Should record rollback operation even for non-existent node"
+        );
     }
 
     #[test]
@@ -450,7 +562,7 @@ mod tests {
             456,
             "Function".to_string(),
             "complex_func".to_string(),
-            serde_json::json!({"complex": "node"})
+            serde_json::json!({"complex": "node"}),
         );
         // Set cluster references manually
         test_node.outgoing_cluster_offset = 1024;
@@ -461,12 +573,8 @@ mod tests {
         test_node.incoming_edge_count = 3;
         let serialized_data = test_node.serialize();
 
-        let result = operations.handle_node_delete(
-            456,
-            4096,
-            Some(&serialized_data),
-            &mut rollback_data
-        );
+        let result =
+            operations.handle_node_delete(456, 4096, Some(&serialized_data), &mut rollback_data);
 
         // Handle cluster reference deletion - may fail due to missing actual cluster data
         // The implementation reads from graph_file which may not have valid cluster data
@@ -480,7 +588,10 @@ mod tests {
             Err(e) => {
                 // If it fails, it should be due to I/O reading cluster data from empty graph file
                 // This is acceptable for testing since we don't have actual cluster data written
-                println!("Node delete with cluster references failed (expected for test): {}", e.message);
+                println!(
+                    "Node delete with cluster references failed (expected for test): {}",
+                    e.message
+                );
             }
         }
     }
@@ -493,19 +604,19 @@ mod tests {
         // Test with malformed node data (invalid binary serialization)
         let malformed_data = vec![1, 2, 3]; // Invalid serialization
 
-        let result = operations.handle_node_delete(
-            42,
-            4096,
-            Some(&malformed_data),
-            &mut rollback_data
-        );
+        let result =
+            operations.handle_node_delete(42, 4096, Some(&malformed_data), &mut rollback_data);
 
         // Should handle malformed data - deserialization will fail
         // The implementation should handle this gracefully
         assert!(result.is_err(), "Malformed data should cause error");
 
         // Should not record rollback operation for failed operation
-        assert_eq!(rollback_data.len(), 0, "Should not record rollback operation for malformed data");
+        assert_eq!(
+            rollback_data.len(),
+            0,
+            "Should not record rollback operation for malformed data"
+        );
     }
 
     #[test]
@@ -518,14 +629,18 @@ mod tests {
             0, // Invalid node ID
             4096,
             None,
-            &mut rollback_data
+            &mut rollback_data,
         );
 
         // Should handle invalid node ID gracefully - implementation treats node_id=0 as no-op
         assert!(result.is_ok(), "Should handle invalid node ID gracefully");
 
         // Should NOT record rollback operation for node_id=0 (it's a no-op)
-        assert_eq!(rollback_data.len(), 0, "Should not record rollback operation for node_id=0 (no-op)");
+        assert_eq!(
+            rollback_data.len(),
+            0,
+            "Should not record rollback operation for node_id=0 (no-op)"
+        );
     }
 
     #[test]
@@ -536,20 +651,23 @@ mod tests {
         // Test that rollback operation correctly preserves slot offset for restoration
         let test_slot_offset = 16384;
 
-        let result = operations.handle_node_delete(
-            789,
-            test_slot_offset,
-            None,
-            &mut rollback_data
-        );
+        let result = operations.handle_node_delete(789, test_slot_offset, None, &mut rollback_data);
 
         assert!(result.is_ok(), "Node delete should succeed");
 
         assert_eq!(rollback_data.len(), 1, "Should record rollback operation");
 
-        if let Some(RollbackOperation::NodeDelete { node_id, slot_offset, .. }) = rollback_data.first() {
+        if let Some(RollbackOperation::NodeDelete {
+            node_id,
+            slot_offset,
+            ..
+        }) = rollback_data.first()
+        {
             assert_eq!(*node_id, 789, "Should preserve correct node ID");
-            assert_eq!(*slot_offset, test_slot_offset, "Should preserve exact slot offset for restoration");
+            assert_eq!(
+                *slot_offset, test_slot_offset,
+                "Should preserve exact slot offset for restoration"
+            );
         } else {
             panic!("Expected NodeDelete rollback operation");
         }
@@ -565,7 +683,7 @@ mod tests {
             555,
             "Module".to_string(),
             "test_module".to_string(),
-            serde_json::json!({"has_edges": true})
+            serde_json::json!({"has_edges": true}),
         );
         // Set cluster references manually
         node_with_edges.outgoing_cluster_offset = 512;
@@ -576,12 +694,8 @@ mod tests {
         node_with_edges.incoming_edge_count = 1;
         let serialized_data = node_with_edges.serialize();
 
-        let result = operations.handle_node_delete(
-            555,
-            4096,
-            Some(&serialized_data),
-            &mut rollback_data
-        );
+        let result =
+            operations.handle_node_delete(555, 4096, Some(&serialized_data), &mut rollback_data);
 
         // Handle edge cleanup - may fail due to missing actual cluster data
         match &result {
@@ -591,7 +705,10 @@ mod tests {
             Err(e) => {
                 // If it fails, it should be due to I/O reading cluster data from empty graph file
                 // This is acceptable for testing since we don't have actual cluster data written
-                println!("Node delete with edges failed (expected for test): {}", e.message);
+                println!(
+                    "Node delete with edges failed (expected for test): {}",
+                    e.message
+                );
             }
         }
     }
@@ -600,8 +717,8 @@ mod tests {
     fn test_full_node_delete_and_restore_cycle() {
         use crate::backend::native::GraphFile;
         use crate::backend::native::v2::StringTable;
-        use crate::backend::native::v2::wal::recovery::replayer::rollback::RollbackSystem;
         use crate::backend::native::v2::free_space::AllocationStrategy;
+        use crate::backend::native::v2::wal::recovery::replayer::rollback::RollbackSystem;
         use std::sync::{Arc, Mutex, RwLock};
 
         // Setup: Create test graph file and components
@@ -618,7 +735,9 @@ mod tests {
         free_space_mgr.add_free_block(2048, 1024 * 1024); // 1MB of free space
         let free_space_manager = Arc::new(Mutex::new(Some(free_space_mgr)));
 
-        let statistics = Arc::new(crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new());
+        let statistics = Arc::new(
+            crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new(),
+        );
         let kv_store = Arc::new(Mutex::new(crate::backend::native::v2::KvStore::new()));
 
         // Create operations handler
@@ -637,14 +756,15 @@ mod tests {
             1001,
             "TestClass".to_string(),
             "test_method".to_string(),
-            serde_json::json!({"version": 1, "state": "initial"})
+            serde_json::json!({"version": 1, "state": "initial"}),
         );
 
         // Write the node to storage
         {
             let mut graph_file_lock = graph_file.write().unwrap();
             let mut node_store = NodeStore::new(&mut *graph_file_lock);
-            node_store.write_node_v2(&original_node)
+            node_store
+                .write_node_v2(&original_node)
                 .expect("Failed to write initial node");
         }
 
@@ -667,7 +787,7 @@ mod tests {
             1001,
             4096,
             Some(&serialized_old_data),
-            &mut rollback_data
+            &mut rollback_data,
         );
         assert!(delete_result.is_ok(), "Node delete should succeed");
         assert_eq!(rollback_data.len(), 1, "Should record rollback operation");
@@ -676,19 +796,32 @@ mod tests {
         // The key test is that rollback data is captured correctly
 
         // Step 3: Extract rollback operation data
-        let (node_id, slot_offset, old_data, outgoing_edges, incoming_edges) = match rollback_data.first() {
-            Some(RollbackOperation::NodeDelete { node_id, slot_offset, old_data, outgoing_edges, incoming_edges }) => {
-                (*node_id, *slot_offset, old_data.clone(), outgoing_edges.clone(), incoming_edges.clone())
-            }
-            _ => panic!("Expected NodeDelete rollback operation"),
-        };
+        let (node_id, slot_offset, old_data, outgoing_edges, incoming_edges) =
+            match rollback_data.first() {
+                Some(RollbackOperation::NodeDelete {
+                    node_id,
+                    slot_offset,
+                    old_data,
+                    outgoing_edges,
+                    incoming_edges,
+                }) => (
+                    *node_id,
+                    *slot_offset,
+                    old_data.clone(),
+                    outgoing_edges.clone(),
+                    incoming_edges.clone(),
+                ),
+                _ => panic!("Expected NodeDelete rollback operation"),
+            };
 
         // Step 4: Rollback using the captured data
         let rollback_system = RollbackSystem::new(
             graph_file.clone(),
             node_store.clone(),
             Arc::new(Mutex::new(StringTable::new())),
-            Arc::new(Mutex::new(Some(FreeSpaceManager::new(AllocationStrategy::FirstFit)))),
+            Arc::new(Mutex::new(Some(FreeSpaceManager::new(
+                AllocationStrategy::FirstFit,
+            )))),
         );
 
         let rollback_result = crate::backend::native::v2::wal::recovery::replayer::rollback::node_ops::rollback_node_delete(
@@ -709,9 +842,19 @@ mod tests {
             assert!(read_result.is_ok(), "Node should exist after rollback");
             let restored_node = read_result.unwrap();
             assert_eq!(restored_node.id, 1001, "Node ID should be restored");
-            assert_eq!(restored_node.kind, "TestClass", "Node kind should be restored");
-            assert_eq!(restored_node.name, "test_method", "Node name should be restored");
-            assert_eq!(restored_node.data.get("version"), Some(&serde_json::json!(1)), "Node data should be preserved");
+            assert_eq!(
+                restored_node.kind, "TestClass",
+                "Node kind should be restored"
+            );
+            assert_eq!(
+                restored_node.name, "test_method",
+                "Node name should be restored"
+            );
+            assert_eq!(
+                restored_node.data.get("version"),
+                Some(&serde_json::json!(1)),
+                "Node data should be preserved"
+            );
         }
 
         // The test passes: full delete/rollback cycle completes correctly

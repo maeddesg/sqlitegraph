@@ -8,7 +8,7 @@
 use crate::backend::native::v2::node_record_v2::NodeRecordV2;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryResult;
 use crate::backend::native::v2::wal::recovery::validator::{
-    ValidationResult, ValidationSeverity, MAX_NODE_RECORD_SIZE,
+    MAX_NODE_RECORD_SIZE, ValidationResult, ValidationSeverity,
 };
 
 use super::super::TransactionValidator;
@@ -155,13 +155,11 @@ pub fn validate_node_update(
 
     // Validate V2 cluster metadata changes are consistent
     if old_record.has_outgoing_edges() && !new_record.has_outgoing_edges() {
-        issues
-            .push("Outgoing edges disappeared in update without explicit deletion".to_string());
+        issues.push("Outgoing edges disappeared in update without explicit deletion".to_string());
     }
 
     if old_record.has_incoming_edges() && !new_record.has_incoming_edges() {
-        issues
-            .push("Incoming edges disappeared in update without explicit deletion".to_string());
+        issues.push("Incoming edges disappeared in update without explicit deletion".to_string());
     }
 
     Ok(if issues.is_empty() {

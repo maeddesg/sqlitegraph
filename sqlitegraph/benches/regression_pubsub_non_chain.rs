@@ -3,11 +3,11 @@
 //! Validates that Star, Random, and Tree graph traversals stay within 10% of baseline.
 //! This ensures pub/sub emission doesn't degrade non-chain traversal patterns.
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rand::Rng;
 use rand::SeedableRng;
-use sqlitegraph::{open_graph, GraphConfig, NodeSpec, EdgeSpec, snapshot::SnapshotId};
 use sqlitegraph::backend::SubscriptionFilter;
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph, snapshot::SnapshotId};
 
 mod bench_utils;
 use bench_utils::{MEASURE, WARM_UP, create_benchmark_temp_dir};
@@ -17,8 +17,7 @@ fn create_star_graph(size: usize) -> (tempfile::TempDir, std::path::PathBuf, i64
     let temp_dir = create_benchmark_temp_dir();
     let db_path = temp_dir.path().join("benchmark.db");
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(size + 1);
 
@@ -52,12 +51,14 @@ fn create_star_graph(size: usize) -> (tempfile::TempDir, std::path::PathBuf, i64
 }
 
 /// Create a random graph
-fn create_random_graph(size: usize, edge_count: usize) -> (tempfile::TempDir, std::path::PathBuf, i64) {
+fn create_random_graph(
+    size: usize,
+    edge_count: usize,
+) -> (tempfile::TempDir, std::path::PathBuf, i64) {
     let temp_dir = create_benchmark_temp_dir();
     let db_path = temp_dir.path().join("benchmark.db");
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(size);
 
@@ -99,8 +100,7 @@ fn create_tree_graph(size: usize) -> (tempfile::TempDir, std::path::PathBuf, i64
     let temp_dir = create_benchmark_temp_dir();
     let db_path = temp_dir.path().join("benchmark.db");
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(size);
 
@@ -156,8 +156,8 @@ fn bench_star_baseline(criterion: &mut Criterion) {
             b.iter(|| {
                 let (_temp_dir, db_path, start_node) = create_star_graph(size);
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to open graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
                 let _result = graph.bfs(SnapshotId::current(), start_node, size as u32);
 
@@ -185,8 +185,8 @@ fn bench_star_with_pubsub(criterion: &mut Criterion) {
             b.iter(|| {
                 let (_temp_dir, db_path, start_node) = create_star_graph(size);
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to open graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
                 // Subscribe 5 receivers and drop them (test emit overhead)
                 for _ in 0..5 {
@@ -223,8 +223,8 @@ fn bench_random_baseline(criterion: &mut Criterion) {
             b.iter(|| {
                 let (_temp_dir, db_path, start_node) = create_random_graph(size, edge_count);
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to open graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
                 let _result = graph.bfs(SnapshotId::current(), start_node, size as u32);
 
@@ -254,8 +254,8 @@ fn bench_random_with_pubsub(criterion: &mut Criterion) {
             b.iter(|| {
                 let (_temp_dir, db_path, start_node) = create_random_graph(size, edge_count);
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to open graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
                 // Subscribe 5 receivers and drop them
                 for _ in 0..5 {
@@ -290,8 +290,8 @@ fn bench_tree_baseline(criterion: &mut Criterion) {
             b.iter(|| {
                 let (_temp_dir, db_path, start_node) = create_tree_graph(size);
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to open graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
                 let _result = graph.bfs(SnapshotId::current(), start_node, size as u32);
 
@@ -319,8 +319,8 @@ fn bench_tree_with_pubsub(criterion: &mut Criterion) {
             b.iter(|| {
                 let (_temp_dir, db_path, start_node) = create_tree_graph(size);
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to open graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
                 // Subscribe 5 receivers and drop them
                 for _ in 0..5 {

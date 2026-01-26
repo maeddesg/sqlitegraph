@@ -5,6 +5,7 @@
 //! focuses on checkpoint lifecycle management, coordination, and basic operations while delegating
 //! strategy decisions to the strategies module and execution details to the operations module.
 
+use crate::backend::native::v2::wal::V2WALConfig;
 use crate::backend::native::v2::wal::checkpoint::{
     constants::*,
     errors::*,
@@ -15,7 +16,6 @@ use crate::backend::native::v2::wal::checkpoint::{
     operations::CheckpointExecutor,
     strategies::CheckpointStrategy,
 };
-use crate::backend::native::v2::wal::V2WALConfig;
 use parking_lot::{Condvar, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -200,7 +200,8 @@ impl DiskOverflowStore {
         }
 
         let spill_time = SystemTime::now();
-        self.spilled_blocks.insert(block_offset, (timestamp, spill_time));
+        self.spilled_blocks
+            .insert(block_offset, (timestamp, spill_time));
         Ok(())
     }
 
@@ -885,9 +886,10 @@ impl V2WALCheckpointManager {
 
     /// Execute multi-file checkpoint operation
     fn execute_multi_file_checkpoint(&self) -> CheckpointResult<CheckpointProgress> {
-        let config_arc = self.multi_file_config.as_ref().ok_or_else(|| {
-            CheckpointError::state("Multi-file config not available")
-        })?;
+        let config_arc = self
+            .multi_file_config
+            .as_ref()
+            .ok_or_else(|| CheckpointError::state("Multi-file config not available"))?;
         let config = config_arc.lock();
 
         // Get LSN range from current state
@@ -978,9 +980,14 @@ impl V2WALCheckpointManager {
 
                 Ok(wal_size >= *threshold)
             }
-            CheckpointStrategy::Adaptive { min_interval, max_wal_size, max_transactions } => {
+            CheckpointStrategy::Adaptive {
+                min_interval,
+                max_wal_size,
+                max_transactions,
+            } => {
                 // Check minimum time interval
-                let time_ok = state.last_checkpoint
+                let time_ok = state
+                    .last_checkpoint
                     .map(|t| t.elapsed() >= *min_interval)
                     .unwrap_or(true); // First checkpoint
 
@@ -1130,11 +1137,7 @@ impl DirtyBlockTracker {
         let mut oldest_blocks: Vec<(u64, u64)> = self
             .global_dirty_blocks
             .iter()
-            .filter_map(|&block| {
-                self.block_timestamps
-                    .get(&block)
-                    .map(|&ts| (block, ts))
-            })
+            .filter_map(|&block| self.block_timestamps.get(&block).map(|&ts| (block, ts)))
             .collect();
 
         oldest_blocks.sort_by_key(|&(_, ts)| ts);
@@ -1294,7 +1297,7 @@ mod tests {
         // Use for_graph_file to set correct graph_path, then customize
         let mut config = V2WALConfig::for_graph_file(&v2_graph_path);
         config.max_wal_size = 64 * 1024 * 1024; // 64MB
-        config.buffer_size = 1024 * 1024;       // 1MB
+        config.buffer_size = 1024 * 1024; // 1MB
         config.checkpoint_interval = 100;
         config.enable_compression = false;
 
@@ -1556,7 +1559,10 @@ mod tests {
         // Verify memory count is reduced after spill
         let (cluster_count, global_count) = tracker.get_statistics();
         assert_eq!(cluster_count, 0);
-        assert!(global_count < 150, "Global count should be less than 150 after spill");
+        assert!(
+            global_count < 150,
+            "Global count should be less than 150 after spill"
+        );
 
         // Verify spilled blocks are tracked
         let overflow_store = tracker.get_overflow_store();
@@ -1575,7 +1581,9 @@ mod tests {
         // Add blocks with cluster metadata
         for i in 0..100 {
             let block_offset = i * 4096;
-            tracker.mark_global_block_dirty(block_offset, i as u64).unwrap();
+            tracker
+                .mark_global_block_dirty(block_offset, i as u64)
+                .unwrap();
 
             // Add cluster metadata for some blocks
             if i % 2 == 0 {
@@ -1598,8 +1606,14 @@ mod tests {
 
         // Verify blocks were promoted to cluster tracking
         let (cluster_count, global_count) = tracker.get_statistics();
-        assert!(cluster_count > 0, "Should have cluster blocks after promotion");
-        assert!(global_count < 100, "Global count should be reduced after promotion");
+        assert!(
+            cluster_count > 0,
+            "Should have cluster blocks after promotion"
+        );
+        assert!(
+            global_count < 100,
+            "Global count should be reduced after promotion"
+        );
     }
 
     #[test]
@@ -1633,7 +1647,10 @@ mod tests {
         // Verify tracking is still functional
         let (cluster_count, global_count) = tracker.get_statistics();
         assert_eq!(cluster_count, 0);
-        assert!(global_count <= max_global + 1000, "Should stay near capacity");
+        assert!(
+            global_count <= max_global + 1000,
+            "Should stay near capacity"
+        );
 
         // Verify spilled blocks are tracked
         let overflow_store = tracker.get_overflow_store();
@@ -1689,9 +1706,7 @@ mod tests {
 
         // Mark blocks with increasing timestamps
         for i in 0..100 {
-            tracker
-                .mark_global_block_dirty(i * 4096, i as u64)
-                .unwrap();
+            tracker.mark_global_block_dirty(i * 4096, i as u64).unwrap();
         }
 
         // Manually spill 50 oldest blocks
@@ -1718,7 +1733,9 @@ mod tests {
         // Add blocks with cluster metadata
         for i in 0..50 {
             let block_offset = i * 4096;
-            tracker.mark_global_block_dirty(block_offset, i as u64).unwrap();
+            tracker
+                .mark_global_block_dirty(block_offset, i as u64)
+                .unwrap();
 
             tracker.block_metadata.insert(
                 block_offset,
@@ -1847,11 +1864,7 @@ mod tests {
             .with_max_segment_size(1024 * 1024) // 1MB segments
             .with_max_segments(4);
 
-        let manager = V2WALCheckpointManager::with_multi_file(
-            config,
-            strategy,
-            multi_file_config,
-        )?;
+        let manager = V2WALCheckpointManager::with_multi_file(config, strategy, multi_file_config)?;
 
         assert_eq!(manager.get_state(), CheckpointState::Idle);
         assert!(manager.is_multi_file_enabled());

@@ -486,7 +486,7 @@ impl ConsistencyUtils {
 #[cfg(test)]
 mod tests {
     use super::*;
-        use std::time::Instant;
+    use std::time::Instant;
     use tempfile::tempdir;
 
     fn create_test_dirty_block_tracker() -> DirtyBlockTracker {

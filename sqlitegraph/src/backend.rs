@@ -22,7 +22,7 @@ pub use sqlite::types::{BackendDirection, EdgeSpec, NeighborQuery, NodeSpec};
 
 // KV store types (re-exported for public API)
 #[cfg(feature = "native-v2")]
-pub use crate::backend::native::v2::kv_store::types::{KvValue, KvStoreError};
+pub use crate::backend::native::v2::kv_store::types::{KvStoreError, KvValue};
 
 // Pub/Sub types (re-exported for public API)
 #[cfg(feature = "native-v2")]
@@ -51,10 +51,29 @@ pub trait GraphBackend {
 
     // Read operations (require snapshot_id parameter)
     fn get_node(&self, snapshot_id: SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError>;
-    fn neighbors(&self, snapshot_id: SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError>;
-    fn bfs(&self, snapshot_id: SnapshotId, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError>;
-    fn shortest_path(&self, snapshot_id: SnapshotId, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError>;
-    fn node_degree(&self, snapshot_id: SnapshotId, node: i64) -> Result<(usize, usize), SqliteGraphError>;
+    fn neighbors(
+        &self,
+        snapshot_id: SnapshotId,
+        node: i64,
+        query: NeighborQuery,
+    ) -> Result<Vec<i64>, SqliteGraphError>;
+    fn bfs(
+        &self,
+        snapshot_id: SnapshotId,
+        start: i64,
+        depth: u32,
+    ) -> Result<Vec<i64>, SqliteGraphError>;
+    fn shortest_path(
+        &self,
+        snapshot_id: SnapshotId,
+        start: i64,
+        end: i64,
+    ) -> Result<Option<Vec<i64>>, SqliteGraphError>;
+    fn node_degree(
+        &self,
+        snapshot_id: SnapshotId,
+        node: i64,
+    ) -> Result<(usize, usize), SqliteGraphError>;
     fn k_hop(
         &self,
         snapshot_id: SnapshotId,
@@ -114,7 +133,10 @@ pub trait GraphBackend {
     ///
     /// # Returns
     /// Snapshot metadata including file paths and size information
-    fn snapshot_export(&self, export_dir: &std::path::Path) -> Result<SnapshotMetadata, SqliteGraphError>;
+    fn snapshot_export(
+        &self,
+        export_dir: &std::path::Path,
+    ) -> Result<SnapshotMetadata, SqliteGraphError>;
 
     /// Import database snapshot from the specified directory
     ///
@@ -127,7 +149,10 @@ pub trait GraphBackend {
     ///
     /// # Returns
     /// Import metadata including number of records imported
-    fn snapshot_import(&self, import_dir: &std::path::Path) -> Result<ImportMetadata, SqliteGraphError>;
+    fn snapshot_import(
+        &self,
+        import_dir: &std::path::Path,
+    ) -> Result<ImportMetadata, SqliteGraphError>;
 
     /// Get a value from the KV store at the given snapshot
     ///
@@ -294,19 +319,38 @@ where
         (*self).insert_edge(edge)
     }
 
-    fn neighbors(&self, snapshot_id: SnapshotId, node: i64, query: NeighborQuery) -> Result<Vec<i64>, SqliteGraphError> {
+    fn neighbors(
+        &self,
+        snapshot_id: SnapshotId,
+        node: i64,
+        query: NeighborQuery,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
         (*self).neighbors(snapshot_id, node, query)
     }
 
-    fn bfs(&self, snapshot_id: SnapshotId, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
+    fn bfs(
+        &self,
+        snapshot_id: SnapshotId,
+        start: i64,
+        depth: u32,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
         (*self).bfs(snapshot_id, start, depth)
     }
 
-    fn shortest_path(&self, snapshot_id: SnapshotId, start: i64, end: i64) -> Result<Option<Vec<i64>>, SqliteGraphError> {
+    fn shortest_path(
+        &self,
+        snapshot_id: SnapshotId,
+        start: i64,
+        end: i64,
+    ) -> Result<Option<Vec<i64>>, SqliteGraphError> {
         (*self).shortest_path(snapshot_id, start, end)
     }
 
-    fn node_degree(&self, snapshot_id: SnapshotId, node: i64) -> Result<(usize, usize), SqliteGraphError> {
+    fn node_degree(
+        &self,
+        snapshot_id: SnapshotId,
+        node: i64,
+    ) -> Result<(usize, usize), SqliteGraphError> {
         (*self).node_degree(snapshot_id, node)
     }
 
@@ -357,11 +401,17 @@ where
         (*self).backup(backup_dir)
     }
 
-    fn snapshot_export(&self, export_dir: &std::path::Path) -> Result<SnapshotMetadata, SqliteGraphError> {
+    fn snapshot_export(
+        &self,
+        export_dir: &std::path::Path,
+    ) -> Result<SnapshotMetadata, SqliteGraphError> {
         (*self).snapshot_export(export_dir)
     }
 
-    fn snapshot_import(&self, import_dir: &std::path::Path) -> Result<ImportMetadata, SqliteGraphError> {
+    fn snapshot_import(
+        &self,
+        import_dir: &std::path::Path,
+    ) -> Result<ImportMetadata, SqliteGraphError> {
         (*self).snapshot_import(import_dir)
     }
 
@@ -370,7 +420,8 @@ where
         &self,
         snapshot_id: SnapshotId,
         key: &[u8],
-    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, SqliteGraphError> {
+    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, SqliteGraphError>
+    {
         (*self).kv_get(snapshot_id, key)
     }
 
@@ -402,4 +453,3 @@ where
         (*self).unsubscribe(subscriber_id)
     }
 }
-

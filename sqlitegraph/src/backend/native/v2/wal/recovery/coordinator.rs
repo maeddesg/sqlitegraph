@@ -20,9 +20,7 @@
 //! - **Idempotent Recovery**: Replay can be safely repeated
 //! - **Authority Resolution**: Clear WAL vs graph file precedence rules
 
-use super::{
-    states::{Authority, RecoveryContext, RecoveryState as ExplicitRecoveryState},
-};
+use super::states::{Authority, RecoveryContext, RecoveryState as ExplicitRecoveryState};
 use crate::backend::native::v2::wal::V2WALConfig;
 use crate::backend::native::{NativeBackendError, NativeResult};
 use std::path::{Path, PathBuf};
@@ -88,11 +86,7 @@ pub enum RecoveryDecision {
 
 impl RecoveryCoordinator {
     /// Create new recovery coordinator
-    pub fn new(
-        config: V2WALConfig,
-        database_path: PathBuf,
-        checkpoint_path: PathBuf,
-    ) -> Self {
+    pub fn new(config: V2WALConfig, database_path: PathBuf, checkpoint_path: PathBuf) -> Self {
         Self {
             config,
             database_path,
@@ -171,7 +165,11 @@ impl RecoveryCoordinator {
     /// - CleanShutdown + GraphFile authority -> No recovery needed
     /// - DirtyShutdown + WAL authority -> Perform recovery
     /// - CorruptWAL/Unrecoverable -> System unrecoverable
-    fn make_recovery_decision(&self, state: ExplicitRecoveryState, authority: Authority) -> RecoveryDecision {
+    fn make_recovery_decision(
+        &self,
+        state: ExplicitRecoveryState,
+        authority: Authority,
+    ) -> RecoveryDecision {
         match (state, authority) {
             (ExplicitRecoveryState::CleanShutdown, Authority::GraphFile) => {
                 RecoveryDecision::NoRecoveryNeeded
@@ -200,16 +198,19 @@ impl RecoveryCoordinator {
     ///
     /// This method delegates entirely to existing recovery infrastructure.
     /// No new recovery logic is implemented - this is pure orchestration.
-    fn perform_existing_recovery(&self, _context: &RecoveryContext) -> NativeResult<super::core::RecoverySuccess> {
+    fn perform_existing_recovery(
+        &self,
+        _context: &RecoveryContext,
+    ) -> NativeResult<super::core::RecoverySuccess> {
         // Create recovery engine using existing factory
         let engine = super::RecoveryFactory::create_v2_optimized_engine(
             self.config.clone(),
             self.database_path.clone(),
-        ).map_err(|e| NativeBackendError::from(e))?;
+        )
+        .map_err(|e| NativeBackendError::from(e))?;
 
         // Perform recovery using existing engine
-        let recovery_result = engine.recover()
-            .map_err(|e| NativeBackendError::from(e))?;
+        let recovery_result = engine.recover().map_err(|e| NativeBackendError::from(e))?;
 
         Ok(recovery_result)
     }
@@ -289,7 +290,9 @@ impl RecoveryCoordinator {
     }
 
     /// Read WAL header for validation
-    fn read_wal_header(wal_path: &Path) -> NativeResult<crate::backend::native::v2::wal::V2WALHeader> {
+    fn read_wal_header(
+        wal_path: &Path,
+    ) -> NativeResult<crate::backend::native::v2::wal::V2WALHeader> {
         use std::io::Read;
 
         let mut file = std::fs::File::open(wal_path).map_err(NativeBackendError::from)?;
@@ -298,13 +301,14 @@ impl RecoveryCoordinator {
         let header_size = std::mem::size_of::<crate::backend::native::v2::wal::V2WALHeader>();
         let mut header_bytes = vec![0u8; header_size];
 
-        file.read_exact(&mut header_bytes).map_err(NativeBackendError::from)?;
+        file.read_exact(&mut header_bytes)
+            .map_err(NativeBackendError::from)?;
 
         // Safety: V2WALHeader is #[repr(C)] with stable layout, and we've validated the byte count
         // We need to cast the pointer from *const u8 to *const V2WALHeader
         let header = unsafe {
             std::ptr::read_unaligned::<crate::backend::native::v2::wal::V2WALHeader>(
-                header_bytes.as_ptr() as *const crate::backend::native::v2::wal::V2WALHeader
+                header_bytes.as_ptr() as *const crate::backend::native::v2::wal::V2WALHeader,
             )
         };
 
@@ -363,10 +367,8 @@ mod tests {
             PathBuf::from("test.checkpoint"),
         );
 
-        let decision = coordinator.make_recovery_decision(
-            ExplicitRecoveryState::CleanShutdown,
-            Authority::GraphFile,
-        );
+        let decision = coordinator
+            .make_recovery_decision(ExplicitRecoveryState::CleanShutdown, Authority::GraphFile);
 
         assert_eq!(decision, RecoveryDecision::NoRecoveryNeeded);
     }
@@ -379,10 +381,8 @@ mod tests {
             PathBuf::from("test.checkpoint"),
         );
 
-        let decision = coordinator.make_recovery_decision(
-            ExplicitRecoveryState::DirtyShutdown,
-            Authority::WAL,
-        );
+        let decision = coordinator
+            .make_recovery_decision(ExplicitRecoveryState::DirtyShutdown, Authority::WAL);
 
         assert_eq!(decision, RecoveryDecision::RecoveryPerformed);
     }
@@ -395,10 +395,8 @@ mod tests {
             PathBuf::from("test.checkpoint"),
         );
 
-        let decision = coordinator.make_recovery_decision(
-            ExplicitRecoveryState::CorruptWAL,
-            Authority::Unrecoverable,
-        );
+        let decision = coordinator
+            .make_recovery_decision(ExplicitRecoveryState::CorruptWAL, Authority::Unrecoverable);
 
         assert_eq!(decision, RecoveryDecision::Unrecoverable);
     }

@@ -13,14 +13,14 @@
 //! 5. No recovery orchestration required
 
 use super::{ExportManifest, ManifestSerializer};
+use crate::backend::native::v2::snapshot::AtomicFileOperations;
 use crate::backend::native::{
     graph_file::GraphFile,
     types::{NativeBackendError, NativeResult},
     v2::wal::recovery::states::{Authority, RecoveryState as ExplicitRecoveryState},
 };
-use crate::backend::native::v2::snapshot::AtomicFileOperations;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Configuration for snapshot export operations
@@ -46,11 +46,13 @@ impl Default for SnapshotExportConfig {
     fn default() -> Self {
         Self {
             export_path: PathBuf::from("snapshot_export"),
-            snapshot_id: format!("snapshot_{}",
+            snapshot_id: format!(
+                "snapshot_{}",
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
-                    .as_secs()),
+                    .as_secs()
+            ),
             include_statistics: true,
             min_stable_duration: Duration::from_secs(0),
             checksum_validation: true,
@@ -119,10 +121,7 @@ pub struct SnapshotExporter {
 
 impl SnapshotExporter {
     /// Create a new snapshot exporter
-    pub fn new(
-        graph_path: &Path,
-        config: SnapshotExportConfig,
-    ) -> NativeResult<Self> {
+    pub fn new(graph_path: &Path, config: SnapshotExportConfig) -> NativeResult<Self> {
         // Validate graph file exists and is accessible
         if !graph_path.exists() {
             return Err(NativeBackendError::InvalidParameter {
@@ -158,8 +157,7 @@ impl SnapshotExporter {
         }
 
         // Step 2: Ensure export directory exists
-        fs::create_dir_all(&self.config.export_path)
-            .map_err(|e| NativeBackendError::Io(e))?;
+        fs::create_dir_all(&self.config.export_path).map_err(|e| NativeBackendError::Io(e))?;
 
         // Step 3: Generate snapshot paths
         let snapshot_filename = format!("{}.v2", self.config.snapshot_id);
@@ -182,11 +180,7 @@ impl SnapshotExporter {
         };
 
         // Step 6: Generate export manifest
-        let manifest = self.generate_export_manifest(
-            snapshot_size,
-            checksum,
-            SystemTime::now(),
-        )?;
+        let manifest = self.generate_export_manifest(snapshot_size, checksum, SystemTime::now())?;
 
         // Step 7: Write manifest file
         ManifestSerializer::write_to_file(&manifest, &manifest_path)?;
@@ -202,8 +196,8 @@ impl SnapshotExporter {
             export_duration,
             snapshot_size_bytes: snapshot_size,
             checksum,
-            record_count: self.graph_file.persistent_header().node_count as u64 +
-                           self.graph_file.persistent_header().edge_count as u64,
+            record_count: self.graph_file.persistent_header().node_count as u64
+                + self.graph_file.persistent_header().edge_count as u64,
             export_timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
@@ -225,9 +219,9 @@ impl SnapshotExporter {
         // Check for active transactions
         if self.graph_file.is_transaction_active() {
             report.is_stable = false;
-            report.errors.push(
-                "Active transaction detected - snapshot requires stable state".to_string()
-            );
+            report
+                .errors
+                .push("Active transaction detected - snapshot requires stable state".to_string());
         }
 
         // Check WAL directory is clean
@@ -239,27 +233,32 @@ impl SnapshotExporter {
 
             if wal_size > 0 {
                 report.wal_clean = false;
-                report.warnings.push(
-                    format!("WAL file exists with size {} bytes - snapshot may not represent clean state", wal_size)
-                );
+                report.warnings.push(format!(
+                    "WAL file exists with size {} bytes - snapshot may not represent clean state",
+                    wal_size
+                ));
             }
         }
 
         // Validate file consistency
         match self.graph_file.validate_file_size() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 report.file_consistent = false;
-                report.errors.push(format!("File size validation failed: {}", e));
+                report
+                    .errors
+                    .push(format!("File size validation failed: {}", e));
             }
         }
 
         // Validate commit marker
         match self.graph_file.verify_commit_marker() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 report.commit_marker_valid = false;
-                report.errors.push(format!("Commit marker validation failed: {}", e));
+                report
+                    .errors
+                    .push(format!("Commit marker validation failed: {}", e));
             }
         }
 
@@ -268,13 +267,15 @@ impl SnapshotExporter {
         #[allow(unused_comparisons)]
         if header.node_count < 0 || header.edge_count < 0 {
             report.file_consistent = false;
-            report.errors.push("Negative node or edge counts in header".to_string());
+            report
+                .errors
+                .push("Negative node or edge counts in header".to_string());
         }
 
         if header.node_count > 1_000_000 || header.edge_count > 10_000_000 {
-            report.warnings.push(
-                "Large node/edge counts detected - verify export size".to_string()
-            );
+            report
+                .warnings
+                .push("Large node/edge counts detected - verify export size".to_string());
         }
 
         Ok(report)
@@ -300,8 +301,7 @@ impl SnapshotExporter {
         }
 
         // Validate file meets minimum V2 header size
-        let metadata = fs::metadata(graph_path)
-            .map_err(|e| NativeBackendError::Io(e))?;
+        let metadata = fs::metadata(graph_path).map_err(|e| NativeBackendError::Io(e))?;
         let min_size = crate::backend::native::constants::HEADER_SIZE;
         if metadata.len() < min_size {
             return Err(NativeBackendError::FileTooSmall {
@@ -313,19 +313,18 @@ impl SnapshotExporter {
         Ok(())
     }
 
-    
     /// Calculate checksum of snapshot file
     fn calculate_snapshot_checksum(&self, snapshot_path: &Path) -> NativeResult<u64> {
         use std::io::Read;
 
-        let mut file = fs::File::open(snapshot_path)
-            .map_err(|e| NativeBackendError::Io(e))?;
+        let mut file = fs::File::open(snapshot_path).map_err(|e| NativeBackendError::Io(e))?;
 
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         let mut buffer = [0u8; 8192];
 
         loop {
-            let bytes_read = file.read(&mut buffer)
+            let bytes_read = file
+                .read(&mut buffer)
                 .map_err(|e| NativeBackendError::Io(e))?;
 
             if bytes_read == 0 {
@@ -372,7 +371,6 @@ impl SnapshotExporter {
 
     /// Sync exported files to ensure durability
     fn sync_export_files(&self, snapshot_path: &Path, manifest_path: &Path) -> NativeResult<()> {
-
         // Sync snapshot file
         {
             let file = fs::OpenOptions::new()
@@ -413,7 +411,8 @@ mod tests {
 
     #[test]
     fn test_snapshot_exporter_creation() {
-        let (graph_file, graph_path) = create_test_graph_file().expect("Failed to create test graph");
+        let (graph_file, graph_path) =
+            create_test_graph_file().expect("Failed to create test graph");
 
         let config = SnapshotExportConfig::default();
         let result = SnapshotExporter::new(&graph_path, config);
@@ -422,7 +421,10 @@ mod tests {
             Ok(_) => println!("Snapshot exporter created successfully"),
             Err(e) => {
                 println!("Snapshot exporter creation failed: {:?}", e);
-                panic!("Snapshot exporter creation should succeed, but got error: {:?}", e);
+                panic!(
+                    "Snapshot exporter creation should succeed, but got error: {:?}",
+                    e
+                );
             }
         }
     }
@@ -434,6 +436,9 @@ mod tests {
 
         let result = SnapshotExporter::new(&missing_path, config);
 
-        assert!(result.is_err(), "Snapshot exporter creation should fail with missing file");
+        assert!(
+            result.is_err(),
+            "Snapshot exporter creation should fail with missing file"
+        );
     }
 }

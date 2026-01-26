@@ -12,11 +12,8 @@
 //!   ctx.node_cluster_index.insert(current_node, cluster_index);
 
 use sqlitegraph::backend::native::{
-    edge_store::EdgeStore,
-    graph_file::GraphFile,
-    graph_ops::native_bfs,
+    NativeNodeId, edge_store::EdgeStore, graph_file::GraphFile, graph_ops::native_bfs,
     node_store::NodeStore,
-    NativeNodeId,
 };
 use tempfile::TempDir;
 
@@ -28,14 +25,18 @@ fn create_linear_chain(size: usize, temp_dir: &TempDir) -> (GraphFile, Vec<Nativ
     let mut node_ids = Vec::with_capacity(size);
     for i in 0..size {
         let mut node_store = NodeStore::new(&mut graph_file);
-        let node_id = node_store.allocate_node_id().expect("Failed to allocate node ID");
+        let node_id = node_store
+            .allocate_node_id()
+            .expect("Failed to allocate node ID");
         let record = sqlitegraph::backend::native::NodeRecord::new(
             node_id,
             "Node".to_string(),
             format!("node_{}", i),
             serde_json::json!({"id": i}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -48,7 +49,9 @@ fn create_linear_chain(size: usize, temp_dir: &TempDir) -> (GraphFile, Vec<Nativ
             "chain".to_string(),
             serde_json::json!({"order": i}),
         );
-        edge_store.write_edge(&edge).expect("Failed to write chain edge");
+        edge_store
+            .write_edge(&edge)
+            .expect("Failed to write chain edge");
     }
 
     (graph_file, node_ids)
@@ -66,11 +69,14 @@ fn test_bfs_populates_node_cluster_index_indirectly() {
     let start_node = node_ids[0];
 
     // Run BFS - should populate node_cluster_index internally
-    let result = native_bfs(&mut graph_file, start_node, 10)
-        .expect("BFS failed");
+    let result = native_bfs(&mut graph_file, start_node, 10).expect("BFS failed");
 
     // Verify BFS visited all nodes (start node not included in result)
-    assert_eq!(result.len(), 9, "BFS should visit 9 neighbor nodes (excluding start)");
+    assert_eq!(
+        result.len(),
+        9,
+        "BFS should visit 9 neighbor nodes (excluding start)"
+    );
 
     // The key assertion: we can't directly access ctx.node_cluster_index
     // from outside BFS, but the sequential cluster read optimization
@@ -86,11 +92,14 @@ fn test_native_bfs_populates_node_cluster_index() {
     let start_node = node_ids[0];
 
     // Run BFS via public API
-    let result = native_bfs(&mut graph_file, start_node, 10)
-        .expect("BFS failed");
+    let result = native_bfs(&mut graph_file, start_node, 10).expect("BFS failed");
 
     // Verify BFS visited all nodes (start node not included in result)
-    assert_eq!(result.len(), 9, "BFS should visit 9 neighbor nodes (excluding start)");
+    assert_eq!(
+        result.len(),
+        9,
+        "BFS should visit 9 neighbor nodes (excluding start)"
+    );
 
     // node_cluster_index population is verified indirectly:
     // - Chain(500) benchmark should show improvement
@@ -105,9 +114,12 @@ fn test_chain_traversal_populates_mapping_for_all_nodes() {
     let start_node = node_ids[0];
 
     // Chain of 5 nodes should populate 5 entries in node_cluster_index
-    let result = native_bfs(&mut graph_file, start_node, 5)
-        .expect("BFS failed");
+    let result = native_bfs(&mut graph_file, start_node, 5).expect("BFS failed");
 
-    assert_eq!(result.len(), 4, "Should visit 4 neighbor nodes (excluding start)");
+    assert_eq!(
+        result.len(),
+        4,
+        "Should visit 4 neighbor nodes (excluding start)"
+    );
     // Internal mapping should have 5 entries (verified indirectly via performance)
 }

@@ -1,7 +1,7 @@
 //! In-memory HashMap-based KV store implementation
 
-use crate::backend::native::v2::kv_store::types::{KvEntry, KvMetadata, KvStoreError, KvValue};
 use crate::backend::native::v2::kv_store::ttl;
+use crate::backend::native::v2::kv_store::types::{KvEntry, KvMetadata, KvStoreError, KvValue};
 use crate::snapshot::SnapshotId;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -62,7 +62,11 @@ impl KvStore {
     ///
     /// # Returns
     /// The value if found and visible at snapshot, or None if not found or not visible
-    pub fn get_at_snapshot(&self, key: &[u8], snapshot_id: SnapshotId) -> Result<Option<KvValue>, KvStoreError> {
+    pub fn get_at_snapshot(
+        &self,
+        key: &[u8],
+        snapshot_id: SnapshotId,
+    ) -> Result<Option<KvValue>, KvStoreError> {
         let entries = self.entries.read();
         let snapshot_lsn = snapshot_id.as_lsn();
 
@@ -108,7 +112,12 @@ impl KvStore {
     ///
     /// Appends a new version to the key's version history.
     /// The version number is set to 0 and will be updated by the WAL system.
-    pub fn set(&mut self, key: Vec<u8>, value: KvValue, ttl: Option<u64>) -> Result<(), KvStoreError> {
+    pub fn set(
+        &mut self,
+        key: Vec<u8>,
+        value: KvValue,
+        ttl: Option<u64>,
+    ) -> Result<(), KvStoreError> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -134,7 +143,11 @@ impl KvStore {
             version: 0, // Will be set by WAL in plan 02
         };
 
-        let entry = KvEntry { key: key.clone(), value, metadata };
+        let entry = KvEntry {
+            key: key.clone(),
+            value,
+            metadata,
+        };
 
         // Append new version to history (maintains sorted order since LSNs are monotonic)
         entries.entry(key).or_default().push(entry);
@@ -147,7 +160,10 @@ impl KvStore {
     /// Removes the entire version history for the key.
     pub fn delete(&mut self, key: &[u8]) -> Result<(), KvStoreError> {
         let mut entries = self.entries.write();
-        entries.remove(key).map(|_| ()).ok_or_else(|| KvStoreError::KeyNotFound(key.to_vec()))
+        entries
+            .remove(key)
+            .map(|_| ())
+            .ok_or_else(|| KvStoreError::KeyNotFound(key.to_vec()))
     }
 
     /// Check if a key exists
@@ -193,7 +209,13 @@ impl KvStore {
     /// Normal set() operations should use version 0 (the WAL system assigns the real version).
     ///
     /// Maintains version history in sorted order by LSN.
-    pub fn set_with_version(&mut self, key: Vec<u8>, value: KvValue, ttl: Option<u64>, version: u64) -> Result<(), KvStoreError> {
+    pub fn set_with_version(
+        &mut self,
+        key: Vec<u8>,
+        value: KvValue,
+        ttl: Option<u64>,
+        version: u64,
+    ) -> Result<(), KvStoreError> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -219,7 +241,11 @@ impl KvStore {
             version,
         };
 
-        let entry = KvEntry { key: key.clone(), value, metadata };
+        let entry = KvEntry {
+            key: key.clone(),
+            value,
+            metadata,
+        };
 
         // Insert into version history, maintaining sorted order by version
         let versions = entries.entry(key).or_default();
@@ -250,12 +276,9 @@ mod tests {
         let mut store = KvStore::new();
 
         // Create entry with version 100
-        store.set_with_version(
-            b"key".to_vec(),
-            KvValue::Integer(42),
-            None,
-            100
-        ).unwrap();
+        store
+            .set_with_version(b"key".to_vec(), KvValue::Integer(42), None, 100)
+            .unwrap();
 
         // Snapshot at version 150 should see the entry
         let snapshot = SnapshotId::from_lsn(150);
@@ -269,12 +292,9 @@ mod tests {
         let mut store = KvStore::new();
 
         // Create entry with version 200
-        store.set_with_version(
-            b"key".to_vec(),
-            KvValue::Integer(42),
-            None,
-            200
-        ).unwrap();
+        store
+            .set_with_version(b"key".to_vec(), KvValue::Integer(42), None, 200)
+            .unwrap();
 
         // Snapshot at version 150 should NOT see the entry (version 200 > 150)
         let snapshot = SnapshotId::from_lsn(150);
@@ -288,12 +308,14 @@ mod tests {
         let mut store = KvStore::new();
 
         // Create entry with short TTL (1 second)
-        store.set_with_version(
-            b"key".to_vec(),
-            KvValue::Integer(42),
-            Some(1), // 1 second TTL
-            100
-        ).unwrap();
+        store
+            .set_with_version(
+                b"key".to_vec(),
+                KvValue::Integer(42),
+                Some(1), // 1 second TTL
+                100,
+            )
+            .unwrap();
 
         // Sleep to ensure expiration
         std::thread::sleep(std::time::Duration::from_secs(2));
@@ -320,20 +342,14 @@ mod tests {
         let mut store = KvStore::new();
 
         // Create key with version 100
-        store.set_with_version(
-            b"key".to_vec(),
-            KvValue::Integer(100),
-            None,
-            100
-        ).unwrap();
+        store
+            .set_with_version(b"key".to_vec(), KvValue::Integer(100), None, 100)
+            .unwrap();
 
         // Update same key with version 200 (MVCC: retains version 100)
-        store.set_with_version(
-            b"key".to_vec(),
-            KvValue::Integer(200),
-            None,
-            200
-        ).unwrap();
+        store
+            .set_with_version(b"key".to_vec(), KvValue::Integer(200), None, 200)
+            .unwrap();
 
         // Snapshot at 250 should see version 200 (latest version <= 250)
         let snapshot_250 = SnapshotId::from_lsn(250);
@@ -343,7 +359,7 @@ mod tests {
         // Snapshot at 150 should see version 100 (version history retained!)
         let snapshot_150 = SnapshotId::from_lsn(150);
         let result = store.get_at_snapshot(b"key", snapshot_150).unwrap();
-        assert_eq!(result, Some(KvValue::Integer(100)));  // TRUE MVCC!
+        assert_eq!(result, Some(KvValue::Integer(100))); // TRUE MVCC!
 
         // Snapshot at 50 should see nothing (all versions > 50)
         let snapshot_50 = SnapshotId::from_lsn(50);

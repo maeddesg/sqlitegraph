@@ -15,12 +15,12 @@
 //! isolation violations through cluster_buffer, cluster_buffer_offsets, or node_cluster_index.
 
 use sqlitegraph::backend::native::{
-    graph_file::GraphFile,
-    node_store::NodeStore,
-    edge_store::EdgeStore,
-    graph_ops::TraversalContext,
-    adjacency::{Direction, LinearDetector, TraversalPattern},
     NativeNodeId,
+    adjacency::{Direction, LinearDetector, TraversalPattern},
+    edge_store::EdgeStore,
+    graph_file::GraphFile,
+    graph_ops::TraversalContext,
+    node_store::NodeStore,
 };
 
 use tempfile::TempDir;
@@ -49,14 +49,18 @@ fn create_test_chain(size: usize) -> (GraphFile, Vec<NativeNodeId>, TempDir) {
     let mut node_ids = Vec::with_capacity(size);
     for i in 0..size {
         let mut node_store = NodeStore::new(&mut graph_file);
-        let node_id = node_store.allocate_node_id().expect("Failed to allocate node ID");
+        let node_id = node_store
+            .allocate_node_id()
+            .expect("Failed to allocate node ID");
         let record = sqlitegraph::backend::native::NodeRecord::new(
             node_id,
             "TestNode".to_string(),
             format!("node_{}", i),
             serde_json::json!({"id": i}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -318,8 +322,8 @@ fn test_clear_cluster_buffer_on_branching_pattern() {
 
     // Simulate branching pattern detected
     let _pattern = ctx.detector.observe_with_cluster(3, 2, 200, 4);
-    let branching_detected = ctx.detector.observe_with_cluster(4, 2, 204, 4)
-        == TraversalPattern::Branching;
+    let branching_detected =
+        ctx.detector.observe_with_cluster(4, 2, 204, 4) == TraversalPattern::Branching;
 
     if branching_detected {
         ctx.clear_cluster_buffer();
@@ -421,7 +425,8 @@ fn test_cluster_fields_isolated_from_l2_cache() {
     // Note: TraversalCache key is (NativeNodeId, Direction)
     let node1: NativeNodeId = 1;
     let node2: NativeNodeId = 2;
-    ctx.cache.insert((node1, Direction::Outgoing), vec![2, 3, 4]);
+    ctx.cache
+        .insert((node1, Direction::Outgoing), vec![2, 3, 4]);
     ctx.cache.insert((node2, Direction::Outgoing), vec![5, 6]);
     ctx.cluster_buffer = Some(vec![1, 2, 3, 4]);
     ctx.cluster_buffer_offsets = vec![(100, 4)];

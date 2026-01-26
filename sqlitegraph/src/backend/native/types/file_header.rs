@@ -1,6 +1,5 @@
 //! File header structure and management for native graph database
 
-
 use super::super::constants;
 use super::super::v2::{V2_FORMAT_VERSION, V2_MAGIC};
 use super::NativeBackendError;
@@ -79,7 +78,8 @@ impl FileHeader {
         }
 
         // Check version
-        if self.version != constants::FILE_FORMAT_VERSION && self.version != 2 && self.version != 3 {
+        if self.version != constants::FILE_FORMAT_VERSION && self.version != 2 && self.version != 3
+        {
             return Err(NativeBackendError::UnsupportedVersion {
                 version: self.version,
                 supported_version: constants::FILE_FORMAT_VERSION,

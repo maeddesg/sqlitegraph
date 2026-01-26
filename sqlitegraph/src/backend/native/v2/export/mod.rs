@@ -18,9 +18,11 @@
 //! 4. Deterministic Results: Same inputs always produce same outputs
 
 // Re-export core export components
-pub use self::exporter::{V2Exporter, V2ExportConfig, ExportResult, ExportConsistencyReport};
+pub use self::exporter::{ExportConsistencyReport, ExportResult, V2ExportConfig, V2Exporter};
 pub use self::manifest::{ExportManifest, ManifestSerializer, ManifestValidator};
-pub use self::snapshot::{SnapshotExporter, SnapshotExportConfig, SnapshotExportResult, SnapshotValidationReport};
+pub use self::snapshot::{
+    SnapshotExportConfig, SnapshotExportResult, SnapshotExporter, SnapshotValidationReport,
+};
 
 // ExportMode is defined in this module, so it's automatically available
 
@@ -28,7 +30,6 @@ pub use self::snapshot::{SnapshotExporter, SnapshotExportConfig, SnapshotExportR
 pub mod exporter;
 pub mod manifest;
 pub mod snapshot;
-
 
 /// Export module factory for creating export components
 pub struct ExportFactory;
@@ -79,11 +80,13 @@ impl ExportFactory {
         let config = SnapshotExportConfig {
             export_path: export_dir.join("snapshot"),
             snapshot_id: snapshot_id.unwrap_or_else(|| {
-                format!("snapshot_{}",
+                format!(
+                    "snapshot_{}",
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
-                        .as_secs())
+                        .as_secs()
+                )
             }),
             include_statistics: true,
             min_stable_duration: std::time::Duration::from_secs(0),
@@ -120,10 +123,7 @@ mod tests {
         let graph_path = temp_dir.path().join("test.v2");
         let export_dir = temp_dir.path().join("export");
 
-        let result = ExportFactory::create_checkpoint_aligned_exporter(
-            &graph_path,
-            &export_dir,
-        );
+        let result = ExportFactory::create_checkpoint_aligned_exporter(&graph_path, &export_dir);
         // This should initially fail until we implement the exporter
         assert!(result.is_err() || result.is_ok()); // We don't know the exact error yet
     }

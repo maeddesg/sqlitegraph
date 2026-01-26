@@ -38,7 +38,9 @@ mod traversal_context;
 
 // Re-export all public functionality
 pub use bfs_implementations::*;
-pub use cache::{TraversalCache, TraversalCacheStats, get_neighbors_cached, get_neighbors_optimized};
+pub use cache::{
+    TraversalCache, TraversalCacheStats, get_neighbors_cached, get_neighbors_optimized,
+};
 pub use chain_queries::*;
 pub use k_hop::*;
 pub use pathfinding::*;
@@ -128,8 +130,8 @@ pub fn native_bfs_with_telemetry(
     let elapsed = start_time.elapsed();
 
     // Update telemetry with total time
-    let mut telemetry: serde_json::Value = serde_json::from_str(&result.1)
-        .unwrap_or_else(|_| serde_json::json!({}));
+    let mut telemetry: serde_json::Value =
+        serde_json::from_str(&result.1).unwrap_or_else(|_| serde_json::json!({}));
     telemetry["time_total_ms"] = serde_json::json!(elapsed.as_secs_f64() * 1000.0);
 
     Ok((result.0, telemetry.to_string()))
@@ -160,7 +162,10 @@ fn bfs_generic_scalar_with_telemetry(
             continue;
         }
 
-        let degree = crate::backend::native::adjacency::AdjacencyHelpers::outgoing_degree(graph_file, current_node)?;
+        let degree = crate::backend::native::adjacency::AdjacencyHelpers::outgoing_degree(
+            graph_file,
+            current_node,
+        )?;
 
         // Extract cluster metadata for sequential read optimization (Phase 37-05)
         let (cluster_offset, cluster_size) = match graph_file.read_node_at(current_node) {
@@ -171,14 +176,17 @@ fn bfs_generic_scalar_with_telemetry(
             Err(_) => (0, 0), // Fallback if node read fails
         };
 
-        let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
+        let _pattern =
+            ctx.detector
+                .observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
         // Populate node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
         let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
         ctx.node_cluster_index.insert(current_node, cluster_index);
 
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
-            ctx.buffer.prefetch_clusters_from(graph_file, current_node)?;
+            ctx.buffer
+                .prefetch_clusters_from(graph_file, current_node)?;
         }
 
         let neighbors = get_neighbors_optimized(

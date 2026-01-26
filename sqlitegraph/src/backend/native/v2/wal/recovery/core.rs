@@ -3,11 +3,11 @@
 //! Core recovery engine and lifecycle management for V2 clustered edge format.
 //! Focuses on recovery orchestration, state management, and phase coordination.
 
-use super::{constants::*, errors::RecoveryError};
 use super::validator::{RecoveryValidator, ValidationResult};
+use super::{constants::*, errors::RecoveryError};
 use crate::backend::native::v2::wal::{V2WALConfig, V2WALRecord};
-use crate::backend::native::{NativeBackendError, NativeResult, GraphFile};
-use crate::debug::{info_log, debug_log, warn_log, error_log};
+use crate::backend::native::{GraphFile, NativeBackendError, NativeResult};
+use crate::debug::{debug_log, error_log, info_log, warn_log};
 use parking_lot::{Condvar, Mutex};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -208,7 +208,8 @@ impl V2WALRecoveryEngine {
         for attempt in 1..=self.options.max_recovery_attempts {
             debug_log!(
                 "Recovery attempt {}/{}",
-                attempt, self.options.max_recovery_attempts
+                attempt,
+                self.options.max_recovery_attempts
             );
 
             match self.attempt_recovery(attempt) {
@@ -494,8 +495,8 @@ impl V2WALRecoveryEngine {
             max_parallel_transactions: self.options.max_parallel_transactions,
         };
 
-        let replayer = V2GraphFileReplayer::create(self.database_path.clone(), config)
-            .map_err(|e| {
+        let replayer =
+            V2GraphFileReplayer::create(self.database_path.clone(), config).map_err(|e| {
                 RecoveryError::configuration(format!("Failed to create replayer: {}", e))
             })?;
 
@@ -599,22 +600,30 @@ impl V2WALRecoveryEngine {
     /// # Returns
     /// * `Ok(Vec<String>)` - List of validation warnings (non-critical issues)
     /// * `Err(RecoveryError)` - Critical validation error preventing recovery completion
-    fn validate_post_recovery(&self, transactions: &[TransactionState]) -> Result<Vec<String>, RecoveryError> {
-        debug_log!("Starting post-recovery validation for {} transactions", transactions.len());
+    fn validate_post_recovery(
+        &self,
+        transactions: &[TransactionState],
+    ) -> Result<Vec<String>, RecoveryError> {
+        debug_log!(
+            "Starting post-recovery validation for {} transactions",
+            transactions.len()
+        );
 
         let mut all_warnings = Vec::new();
 
         // Create validator with database path
-        let mut validator = RecoveryValidator::new(self.database_path.clone())
-            .map_err(|e| RecoveryError::validation(format!("Failed to create recovery validator: {}", e)))?;
+        let mut validator = RecoveryValidator::new(self.database_path.clone()).map_err(|e| {
+            RecoveryError::validation(format!("Failed to create recovery validator: {}", e))
+        })?;
 
         // Validate the recovery sequence (transaction-level validation)
-        let (_stats, tx_warnings) = validator
-            .validate_recovery_sequence(transactions)
-            .map_err(|e| {
-                error_log!("Post-recovery transaction validation failed: {}", e);
-                e
-            })?;
+        let (_stats, tx_warnings) =
+            validator
+                .validate_recovery_sequence(transactions)
+                .map_err(|e| {
+                    error_log!("Post-recovery transaction validation failed: {}", e);
+                    e
+                })?;
         all_warnings.extend(tx_warnings);
 
         // Perform database-level integrity checks if enabled
@@ -622,9 +631,8 @@ impl V2WALRecoveryEngine {
             debug_log!("Performing database integrity checks");
 
             // Calculate number of transactions replayed (committed only)
-            let transactions_replayed = transactions.iter()
-                .filter(|tx| tx.committed)
-                .count() as u64;
+            let transactions_replayed =
+                transactions.iter().filter(|tx| tx.committed).count() as u64;
 
             // Open graph file to verify basic integrity
             let graph_integrity_result = self.validate_graph_file_integrity(transactions_replayed);
@@ -640,23 +648,28 @@ impl V2WALRecoveryEngine {
             }
 
             // If perform_consistency_checks is enabled, also call the comprehensive validator
-            let integrity_result = validator.validate_database_integrity()
-                .map_err(|e| {
-                    error_log!("Database integrity validation failed: {}", e);
-                    e
-                })?;
+            let integrity_result = validator.validate_database_integrity().map_err(|e| {
+                error_log!("Database integrity validation failed: {}", e);
+                e
+            })?;
 
             match integrity_result {
                 ValidationResult::Valid => {
                     debug_log!("Database integrity validation passed");
                 }
                 ValidationResult::Recoverable { issues, .. } => {
-                    warn_log!("Database integrity validation passed with {} warnings", issues.len());
+                    warn_log!(
+                        "Database integrity validation passed with {} warnings",
+                        issues.len()
+                    );
                     all_warnings.extend(issues);
                 }
-                ValidationResult::Invalid { errors, critical_error } => {
+                ValidationResult::Invalid {
+                    errors,
+                    critical_error,
+                } => {
                     error_log!("Database integrity validation failed: {}", critical_error);
-                    for _error in &errors {
+                    for error in &errors {
                         debug_log!("Integrity error: {}", error);
                     }
                     return Err(RecoveryError::validation(format!(
@@ -671,8 +684,11 @@ impl V2WALRecoveryEngine {
         if all_warnings.is_empty() {
             info_log!("Post-recovery validation passed with no warnings");
         } else {
-            warn_log!("Post-recovery validation passed with {} warnings", all_warnings.len());
-            for _warning in &all_warnings {
+            warn_log!(
+                "Post-recovery validation passed with {} warnings",
+                all_warnings.len()
+            );
+            for warning in &all_warnings {
                 debug_log!("Validation warning: {}", warning);
             }
         }
@@ -691,12 +707,16 @@ impl V2WALRecoveryEngine {
     /// # Returns
     /// * `Ok(Vec<String>)` - List of warnings (non-critical issues)
     /// * `Err(RecoveryError)` - Critical integrity error
-    fn validate_graph_file_integrity(&self, transactions_replayed: u64) -> Result<Vec<String>, RecoveryError> {
+    fn validate_graph_file_integrity(
+        &self,
+        transactions_replayed: u64,
+    ) -> Result<Vec<String>, RecoveryError> {
         let mut warnings = Vec::new();
 
         // Open the graph file
-        let graph_file = GraphFile::open(&self.database_path)
-            .map_err(|e| RecoveryError::validation(format!("Cannot open graph file for integrity check: {}", e)))?;
+        let graph_file = GraphFile::open(&self.database_path).map_err(|e| {
+            RecoveryError::validation(format!("Cannot open graph file for integrity check: {}", e))
+        })?;
 
         // Get persistent header
         let header = graph_file.persistent_header();
@@ -705,12 +725,13 @@ impl V2WALRecoveryEngine {
         // If transactions were replayed, we expect the database to have content
         if transactions_replayed > 0 && header.node_count == 0 {
             warnings.push(
-                "Transactions were replayed but node_count is 0 - possible data loss".to_string()
+                "Transactions were replayed but node_count is 0 - possible data loss".to_string(),
             );
         }
 
         // Check file size is reasonable (not truncated)
-        let file_size = graph_file.file_size()
+        let file_size = graph_file
+            .file_size()
             .map_err(|e| RecoveryError::validation(format!("Cannot get file size: {}", e)))?;
 
         // File should at minimum contain the header
@@ -723,7 +744,8 @@ impl V2WALRecoveryEngine {
         }
 
         // Check that the file size matches what the header describes
-        let max_offset = header.free_space_offset
+        let max_offset = header
+            .free_space_offset
             .max(header.incoming_cluster_offset)
             .max(header.outgoing_cluster_offset)
             .max(header.edge_data_offset)
@@ -737,12 +759,15 @@ impl V2WALRecoveryEngine {
         }
 
         // Validate persistent header structure
-        header.validate()
-            .map_err(|e| RecoveryError::validation(format!("Persistent header validation failed: {}", e)))?;
+        header.validate().map_err(|e| {
+            RecoveryError::validation(format!("Persistent header validation failed: {}", e))
+        })?;
 
         debug_log!(
             "Graph file integrity check passed: node_count={}, edge_count={}, file_size={}",
-            header.node_count, header.edge_count, file_size
+            header.node_count,
+            header.edge_count,
+            file_size
         );
 
         Ok(warnings)
@@ -851,11 +876,18 @@ mod tests {
 
         // validate_post_recovery should succeed with empty transactions
         let result = engine.validate_post_recovery(&transactions);
-        assert!(result.is_ok(), "validate_post_recovery should succeed with empty transactions: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "validate_post_recovery should succeed with empty transactions: {:?}",
+            result.err()
+        );
 
         let warnings = result.unwrap();
         // Empty transactions should not produce warnings when consistency checks are disabled
-        assert!(warnings.is_empty(), "Expected no warnings for empty transactions with consistency checks disabled");
+        assert!(
+            warnings.is_empty(),
+            "Expected no warnings for empty transactions with consistency checks disabled"
+        );
     }
 
     /// Test post-recovery validation hook returns warnings for non-critical issues
@@ -894,7 +926,11 @@ mod tests {
 
         // validate_post_recovery should succeed and potentially return warnings
         let result = engine.validate_post_recovery(&transactions);
-        assert!(result.is_ok(), "validate_post_recovery should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "validate_post_recovery should succeed: {:?}",
+            result.err()
+        );
 
         let warnings = result.unwrap();
         // We expect validation to complete - warnings may or may not be present
@@ -931,7 +967,10 @@ mod tests {
         let result = engine.validate_post_recovery(&transactions);
 
         // The test passes if we can call the method without panicking
-        assert!(result.is_ok() || result.is_err(), "validate_post_recovery should be callable");
+        assert!(
+            result.is_ok() || result.is_err(),
+            "validate_post_recovery should be callable"
+        );
     }
 
     /// Test post-recovery validation with empty WAL (no transactions replayed)
@@ -962,11 +1001,18 @@ mod tests {
 
         // validate_post_recovery should succeed when WAL is empty
         let result = engine.validate_post_recovery(&transactions);
-        assert!(result.is_ok(), "validate_post_recovery should succeed with empty WAL: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "validate_post_recovery should succeed with empty WAL: {:?}",
+            result.err()
+        );
 
         let warnings = result.unwrap();
         // Empty WAL with empty database should not produce warnings when consistency checks are disabled
-        assert!(warnings.is_empty(), "Expected no warnings for empty WAL and database with consistency checks disabled");
+        assert!(
+            warnings.is_empty(),
+            "Expected no warnings for empty WAL and database with consistency checks disabled"
+        );
     }
 
     /// Test post-recovery validation detects truncated file
@@ -1006,12 +1052,20 @@ mod tests {
 
         // validate_post_recovery should fail with truncated file
         let result = engine.validate_post_recovery(&transactions);
-        assert!(result.is_err(), "validate_post_recovery should fail with truncated file");
+        assert!(
+            result.is_err(),
+            "validate_post_recovery should fail with truncated file"
+        );
 
         let err_msg = format!("{:?}", result.unwrap_err());
         // The error may mention "too small", "truncated", or file access issues
-        assert!(err_msg.contains("too small") || err_msg.contains("truncated") || err_msg.contains("Cannot open"),
-                "Error should mention file size issue, got: {}", err_msg);
+        assert!(
+            err_msg.contains("too small")
+                || err_msg.contains("truncated")
+                || err_msg.contains("Cannot open"),
+            "Error should mention file size issue, got: {}",
+            err_msg
+        );
     }
 
     /// Test post-recovery validation with node count inconsistency
@@ -1051,18 +1105,24 @@ mod tests {
 
         // validate_post_recovery should succeed
         let result = engine.validate_post_recovery(&transactions);
-        assert!(result.is_ok(), "validate_post_recovery should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "validate_post_recovery should succeed: {:?}",
+            result.err()
+        );
 
         let warnings = result.unwrap();
         // The node count warning should be present since we have committed transactions but node_count=0
         // We may also have file size warnings due to cluster offset initialization
         // The key is that at least one of the warnings is about node count or transactions replayed
-        let has_expected_warning = warnings.iter().any(|w| {
-            w.contains("node_count") || w.contains("Transactions were replayed")
-        });
-        assert!(has_expected_warning,
-                "Expected warning about node_count inconsistency when transactions were replayed but database is empty. Got warnings: {:?}",
-                warnings);
+        let has_expected_warning = warnings
+            .iter()
+            .any(|w| w.contains("node_count") || w.contains("Transactions were replayed"));
+        assert!(
+            has_expected_warning,
+            "Expected warning about node_count inconsistency when transactions were replayed but database is empty. Got warnings: {:?}",
+            warnings
+        );
     }
 
     /// Test post-recovery validation checks free space consistency
@@ -1093,13 +1153,20 @@ mod tests {
 
         // validate_post_recovery should check free space consistency
         let result = engine.validate_post_recovery(&transactions);
-        assert!(result.is_ok(), "validate_post_recovery should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "validate_post_recovery should succeed: {:?}",
+            result.err()
+        );
 
         // For a newly created file, validation should succeed
         let warnings = result.unwrap();
         // With consistency checks disabled, minimal warnings expected
-        assert!(warnings.is_empty(),
-                "Expected no warnings with consistency checks disabled, got: {:?}", warnings);
+        assert!(
+            warnings.is_empty(),
+            "Expected no warnings with consistency checks disabled, got: {:?}",
+            warnings
+        );
     }
 
     /// Test graph_file_integrity validates node_count after recovery with transactions
@@ -1128,13 +1195,23 @@ mod tests {
 
         // Test with transactions replayed = 1 (committed transaction)
         let result = engine.validate_graph_file_integrity(1);
-        assert!(result.is_ok(), "validate_graph_file_integrity should succeed");
+        assert!(
+            result.is_ok(),
+            "validate_graph_file_integrity should succeed"
+        );
 
         let warnings = result.unwrap();
         // Should have warning about node_count being 0 despite transactions replayed
-        assert!(!warnings.is_empty(), "Expected warning when node_count=0 but transactions_replayed>0");
-        assert!(warnings[0].contains("node_count") || warnings[0].contains("Transactions were replayed"),
-                "Warning should mention node_count or transactions replayed: {}", warnings[0]);
+        assert!(
+            !warnings.is_empty(),
+            "Expected warning when node_count=0 but transactions_replayed>0"
+        );
+        assert!(
+            warnings[0].contains("node_count")
+                || warnings[0].contains("Transactions were replayed"),
+            "Warning should mention node_count or transactions replayed: {}",
+            warnings[0]
+        );
     }
 
     /// Test graph_file_integrity passes with no transactions replayed
@@ -1163,13 +1240,21 @@ mod tests {
 
         // Test with transactions replayed = 0 (no committed transactions)
         let result = engine.validate_graph_file_integrity(0);
-        assert!(result.is_ok(), "validate_graph_file_integrity should succeed with no transactions");
+        assert!(
+            result.is_ok(),
+            "validate_graph_file_integrity should succeed with no transactions"
+        );
 
         let warnings = result.unwrap();
         // With no transactions replayed, we shouldn't have node_count warnings
         // But we may have file size warnings due to cluster offset initialization
-        let has_node_count_warning = warnings.iter().any(|w| w.contains("node_count") || w.contains("Transactions were replayed"));
-        assert!(!has_node_count_warning,
-                "Should not have node_count warning with no transactions, got: {:?}", warnings);
+        let has_node_count_warning = warnings
+            .iter()
+            .any(|w| w.contains("node_count") || w.contains("Transactions were replayed"));
+        assert!(
+            !has_node_count_warning,
+            "Should not have node_count warning with no transactions, got: {:?}",
+            warnings
+        );
     }
 }

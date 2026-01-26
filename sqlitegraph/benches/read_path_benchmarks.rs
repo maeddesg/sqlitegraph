@@ -12,19 +12,14 @@
 
 use std::time::Duration;
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rand::{Rng, SeedableRng};
-use sqlitegraph::{
-    BackendDirection, EdgeSpec, NeighborQuery, NodeSpec,
-    GraphConfig, open_graph,
-};
+use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
 
 mod bench_utils;
-use bench_utils::{
-    create_benchmark_temp_dir, BENCHMARK_SIZES,
-};
+use bench_utils::{BENCHMARK_SIZES, create_benchmark_temp_dir};
 
-const SAMPLE_SIZE: usize = 1000;  // Increased for regression detection
+const SAMPLE_SIZE: usize = 1000; // Increased for regression detection
 const WARM_UP_TIME: Duration = Duration::from_secs(5);
 const MEASURE_TIME: Duration = Duration::from_secs(15);
 
@@ -43,8 +38,8 @@ fn bench_memory_usage(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create 1000 nodes
             for i in 0..1000 {
@@ -83,8 +78,8 @@ fn bench_get_node(criterion: &mut Criterion) {
                 let temp_dir = create_benchmark_temp_dir();
                 let db_path = temp_dir.path().join("benchmark.db");
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to create graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
                 // Create nodes
                 let mut node_ids = Vec::new();
@@ -122,8 +117,8 @@ fn bench_get_neighbors_small(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create star topology with center node having 10 edges
             let center = graph
@@ -177,8 +172,8 @@ fn bench_get_neighbors_medium(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create star topology with center node having 100 edges
             let center = graph
@@ -232,8 +227,8 @@ fn bench_get_neighbors_large(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create star topology with center node having 1000 edges
             let center = graph
@@ -292,8 +287,8 @@ fn bench_bfs_depth_1(criterion: &mut Criterion) {
                 let temp_dir = create_benchmark_temp_dir();
                 let db_path = temp_dir.path().join("benchmark.db");
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to create graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
                 // Create chain graph
                 let mut node_ids = Vec::new();
@@ -322,9 +317,7 @@ fn bench_bfs_depth_1(criterion: &mut Criterion) {
                 }
 
                 // Perform 1-hop BFS
-                let _bfs_result = graph
-                    .bfs(node_ids[0], 1)
-                    .expect("Failed to perform BFS");
+                let _bfs_result = graph.bfs(node_ids[0], 1).expect("Failed to perform BFS");
             });
         });
     }
@@ -345,8 +338,8 @@ fn bench_bfs_depth_3(criterion: &mut Criterion) {
                 let temp_dir = create_benchmark_temp_dir();
                 let db_path = temp_dir.path().join("benchmark.db");
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to create graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
                 // Create chain graph
                 let mut node_ids = Vec::new();
@@ -375,9 +368,7 @@ fn bench_bfs_depth_3(criterion: &mut Criterion) {
                 }
 
                 // Perform 3-hop BFS
-                let _bfs_result = graph
-                    .bfs(node_ids[0], 3)
-                    .expect("Failed to perform BFS");
+                let _bfs_result = graph.bfs(node_ids[0], 3).expect("Failed to perform BFS");
             });
         });
     }
@@ -398,8 +389,8 @@ fn bench_bfs_depth_5(criterion: &mut Criterion) {
                 let temp_dir = create_benchmark_temp_dir();
                 let db_path = temp_dir.path().join("benchmark.db");
 
-                let graph = open_graph(&db_path, &GraphConfig::native())
-                    .expect("Failed to create graph");
+                let graph =
+                    open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
                 // Create chain graph
                 let mut node_ids = Vec::new();
@@ -428,9 +419,7 @@ fn bench_bfs_depth_5(criterion: &mut Criterion) {
                 }
 
                 // Perform 5-hop BFS
-                let _bfs_result = graph
-                    .bfs(node_ids[0], 5)
-                    .expect("Failed to perform BFS");
+                let _bfs_result = graph.bfs(node_ids[0], 5).expect("Failed to perform BFS");
             });
         });
     }
@@ -450,8 +439,8 @@ fn bench_k_hop_10_nodes(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create graph with 100 nodes
             let mut node_ids = Vec::new();
@@ -488,9 +477,7 @@ fn bench_k_hop_10_nodes(criterion: &mut Criterion) {
             let mut total_visited = 0;
             for i in 0..10 {
                 let start_node = node_ids[i * 10];
-                let bfs_result = graph
-                    .bfs(start_node, 2)
-                    .expect("Failed to perform BFS");
+                let bfs_result = graph.bfs(start_node, 2).expect("Failed to perform BFS");
                 total_visited += bfs_result.len();
             }
 
@@ -518,8 +505,8 @@ fn bench_cache_hit_sequential(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create chain graph
             let mut node_ids = Vec::new();
@@ -571,8 +558,8 @@ fn bench_cache_hit_random(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create chain graph
             let mut node_ids = Vec::new();
@@ -626,8 +613,8 @@ fn bench_cache_eviction(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create large graph to trigger cache eviction
             let mut node_ids = Vec::new();
@@ -683,8 +670,8 @@ fn bench_iterate_compressed(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create star graph with sequential IDs (compression-friendly)
             let center = graph
@@ -738,8 +725,8 @@ fn bench_decompress_overhead(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create star graph with sequential IDs
             let center = graph
@@ -800,8 +787,8 @@ fn bench_cache_hit_ratio_bfs(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create chain graph with 100 nodes
             let mut node_ids = Vec::new();
@@ -830,9 +817,7 @@ fn bench_cache_hit_ratio_bfs(criterion: &mut Criterion) {
             }
 
             // Perform 3-hop BFS (traversal workload)
-            let _bfs_result = graph
-                .bfs(node_ids[0], 3)
-                .expect("Failed to perform BFS");
+            let _bfs_result = graph.bfs(node_ids[0], 3).expect("Failed to perform BFS");
         });
     });
 
@@ -852,8 +837,8 @@ fn bench_high_degree_cache_retention(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create hub with 1000 edges, 1000 leaves with 1 edge each
             let hub = graph
@@ -917,8 +902,8 @@ fn bench_prefetch_bfs(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create chain graph with 100 nodes
             let mut node_ids = Vec::new();
@@ -947,9 +932,7 @@ fn bench_prefetch_bfs(criterion: &mut Criterion) {
             }
 
             // Perform BFS (should benefit from prefetch in cache implementation)
-            let _bfs_result = graph
-                .bfs(node_ids[0], 3)
-                .expect("Failed to perform BFS");
+            let _bfs_result = graph.bfs(node_ids[0], 3).expect("Failed to perform BFS");
         });
     });
 
@@ -973,8 +956,8 @@ fn bench_compression_ratio(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create star graph with sequential IDs (compression-friendly)
             let center = graph
@@ -1029,8 +1012,8 @@ fn bench_decompress_overhead_comparison(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create star graph with sequential IDs
             let center = graph
@@ -1087,8 +1070,8 @@ fn bench_cache_line_utilization(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create star graph with many edges to test cache line utilization
             let center = graph
@@ -1143,8 +1126,8 @@ fn bench_compression_roundtrip(criterion: &mut Criterion) {
             let temp_dir = create_benchmark_temp_dir();
             let db_path = temp_dir.path().join("benchmark.db");
 
-            let graph = open_graph(&db_path, &GraphConfig::native())
-                .expect("Failed to create graph");
+            let graph =
+                open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
             // Create graph with various edge distributions
             let center = graph

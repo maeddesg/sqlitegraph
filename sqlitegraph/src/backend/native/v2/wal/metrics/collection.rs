@@ -8,9 +8,7 @@
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::core::{
-    ClusterOperationCounters, V2WALMetrics, WALPerformanceCounters,
-};
+use super::core::{ClusterOperationCounters, V2WALMetrics, WALPerformanceCounters};
 use crate::backend::native::v2::wal::metrics::reporting::ErrorEntry;
 
 impl V2WALMetrics {
@@ -425,7 +423,7 @@ impl V2WALMetrics {
 
 #[cfg(test)]
 mod tests {
-  use crate::backend::native::v2::wal::metrics::core::V2WALMetrics;
+    use crate::backend::native::v2::wal::metrics::core::V2WALMetrics;
 
     #[test]
     fn test_record_write_operation() {

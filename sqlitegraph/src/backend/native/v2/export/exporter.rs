@@ -7,10 +7,10 @@ use super::ExportMode;
 use super::manifest::ExportManifest;
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::{NativeBackendError, NativeResult};
-use crate::backend::native::v2::wal::{V2WALConfig, V2WALReader};
 use crate::backend::native::v2::wal::recovery::states::{
-    RecoveryContext, Authority, RecoveryState as ExplicitRecoveryState,
+    Authority, RecoveryContext, RecoveryState as ExplicitRecoveryState,
 };
+use crate::backend::native::v2::wal::{V2WALConfig, V2WALReader};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -97,15 +97,15 @@ pub struct V2Exporter {
 
 impl V2Exporter {
     /// Create exporter from existing graph file
-    pub fn from_graph_file(
-        graph_path: &Path,
-        export_config: V2ExportConfig,
-    ) -> NativeResult<Self> {
+    pub fn from_graph_file(graph_path: &Path, export_config: V2ExportConfig) -> NativeResult<Self> {
         // Validate export configuration first
         if !export_config.export_path.exists() {
             std::fs::create_dir_all(&export_config.export_path).map_err(|e| {
                 NativeBackendError::IoError {
-                    context: format!("Failed to create export directory: {:?}", export_config.export_path),
+                    context: format!(
+                        "Failed to create export directory: {:?}",
+                        export_config.export_path
+                    ),
                     source: e,
                 }
             })?;
@@ -204,7 +204,10 @@ impl V2Exporter {
             }
             _ => {
                 return Err(NativeBackendError::InvalidState {
-                    context: format!("Checkpoint-aligned export requires CleanShutdown or PartialCheckpoint state, got {:?}", consistency_report.recovery_state),
+                    context: format!(
+                        "Checkpoint-aligned export requires CleanShutdown or PartialCheckpoint state, got {:?}",
+                        consistency_report.recovery_state
+                    ),
                     source: None,
                 });
             }
@@ -224,14 +227,15 @@ impl V2Exporter {
         let graph_file_path = self.config.export_path.join(graph_filename);
 
         // Copy graph file to export location (checkpoint-aligned exports typically don't include WAL)
-        let graph_bytes_copied = std::fs::copy(
-            self.graph_file.file_path(),
-            &graph_file_path
-        ).map_err(|e| NativeBackendError::IoError {
-            context: format!("Failed to copy graph file from {:?} to {:?}",
-                self.graph_file.file_path(), &graph_file_path),
-            source: e,
-        })?;
+        let graph_bytes_copied = std::fs::copy(self.graph_file.file_path(), &graph_file_path)
+            .map_err(|e| NativeBackendError::IoError {
+                context: format!(
+                    "Failed to copy graph file from {:?} to {:?}",
+                    self.graph_file.file_path(),
+                    &graph_file_path
+                ),
+                source: e,
+            })?;
 
         // Create checkpoint-aligned export manifest
         let manifest = ExportManifest {
@@ -289,7 +293,10 @@ impl V2Exporter {
 
         std::fs::write(&manifest_path, manifest_content).map_err(|e| {
             NativeBackendError::IoError {
-                context: format!("Failed to write checkpoint-aligned manifest file: {:?}", &manifest_path),
+                context: format!(
+                    "Failed to write checkpoint-aligned manifest file: {:?}",
+                    &manifest_path
+                ),
                 source: e,
             }
         })?;
@@ -314,7 +321,10 @@ impl V2Exporter {
         // Validate LSN parameters
         if from_lsn > to_lsn {
             return Err(NativeBackendError::InvalidParameter {
-                context: format!("LSN range invalid: from_lsn ({}) > to_lsn ({})", from_lsn, to_lsn),
+                context: format!(
+                    "LSN range invalid: from_lsn ({}) > to_lsn ({})",
+                    from_lsn, to_lsn
+                ),
                 source: None,
             });
         }
@@ -335,8 +345,10 @@ impl V2Exporter {
             let wal_header = wal_reader.header();
             if from_lsn > wal_header.committed_lsn || to_lsn > wal_header.committed_lsn {
                 return Err(NativeBackendError::InvalidState {
-                    context: format!("LSN range [{}, {}] exceeds committed LSN ({})",
-                        from_lsn, to_lsn, wal_header.committed_lsn),
+                    context: format!(
+                        "LSN range [{}, {}] exceeds committed LSN ({})",
+                        from_lsn, to_lsn, wal_header.committed_lsn
+                    ),
                     source: None,
                 });
             }
@@ -358,24 +370,27 @@ impl V2Exporter {
         let wal_file_path = self.config.export_path.join(wal_filename);
 
         // Copy graph file to export location
-        let graph_bytes_copied = std::fs::copy(
-            self.graph_file.file_path(),
-            &graph_file_path
-        ).map_err(|e| NativeBackendError::IoError {
-            context: format!("Failed to copy graph file from {:?} to {:?}",
-                self.graph_file.file_path(), &graph_file_path),
-            source: e,
-        })?;
+        let graph_bytes_copied = std::fs::copy(self.graph_file.file_path(), &graph_file_path)
+            .map_err(|e| NativeBackendError::IoError {
+                context: format!(
+                    "Failed to copy graph file from {:?} to {:?}",
+                    self.graph_file.file_path(),
+                    &graph_file_path
+                ),
+                source: e,
+            })?;
 
         // Copy WAL file (required for LSN-bounded export)
-        let wal_bytes_copied = std::fs::copy(
-            &self.wal_config.wal_path,
-            &wal_file_path
-        ).map_err(|e| NativeBackendError::IoError {
-            context: format!("Failed to copy WAL file from {:?} to {:?}",
-                &self.wal_config.wal_path, &wal_file_path),
-            source: e,
-        })?;
+        let wal_bytes_copied =
+            std::fs::copy(&self.wal_config.wal_path, &wal_file_path).map_err(|e| {
+                NativeBackendError::IoError {
+                    context: format!(
+                        "Failed to copy WAL file from {:?} to {:?}",
+                        &self.wal_config.wal_path, &wal_file_path
+                    ),
+                    source: e,
+                }
+            })?;
 
         // Create LSN-bounded export manifest
         let manifest = ExportManifest {
@@ -391,7 +406,7 @@ impl V2Exporter {
             wal_format_version: 2,
             v2_clustered_edges: true,
             export_timestamp,
-            export_duration_ms: 0, // Will be set below
+            export_duration_ms: 0,                         // Will be set below
             graph_checksum: from_lsn.wrapping_add(to_lsn), // Simple LSN-based checksum
             wal_checksum: Some(from_lsn.wrapping_add(to_lsn)),
             total_records: 0, // Would require parsing actual WAL data
@@ -441,7 +456,10 @@ impl V2Exporter {
 
         std::fs::write(&manifest_path, manifest_content).map_err(|e| {
             NativeBackendError::IoError {
-                context: format!("Failed to write LSN-bounded manifest file: {:?}", &manifest_path),
+                context: format!(
+                    "Failed to write LSN-bounded manifest file: {:?}",
+                    &manifest_path
+                ),
                 source: e,
             }
         })?;
@@ -482,29 +500,31 @@ impl V2Exporter {
         let consistency_report = self.analyze_consistency()?;
 
         // Copy graph file to export location
-        let graph_bytes_copied = std::fs::copy(
-            self.graph_file.file_path(),
-            &graph_file_path
-        ).map_err(|e| NativeBackendError::IoError {
-            context: format!("Failed to copy graph file from {:?} to {:?}",
-                self.graph_file.file_path(), &graph_file_path),
-            source: e,
-        })?;
-
-        // Copy WAL file if it exists
-        let (wal_bytes_copied, final_wal_path) = if self.wal_config.wal_path.exists() {
-            let bytes_copied = std::fs::copy(
-                &self.wal_config.wal_path,
-                &wal_file_path
-            ).map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to copy WAL file from {:?} to {:?}",
-                    &self.wal_config.wal_path, &wal_file_path),
+        let graph_bytes_copied = std::fs::copy(self.graph_file.file_path(), &graph_file_path)
+            .map_err(|e| NativeBackendError::IoError {
+                context: format!(
+                    "Failed to copy graph file from {:?} to {:?}",
+                    self.graph_file.file_path(),
+                    &graph_file_path
+                ),
                 source: e,
             })?;
-            (Some(bytes_copied), Some(wal_file_path))
-        } else {
-            (None, None)
-        };
+
+        // Copy WAL file if it exists
+        let (wal_bytes_copied, final_wal_path) =
+            if self.wal_config.wal_path.exists() {
+                let bytes_copied = std::fs::copy(&self.wal_config.wal_path, &wal_file_path)
+                    .map_err(|e| NativeBackendError::IoError {
+                        context: format!(
+                            "Failed to copy WAL file from {:?} to {:?}",
+                            &self.wal_config.wal_path, &wal_file_path
+                        ),
+                        source: e,
+                    })?;
+                (Some(bytes_copied), Some(wal_file_path))
+            } else {
+                (None, None)
+            };
 
         // Create export manifest with basic structure
         let manifest = ExportManifest {
@@ -514,16 +534,24 @@ impl V2Exporter {
             authority: consistency_report.authority,
             export_mode: ExportMode::Full,
             graph_checkpoint_lsn: consistency_report.checkpoint_lsn,
-            wal_start_lsn: if wal_bytes_copied.is_some() { Some(0) } else { None },
-            wal_end_lsn: if wal_bytes_copied.is_some() { Some(consistency_report.committed_lsn) } else { None },
+            wal_start_lsn: if wal_bytes_copied.is_some() {
+                Some(0)
+            } else {
+                None
+            },
+            wal_end_lsn: if wal_bytes_copied.is_some() {
+                Some(consistency_report.committed_lsn)
+            } else {
+                None
+            },
             graph_format_version: 2,
             wal_format_version: 2,
             v2_clustered_edges: true,
             export_timestamp,
             export_duration_ms: 0, // Will be set below
-            graph_checksum: 0, // Simple checksum - will be calculated later
-            wal_checksum: None, // Will be calculated if WAL is included
-            total_records: 0, // Will be calculated from actual data
+            graph_checksum: 0,     // Simple checksum - will be calculated later
+            wal_checksum: None,    // Will be calculated if WAL is included
+            total_records: 0,      // Will be calculated from actual data
             total_bytes: graph_bytes_copied + wal_bytes_copied.unwrap_or(0),
             reserved: [0; 8],
         };
@@ -596,4 +624,3 @@ impl V2Exporter {
         }
     }
 }
-

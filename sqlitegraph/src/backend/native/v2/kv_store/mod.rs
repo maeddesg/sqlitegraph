@@ -37,8 +37,8 @@ pub mod integration_tests;
 pub mod snapshot_tests;
 pub mod store;
 pub mod tests;
-pub mod types;
 pub mod ttl;
+pub mod types;
 pub mod wal;
 pub mod wal_tests;
 

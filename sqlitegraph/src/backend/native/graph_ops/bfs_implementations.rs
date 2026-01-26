@@ -48,7 +48,9 @@ pub fn bfs_generic_scalar(
         };
 
         // Observe for pattern detection with cluster metadata
-        let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
+        let _pattern =
+            ctx.detector
+                .observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
         // Populate node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
         let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
@@ -56,7 +58,8 @@ pub fn bfs_generic_scalar(
 
         // Trigger prefetch if linear confirmed and node not in buffer
         if ctx.detector.is_linear_confirmed() && !ctx.buffer.contains(current_node) {
-            ctx.buffer.prefetch_clusters_from(graph_file, current_node)?;
+            ctx.buffer
+                .prefetch_clusters_from(graph_file, current_node)?;
         }
 
         let neighbors = get_neighbors_optimized(
@@ -80,7 +83,10 @@ pub fn bfs_generic_scalar(
         if total_lookups > 0 {
             log::debug!(
                 "BFS optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
-                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.buffer_hits,
+                ctx.buffer_misses,
+                ctx.stats.hits,
+                ctx.stats.misses,
                 ctx.combined_hit_rate() * 100.0
             );
         }
@@ -126,7 +132,9 @@ pub fn bfs_pointer_table_optimized(
             Err(_) => (0, 0), // Fallback if node read fails
         };
 
-        let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
+        let _pattern =
+            ctx.detector
+                .observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
         // Populate node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
         let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
@@ -173,7 +181,10 @@ pub fn bfs_pointer_table_optimized(
         if total_lookups > 0 {
             log::debug!(
                 "BFS pointer table optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
-                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.buffer_hits,
+                ctx.buffer_misses,
+                ctx.stats.hits,
+                ctx.stats.misses,
                 ctx.combined_hit_rate() * 100.0
             );
         }
@@ -219,7 +230,9 @@ pub fn bfs_fully_optimized(
             Err(_) => (0, 0), // Fallback if node read fails
         };
 
-        let _pattern = ctx.detector.observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
+        let _pattern =
+            ctx.detector
+                .observe_with_cluster(current_node, degree, cluster_offset, cluster_size);
 
         // Populate node_id -> cluster_index mapping for sequential cluster extraction (Phase 35)
         let cluster_index = ctx.detector.cluster_offsets().len().saturating_sub(1);
@@ -284,7 +297,10 @@ pub fn bfs_fully_optimized(
         if total_lookups > 0 {
             log::debug!(
                 "BFS fully optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
-                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.buffer_hits,
+                ctx.buffer_misses,
+                ctx.stats.hits,
+                ctx.stats.misses,
                 ctx.combined_hit_rate() * 100.0
             );
         }

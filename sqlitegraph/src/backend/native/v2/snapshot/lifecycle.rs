@@ -44,12 +44,18 @@ pub enum SnapshotLifecycleState {
 impl SnapshotLifecycleState {
     /// Check if state is a terminal state
     pub fn is_terminal(self) -> bool {
-        matches!(self, SnapshotLifecycleState::Applied | SnapshotLifecycleState::Obsolete)
+        matches!(
+            self,
+            SnapshotLifecycleState::Applied | SnapshotLifecycleState::Obsolete
+        )
     }
 
     /// Check if state allows export operations
     pub fn allows_export(self) -> bool {
-        matches!(self, SnapshotLifecycleState::Stable | SnapshotLifecycleState::Importable)
+        matches!(
+            self,
+            SnapshotLifecycleState::Stable | SnapshotLifecycleState::Importable
+        )
     }
 
     /// Check if state allows import operations
@@ -123,8 +129,10 @@ impl SnapshotLifecycleInspector {
 
         // Check for actual temporary files, not completion markers
         if snapshot_files.iter().any(|p| {
-            p.extension().map_or(false, |ext| ext == "tmp") &&
-            !p.file_name().map_or(false, |name| name.to_str().map_or(false, |s| s.ends_with(".complete")))
+            p.extension().map_or(false, |ext| ext == "tmp")
+                && !p.file_name().map_or(false, |name| {
+                    name.to_str().map_or(false, |s| s.ends_with(".complete"))
+                })
         }) {
             return Ok(true);
         }
@@ -132,8 +140,10 @@ impl SnapshotLifecycleInspector {
         let manifest_path = self.export_dir.join("export.manifest");
         // Look for actual snapshot files, not completion markers
         let has_snapshot_files = snapshot_files.iter().any(|p| {
-            p.extension().map_or(false, |ext| ext == "v2") ||
-            p.file_name().map_or(false, |name| name.to_str().map_or(false, |s| s == "export.manifest"))
+            p.extension().map_or(false, |ext| ext == "v2")
+                || p.file_name().map_or(false, |name| {
+                    name.to_str().map_or(false, |s| s == "export.manifest")
+                })
         });
 
         if !manifest_path.exists() && has_snapshot_files {
@@ -144,7 +154,11 @@ impl SnapshotLifecycleInspector {
     }
 
     /// Check if snapshot is stable and complete
-    fn is_snapshot_stable(&self, manifest_path: &Path, snapshot_files: &[PathBuf]) -> NativeResult<bool> {
+    fn is_snapshot_stable(
+        &self,
+        manifest_path: &Path,
+        snapshot_files: &[PathBuf],
+    ) -> NativeResult<bool> {
         // Stable if:
         // 1. Manifest exists and is valid
         // 2. All required files are present
@@ -167,7 +181,10 @@ impl SnapshotLifecycleInspector {
         }
 
         // No temporary files should exist in stable state
-        if snapshot_files.iter().any(|p| p.extension().map_or(false, |ext| ext == "tmp")) {
+        if snapshot_files
+            .iter()
+            .any(|p| p.extension().map_or(false, |ext| ext == "tmp"))
+        {
             return Ok(false);
         }
 
@@ -189,7 +206,11 @@ impl SnapshotLifecycleInspector {
     }
 
     /// Check if snapshot is importable
-    fn is_snapshot_importable(&self, manifest_path: &Path, snapshot_files: &[PathBuf]) -> NativeResult<bool> {
+    fn is_snapshot_importable(
+        &self,
+        manifest_path: &Path,
+        snapshot_files: &[PathBuf],
+    ) -> NativeResult<bool> {
         // Importable if:
         // 1. Stable state conditions met
         // 2. Validation marker file exists
@@ -247,11 +268,12 @@ impl SnapshotLifecycleInspector {
             // Include relevant files
             if let Some(name) = path.file_name() {
                 if let Some(name_str) = name.to_str() {
-                    if name_str.ends_with(".v2") ||
-                       name_str.ends_with(".tmp") ||
-                       name_str == "export.manifest" ||
-                       name_str.starts_with("validation.") ||
-                       name_str.starts_with("import.") {
+                    if name_str.ends_with(".v2")
+                        || name_str.ends_with(".tmp")
+                        || name_str == "export.manifest"
+                        || name_str.starts_with("validation.")
+                        || name_str.starts_with("import.")
+                    {
                         files.push(path);
                     }
                 }
@@ -269,7 +291,11 @@ impl SnapshotLifecycleInspector {
     }
 
     /// Check if all required files are present according to manifest
-    fn all_required_files_present(&self, _manifest: &ExportManifest, snapshot_files: &[PathBuf]) -> NativeResult<bool> {
+    fn all_required_files_present(
+        &self,
+        _manifest: &ExportManifest,
+        snapshot_files: &[PathBuf],
+    ) -> NativeResult<bool> {
         // For snapshots, we need exactly one .v2 file
         let v2_files: Vec<&PathBuf> = snapshot_files
             .iter()
@@ -291,7 +317,8 @@ impl SnapshotLifecycleInspector {
             Err(_) => return Ok(false),
         };
 
-        if metadata.len() < 80 { // Minimum V2 header size
+        if metadata.len() < 80 {
+            // Minimum V2 header size
             return Ok(false);
         }
 
@@ -299,7 +326,11 @@ impl SnapshotLifecycleInspector {
     }
 
     /// Validate if a state transition is allowed
-    pub fn validate_transition(&self, from: SnapshotLifecycleState, to: SnapshotLifecycleState) -> NativeResult<()> {
+    pub fn validate_transition(
+        &self,
+        from: SnapshotLifecycleState,
+        to: SnapshotLifecycleState,
+    ) -> NativeResult<()> {
         // Define allowed state transitions
         match (from, to) {
             // From Creating
@@ -327,7 +358,10 @@ impl SnapshotLifecycleInspector {
 
             // All other transitions are invalid
             (from, to) => Err(NativeBackendError::InvalidState {
-                context: format!("Invalid snapshot lifecycle state transition from {:?} to {:?}", from, to),
+                context: format!(
+                    "Invalid snapshot lifecycle state transition from {:?} to {:?}",
+                    from, to
+                ),
                 source: None,
             }),
         }
@@ -339,21 +373,26 @@ impl SnapshotLifecycleInspector {
         let manifest_path = self.export_dir.join("export.manifest");
 
         let (manifest_exists, export_timestamp) = if manifest_path.exists() {
-            let metadata = std::fs::metadata(&manifest_path)
-                .map_err(|e| NativeBackendError::Io(e))?;
+            let metadata =
+                std::fs::metadata(&manifest_path).map_err(|e| NativeBackendError::Io(e))?;
 
-            let timestamp = metadata.created()
+            let timestamp = metadata
+                .created()
                 .or_else(|_| metadata.modified())
                 .or_else(|_| Ok(SystemTime::now()))
-                .map_err(|_: std::time::SystemTimeError| NativeBackendError::CorruptionDetected {
-                    context: "Cannot determine manifest timestamp".to_string(),
-                    source: None,
-                })?
+                .map_err(
+                    |_: std::time::SystemTimeError| NativeBackendError::CorruptionDetected {
+                        context: "Cannot determine manifest timestamp".to_string(),
+                        source: None,
+                    },
+                )?
                 .duration_since(UNIX_EPOCH)
-                .map_err(|_: std::time::SystemTimeError| NativeBackendError::CorruptionDetected {
-                    context: "Invalid manifest timestamp".to_string(),
-                    source: None,
-                })?
+                .map_err(
+                    |_: std::time::SystemTimeError| NativeBackendError::CorruptionDetected {
+                        context: "Invalid manifest timestamp".to_string(),
+                        source: None,
+                    },
+                )?
                 .as_secs();
 
             (true, timestamp)
@@ -368,10 +407,12 @@ impl SnapshotLifecycleInspector {
             export_timestamp,
             inspection_timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|_: std::time::SystemTimeError| NativeBackendError::CorruptionDetected {
-                    context: "System clock error".to_string(),
-                    source: None,
-                })?
+                .map_err(
+                    |_: std::time::SystemTimeError| NativeBackendError::CorruptionDetected {
+                        context: "System clock error".to_string(),
+                        source: None,
+                    },
+                )?
                 .as_secs(),
         })
     }
@@ -399,7 +440,8 @@ pub struct SnapshotMetadata {
 impl SnapshotMetadata {
     /// Get age of snapshot in seconds
     pub fn age_seconds(&self) -> u64 {
-        self.inspection_timestamp.saturating_sub(self.export_timestamp)
+        self.inspection_timestamp
+            .saturating_sub(self.export_timestamp)
     }
 
     /// Check if snapshot is stale (older than specified duration)
@@ -411,11 +453,13 @@ impl SnapshotMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::native::v2::wal::recovery::states::{RecoveryState as ExplicitRecoveryState, Authority};
-    use tempfile::{TempDir, NamedTempFile};
-    use std::fs;
     use crate::backend::native::constants::MAGIC_BYTES;
     use crate::backend::native::v2::export::ExportManifest;
+    use crate::backend::native::v2::wal::recovery::states::{
+        Authority, RecoveryState as ExplicitRecoveryState,
+    };
+    use std::fs;
+    use tempfile::{NamedTempFile, TempDir};
 
     #[test]
     fn test_snapshot_lifecycle_clean_export() {
@@ -445,7 +489,12 @@ mod tests {
         assert!(!state.allows_import());
 
         // This should fail initially - validate_transition is not implemented yet
-        inspector.validate_transition(SnapshotLifecycleState::Stable, SnapshotLifecycleState::Verifying).unwrap();
+        inspector
+            .validate_transition(
+                SnapshotLifecycleState::Stable,
+                SnapshotLifecycleState::Verifying,
+            )
+            .unwrap();
     }
 
     #[test]

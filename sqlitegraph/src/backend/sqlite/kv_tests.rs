@@ -42,7 +42,11 @@ mod tests {
 
         // Set a value
         backend
-            .kv_set(b"delete_me".to_vec(), KvValue::String("value".to_string()), None)
+            .kv_set(
+                b"delete_me".to_vec(),
+                KvValue::String("value".to_string()),
+                None,
+            )
             .unwrap();
 
         // Verify it exists
@@ -96,7 +100,11 @@ mod tests {
 
         // Bytes
         backend
-            .kv_set(b"bytes_key".to_vec(), KvValue::Bytes(vec![1, 2, 3, 4]), None)
+            .kv_set(
+                b"bytes_key".to_vec(),
+                KvValue::Bytes(vec![1, 2, 3, 4]),
+                None,
+            )
             .unwrap();
         let snapshot = SnapshotId::current();
         let result = backend.kv_get(snapshot, b"bytes_key").unwrap();
@@ -112,10 +120,7 @@ mod tests {
             .unwrap();
         let snapshot = SnapshotId::current();
         let result = backend.kv_get(snapshot, b"string_key").unwrap();
-        assert_eq!(
-            result,
-            Some(KvValue::String("hello world".to_string()))
-        );
+        assert_eq!(result, Some(KvValue::String("hello world".to_string())));
 
         // Float
         backend
@@ -145,7 +150,9 @@ mod tests {
         let result = backend.kv_get(snapshot, b"json_key").unwrap();
         assert_eq!(
             result,
-            Some(KvValue::Json(serde_json::json!({"key": "value", "number": 42})))
+            Some(KvValue::Json(
+                serde_json::json!({"key": "value", "number": 42})
+            ))
         );
     }
 
@@ -156,16 +163,17 @@ mod tests {
 
         // Set a value with 2 second TTL
         backend
-            .kv_set(b"ttl_key".to_vec(), KvValue::String("expires".to_string()), Some(2))
+            .kv_set(
+                b"ttl_key".to_vec(),
+                KvValue::String("expires".to_string()),
+                Some(2),
+            )
             .unwrap();
 
         // Should be visible immediately
         let snapshot = SnapshotId::current();
         let result = backend.kv_get(snapshot, b"ttl_key").unwrap();
-        assert_eq!(
-            result,
-            Some(KvValue::String("expires".to_string()))
-        );
+        assert_eq!(result, Some(KvValue::String("expires".to_string())));
 
         // Wait for expiration
         std::thread::sleep(std::time::Duration::from_secs(3));

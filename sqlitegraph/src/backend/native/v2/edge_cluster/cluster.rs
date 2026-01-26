@@ -76,9 +76,7 @@ impl<'a> Iterator for DecompressEdgeIterator<'a> {
 
         // Read neighbor_id (i64, 8 bytes)
         let neighbor_id_bytes = &self.data[self.position..self.position + 8];
-        let neighbor_id = i64::from_be_bytes(
-            neighbor_id_bytes.try_into().unwrap_or([0u8; 8]),
-        );
+        let neighbor_id = i64::from_be_bytes(neighbor_id_bytes.try_into().unwrap_or([0u8; 8]));
         self.position += 8;
 
         // Check if we have enough bytes for type_offset (2 bytes) + data_len (2 bytes)
@@ -88,16 +86,12 @@ impl<'a> Iterator for DecompressEdgeIterator<'a> {
 
         // Read type_offset (u16, 2 bytes)
         let type_offset_bytes = &self.data[self.position..self.position + 2];
-        let type_offset = u16::from_be_bytes(
-            type_offset_bytes.try_into().unwrap_or([0u8; 2]),
-        );
+        let type_offset = u16::from_be_bytes(type_offset_bytes.try_into().unwrap_or([0u8; 2]));
         self.position += 2;
 
         // Read data_len (u16, 2 bytes)
         let data_len_bytes = &self.data[self.position..self.position + 2];
-        let data_len = u16::from_be_bytes(
-            data_len_bytes.try_into().unwrap_or([0u8; 2]),
-        ) as usize;
+        let data_len = u16::from_be_bytes(data_len_bytes.try_into().unwrap_or([0u8; 2])) as usize;
         self.position += 2;
 
         // Read edge_data
@@ -251,9 +245,7 @@ impl EdgeCluster {
     ///
     /// # Returns
     /// A `DecompressEdgeIterator` that yields edges on-demand
-    pub fn decompress_from_bytes(
-        bytes: &[u8],
-    ) -> NativeResult<DecompressEdgeIterator<'_>> {
+    pub fn decompress_from_bytes(bytes: &[u8]) -> NativeResult<DecompressEdgeIterator<'_>> {
         DecompressEdgeIterator::new(bytes)
     }
 
@@ -453,7 +445,8 @@ mod tests {
         let edge = create_test_edge(1, 2, "test");
 
         let mut compact_edge =
-            CompactEdgeRecord::from_edge_record(&edge, Direction::Outgoing, &mut string_table).unwrap();
+            CompactEdgeRecord::from_edge_record(&edge, Direction::Outgoing, &mut string_table)
+                .unwrap();
 
         // Serialize the edge
         let edge_bytes = compact_edge.serialize();
@@ -535,7 +528,8 @@ mod tests {
         let edge = create_test_edge(1, 2, "test");
 
         let mut compact_edge =
-            CompactEdgeRecord::from_edge_record(&edge, Direction::Outgoing, &mut string_table).unwrap();
+            CompactEdgeRecord::from_edge_record(&edge, Direction::Outgoing, &mut string_table)
+                .unwrap();
 
         // Serialize the edge
         let edge_bytes = compact_edge.serialize();

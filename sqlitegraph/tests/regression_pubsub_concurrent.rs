@@ -3,14 +3,12 @@
 //! Validates that concurrent subscribers don't cause lock contention or deadlocks.
 //! Tests subscribe/unsubscribe during commits, dropped receivers, and filter correctness.
 
-use std::time::Duration;
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use sqlitegraph::{
-    open_graph, GraphConfig, NodeSpec, EdgeSpec,
-    backend::SubscriptionFilter,
-    backend::PubSubEvent,
-    backend::native::v2::pubsub::PubSubEventType,
+    EdgeSpec, GraphConfig, NodeSpec, backend::PubSubEvent, backend::SubscriptionFilter,
+    backend::native::v2::pubsub::PubSubEventType, open_graph,
 };
 
 /// Create a test graph with Native backend
@@ -18,8 +16,7 @@ fn create_test_graph() -> (tempfile::TempDir, std::path::PathBuf) {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     std::mem::drop(graph);
     (temp_dir, db_path)
@@ -34,8 +31,7 @@ fn test_concurrent_subscribers_no_contention() {
     let (_temp_dir, db_path) = create_test_graph();
 
     // Create graph and subscribe multiple receivers
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to open graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
     // Subscribe 10 receivers with different filters
     let mut receivers = Vec::new();
@@ -81,9 +77,7 @@ fn test_concurrent_subscribers_no_contention() {
 
     // Unsubscribe all
     for sub_id in subscriber_ids {
-        let removed = graph
-            .unsubscribe(sub_id)
-            .expect("Failed to unsubscribe");
+        let removed = graph.unsubscribe(sub_id).expect("Failed to unsubscribe");
         assert!(removed, "Subscriber should exist");
     }
 
@@ -100,8 +94,7 @@ fn test_subscribe_unsubscribe_during_commits() {
 
     // GraphBackend is NOT Send/Sync, so we can't share across threads
     // Instead, test sequential subscribe/unsubscribe with interleaved commits
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to open graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
     // Perform 5 rounds of subscribe -> commit -> unsubscribe
     for round in 0..5 {
@@ -123,9 +116,7 @@ fn test_subscribe_unsubscribe_during_commits() {
         }
 
         // Unsubscribe
-        let removed = graph
-            .unsubscribe(sub_id)
-            .expect("Failed to unsubscribe");
+        let removed = graph.unsubscribe(sub_id).expect("Failed to unsubscribe");
         assert!(removed, "Subscriber should exist");
     }
 
@@ -140,8 +131,7 @@ fn test_subscribe_unsubscribe_during_commits() {
 fn test_dropped_receiver_doesnt_block_commit() {
     let (_temp_dir, db_path) = create_test_graph();
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to open graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
     // Subscribe 5 receivers
     let mut subscriber_ids = Vec::new();
@@ -197,20 +187,15 @@ fn test_dropped_receiver_doesnt_block_commit() {
 fn test_filter_api_works() {
     let (_temp_dir, db_path) = create_test_graph();
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to open graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
     // Subscribe 3 receivers with different filters
     let (node_sub_id, _node_rx) = graph
-        .subscribe(SubscriptionFilter::event_types(vec![
-            PubSubEventType::Node,
-        ]))
+        .subscribe(SubscriptionFilter::event_types(vec![PubSubEventType::Node]))
         .expect("Failed to subscribe");
 
     let (edge_sub_id, _edge_rx) = graph
-        .subscribe(SubscriptionFilter::event_types(vec![
-            PubSubEventType::Edge,
-        ]))
+        .subscribe(SubscriptionFilter::event_types(vec![PubSubEventType::Edge]))
         .expect("Failed to subscribe");
 
     let (all_sub_id, _all_rx) = graph
@@ -260,8 +245,7 @@ fn test_filter_api_works() {
 fn test_multiple_subscribers_no_crashes() {
     let (_temp_dir, db_path) = create_test_graph();
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to open graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
     // Subscribe 3 receivers
     let (sub1_id, _rx1) = graph
@@ -307,8 +291,7 @@ fn test_multiple_subscribers_no_crashes() {
 fn test_unsubscribe_api_works() {
     let (_temp_dir, db_path) = create_test_graph();
 
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to open graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to open graph");
 
     // Subscribe
     let (sub_id, _rx) = graph
@@ -326,9 +309,7 @@ fn test_unsubscribe_api_works() {
         .expect("Failed to insert node");
 
     // Unsubscribe
-    let removed = graph
-        .unsubscribe(sub_id)
-        .expect("Failed to unsubscribe");
+    let removed = graph.unsubscribe(sub_id).expect("Failed to unsubscribe");
     assert!(removed, "Subscriber should exist");
 
     // Perform more operations (after unsubscribe)
@@ -342,9 +323,7 @@ fn test_unsubscribe_api_works() {
         .expect("Failed to insert node");
 
     // Try to unsubscribe again - should return false
-    let removed_again = graph
-        .unsubscribe(sub_id)
-        .expect("Failed to unsubscribe");
+    let removed_again = graph.unsubscribe(sub_id).expect("Failed to unsubscribe");
     assert!(!removed_again, "Second unsubscribe should return false");
 
     // Test passes - unsubscribe API works

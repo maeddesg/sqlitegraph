@@ -363,7 +363,7 @@ impl V2WALReader {
                 // Invariant: Data records require active transaction
                 if self.active_tx.is_none() {
                     return Err(NativeBackendError::WalContiguityViolation(
-                        "Data record without active transaction".to_string()
+                        "Data record without active transaction".to_string(),
                     ));
                 }
                 Ok(())
@@ -377,7 +377,10 @@ impl V2WALReader {
     }
 
     /// Read the next WAL record from current position with optional validation
-    fn read_next_record_with_validation(&mut self, validate_contiguity: bool) -> NativeResult<Option<(u64, V2WALRecord)>> {
+    fn read_next_record_with_validation(
+        &mut self,
+        validate_contiguity: bool,
+    ) -> NativeResult<Option<(u64, V2WALRecord)>> {
         if self.current_position >= self.wal_end {
             return Ok(None); // End of WAL
         }
@@ -446,8 +449,8 @@ impl V2WALReader {
             V2WALRecord::TransactionBegin { tx_id, .. } => {
                 self.active_tx = Some(*tx_id);
             }
-            V2WALRecord::TransactionCommit { tx_id, .. } |
-            V2WALRecord::TransactionRollback { tx_id, .. } => {
+            V2WALRecord::TransactionCommit { tx_id, .. }
+            | V2WALRecord::TransactionRollback { tx_id, .. } => {
                 // Only clear if it matches active transaction
                 if self.active_tx == Some(*tx_id) {
                     self.active_tx = None;
@@ -726,7 +729,7 @@ mod tests {
         let header_bytes = unsafe {
             std::slice::from_raw_parts(
                 &header as *const _ as *const u8,
-                std::mem::size_of::<crate::backend::native::v2::wal::V2WALHeader>()
+                std::mem::size_of::<crate::backend::native::v2::wal::V2WALHeader>(),
             )
         };
         file.write_all(header_bytes).unwrap();
@@ -734,7 +737,9 @@ mod tests {
 
         // Write test records
         for record in records {
-            let serialized = crate::backend::native::v2::wal::record::V2WALSerializer::serialize(&record).unwrap();
+            let serialized =
+                crate::backend::native::v2::wal::record::V2WALSerializer::serialize(&record)
+                    .unwrap();
             file.write_all(&serialized).unwrap();
         }
 
@@ -747,22 +752,37 @@ mod tests {
         let wal_path = temp_dir.path().join("test_contiguity.wal");
 
         // Create valid WAL with proper transaction structure
-        write_wal_records(&wal_path, vec![
-            V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 100 },
-            V2WALRecord::NodeInsert {
-                node_id: 1,
-                slot_offset: 1024,
-                node_data: vec![1, 2, 3],
-            },
-            V2WALRecord::TransactionCommit { tx_id: 1, timestamp: 150 },
-            V2WALRecord::TransactionBegin { tx_id: 2, timestamp: 160 },
-            V2WALRecord::NodeInsert {
-                node_id: 2,
-                slot_offset: 2048,
-                node_data: vec![4, 5, 6],
-            },
-            V2WALRecord::TransactionCommit { tx_id: 2, timestamp: 200 },
-        ]);
+        write_wal_records(
+            &wal_path,
+            vec![
+                V2WALRecord::TransactionBegin {
+                    tx_id: 1,
+                    timestamp: 100,
+                },
+                V2WALRecord::NodeInsert {
+                    node_id: 1,
+                    slot_offset: 1024,
+                    node_data: vec![1, 2, 3],
+                },
+                V2WALRecord::TransactionCommit {
+                    tx_id: 1,
+                    timestamp: 150,
+                },
+                V2WALRecord::TransactionBegin {
+                    tx_id: 2,
+                    timestamp: 160,
+                },
+                V2WALRecord::NodeInsert {
+                    node_id: 2,
+                    slot_offset: 2048,
+                    node_data: vec![4, 5, 6],
+                },
+                V2WALRecord::TransactionCommit {
+                    tx_id: 2,
+                    timestamp: 200,
+                },
+            ],
+        );
 
         // Open and read WAL - should succeed
         let mut reader = V2WALReader::open(&wal_path).unwrap();
@@ -783,13 +803,14 @@ mod tests {
         let wal_path = temp_dir.path().join("test_contiguity.wal");
 
         // Create WAL with data record but no Begin
-        write_wal_records(&wal_path, vec![
-            V2WALRecord::NodeInsert {
+        write_wal_records(
+            &wal_path,
+            vec![V2WALRecord::NodeInsert {
                 node_id: 1,
                 slot_offset: 1024,
                 node_data: vec![1, 2, 3],
-            },
-        ]);
+            }],
+        );
 
         // Open WAL
         let mut reader = V2WALReader::open(&wal_path).unwrap();
@@ -811,10 +832,19 @@ mod tests {
         let wal_path = temp_dir.path().join("test_contiguity.wal");
 
         // Create WAL with Begin while another transaction active
-        write_wal_records(&wal_path, vec![
-            V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 100 },
-            V2WALRecord::TransactionBegin { tx_id: 2, timestamp: 110 }, // ERROR: tx_id 1 still active
-        ]);
+        write_wal_records(
+            &wal_path,
+            vec![
+                V2WALRecord::TransactionBegin {
+                    tx_id: 1,
+                    timestamp: 100,
+                },
+                V2WALRecord::TransactionBegin {
+                    tx_id: 2,
+                    timestamp: 110,
+                }, // ERROR: tx_id 1 still active
+            ],
+        );
 
         // Open WAL
         let mut reader = V2WALReader::open(&wal_path).unwrap();
@@ -839,10 +869,19 @@ mod tests {
         let wal_path = temp_dir.path().join("test_contiguity.wal");
 
         // Create WAL with Commit for wrong transaction
-        write_wal_records(&wal_path, vec![
-            V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 100 },
-            V2WALRecord::TransactionCommit { tx_id: 2, timestamp: 110 }, // ERROR: committing tx_id=2 but tx_id=1 active
-        ]);
+        write_wal_records(
+            &wal_path,
+            vec![
+                V2WALRecord::TransactionBegin {
+                    tx_id: 1,
+                    timestamp: 100,
+                },
+                V2WALRecord::TransactionCommit {
+                    tx_id: 2,
+                    timestamp: 110,
+                }, // ERROR: committing tx_id=2 but tx_id=1 active
+            ],
+        );
 
         // Open WAL
         let mut reader = V2WALReader::open(&wal_path).unwrap();
@@ -867,9 +906,13 @@ mod tests {
         let wal_path = temp_dir.path().join("test_contiguity.wal");
 
         // Create WAL with Commit but no Begin
-        write_wal_records(&wal_path, vec![
-            V2WALRecord::TransactionCommit { tx_id: 1, timestamp: 100 },
-        ]);
+        write_wal_records(
+            &wal_path,
+            vec![V2WALRecord::TransactionCommit {
+                tx_id: 1,
+                timestamp: 100,
+            }],
+        );
 
         // Open WAL
         let mut reader = V2WALReader::open(&wal_path).unwrap();
@@ -891,9 +934,13 @@ mod tests {
         let wal_path = temp_dir.path().join("test_contiguity.wal");
 
         // Create WAL with Rollback but no Begin
-        write_wal_records(&wal_path, vec![
-            V2WALRecord::TransactionRollback { tx_id: 1, timestamp: 100 },
-        ]);
+        write_wal_records(
+            &wal_path,
+            vec![V2WALRecord::TransactionRollback {
+                tx_id: 1,
+                timestamp: 100,
+            }],
+        );
 
         // Open WAL
         let mut reader = V2WALReader::open(&wal_path).unwrap();
@@ -915,22 +962,37 @@ mod tests {
         let wal_path = temp_dir.path().join("test_contiguity.wal");
 
         // Create WAL with Begin, data, Rollback, then new transaction
-        write_wal_records(&wal_path, vec![
-            V2WALRecord::TransactionBegin { tx_id: 1, timestamp: 100 },
-            V2WALRecord::NodeInsert {
-                node_id: 1,
-                slot_offset: 1024,
-                node_data: vec![1, 2, 3],
-            },
-            V2WALRecord::TransactionRollback { tx_id: 1, timestamp: 150 },
-            V2WALRecord::TransactionBegin { tx_id: 2, timestamp: 160 }, // Should succeed after rollback
-            V2WALRecord::NodeInsert {
-                node_id: 2,
-                slot_offset: 2048,
-                node_data: vec![4, 5, 6],
-            },
-            V2WALRecord::TransactionCommit { tx_id: 2, timestamp: 200 },
-        ]);
+        write_wal_records(
+            &wal_path,
+            vec![
+                V2WALRecord::TransactionBegin {
+                    tx_id: 1,
+                    timestamp: 100,
+                },
+                V2WALRecord::NodeInsert {
+                    node_id: 1,
+                    slot_offset: 1024,
+                    node_data: vec![1, 2, 3],
+                },
+                V2WALRecord::TransactionRollback {
+                    tx_id: 1,
+                    timestamp: 150,
+                },
+                V2WALRecord::TransactionBegin {
+                    tx_id: 2,
+                    timestamp: 160,
+                }, // Should succeed after rollback
+                V2WALRecord::NodeInsert {
+                    node_id: 2,
+                    slot_offset: 2048,
+                    node_data: vec![4, 5, 6],
+                },
+                V2WALRecord::TransactionCommit {
+                    tx_id: 2,
+                    timestamp: 200,
+                },
+            ],
+        );
 
         // Open WAL
         let mut reader = V2WALReader::open(&wal_path).unwrap();

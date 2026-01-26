@@ -4,11 +4,9 @@
 //! serialization/deserialization, cluster affinity, and record type validation.
 //! Tests follow TDD methodology with comprehensive edge case coverage.
 
-use sqlitegraph::backend::native::v2::wal::{
-    V2WALRecord, V2WALRecordType, WALSerializationError,
-};
-use sqlitegraph::backend::native::v2::wal::record::V2WALSerializer;
 use sqlitegraph::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
+use sqlitegraph::backend::native::v2::wal::record::V2WALSerializer;
+use sqlitegraph::backend::native::v2::wal::{V2WALRecord, V2WALRecordType, WALSerializationError};
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
 use std::collections::HashMap;
 use tempfile::tempdir;
@@ -43,11 +41,11 @@ fn test_all_record_types_creation() -> NativeResult<()> {
     let edge_insert = V2WALRecord::EdgeInsert {
         cluster_key: (100, Direction::Outgoing), // (source_node, direction)
         edge_record: CompactEdgeRecord::new(
-            200,                                    // target_node as neighbor_id
-            0,                                      // edge_type_offset
-            vec![7, 8, 9],                          // edge_data
+            200,           // target_node as neighbor_id
+            0,             // edge_type_offset
+            vec![7, 8, 9], // edge_data
         ),
-        insertion_point: 0,                         // Required field
+        insertion_point: 0, // Required field
     };
     assert_eq!(edge_insert.record_type(), V2WALRecordType::EdgeInsert);
     assert!(edge_insert.modifies_data());
@@ -56,11 +54,11 @@ fn test_all_record_types_creation() -> NativeResult<()> {
 
     // Test ClusterCreate record
     let cluster_create = V2WALRecord::ClusterCreate {
-        node_id: 5555,                      // ✅ Node identifier
-        direction: Direction::Outgoing,      // ✅ Direction
-        cluster_offset: 0,                   // ✅ File offset
-        cluster_size: 1000,                  // ✅ Size
-        edge_data: vec![10, 20, 30],        // ✅ Cluster metadata
+        node_id: 5555,                  // ✅ Node identifier
+        direction: Direction::Outgoing, // ✅ Direction
+        cluster_offset: 0,              // ✅ File offset
+        cluster_size: 1000,             // ✅ Size
+        edge_data: vec![10, 20, 30],    // ✅ Cluster metadata
     };
     assert_eq!(cluster_create.record_type(), V2WALRecordType::ClusterCreate);
     assert!(cluster_create.modifies_data());
@@ -69,8 +67,8 @@ fn test_all_record_types_creation() -> NativeResult<()> {
 
     // Test TransactionBegin record
     let tx_begin = V2WALRecord::TransactionBegin {
-        tx_id: 123456,                    // ✅ Correct field name
-        timestamp: 1640995200000,         // 2022-01-01 00:00:00 UTC
+        tx_id: 123456,            // ✅ Correct field name
+        timestamp: 1640995200000, // 2022-01-01 00:00:00 UTC
     };
     assert_eq!(tx_begin.record_type(), V2WALRecordType::TransactionBegin);
     assert!(!tx_begin.modifies_data());
@@ -79,8 +77,8 @@ fn test_all_record_types_creation() -> NativeResult<()> {
 
     // Test TransactionCommit record
     let tx_commit = V2WALRecord::TransactionCommit {
-        tx_id: 123456,                    // ✅ Correct field name
-        timestamp: 1640995201000,         // ✅ Required field
+        tx_id: 123456,            // ✅ Correct field name
+        timestamp: 1640995201000, // ✅ Required field
     };
     assert_eq!(tx_commit.record_type(), V2WALRecordType::TransactionCommit);
     assert!(!tx_commit.modifies_data());
@@ -89,8 +87,8 @@ fn test_all_record_types_creation() -> NativeResult<()> {
 
     // Test TransactionRollback record
     let tx_rollback = V2WALRecord::TransactionRollback {
-        tx_id: 123456,                    // ✅ Correct field name
-        timestamp: 1640995200500,         // ✅ Required field
+        tx_id: 123456,            // ✅ Correct field name
+        timestamp: 1640995200500, // ✅ Required field
     };
     assert_eq!(
         tx_rollback.record_type(),
@@ -121,22 +119,22 @@ fn test_record_serialization_round_trip() -> NativeResult<()> {
         V2WALRecord::EdgeInsert {
             cluster_key: (100, Direction::Outgoing), // (source_node, direction)
             edge_record: CompactEdgeRecord::new(
-                200,                                    // target_node as neighbor_id
-                0,                                      // edge_type_offset
-                vec![7, 8, 9],                          // edge_data
+                200,           // target_node as neighbor_id
+                0,             // edge_type_offset
+                vec![7, 8, 9], // edge_data
             ),
-            insertion_point: 0,                         // Required field
+            insertion_point: 0, // Required field
         },
         V2WALRecord::TransactionBegin {
-            tx_id: 123456,                    // ✅ Correct field name
-            timestamp: 1640995200000,         // ✅ Required field
+            tx_id: 123456,            // ✅ Correct field name
+            timestamp: 1640995200000, // ✅ Required field
         },
         V2WALRecord::ClusterCreate {
-            node_id: 5555,                      // ✅ Node identifier
-            direction: Direction::Outgoing,      // ✅ Direction
-            cluster_offset: 0,                   // ✅ File offset
-            cluster_size: 1000,                  // ✅ Size
-            edge_data: vec![10, 20, 30],        // ✅ Cluster metadata
+            node_id: 5555,                  // ✅ Node identifier
+            direction: Direction::Outgoing, // ✅ Direction
+            cluster_offset: 0,              // ✅ File offset
+            cluster_size: 1000,             // ✅ Size
+            edge_data: vec![10, 20, 30],    // ✅ Cluster metadata
         },
     ];
 
@@ -214,9 +212,18 @@ fn test_record_serialization_round_trip() -> NativeResult<()> {
                 },
             ) => {
                 // Compare CompactEdgeRecord components since PartialEq is not implemented
-                assert_eq!(orig_edge_record.neighbor_id, de_edge_record.neighbor_id, "EdgeInsert neighbor_id should match");
-                assert_eq!(orig_edge_record.edge_type_offset, de_edge_record.edge_type_offset, "EdgeInsert edge_type_offset should match");
-                assert_eq!(orig_edge_record.edge_data, de_edge_record.edge_data, "EdgeInsert edge_data should match");
+                assert_eq!(
+                    orig_edge_record.neighbor_id, de_edge_record.neighbor_id,
+                    "EdgeInsert neighbor_id should match"
+                );
+                assert_eq!(
+                    orig_edge_record.edge_type_offset, de_edge_record.edge_type_offset,
+                    "EdgeInsert edge_type_offset should match"
+                );
+                assert_eq!(
+                    orig_edge_record.edge_data, de_edge_record.edge_data,
+                    "EdgeInsert edge_data should match"
+                );
             }
             _ => {} // Other record types
         }
@@ -250,9 +257,9 @@ fn test_record_size_estimation() -> NativeResult<()> {
             V2WALRecord::EdgeInsert {
                 cluster_key: (100, Direction::Outgoing), // (source_node, direction)
                 edge_record: CompactEdgeRecord::new(
-                    200,                                // target_node
-                    0,                                  // edge_type_offset
-                    vec![4; 200]                        // edge_data
+                    200,          // target_node
+                    0,            // edge_type_offset
+                    vec![4; 200], // edge_data
                 ),
                 insertion_point: 0,
             },
@@ -325,9 +332,9 @@ fn test_cluster_affinity_grouping() -> NativeResult<()> {
         V2WALRecord::EdgeInsert {
             cluster_key: (10, Direction::Outgoing), // (source_node, direction)
             edge_record: CompactEdgeRecord::new(
-                20,                                 // target_node
-                0,                                   // edge_type_offset
-                vec![7, 8, 9]                        // edge_data
+                20,            // target_node
+                0,             // edge_type_offset
+                vec![7, 8, 9], // edge_data
             ),
             insertion_point: 0,
         },
@@ -343,9 +350,9 @@ fn test_cluster_affinity_grouping() -> NativeResult<()> {
         V2WALRecord::EdgeInsert {
             cluster_key: (30, Direction::Outgoing), // (source_node, direction)
             edge_record: CompactEdgeRecord::new(
-                40,                                 // target_node
-                0,                                   // edge_type_offset
-                vec![13, 14, 15]                     // edge_data
+                40,               // target_node
+                0,                // edge_type_offset
+                vec![13, 14, 15], // edge_data
             ),
             insertion_point: 0,
         },
@@ -424,9 +431,9 @@ fn test_record_sequence_validation() -> NativeResult<()> {
         V2WALRecord::EdgeInsert {
             cluster_key: (1, Direction::Outgoing), // (source_node, direction)
             edge_record: CompactEdgeRecord::new(
-                2,                                 // target_node
-                0,                                   // edge_type_offset
-                vec![4, 5, 6]                        // edge_data
+                2,             // target_node
+                0,             // edge_type_offset
+                vec![4, 5, 6], // edge_data
             ),
             insertion_point: 0,
         },
@@ -535,9 +542,9 @@ fn test_serialization_performance() -> NativeResult<()> {
             V2WALRecord::EdgeInsert {
                 cluster_key: ((i * 2) as i64, Direction::Outgoing), // (source_node, direction)
                 edge_record: CompactEdgeRecord::new(
-                    (i * 3) as i64,                               // target_node
-                    0,                                             // edge_type_offset
-                    vec![i as u8; 32]                             // edge_data
+                    (i * 3) as i64,    // target_node
+                    0,                 // edge_type_offset
+                    vec![i as u8; 32], // edge_data
                 ),
                 insertion_point: 0,
             }

@@ -4,7 +4,6 @@
 //! the overall checkpoint process, managing record processing, progress tracking,
 //! and coordination between different checkpoint subsystems.
 
-
 // Re-export the main CheckpointExecutor as the primary public API
 pub use self::executor::CheckpointExecutor;
 

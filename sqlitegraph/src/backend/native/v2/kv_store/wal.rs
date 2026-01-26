@@ -23,8 +23,9 @@ pub fn serialize_value(value: &KvValue) -> Result<Vec<u8>, KvStoreError> {
         KvValue::Integer(n) => Ok(n.to_le_bytes().to_vec()),
         KvValue::Float(f) => Ok(f.to_le_bytes().to_vec()),
         KvValue::Boolean(b) => Ok(vec![*b as u8]),
-        KvValue::Json(v) => serde_json::to_vec(v)
-            .map_err(|e| KvStoreError::SerializationError(format!("JSON serialization failed: {}", e))),
+        KvValue::Json(v) => serde_json::to_vec(v).map_err(|e| {
+            KvStoreError::SerializationError(format!("JSON serialization failed: {}", e))
+        }),
     }
 }
 
@@ -32,45 +33,47 @@ pub fn serialize_value(value: &KvValue) -> Result<Vec<u8>, KvStoreError> {
 pub fn deserialize_value(bytes: &[u8], type_tag: u8) -> Result<KvValue, KvStoreError> {
     match type_tag {
         VALUE_TYPE_BYTES => Ok(KvValue::Bytes(bytes.to_vec())),
-        VALUE_TYPE_STRING => {
-            String::from_utf8(bytes.to_vec())
-                .map(KvValue::String)
-                .map_err(|e| KvStoreError::DeserializationError(format!("Invalid UTF-8: {}", e)))
-        }
+        VALUE_TYPE_STRING => String::from_utf8(bytes.to_vec())
+            .map(KvValue::String)
+            .map_err(|e| KvStoreError::DeserializationError(format!("Invalid UTF-8: {}", e))),
         VALUE_TYPE_INTEGER => {
             if bytes.len() != 8 {
-                return Err(KvStoreError::DeserializationError(
-                    format!("Invalid integer length: {}", bytes.len())
-                ));
+                return Err(KvStoreError::DeserializationError(format!(
+                    "Invalid integer length: {}",
+                    bytes.len()
+                )));
             }
             let val = i64::from_le_bytes(bytes.try_into().unwrap());
             Ok(KvValue::Integer(val))
         }
         VALUE_TYPE_FLOAT => {
             if bytes.len() != 8 {
-                return Err(KvStoreError::DeserializationError(
-                    format!("Invalid float length: {}", bytes.len())
-                ));
+                return Err(KvStoreError::DeserializationError(format!(
+                    "Invalid float length: {}",
+                    bytes.len()
+                )));
             }
             let val = f64::from_le_bytes(bytes.try_into().unwrap());
             Ok(KvValue::Float(val))
         }
         VALUE_TYPE_BOOLEAN => {
             if bytes.len() != 1 {
-                return Err(KvStoreError::DeserializationError(
-                    format!("Invalid boolean length: {}", bytes.len())
-                ));
+                return Err(KvStoreError::DeserializationError(format!(
+                    "Invalid boolean length: {}",
+                    bytes.len()
+                )));
             }
             Ok(KvValue::Boolean(bytes[0] != 0))
         }
-        VALUE_TYPE_JSON => {
-            serde_json::from_slice(bytes)
-                .map(KvValue::Json)
-                .map_err(|e| KvStoreError::DeserializationError(format!("JSON deserialization failed: {}", e)))
-        }
-        _ => Err(KvStoreError::DeserializationError(
-            format!("Unknown value type tag: {}", type_tag)
-        )),
+        VALUE_TYPE_JSON => serde_json::from_slice(bytes)
+            .map(KvValue::Json)
+            .map_err(|e| {
+                KvStoreError::DeserializationError(format!("JSON deserialization failed: {}", e))
+            }),
+        _ => Err(KvStoreError::DeserializationError(format!(
+            "Unknown value type tag: {}",
+            type_tag
+        ))),
     }
 }
 
@@ -194,7 +197,15 @@ mod tests {
         let ttl_seconds = Some(3600);
         let version = 12345;
 
-        apply_set(&mut store, key.clone(), value_bytes, value_type, ttl_seconds, version).unwrap();
+        apply_set(
+            &mut store,
+            key.clone(),
+            value_bytes,
+            value_type,
+            ttl_seconds,
+            version,
+        )
+        .unwrap();
 
         let result = store.get(&key).unwrap();
         assert_eq!(result, Some(KvValue::Bytes(b"test_value".to_vec())));
@@ -206,7 +217,9 @@ mod tests {
 
         // First create an entry
         let key = b"test_key".to_vec();
-        store.set(key.clone(), KvValue::Bytes(b"test_value".to_vec()), None).unwrap();
+        store
+            .set(key.clone(), KvValue::Bytes(b"test_value".to_vec()), None)
+            .unwrap();
 
         // Verify it exists
         assert!(store.get(&key).unwrap().is_some());

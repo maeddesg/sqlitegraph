@@ -49,7 +49,10 @@ pub enum DependencyStatus {
 impl DependencyStatus {
     /// Returns true if the dependency status requires action
     pub fn requires_action(&self) -> bool {
-        matches!(self, DependencyStatus::Deprecated | DependencyStatus::SecurityAdvisory)
+        matches!(
+            self,
+            DependencyStatus::Deprecated | DependencyStatus::SecurityAdvisory
+        )
     }
 }
 

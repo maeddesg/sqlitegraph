@@ -85,16 +85,29 @@ impl NodeRecordV2 {
 
             // DEBUG: Print cluster information
             if std::env::var("CLUSTER_VALIDATION_DEBUG").is_ok() {
-                println!("[CLUSTER_VALIDATION_DEBUG] Node {}: checking overlap", self.id);
-                println!("  outgoing_cluster_offset: {}", self.outgoing_cluster_offset);
+                println!(
+                    "[CLUSTER_VALIDATION_DEBUG] Node {}: checking overlap",
+                    self.id
+                );
+                println!(
+                    "  outgoing_cluster_offset: {}",
+                    self.outgoing_cluster_offset
+                );
                 println!("  outgoing_cluster_size: {}", self.outgoing_cluster_size);
                 println!("  outgoing_end: {}", outgoing_end);
-                println!("  incoming_cluster_offset: {}", self.incoming_cluster_offset);
+                println!(
+                    "  incoming_cluster_offset: {}",
+                    self.incoming_cluster_offset
+                );
                 println!("  incoming_cluster_size: {}", self.incoming_cluster_size);
                 println!("  incoming_end: {}", incoming_end);
-                println!("  overlap_condition: {} < {} && {} < {}",
-                    self.incoming_cluster_offset, outgoing_end,
-                    self.outgoing_cluster_offset, incoming_end);
+                println!(
+                    "  overlap_condition: {} < {} && {} < {}",
+                    self.incoming_cluster_offset,
+                    outgoing_end,
+                    self.outgoing_cluster_offset,
+                    incoming_end
+                );
             }
 
             // Bidirectional overlap check: intervals [outgoing_start, outgoing_end) and [incoming_start, incoming_end)
@@ -104,7 +117,8 @@ impl NodeRecordV2 {
             {
                 // Calculate actual overlap size
                 // Allow edge case where clusters are adjacent (overlap_size = 0 is OK)
-                let overlap_start = std::cmp::max(self.outgoing_cluster_offset, self.incoming_cluster_offset);
+                let overlap_start =
+                    std::cmp::max(self.outgoing_cluster_offset, self.incoming_cluster_offset);
                 let overlap_end = std::cmp::min(outgoing_end, incoming_end);
                 let overlap_size = overlap_end - overlap_start;
 

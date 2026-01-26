@@ -5,7 +5,6 @@
 
 #![cfg(feature = "native-v2")]
 
-
 #[cfg(test)]
 mod basic_visibility_tests {
     use super::*;
@@ -127,15 +126,27 @@ mod version_ordering_tests {
         let backend = NativeGraphBackend::new_temp().unwrap();
 
         backend
-            .kv_set(b"multi_key".to_vec(), KvValue::String("v1".to_string()), None)
+            .kv_set(
+                b"multi_key".to_vec(),
+                KvValue::String("v1".to_string()),
+                None,
+            )
             .unwrap();
 
         backend
-            .kv_set(b"multi_key".to_vec(), KvValue::String("v2".to_string()), None)
+            .kv_set(
+                b"multi_key".to_vec(),
+                KvValue::String("v2".to_string()),
+                None,
+            )
             .unwrap();
 
         backend
-            .kv_set(b"multi_key".to_vec(), KvValue::String("v3".to_string()), None)
+            .kv_set(
+                b"multi_key".to_vec(),
+                KvValue::String("v3".to_string()),
+                None,
+            )
             .unwrap();
 
         // Current snapshot sees latest value (v3)
@@ -183,11 +194,7 @@ mod ttl_interaction_tests {
         let backend = NativeGraphBackend::new_temp().unwrap();
 
         backend
-            .kv_set(
-                b"both_filters_key".to_vec(),
-                KvValue::Integer(42),
-                Some(1),
-            )
+            .kv_set(b"both_filters_key".to_vec(), KvValue::Integer(42), Some(1))
             .unwrap();
 
         let snapshot = SnapshotId::current();
@@ -270,11 +277,7 @@ mod backend_integration_tests {
 
         // Set KV value
         backend
-            .kv_set(
-                b"node_metadata".to_vec(),
-                KvValue::Integer(node_id),
-                None,
-            )
+            .kv_set(b"node_metadata".to_vec(), KvValue::Integer(node_id), None)
             .unwrap();
 
         // Read both at same snapshot
@@ -303,7 +306,9 @@ mod compatibility_tests {
         let value = KvValue::String("test_value".to_string());
 
         // Both backends accept same types
-        native_backend.kv_set(key.clone(), value.clone(), None).unwrap();
+        native_backend
+            .kv_set(key.clone(), value.clone(), None)
+            .unwrap();
         sqlite_backend.kv_set(key, value, None).unwrap();
 
         let snapshot = SnapshotId::current();
@@ -353,12 +358,16 @@ mod compatibility_tests {
 
         for (key, value) in test_cases {
             // Native backend
-            native_backend.kv_set(key.to_vec(), value.clone(), None).unwrap();
+            native_backend
+                .kv_set(key.to_vec(), value.clone(), None)
+                .unwrap();
             let snapshot = SnapshotId::current();
             let native_result = native_backend.kv_get(snapshot, key).unwrap();
 
             // SQLite backend
-            sqlite_backend.kv_set(key.to_vec(), value.clone(), None).unwrap();
+            sqlite_backend
+                .kv_set(key.to_vec(), value.clone(), None)
+                .unwrap();
             let snapshot = SnapshotId::current();
             let sqlite_result = sqlite_backend.kv_get(snapshot, key).unwrap();
 
@@ -379,8 +388,12 @@ mod compatibility_tests {
         let value2 = KvValue::Integer(200);
 
         // Set initial value
-        native_backend.kv_set(key.clone(), value1.clone(), None).unwrap();
-        sqlite_backend.kv_set(key.clone(), value1.clone(), None).unwrap();
+        native_backend
+            .kv_set(key.clone(), value1.clone(), None)
+            .unwrap();
+        sqlite_backend
+            .kv_set(key.clone(), value1.clone(), None)
+            .unwrap();
 
         let snapshot = SnapshotId::current();
         let native_result = native_backend.kv_get(snapshot, &key).unwrap();
@@ -390,8 +403,12 @@ mod compatibility_tests {
         assert_eq!(native_result, Some(value1));
 
         // Update value
-        native_backend.kv_set(key.clone(), value2.clone(), None).unwrap();
-        sqlite_backend.kv_set(key.clone(), value2.clone(), None).unwrap();
+        native_backend
+            .kv_set(key.clone(), value2.clone(), None)
+            .unwrap();
+        sqlite_backend
+            .kv_set(key.clone(), value2.clone(), None)
+            .unwrap();
 
         let snapshot = SnapshotId::current();
         let native_result = native_backend.kv_get(snapshot, &key).unwrap();
@@ -459,8 +476,12 @@ mod compatibility_tests {
         let value = KvValue::String("delete_me".to_string());
 
         // Set values
-        native_backend.kv_set(key.clone(), value.clone(), None).unwrap();
-        sqlite_backend.kv_set(key.clone(), value.clone(), None).unwrap();
+        native_backend
+            .kv_set(key.clone(), value.clone(), None)
+            .unwrap();
+        sqlite_backend
+            .kv_set(key.clone(), value.clone(), None)
+            .unwrap();
 
         // Verify they exist
         let snapshot = SnapshotId::current();
@@ -517,10 +538,7 @@ mod compatibility_tests {
             .unwrap();
 
         assert_eq!(native_value, Some(KvValue::String("native".to_string())));
-        assert_eq!(
-            sqlite_value,
-            Some(KvValue::String("sqlite".to_string()))
-        );
+        assert_eq!(sqlite_value, Some(KvValue::String("sqlite".to_string())));
 
         // Verify isolation (Native doesn't see SQLite data and vice versa)
         let native_cross = native_backend

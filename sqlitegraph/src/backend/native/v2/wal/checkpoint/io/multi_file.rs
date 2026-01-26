@@ -16,7 +16,9 @@
 //! - Manifest file: `{base}.ckpt.manifest`
 
 use crate::backend::native::v2::wal::checkpoint::constants::*;
-use crate::backend::native::v2::wal::checkpoint::errors::{CheckpointError, CheckpointErrorKind, CheckpointResult};
+use crate::backend::native::v2::wal::checkpoint::errors::{
+    CheckpointError, CheckpointErrorKind, CheckpointResult,
+};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
@@ -100,9 +102,7 @@ impl MultiFileCheckpointConfig {
         }
 
         if self.max_segments == 0 {
-            return Err(CheckpointError::validation(
-                "Max segments cannot be zero",
-            ));
+            return Err(CheckpointError::validation("Max segments cannot be zero"));
         }
 
         if self.max_segments > 256 {
@@ -319,7 +319,11 @@ pub struct SegmentWriter {
 
 impl SegmentWriter {
     /// Create a new segment writer
-    pub fn create(config: MultiFileCheckpointConfig, index: u32, lsn_start: u64) -> CheckpointResult<Self> {
+    pub fn create(
+        config: MultiFileCheckpointConfig,
+        index: u32,
+        lsn_start: u64,
+    ) -> CheckpointResult<Self> {
         config.validate()?;
 
         if index as usize >= config.max_segments {
@@ -329,11 +333,19 @@ impl SegmentWriter {
             )));
         }
 
-        let segment_path = config.base_path.with_extension(format!("{}.{}", SEGMENT_EXTENSION, format!("{:03}", index)));
+        let segment_path = config.base_path.with_extension(format!(
+            "{}.{}",
+            SEGMENT_EXTENSION,
+            format!("{:03}", index)
+        ));
 
         // Create segment file
         let file = File::create(&segment_path).map_err(|e| {
-            CheckpointError::io(format!("Failed to create segment file {}: {}", segment_path.display(), e))
+            CheckpointError::io(format!(
+                "Failed to create segment file {}: {}",
+                segment_path.display(),
+                e
+            ))
         })?;
 
         let mut writer = BufWriter::with_capacity(DEFAULT_CHECKPOINT_BUFFER_SIZE, file);
@@ -356,7 +368,11 @@ impl SegmentWriter {
     }
 
     /// Write segment header
-    fn write_segment_header<W: Write>(writer: &mut W, index: u32, lsn_start: u64) -> CheckpointResult<()> {
+    fn write_segment_header<W: Write>(
+        writer: &mut W,
+        index: u32,
+        lsn_start: u64,
+    ) -> CheckpointResult<()> {
         // Write magic number
         writer
             .write_all(SEGMENT_MAGIC)
@@ -373,14 +389,14 @@ impl SegmentWriter {
             .map_err(|e| CheckpointError::io(format!("Failed to write LSN start: {}", e)))?;
 
         // Write placeholder LSN end (will be updated on finalize)
-        writer
-            .write_all(&0u64.to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write LSN end placeholder: {}", e)))?;
+        writer.write_all(&0u64.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write LSN end placeholder: {}", e))
+        })?;
 
         // Write placeholder block count
-        writer
-            .write_all(&0u64.to_le_bytes())
-            .map_err(|e| CheckpointError::io(format!("Failed to write block count placeholder: {}", e)))?;
+        writer.write_all(&0u64.to_le_bytes()).map_err(|e| {
+            CheckpointError::io(format!("Failed to write block count placeholder: {}", e))
+        })?;
 
         Ok(())
     }
@@ -438,10 +454,18 @@ impl SegmentWriter {
             )));
         }
 
-        let segment_path = self.config.base_path.with_extension(format!("{}.{}", SEGMENT_EXTENSION, format!("{:03}", new_index)));
+        let segment_path = self.config.base_path.with_extension(format!(
+            "{}.{}",
+            SEGMENT_EXTENSION,
+            format!("{:03}", new_index)
+        ));
 
         let file = File::create(&segment_path).map_err(|e| {
-            CheckpointError::io(format!("Failed to create rotated segment file {}: {}", segment_path.display(), e))
+            CheckpointError::io(format!(
+                "Failed to create rotated segment file {}: {}",
+                segment_path.display(),
+                e
+            ))
         })?;
 
         let mut writer = BufWriter::with_capacity(DEFAULT_CHECKPOINT_BUFFER_SIZE, file);
@@ -461,34 +485,36 @@ impl SegmentWriter {
     }
 
     /// Finalize the current segment
-    pub fn finalize(&mut self, lsn_end: u64, block_count: u64) -> CheckpointResult<CheckpointSegment> {
+    pub fn finalize(
+        &mut self,
+        lsn_end: u64,
+        block_count: u64,
+    ) -> CheckpointResult<CheckpointSegment> {
         // Flush all data
-        self.writer.flush().map_err(|e| {
-            CheckpointError::io(format!("Failed to flush segment: {}", e))
-        })?;
+        self.writer
+            .flush()
+            .map_err(|e| CheckpointError::io(format!("Failed to flush segment: {}", e)))?;
 
         // Seek back to update LSN end and block count in header
-        let mut file = self.writer.get_ref().try_clone().map_err(|e| {
-            CheckpointError::io(format!("Failed to clone file handle: {}", e))
-        })?;
+        let mut file = self
+            .writer
+            .get_ref()
+            .try_clone()
+            .map_err(|e| CheckpointError::io(format!("Failed to clone file handle: {}", e)))?;
 
         // LSN end is at offset 16 (4 magic + 4 index + 8 lsn_start)
-        file.seek(SeekFrom::Start(16)).map_err(|e| {
-            CheckpointError::io(format!("Failed to seek to LSN end: {}", e))
-        })?;
+        file.seek(SeekFrom::Start(16))
+            .map_err(|e| CheckpointError::io(format!("Failed to seek to LSN end: {}", e)))?;
 
-        file.write_all(&lsn_end.to_le_bytes()).map_err(|e| {
-            CheckpointError::io(format!("Failed to write LSN end: {}", e))
-        })?;
+        file.write_all(&lsn_end.to_le_bytes())
+            .map_err(|e| CheckpointError::io(format!("Failed to write LSN end: {}", e)))?;
 
         // Block count is at offset 24
-        file.write_all(&block_count.to_le_bytes()).map_err(|e| {
-            CheckpointError::io(format!("Failed to write block count: {}", e))
-        })?;
+        file.write_all(&block_count.to_le_bytes())
+            .map_err(|e| CheckpointError::io(format!("Failed to write block count: {}", e)))?;
 
-        file.sync_all().map_err(|e| {
-            CheckpointError::io(format!("Failed to sync segment file: {}", e))
-        })?;
+        file.sync_all()
+            .map_err(|e| CheckpointError::io(format!("Failed to sync segment file: {}", e)))?;
 
         // Create segment metadata
         let segment = CheckpointSegment {
@@ -522,9 +548,9 @@ impl SegmentWriter {
 
     /// Flush current data without finalizing
     pub fn flush(&mut self) -> CheckpointResult<()> {
-        self.writer.flush().map_err(|e| {
-            CheckpointError::io(format!("Failed to flush segment writer: {}", e))
-        })
+        self.writer
+            .flush()
+            .map_err(|e| CheckpointError::io(format!("Failed to flush segment writer: {}", e)))
     }
 }
 
@@ -547,7 +573,11 @@ impl SegmentReader {
     /// Open a segment file for reading
     pub fn open_segment(path: &Path) -> CheckpointResult<Self> {
         let file = File::open(path).map_err(|e| {
-            CheckpointError::io(format!("Failed to open segment file {}: {}", path.display(), e))
+            CheckpointError::io(format!(
+                "Failed to open segment file {}: {}",
+                path.display(),
+                e
+            ))
         })?;
 
         let mut reader = BufReader::with_capacity(DEFAULT_CHECKPOINT_BUFFER_SIZE, file);
@@ -565,11 +595,14 @@ impl SegmentReader {
     }
 
     /// Read segment header
-    fn read_segment_header<R: Read + Seek>(reader: &mut R, path: &Path) -> CheckpointResult<CheckpointSegment> {
+    fn read_segment_header<R: Read + Seek>(
+        reader: &mut R,
+        path: &Path,
+    ) -> CheckpointResult<CheckpointSegment> {
         let mut magic = [0u8; 4];
-        reader.read_exact(&mut magic).map_err(|e| {
-            CheckpointError::io(format!("Failed to read segment magic: {}", e))
-        })?;
+        reader
+            .read_exact(&mut magic)
+            .map_err(|e| CheckpointError::io(format!("Failed to read segment magic: {}", e)))?;
 
         if magic != *SEGMENT_MAGIC {
             return Err(CheckpointError::corruption(format!(
@@ -581,33 +614,32 @@ impl SegmentReader {
         }
 
         let mut index_bytes = [0u8; 4];
-        reader.read_exact(&mut index_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read segment index: {}", e))
-        })?;
+        reader
+            .read_exact(&mut index_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read segment index: {}", e)))?;
         let segment_index = u32::from_le_bytes(index_bytes);
 
         let mut lsn_start_bytes = [0u8; 8];
-        reader.read_exact(&mut lsn_start_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read LSN start: {}", e))
-        })?;
+        reader
+            .read_exact(&mut lsn_start_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read LSN start: {}", e)))?;
         let lsn_start = u64::from_le_bytes(lsn_start_bytes);
 
         let mut lsn_end_bytes = [0u8; 8];
-        reader.read_exact(&mut lsn_end_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read LSN end: {}", e))
-        })?;
+        reader
+            .read_exact(&mut lsn_end_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read LSN end: {}", e)))?;
         let lsn_end = u64::from_le_bytes(lsn_end_bytes);
 
         let mut block_count_bytes = [0u8; 8];
-        reader.read_exact(&mut block_count_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read block count: {}", e))
-        })?;
+        reader
+            .read_exact(&mut block_count_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read block count: {}", e)))?;
         let block_count = u64::from_le_bytes(block_count_bytes);
 
         // Get file size
-        let metadata = std::fs::metadata(path).map_err(|e| {
-            CheckpointError::io(format!("Failed to get segment metadata: {}", e))
-        })?;
+        let metadata = std::fs::metadata(path)
+            .map_err(|e| CheckpointError::io(format!("Failed to get segment metadata: {}", e)))?;
 
         Ok(CheckpointSegment {
             segment_index,
@@ -621,9 +653,10 @@ impl SegmentReader {
 
     /// Read data from the segment
     pub fn read_data(&mut self, buf: &mut [u8]) -> CheckpointResult<usize> {
-        let n = self.reader.read(buf).map_err(|e| {
-            CheckpointError::io(format!("Failed to read segment data: {}", e))
-        })?;
+        let n = self
+            .reader
+            .read(buf)
+            .map_err(|e| CheckpointError::io(format!("Failed to read segment data: {}", e)))?;
 
         self.position += n as u64;
         Ok(n)
@@ -653,9 +686,9 @@ pub struct MultiFileRecovery;
 impl MultiFileRecovery {
     /// Discover all checkpoint manifests in a directory
     pub fn discover_checkpoints(base_path: &Path) -> CheckpointResult<Vec<PathBuf>> {
-        let parent = base_path.parent().ok_or_else(|| {
-            CheckpointError::io("Checkpoint path has no parent directory")
-        })?;
+        let parent = base_path
+            .parent()
+            .ok_or_else(|| CheckpointError::io("Checkpoint path has no parent directory"))?;
 
         let mut manifests = Vec::new();
 
@@ -681,14 +714,17 @@ impl MultiFileRecovery {
     /// Load a checkpoint manifest from file
     pub fn load_manifest(path: &Path) -> CheckpointResult<CheckpointManifest> {
         let mut file = File::open(path).map_err(|e| {
-            CheckpointError::io(format!("Failed to open manifest file {}: {}", path.display(), e))
+            CheckpointError::io(format!(
+                "Failed to open manifest file {}: {}",
+                path.display(),
+                e
+            ))
         })?;
 
         // Read and validate magic
         let mut magic = [0u8; 4];
-        file.read_exact(&mut magic).map_err(|e| {
-            CheckpointError::io(format!("Failed to read manifest magic: {}", e))
-        })?;
+        file.read_exact(&mut magic)
+            .map_err(|e| CheckpointError::io(format!("Failed to read manifest magic: {}", e)))?;
 
         if magic != *MANIFEST_MAGIC {
             return Err(CheckpointError::corruption(format!(
@@ -701,43 +737,37 @@ impl MultiFileRecovery {
 
         // Read segment count
         let mut count_bytes = [0u8; 4];
-        file.read_exact(&mut count_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read segment count: {}", e))
-        })?;
+        file.read_exact(&mut count_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read segment count: {}", e)))?;
         let segment_count = u32::from_le_bytes(count_bytes);
 
         // Read timestamp
         let mut timestamp_bytes = [0u8; 8];
-        file.read_exact(&mut timestamp_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read timestamp: {}", e))
-        })?;
+        file.read_exact(&mut timestamp_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read timestamp: {}", e)))?;
         let timestamp = u64::from_le_bytes(timestamp_bytes);
 
         // Read total LSN range
         let mut lsn_start_bytes = [0u8; 8];
-        file.read_exact(&mut lsn_start_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read total LSN start: {}", e))
-        })?;
+        file.read_exact(&mut lsn_start_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read total LSN start: {}", e)))?;
         let lsn_start = u64::from_le_bytes(lsn_start_bytes);
 
         let mut lsn_end_bytes = [0u8; 8];
-        file.read_exact(&mut lsn_end_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read total LSN end: {}", e))
-        })?;
+        file.read_exact(&mut lsn_end_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read total LSN end: {}", e)))?;
         let lsn_end = u64::from_le_bytes(lsn_end_bytes);
 
         // Read total block count
         let mut block_count_bytes = [0u8; 8];
-        file.read_exact(&mut block_count_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read total block count: {}", e))
-        })?;
+        file.read_exact(&mut block_count_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read total block count: {}", e)))?;
         let total_block_count = u64::from_le_bytes(block_count_bytes);
 
         // Read checksum
         let mut checksum_bytes = [0u8; 8];
-        file.read_exact(&mut checksum_bytes).map_err(|e| {
-            CheckpointError::io(format!("Failed to read checksum: {}", e))
-        })?;
+        file.read_exact(&mut checksum_bytes)
+            .map_err(|e| CheckpointError::io(format!("Failed to read checksum: {}", e)))?;
         let checksum = u64::from_le_bytes(checksum_bytes);
 
         // Read segment metadata
@@ -830,83 +860,76 @@ impl MultiFileRecovery {
     }
 
     /// Write a manifest file
-    pub fn write_manifest(
-        manifest: &CheckpointManifest,
-        base_path: &Path,
-    ) -> CheckpointResult<()> {
+    pub fn write_manifest(manifest: &CheckpointManifest, base_path: &Path) -> CheckpointResult<()> {
         let manifest_path = base_path.with_extension(MANIFEST_EXTENSION);
 
         // Write to temporary file first
         let temp_path = manifest_path.with_extension("manifest.tmp");
 
-        let mut file = File::create(&temp_path).map_err(|e| {
-            CheckpointError::io(format!("Failed to create manifest file: {}", e))
-        })?;
+        let mut file = File::create(&temp_path)
+            .map_err(|e| CheckpointError::io(format!("Failed to create manifest file: {}", e)))?;
 
         // Write magic
-        file.write_all(MANIFEST_MAGIC).map_err(|e| {
-            CheckpointError::io(format!("Failed to write manifest magic: {}", e))
-        })?;
+        file.write_all(MANIFEST_MAGIC)
+            .map_err(|e| CheckpointError::io(format!("Failed to write manifest magic: {}", e)))?;
 
         // Write segment count
-        file.write_all(&manifest.segment_count.to_le_bytes()).map_err(|e| {
-            CheckpointError::io(format!("Failed to write segment count: {}", e))
-        })?;
+        file.write_all(&manifest.segment_count.to_le_bytes())
+            .map_err(|e| CheckpointError::io(format!("Failed to write segment count: {}", e)))?;
 
         // Write timestamp
-        file.write_all(&manifest.timestamp.to_le_bytes()).map_err(|e| {
-            CheckpointError::io(format!("Failed to write timestamp: {}", e))
-        })?;
+        file.write_all(&manifest.timestamp.to_le_bytes())
+            .map_err(|e| CheckpointError::io(format!("Failed to write timestamp: {}", e)))?;
 
         // Write total LSN range
-        file.write_all(&manifest.total_lsn_range.0.to_le_bytes()).map_err(|e| {
-            CheckpointError::io(format!("Failed to write total LSN start: {}", e))
-        })?;
-        file.write_all(&manifest.total_lsn_range.1.to_le_bytes()).map_err(|e| {
-            CheckpointError::io(format!("Failed to write total LSN end: {}", e))
-        })?;
+        file.write_all(&manifest.total_lsn_range.0.to_le_bytes())
+            .map_err(|e| CheckpointError::io(format!("Failed to write total LSN start: {}", e)))?;
+        file.write_all(&manifest.total_lsn_range.1.to_le_bytes())
+            .map_err(|e| CheckpointError::io(format!("Failed to write total LSN end: {}", e)))?;
 
         // Write total block count
-        file.write_all(&manifest.total_block_count.to_le_bytes()).map_err(|e| {
-            CheckpointError::io(format!("Failed to write total block count: {}", e))
-        })?;
+        file.write_all(&manifest.total_block_count.to_le_bytes())
+            .map_err(|e| {
+                CheckpointError::io(format!("Failed to write total block count: {}", e))
+            })?;
 
         // Write checksum
-        file.write_all(&manifest.checksum.to_le_bytes()).map_err(|e| {
-            CheckpointError::io(format!("Failed to write checksum: {}", e))
-        })?;
+        file.write_all(&manifest.checksum.to_le_bytes())
+            .map_err(|e| CheckpointError::io(format!("Failed to write checksum: {}", e)))?;
 
         // Write segment metadata
         for segment_meta in &manifest.segments {
-            file.write_all(&segment_meta.index.to_le_bytes()).map_err(|e| {
-                CheckpointError::io(format!("Failed to write segment index: {}", e))
-            })?;
-            file.write_all(&segment_meta.lsn_start.to_le_bytes()).map_err(|e| {
-                CheckpointError::io(format!("Failed to write segment LSN start: {}", e))
-            })?;
-            file.write_all(&segment_meta.lsn_end.to_le_bytes()).map_err(|e| {
-                CheckpointError::io(format!("Failed to write segment LSN end: {}", e))
-            })?;
-            file.write_all(&segment_meta.block_count.to_le_bytes()).map_err(|e| {
-                CheckpointError::io(format!("Failed to write segment block count: {}", e))
-            })?;
-            file.write_all(&segment_meta.checksum.to_le_bytes()).map_err(|e| {
-                CheckpointError::io(format!("Failed to write segment checksum: {}", e))
-            })?;
-            file.write_all(&segment_meta.size.to_le_bytes()).map_err(|e| {
-                CheckpointError::io(format!("Failed to write segment size: {}", e))
-            })?;
+            file.write_all(&segment_meta.index.to_le_bytes())
+                .map_err(|e| {
+                    CheckpointError::io(format!("Failed to write segment index: {}", e))
+                })?;
+            file.write_all(&segment_meta.lsn_start.to_le_bytes())
+                .map_err(|e| {
+                    CheckpointError::io(format!("Failed to write segment LSN start: {}", e))
+                })?;
+            file.write_all(&segment_meta.lsn_end.to_le_bytes())
+                .map_err(|e| {
+                    CheckpointError::io(format!("Failed to write segment LSN end: {}", e))
+                })?;
+            file.write_all(&segment_meta.block_count.to_le_bytes())
+                .map_err(|e| {
+                    CheckpointError::io(format!("Failed to write segment block count: {}", e))
+                })?;
+            file.write_all(&segment_meta.checksum.to_le_bytes())
+                .map_err(|e| {
+                    CheckpointError::io(format!("Failed to write segment checksum: {}", e))
+                })?;
+            file.write_all(&segment_meta.size.to_le_bytes())
+                .map_err(|e| CheckpointError::io(format!("Failed to write segment size: {}", e)))?;
         }
 
         // Sync and close
-        file.sync_all().map_err(|e| {
-            CheckpointError::io(format!("Failed to sync manifest file: {}", e))
-        })?;
+        file.sync_all()
+            .map_err(|e| CheckpointError::io(format!("Failed to sync manifest file: {}", e)))?;
 
         // Atomic rename
-        std::fs::rename(&temp_path, &manifest_path).map_err(|e| {
-            CheckpointError::io(format!("Failed to rename manifest file: {}", e))
-        })?;
+        std::fs::rename(&temp_path, &manifest_path)
+            .map_err(|e| CheckpointError::io(format!("Failed to rename manifest file: {}", e)))?;
 
         Ok(())
     }
@@ -1052,9 +1075,9 @@ impl Read for MultiSegmentIterator {
 
             let reader = self.current_reader.as_mut().unwrap();
             let remaining = &mut buf[total_read..];
-            let n = reader.read_data(remaining).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-            })?;
+            let n = reader
+                .read_data(remaining)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
             if n == 0 {
                 // End of current segment, move to next
@@ -1436,16 +1459,14 @@ mod tests {
 
         // Create a corresponding segment file
         let segment_path = base_path.with_extension("ckpt.000");
-        let mut writer = SegmentWriter::create(
-            MultiFileCheckpointConfig::new(base_path.clone()),
-            0,
-            100,
-        )?;
+        let mut writer =
+            SegmentWriter::create(MultiFileCheckpointConfig::new(base_path.clone()), 0, 100)?;
         writer.write_data(&[1u8, 2, 3, 4, 5])?;
         writer.finalize(200, 50)?;
 
         // Recover the checkpoint
-        let loaded_manifest = MultiFileRecovery::load_manifest(&base_path.with_extension("manifest"))?;
+        let loaded_manifest =
+            MultiFileRecovery::load_manifest(&base_path.with_extension("manifest"))?;
         let recovered = MultiFileRecovery::recover_checkpoint(loaded_manifest, base_path)?;
 
         assert_eq!(recovered.lsn_range(), (100, 200));
@@ -1475,7 +1496,8 @@ mod tests {
         MultiFileRecovery::write_manifest(&manifest, &base_path).unwrap();
 
         // Don't create the segment file - recovery should fail
-        let loaded_manifest = MultiFileRecovery::load_manifest(&base_path.with_extension("manifest")).unwrap();
+        let loaded_manifest =
+            MultiFileRecovery::load_manifest(&base_path.with_extension("manifest")).unwrap();
         let result = MultiFileRecovery::recover_checkpoint(loaded_manifest, base_path);
         assert!(result.is_err());
     }

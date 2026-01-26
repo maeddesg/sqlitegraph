@@ -17,12 +17,12 @@
 //! traversal performance with different window sizes.
 
 use sqlitegraph::backend::native::{
-    graph_file::GraphFile,
-    node_store::NodeStore,
-    edge_store::EdgeStore,
-    graph_ops::{native_bfs, TraversalContext, TraversalCache, TraversalCacheStats},
-    adjacency::{LinearDetector, SequentialReadBuffer},
     NativeNodeId,
+    adjacency::{LinearDetector, SequentialReadBuffer},
+    edge_store::EdgeStore,
+    graph_file::GraphFile,
+    graph_ops::{TraversalCache, TraversalCacheStats, TraversalContext, native_bfs},
+    node_store::NodeStore,
 };
 use std::time::Instant;
 use tempfile::TempDir;
@@ -62,7 +62,9 @@ fn create_chain_graph(node_count: usize) -> (GraphFile, Vec<NativeNodeId>, TempD
             format!("node_{}", i),
             serde_json::json!({"id": i}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -70,8 +72,8 @@ fn create_chain_graph(node_count: usize) -> (GraphFile, Vec<NativeNodeId>, TempD
     let mut edge_store = EdgeStore::new(&mut graph_file);
     for i in 0..node_count.saturating_sub(1) {
         let edge = sqlitegraph::backend::native::EdgeRecord::new(
-            i as i64 + 1, // edge_id
-            node_ids[i],   // from node i
+            i as i64 + 1,    // edge_id
+            node_ids[i],     // from node i
             node_ids[i + 1], // to node i+1
             "chain".to_string(),
             serde_json::json!({"order": i}),
@@ -130,7 +132,10 @@ fn test_prefetch_window_4_chain_500() {
 
     println!("Window 4 prefetch: {:?}", duration);
     println!("  Cached nodes: {} (expected: ~4)", cached_count);
-    println!("  Throughput: {:.2} nodes/sec", cached_count as f64 / duration.as_secs_f64());
+    println!(
+        "  Throughput: {:.2} nodes/sec",
+        cached_count as f64 / duration.as_secs_f64()
+    );
 
     // Verify prefetch cached nodes
     assert!(cached_count > 0, "Prefetch should cache some nodes");
@@ -149,7 +154,10 @@ fn test_prefetch_window_8_chain_500() {
 
     println!("Window 8 prefetch: {:?}", duration);
     println!("  Cached nodes: {} (expected: ~8)", cached_count);
-    println!("  Throughput: {:.2} nodes/sec", cached_count as f64 / duration.as_secs_f64());
+    println!(
+        "  Throughput: {:.2} nodes/sec",
+        cached_count as f64 / duration.as_secs_f64()
+    );
 
     // Verify prefetch cached nodes
     assert!(cached_count > 0, "Prefetch should cache some nodes");
@@ -168,11 +176,17 @@ fn test_prefetch_window_16_chain_500() {
 
     println!("Window 16 prefetch: {:?}", duration);
     println!("  Cached nodes: {} (expected: ~16)", cached_count);
-    println!("  Throughput: {:.2} nodes/sec", cached_count as f64 / duration.as_secs_f64());
+    println!(
+        "  Throughput: {:.2} nodes/sec",
+        cached_count as f64 / duration.as_secs_f64()
+    );
 
     // Verify prefetch cached nodes
     assert!(cached_count > 0, "Prefetch should cache some nodes");
-    assert!(cached_count <= 16, "Window 16 should cache at most 16 nodes");
+    assert!(
+        cached_count <= 16,
+        "Window 16 should cache at most 16 nodes"
+    );
 }
 
 //
@@ -183,7 +197,10 @@ fn test_prefetch_window_16_chain_500() {
 fn test_prefetch_window_comparison_chain_500() {
     let node_count = 500;
 
-    println!("\n=== Prefetch Window Comparison: Chain({}) ===", node_count);
+    println!(
+        "\n=== Prefetch Window Comparison: Chain({}) ===",
+        node_count
+    );
 
     // Test window 4
     let (mut graph_file_4, node_ids_4, _temp_dir_4) = create_chain_graph(node_count);
@@ -198,8 +215,7 @@ fn test_prefetch_window_comparison_chain_500() {
     // Test window 16
     let (mut graph_file_16, node_ids_16, _temp_dir_16) = create_chain_graph(node_count);
     let start_node_16 = node_ids_16[0];
-    let (duration_16, cached_16) =
-        measure_prefetch_timing(&mut graph_file_16, start_node_16, 16);
+    let (duration_16, cached_16) = measure_prefetch_timing(&mut graph_file_16, start_node_16, 16);
 
     // Print comparison table
     println!("\n=== Timing Comparison ===");
@@ -221,8 +237,14 @@ fn test_prefetch_window_comparison_chain_500() {
     assert!(cached_16 > 0);
 
     // Larger windows should cache more nodes
-    assert!(cached_4 <= cached_8, "Window 8 should cache >= nodes as window 4");
-    assert!(cached_8 <= cached_16, "Window 16 should cache >= nodes as window 8");
+    assert!(
+        cached_4 <= cached_8,
+        "Window 8 should cache >= nodes as window 4"
+    );
+    assert!(
+        cached_8 <= cached_16,
+        "Window 16 should cache >= nodes as window 8"
+    );
 }
 
 //
@@ -240,9 +262,21 @@ fn test_memory_overhead_per_buffer_size() {
 
     // Each buffer starts empty, so base overhead is minimal
     println!("Empty buffer overhead:");
-    println!("  Window 4:  len={}, is_empty={}", buffer_4.len(), buffer_4.is_empty());
-    println!("  Window 8:  len={}, is_empty={}", buffer_8.len(), buffer_8.is_empty());
-    println!("  Window 16: len={}, is_empty={}", buffer_16.len(), buffer_16.is_empty());
+    println!(
+        "  Window 4:  len={}, is_empty={}",
+        buffer_4.len(),
+        buffer_4.is_empty()
+    );
+    println!(
+        "  Window 8:  len={}, is_empty={}",
+        buffer_8.len(),
+        buffer_8.is_empty()
+    );
+    println!(
+        "  Window 16: len={}, is_empty={}",
+        buffer_16.len(),
+        buffer_16.is_empty()
+    );
 
     // Verify empty buffers have no entries
     assert_eq!(buffer_4.len(), 0);
@@ -278,7 +312,10 @@ fn test_memory_overhead_full_buffer() {
     println!("Full buffer (8 slots):");
     println!("  Entries: {}", buffer.len());
     println!("  Estimated memory: ~{} bytes", total_estimated_bytes);
-    println!("  Per-slot average: ~{} bytes", total_estimated_bytes / buffer.len());
+    println!(
+        "  Per-slot average: ~{} bytes",
+        total_estimated_bytes / buffer.len()
+    );
 
     // Verify buffer is full
     assert_eq!(buffer.len(), 8);
@@ -342,7 +379,10 @@ fn test_buffer_contains_after_prefetch() {
         .expect("Prefetch should succeed");
 
     // Buffer should contain the start node
-    assert!(buffer.contains(start_node), "Buffer should contain start node");
+    assert!(
+        buffer.contains(start_node),
+        "Buffer should contain start node"
+    );
 
     // Buffer should have some nodes cached
     assert!(buffer.len() > 0, "Buffer should have cached nodes");
@@ -373,12 +413,16 @@ fn test_next_prefetch_start_tracking() {
 
     // Check next prefetch start is tracked
     let next_start = buffer.next_prefetch_start();
-    assert!(next_start.is_some(), "Next prefetch start should be tracked");
+    assert!(
+        next_start.is_some(),
+        "Next prefetch start should be tracked"
+    );
 
     // Next prefetch should be start_node + window
     let expected_next = start_node + 8;
     assert_eq!(
-        next_start.unwrap(), expected_next,
+        next_start.unwrap(),
+        expected_next,
         "Next prefetch should be at start + window"
     );
 
@@ -409,10 +453,22 @@ fn test_buffer_window_configuration() {
     assert_eq!(buffer_default.prefetch_window(), 8);
 
     println!("\nBuffer window configuration verified:");
-    println!("  with_prefetch_window(4) -> {}", buffer_4.prefetch_window());
-    println!("  with_prefetch_window(8) -> {}", buffer_8.prefetch_window());
-    println!("  with_prefetch_window(16) -> {}", buffer_16.prefetch_window());
-    println!("  SequentialReadBuffer::new() -> {}", buffer_default.prefetch_window());
+    println!(
+        "  with_prefetch_window(4) -> {}",
+        buffer_4.prefetch_window()
+    );
+    println!(
+        "  with_prefetch_window(8) -> {}",
+        buffer_8.prefetch_window()
+    );
+    println!(
+        "  with_prefetch_window(16) -> {}",
+        buffer_16.prefetch_window()
+    );
+    println!(
+        "  SequentialReadBuffer::new() -> {}",
+        buffer_default.prefetch_window()
+    );
 }
 
 #[test]
@@ -449,7 +505,10 @@ fn test_native_bfs_chain_500_with_default_window() {
     let start_node = node_ids[0];
     let depth = node_count as u32;
 
-    println!("\n=== Native BFS with Default Window 8: Chain({}) ===", node_count);
+    println!(
+        "\n=== Native BFS with Default Window 8: Chain({}) ===",
+        node_count
+    );
 
     let start_time = Instant::now();
     let result = native_bfs(&mut graph_file, start_node, depth);
@@ -459,13 +518,24 @@ fn test_native_bfs_chain_500_with_default_window() {
     let visited = result.unwrap();
 
     println!("Native BFS: {:?}", duration);
-    println!("  Visited: {} nodes (expected: {})", visited.len(), node_count);
-    println!("  Throughput: {:.2} nodes/sec", node_count as f64 / duration.as_secs_f64());
+    println!(
+        "  Visited: {} nodes (expected: {})",
+        visited.len(),
+        node_count
+    );
+    println!(
+        "  Throughput: {:.2} nodes/sec",
+        node_count as f64 / duration.as_secs_f64()
+    );
 
     // Note: As of Phase 32-01, L1 buffer neighbor extraction is instrumentation-only
     // This test validates that native_bfs works correctly with default window=8
     // Note: BFS excludes the start node from visited list, so we expect node_count - 1
-    assert_eq!(visited.len(), node_count - 1, "BFS should visit all reachable nodes (excluding start)");
+    assert_eq!(
+        visited.len(),
+        node_count - 1,
+        "BFS should visit all reachable nodes (excluding start)"
+    );
 }
 
 //

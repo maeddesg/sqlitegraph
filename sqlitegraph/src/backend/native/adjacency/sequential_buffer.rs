@@ -31,11 +31,11 @@
 //! // Buffer evaporates here
 //! ```
 
-use ahash::AHashMap;
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::node_store::NodeStore;
 use crate::backend::native::types::{NativeNodeId, NativeResult};
 use crate::backend::native::v2::node_record_v2::NodeRecordV2;
+use ahash::AHashMap;
 
 /// Per-traversal buffer for sequential I/O optimization
 ///
@@ -72,7 +72,7 @@ impl SequentialReadBuffer {
         Self {
             slots: AHashMap::new(),
             cluster_cache: AHashMap::new(),
-            prefetch_window: 8,  // 32KB = 8 * 4096
+            prefetch_window: 8, // 32KB = 8 * 4096
             next_prefetch_start: None,
         }
     }
@@ -214,7 +214,10 @@ impl SequentialReadBuffer {
 
             // Read cluster data and cache it
             let mut cluster_data = vec![0u8; cluster_size as usize];
-            if graph_file.read_bytes(cluster_offset, &mut cluster_data).is_ok() {
+            if graph_file
+                .read_bytes(cluster_offset, &mut cluster_data)
+                .is_ok()
+            {
                 self.cluster_cache.insert(cluster_offset, cluster_data);
             }
             // If read fails, we just don't cache it (will fall back to direct read)
@@ -236,7 +239,9 @@ impl SequentialReadBuffer {
     /// - `None` if cluster not in cache (caller should fall back to file I/O)
     #[inline]
     pub fn get_cluster(&self, cluster_offset: u64) -> Option<&[u8]> {
-        self.cluster_cache.get(&cluster_offset).map(|v| v.as_slice())
+        self.cluster_cache
+            .get(&cluster_offset)
+            .map(|v| v.as_slice())
     }
 
     /// Check if cluster data is cached
@@ -351,8 +356,18 @@ mod tests {
     #[test]
     fn test_buffer_clear() {
         let mut buffer = SequentialReadBuffer::new();
-        buffer.insert(NodeRecordV2::new(1, "Test".into(), "node1".into(), serde_json::json!({})));
-        buffer.insert(NodeRecordV2::new(2, "Test".into(), "node2".into(), serde_json::json!({})));
+        buffer.insert(NodeRecordV2::new(
+            1,
+            "Test".into(),
+            "node1".into(),
+            serde_json::json!({}),
+        ));
+        buffer.insert(NodeRecordV2::new(
+            2,
+            "Test".into(),
+            "node2".into(),
+            serde_json::json!({}),
+        ));
 
         assert_eq!(buffer.len(), 2);
 
@@ -384,11 +399,21 @@ mod tests {
         let mut buffer = SequentialReadBuffer::new();
 
         // Insert first version
-        buffer.insert(NodeRecordV2::new(1, "Type1".into(), "node1".into(), serde_json::json!({})));
+        buffer.insert(NodeRecordV2::new(
+            1,
+            "Type1".into(),
+            "node1".into(),
+            serde_json::json!({}),
+        ));
         assert_eq!(buffer.len(), 1);
 
         // Overwrite with second version
-        buffer.insert(NodeRecordV2::new(1, "Type2".into(), "node1_v2".into(), serde_json::json!({})));
+        buffer.insert(NodeRecordV2::new(
+            1,
+            "Type2".into(),
+            "node1_v2".into(),
+            serde_json::json!({}),
+        ));
         assert_eq!(buffer.len(), 1); // Still only 1 entry
 
         let retrieved = buffer.get(1).unwrap();
@@ -457,7 +482,12 @@ mod tests {
         let mut buffer = SequentialReadBuffer::new();
 
         // Insert some nodes
-        buffer.insert(NodeRecordV2::new(1, "Test".into(), "node1".into(), serde_json::json!({})));
+        buffer.insert(NodeRecordV2::new(
+            1,
+            "Test".into(),
+            "node1".into(),
+            serde_json::json!({}),
+        ));
 
         // Cache should be empty
         assert_eq!(buffer.cluster_cache_len(), 0);
@@ -486,4 +516,3 @@ mod tests {
         assert_eq!(buffer.prefetch_window(), 16);
     }
 }
-

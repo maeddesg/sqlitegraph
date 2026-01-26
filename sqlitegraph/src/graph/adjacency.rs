@@ -26,10 +26,7 @@ impl<'a> ConnectionWrapper<'a> {
         }
     }
 
-    pub fn prepare_cached(
-        &self,
-        sql: &str,
-    ) -> Result<StatementWrapper<'_>, rusqlite::Error> {
+    pub fn prepare_cached(&self, sql: &str) -> Result<StatementWrapper<'_>, rusqlite::Error> {
         match self {
             ConnectionWrapper::Borrowed(conn) => {
                 conn.prepare_cached(sql).map(StatementWrapper::Borrowed)
@@ -40,12 +37,7 @@ impl<'a> ConnectionWrapper<'a> {
         }
     }
 
-    pub fn query_row<P, F, R>(
-        &self,
-        sql: &str,
-        params: P,
-        f: F,
-    ) -> Result<R, rusqlite::Error>
+    pub fn query_row<P, F, R>(&self, sql: &str, params: P, f: F) -> Result<R, rusqlite::Error>
     where
         P: rusqlite::Params,
         F: FnOnce(&rusqlite::Row<'_>) -> rusqlite::Result<R>,
@@ -131,8 +123,7 @@ impl SqliteGraph {
         }
 
         // Otherwise, get a pooled connection
-        let conn = self.pool.get()
-            .expect("Failed to get connection from pool");
+        let conn = self.pool.get().expect("Failed to get connection from pool");
         ConnectionWrapper::Pooled(PooledInstrumentedConnection::new(
             conn,
             self.metrics.clone(),

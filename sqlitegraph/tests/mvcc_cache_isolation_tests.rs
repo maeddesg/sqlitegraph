@@ -15,14 +15,11 @@
 //! isolation violations.
 
 use sqlitegraph::{
+    GraphEdgeCreate, GraphEntity, GraphEntityCreate, SqliteGraph, SqliteGraphError,
     backend::native::{
-        graph_file::GraphFile,
+        NativeNodeId, edge_store::EdgeStore, graph_file::GraphFile, graph_ops::native_bfs,
         node_store::NodeStore,
-        edge_store::EdgeStore,
-        graph_ops::native_bfs,
-        NativeNodeId,
     },
-    GraphEdgeCreate, GraphEntityCreate, GraphEntity, SqliteGraph, SqliteGraphError,
 };
 
 use tempfile::TempDir;
@@ -42,42 +39,54 @@ fn create_simple_native_graph() -> (GraphFile, Vec<NativeNodeId>, TempDir) {
     let mut node_ids = Vec::new();
     for i in 1..=3 {
         let mut node_store = NodeStore::new(&mut graph_file);
-        let node_id = node_store.allocate_node_id().expect("Failed to allocate node ID");
+        let node_id = node_store
+            .allocate_node_id()
+            .expect("Failed to allocate node ID");
         let record = sqlitegraph::backend::native::NodeRecord::new(
             node_id,
             "test".to_string(),
             format!("node_{}", i),
             serde_json::json!({}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
     // Create edges A->B, B->C
     let mut edge_store = EdgeStore::new(&mut graph_file);
     let edge1 = sqlitegraph::backend::native::EdgeRecord::new(
-        1, // edge_id
+        1,           // edge_id
         node_ids[0], // from A
         node_ids[1], // to B
         "connects".to_string(),
         serde_json::json!({}),
     );
-    edge_store.write_edge(&edge1).expect("Failed to write edge A->B");
+    edge_store
+        .write_edge(&edge1)
+        .expect("Failed to write edge A->B");
 
     let edge2 = sqlitegraph::backend::native::EdgeRecord::new(
-        2, // edge_id
+        2,           // edge_id
         node_ids[1], // from B
         node_ids[2], // to C
         "connects".to_string(),
         serde_json::json!({}),
     );
-    edge_store.write_edge(&edge2).expect("Failed to write edge B->C");
+    edge_store
+        .write_edge(&edge2)
+        .expect("Failed to write edge B->C");
 
     (graph_file, node_ids, temp_dir)
 }
 
 /// Helper: Run BFS traversal and return result
-fn run_bfs_traversal(graph_file: &mut GraphFile, start: NativeNodeId, depth: u32) -> Vec<NativeNodeId> {
+fn run_bfs_traversal(
+    graph_file: &mut GraphFile,
+    start: NativeNodeId,
+    depth: u32,
+) -> Vec<NativeNodeId> {
     native_bfs(graph_file, start, depth).expect("BFS should succeed")
 }
 
@@ -109,14 +118,8 @@ fn test_cache_evaporation_on_function_return() {
     );
 
     // Verify we can reach both B and C from A
-    assert!(
-        result1.contains(&node_ids[1]),
-        "Should reach node B from A"
-    );
-    assert!(
-        result1.contains(&node_ids[2]),
-        "Should reach node C from A"
-    );
+    assert!(result1.contains(&node_ids[1]), "Should reach node B from A");
+    assert!(result1.contains(&node_ids[2]), "Should reach node C from A");
 }
 
 #[test]
@@ -135,7 +138,8 @@ fn test_cache_evaporation_multiple_sequential_traversals() {
         let result = run_bfs_traversal(&mut graph_file, start_node, 2);
         assert_eq!(
             result, expected_result,
-            "Traversal {} should match first result", i
+            "Traversal {} should match first result",
+            i
         );
     }
 }
@@ -183,14 +187,26 @@ fn test_sequential_traversals_separate_caches() {
 
     // First traversal: from node A (should reach B, C)
     let result1 = run_bfs_traversal(&mut graph_file, node_ids[0], 2);
-    assert!(result1.contains(&node_ids[1]), "First traversal should reach node B");
-    assert!(result1.contains(&node_ids[2]), "First traversal should reach node C");
+    assert!(
+        result1.contains(&node_ids[1]),
+        "First traversal should reach node B"
+    );
+    assert!(
+        result1.contains(&node_ids[2]),
+        "First traversal should reach node C"
+    );
 
     // Second traversal: from node B (should reach C only)
     // This proves cache from first traversal didn't pollute second
     let result2 = run_bfs_traversal(&mut graph_file, node_ids[1], 1);
-    assert!(result2.contains(&node_ids[2]), "Second traversal should reach node C");
-    assert!(!result2.contains(&node_ids[0]), "Second traversal should not see node A");
+    assert!(
+        result2.contains(&node_ids[2]),
+        "Second traversal should reach node C"
+    );
+    assert!(
+        !result2.contains(&node_ids[0]),
+        "Second traversal should not see node A"
+    );
 
     // Third traversal: from node A again
     // Should get same results as first (no pollution from second)
@@ -463,13 +479,22 @@ fn test_multiple_traversals_consistent_results() {
     // Depth 1: should reach B only
     let result_d1 = run_bfs_traversal(&mut graph_file, start_node, 1);
     assert_eq!(result_d1.len(), 1, "Depth 1 should reach 1 node");
-    assert!(result_d1.contains(&node_ids[1]), "Depth 1 should reach node B");
+    assert!(
+        result_d1.contains(&node_ids[1]),
+        "Depth 1 should reach node B"
+    );
 
     // Depth 2: should reach B and C
     let result_d2 = run_bfs_traversal(&mut graph_file, start_node, 2);
     assert_eq!(result_d2.len(), 2, "Depth 2 should reach 2 nodes");
-    assert!(result_d2.contains(&node_ids[1]), "Depth 2 should reach node B");
-    assert!(result_d2.contains(&node_ids[2]), "Depth 2 should reach node C");
+    assert!(
+        result_d2.contains(&node_ids[1]),
+        "Depth 2 should reach node B"
+    );
+    assert!(
+        result_d2.contains(&node_ids[2]),
+        "Depth 2 should reach node C"
+    );
 
     // Depth 1 again: should still reach B only (no cache pollution from depth 2)
     let result_d1_again = run_bfs_traversal(&mut graph_file, start_node, 1);
@@ -490,14 +515,18 @@ fn test_cache_with_graph_modifications() {
     let mut node_ids = Vec::new();
     for i in 1..=3 {
         let mut node_store = NodeStore::new(&mut graph_file);
-        let node_id = node_store.allocate_node_id().expect("Failed to allocate node ID");
+        let node_id = node_store
+            .allocate_node_id()
+            .expect("Failed to allocate node ID");
         let record = sqlitegraph::backend::native::NodeRecord::new(
             node_id,
             "test".to_string(),
             format!("node_{}", i),
             serde_json::json!({}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -533,8 +562,15 @@ fn test_cache_with_graph_modifications() {
 
     // Second BFS: should reach nodes 2 and 3
     let result2 = run_bfs_traversal(&mut graph_file, node_ids[0], 2);
-    assert_eq!(result2.len(), 2, "Second BFS should reach 2 nodes after modification");
-    assert!(result2.contains(&node_ids[2]), "Second BFS should reach node 3");
+    assert_eq!(
+        result2.len(),
+        2,
+        "Second BFS should reach 2 nodes after modification"
+    );
+    assert!(
+        result2.contains(&node_ids[2]),
+        "Second BFS should reach node 3"
+    );
 }
 
 //
@@ -555,7 +591,8 @@ fn test_rapid_sequential_traversals() {
         let result = run_bfs_traversal(&mut graph_file, start_node, 2);
         assert_eq!(
             result, expected,
-            "Traversal {} should produce consistent result", i
+            "Traversal {} should produce consistent result",
+            i
         );
     }
 }

@@ -223,13 +223,18 @@ impl HnswConfig {
     ///
     /// let config = HnswConfig::new(128, 16, 200, DistanceMetric::Cosine);
     /// ```
-    pub fn new(dimension: usize, m: usize, ef_construction: usize, distance_metric: DistanceMetric) -> Self {
+    pub fn new(
+        dimension: usize,
+        m: usize,
+        ef_construction: usize,
+        distance_metric: DistanceMetric,
+    ) -> Self {
         HnswConfig {
             dimension,
             m,
             ef_construction,
             ef_search: ef_construction, // Default ef_search to ef_construction
-            ml: 16, // Reasonable default
+            ml: 16,                     // Reasonable default
             distance_metric,
             enable_multilayer: false, // Single-layer mode by default
             multilayer_level_distribution_base: None,

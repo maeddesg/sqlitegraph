@@ -144,9 +144,9 @@ impl<'a> NodeStore<'a> {
         // PHASE 2C.1 FORENSIC: Dual-API instrumentation to detect cache/coherence issues
         if std::env::var("V2_SLOT_DEBUG").is_ok() {
             let mut before_buffer_file = vec![0u8; 32];
-            let _before_buffer_mmap = vec![0u8; 32];
+            let mut before_buffer_mmap = vec![0u8; 32];
             let mut after_buffer_file = vec![0u8; 32];
-            let _after_buffer_mmap = vec![0u8; 32];
+            let mut after_buffer_mmap = vec![0u8; 32];
 
             let file_size_before = self.graph_file.file_size().unwrap_or(0);
 
@@ -259,7 +259,7 @@ impl<'a> NodeStore<'a> {
         // PHASE 2C.1 FORENSIC: Dual-API instrumentation for reader
         if std::env::var("V2_SLOT_DEBUG").is_ok() {
             let mut debug_buffer_file = vec![0u8; 32];
-            let _debug_buffer_mmap = vec![0u8; 32];
+            let mut debug_buffer_mmap = vec![0u8; 32];
             let file_size = self.graph_file.file_size().unwrap_or(0);
 
             if slot_offset + 32 <= file_size {
@@ -459,20 +459,17 @@ impl<'a> NodeStore<'a> {
             .checked_add((start_node_id - 1) as u64 * node_slot_size)
             .ok_or_else(|| NativeBackendError::CorruptNodeRecord {
                 node_id: start_node_id,
-                reason: format!(
-                    "Start offset overflow for node_id={}",
-                    start_node_id
-                ),
+                reason: format!("Start offset overflow for node_id={}", start_node_id),
             })?;
 
         // File size validation: ensure we don't read beyond EOF
         let file_size = self.graph_file.file_size()?;
-        let end_offset = start_offset
-            .checked_add(total_bytes)
-            .ok_or_else(|| NativeBackendError::CorruptNodeRecord {
+        let end_offset = start_offset.checked_add(total_bytes).ok_or_else(|| {
+            NativeBackendError::CorruptNodeRecord {
                 node_id: start_node_id,
                 reason: "End offset calculation overflow".to_string(),
-            })?;
+            }
+        })?;
 
         if end_offset > file_size {
             return Err(NativeBackendError::FileTooSmall {

@@ -1,7 +1,10 @@
 use serde_json::json;
 use sqlitegraph::{
     GraphEdge, GraphEntity, SqliteGraph,
-    algo::{connected_components, find_cycles_limited, nodes_by_degree, pagerank, betweenness_centrality, label_propagation, louvain_communities},
+    algo::{
+        betweenness_centrality, connected_components, find_cycles_limited, label_propagation,
+        louvain_communities, nodes_by_degree, pagerank,
+    },
 };
 
 fn insert_entity(graph: &SqliteGraph, name: &str) -> i64 {
@@ -170,8 +173,7 @@ fn test_betweenness_line_graph() {
     // Middle nodes (B, C) should have higher centrality than ends (A, D)
     assert_eq!(centrality.len(), 4);
 
-    let centrality_map: std::collections::HashMap<i64, f64> =
-        centrality.into_iter().collect();
+    let centrality_map: std::collections::HashMap<i64, f64> = centrality.into_iter().collect();
 
     // B and C should have higher centrality than A and D
     assert!(centrality_map[&b] > centrality_map[&a]);
@@ -201,7 +203,8 @@ fn test_betweenness_star_graph() {
     assert!(center_centrality > 0.0);
 
     // Leaves should have zero or very low centrality
-    let leaf_values: Vec<(i64, f64)> = centrality.into_iter()
+    let leaf_values: Vec<(i64, f64)> = centrality
+        .into_iter()
         .filter(|(id, _)| *id != center)
         .collect();
 
@@ -268,13 +271,11 @@ fn test_label_propagation_disconnected() {
 #[test]
 fn test_label_propagation_clique() {
     let graph = SqliteGraph::open_in_memory().unwrap();
-    let nodes: Vec<i64> = (0..5)
-        .map(|_| insert_entity(&graph, "Node"))
-        .collect();
+    let nodes: Vec<i64> = (0..5).map(|_| insert_entity(&graph, "Node")).collect();
 
     // Create fully connected graph (clique)
     for i in 0..nodes.len() {
-        for j in (i+1)..nodes.len() {
+        for j in (i + 1)..nodes.len() {
             insert_edge(&graph, nodes[i], nodes[j], "LINK");
         }
     }
@@ -318,16 +319,12 @@ fn test_louvain_barbell() {
     let graph = SqliteGraph::open_in_memory().unwrap();
 
     // Create two cliques (cliques of 3 nodes each)
-    let clique1: Vec<i64> = (0..3)
-        .map(|_| insert_entity(&graph, "C1"))
-        .collect();
-    let clique2: Vec<i64> = (0..3)
-        .map(|_| insert_entity(&graph, "C2"))
-        .collect();
+    let clique1: Vec<i64> = (0..3).map(|_| insert_entity(&graph, "C1")).collect();
+    let clique2: Vec<i64> = (0..3).map(|_| insert_entity(&graph, "C2")).collect();
 
     // Connect clique1 internally (bidirectional edges)
     for i in 0..clique1.len() {
-        for j in (i+1)..clique1.len() {
+        for j in (i + 1)..clique1.len() {
             insert_edge(&graph, clique1[i], clique1[j], "LINK");
             insert_edge(&graph, clique1[j], clique1[i], "LINK");
         }
@@ -335,7 +332,7 @@ fn test_louvain_barbell() {
 
     // Connect clique2 internally (bidirectional edges)
     for i in 0..clique2.len() {
-        for j in (i+1)..clique2.len() {
+        for j in (i + 1)..clique2.len() {
             insert_edge(&graph, clique2[i], clique2[j], "LINK");
             insert_edge(&graph, clique2[j], clique2[i], "LINK");
         }
@@ -361,9 +358,7 @@ fn test_louvain_barbell() {
 fn test_louvain_star() {
     let graph = SqliteGraph::open_in_memory().unwrap();
     let center = insert_entity(&graph, "Center");
-    let leaves: Vec<i64> = (0..4)
-        .map(|_| insert_entity(&graph, "Leaf"))
-        .collect();
+    let leaves: Vec<i64> = (0..4).map(|_| insert_entity(&graph, "Leaf")).collect();
 
     // Create star: all leaves connected to center
     for leaf in &leaves {
@@ -549,9 +544,7 @@ fn test_label_prop_max_iterations() {
     let graph = SqliteGraph::open_in_memory().unwrap();
 
     // Create line graph: A -> B -> C -> D -> E
-    let nodes: Vec<i64> = (0..5)
-        .map(|_| insert_entity(&graph, "Node"))
-        .collect();
+    let nodes: Vec<i64> = (0..5).map(|_| insert_entity(&graph, "Node")).collect();
 
     for i in 0..4 {
         insert_edge(&graph, nodes[i], nodes[i + 1], "LINK");
@@ -580,12 +573,8 @@ fn test_louvain_max_iterations() {
     let graph = SqliteGraph::open_in_memory().unwrap();
 
     // Create two cliques connected by weak bridge
-    let clique1: Vec<i64> = (0..3)
-        .map(|_| insert_entity(&graph, "C1"))
-        .collect();
-    let clique2: Vec<i64> = (0..3)
-        .map(|_| insert_entity(&graph, "C2"))
-        .collect();
+    let clique1: Vec<i64> = (0..3).map(|_| insert_entity(&graph, "C1")).collect();
+    let clique2: Vec<i64> = (0..3).map(|_| insert_entity(&graph, "C2")).collect();
 
     // Connect clique1 internally
     for i in 0..clique1.len() {
@@ -647,7 +636,11 @@ fn test_pagerank_large_graph() {
     let duration = start.elapsed();
 
     // Should complete in reasonable time (< 10 seconds)
-    assert!(duration.as_secs() < 10, "PageRank took too long: {:?}", duration);
+    assert!(
+        duration.as_secs() < 10,
+        "PageRank took too long: {:?}",
+        duration
+    );
 
     // All nodes should have scores
     assert_eq!(scores.len(), 1000);
@@ -684,7 +677,11 @@ fn test_label_prop_large_graph() {
     let duration = start.elapsed();
 
     // Should complete in reasonable time (< 10 seconds)
-    assert!(duration.as_secs() < 10, "Label propagation took too long: {:?}", duration);
+    assert!(
+        duration.as_secs() < 10,
+        "Label propagation took too long: {:?}",
+        duration
+    );
 
     // All nodes should be assigned
     let total_nodes: usize = communities.iter().map(|c| c.len()).sum();

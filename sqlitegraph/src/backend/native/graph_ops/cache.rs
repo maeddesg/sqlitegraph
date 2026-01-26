@@ -45,11 +45,11 @@
 //! }
 //! ```
 
-use ahash::AHashMap;
 use crate::backend::native::adjacency::{AdjacencyHelpers, Direction};
 use crate::backend::native::graph_file::GraphFile;
 use crate::backend::native::types::{NativeNodeId, NativeResult};
 use crate::backend::native::v2::edge_cluster::EdgeCluster;
+use ahash::AHashMap;
 
 // Phase 34: Sequential cluster reader
 use crate::backend::native::adjacency::SequentialClusterReader;
@@ -177,12 +177,8 @@ pub fn get_neighbors_cached(
     stats.record_miss();
 
     let neighbors = match direction {
-        Direction::Outgoing => {
-            AdjacencyHelpers::get_outgoing_neighbors(graph_file, node_id)?
-        }
-        Direction::Incoming => {
-            AdjacencyHelpers::get_incoming_neighbors(graph_file, node_id)?
-        }
+        Direction::Outgoing => AdjacencyHelpers::get_outgoing_neighbors(graph_file, node_id)?,
+        Direction::Incoming => AdjacencyHelpers::get_incoming_neighbors(graph_file, node_id)?,
     };
 
     // Insert into cache for future lookups in this traversal
@@ -304,8 +300,10 @@ pub fn get_neighbors_optimized(
                 if let Some(cached_cluster_bytes) = ctx.buffer.get_cluster(cluster_offset) {
                     // Cluster cache hit - deserialize from cached bytes (no I/O)
                     if let Ok(cluster) = EdgeCluster::deserialize(cached_cluster_bytes) {
-                        let neighbors: Vec<NativeNodeId> =
-                            cluster.iter_neighbors().map(|id| id as NativeNodeId).collect();
+                        let neighbors: Vec<NativeNodeId> = cluster
+                            .iter_neighbors()
+                            .map(|id| id as NativeNodeId)
+                            .collect();
 
                         // Insert into L2 cache for future lookups in this traversal
                         ctx.cache.insert(cache_key, neighbors.clone());
@@ -317,11 +315,16 @@ pub fn get_neighbors_optimized(
 
                 // Cluster cache miss - read cluster data from file
                 let mut cluster_data = vec![0u8; cluster_size as usize];
-                if graph_file.read_bytes(cluster_offset, &mut cluster_data).is_ok() {
+                if graph_file
+                    .read_bytes(cluster_offset, &mut cluster_data)
+                    .is_ok()
+                {
                     // Deserialize edge cluster and extract neighbors
                     if let Ok(cluster) = EdgeCluster::deserialize(&cluster_data) {
-                        let neighbors: Vec<NativeNodeId> =
-                            cluster.iter_neighbors().map(|id| id as NativeNodeId).collect();
+                        let neighbors: Vec<NativeNodeId> = cluster
+                            .iter_neighbors()
+                            .map(|id| id as NativeNodeId)
+                            .collect();
 
                         // Insert into L2 cache for future lookups in this traversal
                         ctx.cache.insert(cache_key, neighbors.clone());
@@ -345,14 +348,9 @@ pub fn get_neighbors_optimized(
 
     // Phase 34: Sequential cluster read (lazy trigger)
     // Trigger only once when linear pattern confirmed, clusters contiguous, and buffer not yet populated
-    if ctx.cluster_buffer.is_none()
-        && ctx.detector.should_use_sequential_read()
-    {
+    if ctx.cluster_buffer.is_none() && ctx.detector.should_use_sequential_read() {
         let mut reader = SequentialClusterReader::new();
-        match reader.read_chain_clusters(
-            graph_file,
-            ctx.detector.cluster_offsets(),
-        ) {
+        match reader.read_chain_clusters(graph_file, ctx.detector.cluster_offsets()) {
             Ok(buffer) => {
                 ctx.cluster_buffer = Some(buffer);
                 ctx.cluster_buffer_offsets = ctx.detector.cluster_offsets().to_vec();
@@ -370,11 +368,7 @@ pub fn get_neighbors_optimized(
         if let Some(&cluster_index) = ctx.node_cluster_index.get(&node_id) {
             // Extract neighbors from buffered cluster
             let mut reader = SequentialClusterReader::new();
-            match reader.extract_neighbors(
-                buffer,
-                cluster_index,
-                &ctx.cluster_buffer_offsets,
-            ) {
+            match reader.extract_neighbors(buffer, cluster_index, &ctx.cluster_buffer_offsets) {
                 Ok(neighbors) => {
                     // Insert into L2 cache for future lookups
                     ctx.cache.insert(cache_key, neighbors.clone());
@@ -397,12 +391,8 @@ pub fn get_neighbors_optimized(
 
     // L3: Load from storage via AdjacencyHelpers
     let neighbors = match direction {
-        Direction::Outgoing => {
-            AdjacencyHelpers::get_outgoing_neighbors(graph_file, node_id)?
-        }
-        Direction::Incoming => {
-            AdjacencyHelpers::get_incoming_neighbors(graph_file, node_id)?
-        }
+        Direction::Outgoing => AdjacencyHelpers::get_outgoing_neighbors(graph_file, node_id)?,
+        Direction::Incoming => AdjacencyHelpers::get_incoming_neighbors(graph_file, node_id)?,
     };
 
     // Insert into cache for future lookups
@@ -472,7 +462,9 @@ pub fn traverse_with_detection(
     };
 
     // Observe node with cluster metadata (pushes to cluster_offsets)
-    let pattern = ctx.detector.observe_with_cluster(node_id, degree, cluster_offset, cluster_size);
+    let pattern = ctx
+        .detector
+        .observe_with_cluster(node_id, degree, cluster_offset, cluster_size);
 
     // Populate node_id -> cluster_index mapping
     // cluster_index = current length BEFORE push, so after observe_with_cluster() it's len() - 1
@@ -587,7 +579,7 @@ mod tests {
 
     #[test]
     fn test_traverse_with_detection_populates_mapping() {
-        use crate::backend::native::adjacency::{LinearDetector, Direction};
+        use crate::backend::native::adjacency::{Direction, LinearDetector};
         use crate::backend::native::types::NativeNodeId;
 
         let ctx = TraversalContext::new();
@@ -600,7 +592,7 @@ mod tests {
 
     #[test]
     fn test_traverse_with_detection_clears_on_branching() {
-        use crate::backend::native::adjacency::{TraversalPattern, Direction};
+        use crate::backend::native::adjacency::{Direction, TraversalPattern};
 
         let mut ctx = TraversalContext::new();
 

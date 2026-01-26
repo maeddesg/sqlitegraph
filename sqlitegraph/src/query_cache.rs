@@ -184,7 +184,10 @@ impl QueryCache {
             Ok(cache) => cache,
             Err(poisoned) => {
                 // Log the poisoning error and treat as cache miss
-                eprintln!("WARNING: Query cache read lock poisoned in get_bfs operation (start={}, depth={}). Treating as cache miss.", start, depth);
+                eprintln!(
+                    "WARNING: Query cache read lock poisoned in get_bfs operation (start={}, depth={}). Treating as cache miss.",
+                    start, depth
+                );
                 // Return the inner HashMap from the poisoned lock
                 poisoned.into_inner()
             }
@@ -210,7 +213,10 @@ impl QueryCache {
             }
             Err(poisoned) => {
                 // Log the poisoning error and recover from poisoned lock
-                eprintln!("WARNING: Query cache write lock poisoned in put_bfs operation (start={}, depth={}). Recovering and continuing.", start, depth);
+                eprintln!(
+                    "WARNING: Query cache write lock poisoned in put_bfs operation (start={}, depth={}). Recovering and continuing.",
+                    start, depth
+                );
                 let mut cache = poisoned.into_inner();
                 cache.insert(key, entry);
             }
@@ -235,7 +241,10 @@ impl QueryCache {
             Ok(cache) => cache,
             Err(poisoned) => {
                 // Log the poisoning error and treat as cache miss
-                eprintln!("WARNING: Query cache read lock poisoned in get_k_hop operation (start={}, depth={}, direction={:?}). Treating as cache miss.", start, depth, direction);
+                eprintln!(
+                    "WARNING: Query cache read lock poisoned in get_k_hop operation (start={}, depth={}, direction={:?}). Treating as cache miss.",
+                    start, depth, direction
+                );
                 poisoned.into_inner()
             }
         };
@@ -264,7 +273,10 @@ impl QueryCache {
             }
             Err(poisoned) => {
                 // Log the poisoning error and recover from poisoned lock
-                eprintln!("WARNING: Query cache write lock poisoned in put_k_hop operation (start={}, depth={}, direction={:?}). Recovering and continuing.", start, depth, direction);
+                eprintln!(
+                    "WARNING: Query cache write lock poisoned in put_k_hop operation (start={}, depth={}, direction={:?}). Recovering and continuing.",
+                    start, depth, direction
+                );
                 let mut cache = poisoned.into_inner();
                 cache.insert(key, entry);
             }
@@ -292,7 +304,10 @@ impl QueryCache {
             Ok(cache) => cache,
             Err(poisoned) => {
                 // Log the poisoning error and treat as cache miss
-                eprintln!("WARNING: Query cache read lock poisoned in get_k_hop_filtered operation (start={}, depth={}, direction={:?}, edge_types={:?}). Treating as cache miss.", start, depth, direction, allowed_edge_types);
+                eprintln!(
+                    "WARNING: Query cache read lock poisoned in get_k_hop_filtered operation (start={}, depth={}, direction={:?}, edge_types={:?}). Treating as cache miss.",
+                    start, depth, direction, allowed_edge_types
+                );
                 poisoned.into_inner()
             }
         };
@@ -330,7 +345,10 @@ impl QueryCache {
             }
             Err(poisoned) => {
                 // Log the poisoning error and recover from poisoned lock
-                eprintln!("WARNING: Query cache write lock poisoned in put_k_hop_filtered operation (start={}, depth={}, direction={:?}, edge_types={:?}). Recovering and continuing.", start, depth, direction, allowed_edge_types);
+                eprintln!(
+                    "WARNING: Query cache write lock poisoned in put_k_hop_filtered operation (start={}, depth={}, direction={:?}, edge_types={:?}). Recovering and continuing.",
+                    start, depth, direction, allowed_edge_types
+                );
                 let mut cache = poisoned.into_inner();
                 cache.insert(key, entry);
             }
@@ -346,7 +364,10 @@ impl QueryCache {
             Ok(cache) => cache,
             Err(poisoned) => {
                 // Log the poisoning error and treat as cache miss
-                eprintln!("WARNING: Query cache read lock poisoned in get_shortest_path operation (start={}, end={}). Treating as cache miss.", start, end);
+                eprintln!(
+                    "WARNING: Query cache read lock poisoned in get_shortest_path operation (start={}, end={}). Treating as cache miss.",
+                    start, end
+                );
                 poisoned.into_inner()
             }
         };
@@ -371,7 +392,10 @@ impl QueryCache {
             }
             Err(poisoned) => {
                 // Log the poisoning error and recover from poisoned lock
-                eprintln!("WARNING: Query cache write lock poisoned in put_shortest_path operation (start={}, end={}). Recovering and continuing.", start, end);
+                eprintln!(
+                    "WARNING: Query cache write lock poisoned in put_shortest_path operation (start={}, end={}). Recovering and continuing.",
+                    start, end
+                );
                 let mut cache = poisoned.into_inner();
                 cache.insert(key, entry);
             }
@@ -387,7 +411,9 @@ impl QueryCache {
             }
             Err(poisoned) => {
                 // Log the poisoning error and recover from poisoned lock
-                eprintln!("WARNING: Query cache write lock poisoned in invalidate_all operation. Recovering and continuing.");
+                eprintln!(
+                    "WARNING: Query cache write lock poisoned in invalidate_all operation. Recovering and continuing."
+                );
                 let mut cache = poisoned.into_inner();
                 cache.clear();
             }
@@ -401,7 +427,9 @@ impl QueryCache {
             Ok(cache) => cache.len(),
             Err(poisoned) => {
                 // Log the poisoning error and treat as empty cache
-                eprintln!("WARNING: Query cache read lock poisoned in size operation. Treating as empty cache.");
+                eprintln!(
+                    "WARNING: Query cache read lock poisoned in size operation. Treating as empty cache."
+                );
                 poisoned.into_inner().len()
             }
         }
@@ -414,7 +442,9 @@ impl QueryCache {
             Ok(cache) => cache.is_empty(),
             Err(poisoned) => {
                 // Log the poisoning error and treat as empty cache
-                eprintln!("WARNING: Query cache read lock poisoned in is_empty operation. Treating as empty cache.");
+                eprintln!(
+                    "WARNING: Query cache read lock poisoned in is_empty operation. Treating as empty cache."
+                );
                 poisoned.into_inner().is_empty()
             }
         }

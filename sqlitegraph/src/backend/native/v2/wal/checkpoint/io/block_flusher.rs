@@ -179,7 +179,9 @@ mod tests {
     }
 
     /// Helper function to create a V2 graph file and return actual file size info
-    fn create_test_v2_file_with_size_info(path: &std::path::Path) -> CheckpointResult<(GraphFile, u64)> {
+    fn create_test_v2_file_with_size_info(
+        path: &std::path::Path,
+    ) -> CheckpointResult<(GraphFile, u64)> {
         // Create base V2 graph file
         let graph_file = GraphFile::create(path)?;
 
@@ -204,11 +206,19 @@ mod tests {
         // Test with the smallest valid block offset, which is 0, but only if the file is large enough
         if file_size >= V2_GRAPH_BLOCK_SIZE {
             let result = flusher.flush_dirty_block(0);
-            assert!(result.is_ok(), "Should successfully flush first block for file size {}", file_size);
+            assert!(
+                result.is_ok(),
+                "Should successfully flush first block for file size {}",
+                file_size
+            );
         } else {
             // File is too small for any block operations - test this case
             let result = flusher.flush_dirty_block(0);
-            assert!(result.is_err(), "Expected failure for small file size {}", file_size);
+            assert!(
+                result.is_err(),
+                "Expected failure for small file size {}",
+                file_size
+            );
         }
 
         Ok(())
@@ -229,7 +239,8 @@ mod tests {
 
         // Create block offsets that are within the file size
         let mut block_offsets = Vec::new();
-        for i in 0..max_block_count.min(3) { // Test up to 3 blocks or what fits
+        for i in 0..max_block_count.min(3) {
+            // Test up to 3 blocks or what fits
             block_offsets.push(i * V2_GRAPH_BLOCK_SIZE);
         }
 
@@ -243,7 +254,11 @@ mod tests {
 
         // Only assert success if we had realistic block offsets
         if file_size >= V2_GRAPH_BLOCK_SIZE {
-            assert!(result.is_ok(), "Should successfully flush {} blocks", block_offsets.len());
+            assert!(
+                result.is_ok(),
+                "Should successfully flush {} blocks",
+                block_offsets.len()
+            );
         } else {
             // File too small for block operations - this is expected for minimal test files
             assert!(result.is_err(), "Expected failure for small file size");

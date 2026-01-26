@@ -382,13 +382,17 @@ fn bench_louvain(criterion: &mut Criterion) {
             });
         });
 
-        group.bench_with_input(BenchmarkId::new("barbell_graph", size), &size, |b, &size| {
-            b.iter(|| {
-                let clique_size = size / 2;
-                let graph = create_barbell_graph(clique_size);
-                let _communities = louvain_communities(&graph, 10).expect("louvain failed");
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("barbell_graph", size),
+            &size,
+            |b, &size| {
+                b.iter(|| {
+                    let clique_size = size / 2;
+                    let graph = create_barbell_graph(clique_size);
+                    let _communities = louvain_communities(&graph, 10).expect("louvain failed");
+                });
+            },
+        );
     }
 
     group.finish();
@@ -408,7 +412,8 @@ fn bench_connected_components(criterion: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("random_graph", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_random_graph(size, 0.05);
-                let _components = connected_components(&graph).expect("connected components failed");
+                let _components =
+                    connected_components(&graph).expect("connected components failed");
             });
         });
     }
@@ -468,59 +473,119 @@ fn bench_disconnected_components(criterion: &mut Criterion) {
             let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
             // Create two disconnected triangles
-            let a = graph.insert_entity(&sqlitegraph::GraphEntity {
-                id: 0, kind: "Node".into(), name: "A".into(), file_path: None,
-                data: serde_json::json!({}),
-            }).expect("insert");
-            let b = graph.insert_entity(&sqlitegraph::GraphEntity {
-                id: 0, kind: "Node".into(), name: "B".into(), file_path: None,
-                data: serde_json::json!({}),
-            }).expect("insert");
-            let c = graph.insert_entity(&sqlitegraph::GraphEntity {
-                id: 0, kind: "Node".into(), name: "C".into(), file_path: None,
-                data: serde_json::json!({}),
-            }).expect("insert");
+            let a = graph
+                .insert_entity(&sqlitegraph::GraphEntity {
+                    id: 0,
+                    kind: "Node".into(),
+                    name: "A".into(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
+            let b = graph
+                .insert_entity(&sqlitegraph::GraphEntity {
+                    id: 0,
+                    kind: "Node".into(),
+                    name: "B".into(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
+            let c = graph
+                .insert_entity(&sqlitegraph::GraphEntity {
+                    id: 0,
+                    kind: "Node".into(),
+                    name: "C".into(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
 
             // Triangle 1
-            graph.insert_edge(&sqlitegraph::GraphEdge {
-                id: 0, from_id: a, to_id: b, edge_type: "LINK".into(),
-                data: serde_json::json!({}),
-            }).expect("insert");
-            graph.insert_edge(&sqlitegraph::GraphEdge {
-                id: 0, from_id: b, to_id: c, edge_type: "LINK".into(),
-                data: serde_json::json!({}),
-            }).expect("insert");
-            graph.insert_edge(&sqlitegraph::GraphEdge {
-                id: 0, from_id: c, to_id: a, edge_type: "LINK".into(),
-                data: serde_json::json!({}),
-            }).expect("insert");
+            graph
+                .insert_edge(&sqlitegraph::GraphEdge {
+                    id: 0,
+                    from_id: a,
+                    to_id: b,
+                    edge_type: "LINK".into(),
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
+            graph
+                .insert_edge(&sqlitegraph::GraphEdge {
+                    id: 0,
+                    from_id: b,
+                    to_id: c,
+                    edge_type: "LINK".into(),
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
+            graph
+                .insert_edge(&sqlitegraph::GraphEdge {
+                    id: 0,
+                    from_id: c,
+                    to_id: a,
+                    edge_type: "LINK".into(),
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
 
             // Triangle 2
-            let d = graph.insert_entity(&sqlitegraph::GraphEntity {
-                id: 0, kind: "Node".into(), name: "D".into(), file_path: None,
-                data: serde_json::json!({}),
-            }).expect("insert");
-            let e = graph.insert_entity(&sqlitegraph::GraphEntity {
-                id: 0, kind: "Node".into(), name: "E".into(), file_path: None,
-                data: serde_json::json!({}),
-            }).expect("insert");
-            let f = graph.insert_entity(&sqlitegraph::GraphEntity {
-                id: 0, kind: "Node".into(), name: "F".into(), file_path: None,
-                data: serde_json::json!({}),
-            }).expect("insert");
+            let d = graph
+                .insert_entity(&sqlitegraph::GraphEntity {
+                    id: 0,
+                    kind: "Node".into(),
+                    name: "D".into(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
+            let e = graph
+                .insert_entity(&sqlitegraph::GraphEntity {
+                    id: 0,
+                    kind: "Node".into(),
+                    name: "E".into(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
+            let f = graph
+                .insert_entity(&sqlitegraph::GraphEntity {
+                    id: 0,
+                    kind: "Node".into(),
+                    name: "F".into(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
 
-            graph.insert_edge(&sqlitegraph::GraphEdge {
-                id: 0, from_id: d, to_id: e, edge_type: "LINK".into(),
-                data: serde_json::json!({}),
-            }).expect("insert");
-            graph.insert_edge(&sqlitegraph::GraphEdge {
-                id: 0, from_id: e, to_id: f, edge_type: "LINK".into(),
-                data: serde_json::json!({}),
-            }).expect("insert");
-            graph.insert_edge(&sqlitegraph::GraphEdge {
-                id: 0, from_id: f, to_id: d, edge_type: "LINK".into(),
-                data: serde_json::json!({}),
-            }).expect("insert");
+            graph
+                .insert_edge(&sqlitegraph::GraphEdge {
+                    id: 0,
+                    from_id: d,
+                    to_id: e,
+                    edge_type: "LINK".into(),
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
+            graph
+                .insert_edge(&sqlitegraph::GraphEdge {
+                    id: 0,
+                    from_id: e,
+                    to_id: f,
+                    edge_type: "LINK".into(),
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
+            graph
+                .insert_edge(&sqlitegraph::GraphEdge {
+                    id: 0,
+                    from_id: f,
+                    to_id: d,
+                    edge_type: "LINK".into(),
+                    data: serde_json::json!({}),
+                })
+                .expect("insert");
 
             let _scores = pagerank(&graph, 0.85, 20).expect("pagerank failed");
         });

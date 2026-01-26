@@ -84,9 +84,7 @@ pub fn detect_format_version(path: &Path) -> NativeResult<FormatVersion> {
     if magic != MAGIC_BYTES {
         return Err(NativeBackendError::InvalidMagic {
             expected: u64::from_be_bytes(MAGIC_BYTES),
-            found: u64::from_be_bytes(
-                magic.try_into().unwrap_or([0u8; 8]),
-            ),
+            found: u64::from_be_bytes(magic.try_into().unwrap_or([0u8; 8])),
         });
     }
 
@@ -128,7 +126,7 @@ pub fn needs_migration(path: &Path) -> NativeResult<bool> {
             version: 1,
             supported_version: 3,
         }),
-        FormatVersion::V2 => Ok(true), // V2 needs migration to V3
+        FormatVersion::V2 => Ok(true),  // V2 needs migration to V3
         FormatVersion::V3 => Ok(false), // V3 is current
         FormatVersion::Unknown(v) => Err(NativeBackendError::UnsupportedVersion {
             version: v,

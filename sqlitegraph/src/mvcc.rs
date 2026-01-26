@@ -172,11 +172,16 @@ impl SnapshotManager {
         #[cfg(debug_assertions)]
         {
             // Verify state is fully constructed
-            assert_eq!(new_state.node_count(), outgoing.len(),
-                "Snapshot state node count mismatch");
-            assert_eq!(new_state.edge_count(),
+            assert_eq!(
+                new_state.node_count(),
+                outgoing.len(),
+                "Snapshot state node count mismatch"
+            );
+            assert_eq!(
+                new_state.edge_count(),
                 outgoing.values().map(|v| v.len()).sum::<usize>(),
-                "Snapshot state edge count mismatch");
+                "Snapshot state edge count mismatch"
+            );
         }
 
         // Atomic publication with Release ordering

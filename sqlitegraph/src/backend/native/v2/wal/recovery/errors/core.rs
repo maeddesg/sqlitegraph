@@ -689,7 +689,7 @@ impl Default for RecoveryErrorCollection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_recovery_error_creation() {
         let error = RecoveryError::new(RecoveryErrorKind::Configuration, "Invalid path");

@@ -10,7 +10,6 @@
 //! - Error handling (missing keys, large values)
 //! - Edge cases (empty keys, concurrent access)
 
-
 // ============================================================================
 // Basic Operations Tests (End-to-End)
 // ============================================================================
@@ -18,7 +17,13 @@
 #[test]
 fn test_set_and_get() {
     let mut store = KvStore::new();
-    store.set(b"my_key".to_vec(), KvValue::String("my_value".to_string()), None).unwrap();
+    store
+        .set(
+            b"my_key".to_vec(),
+            KvValue::String("my_value".to_string()),
+            None,
+        )
+        .unwrap();
     let result = store.get(b"my_key").unwrap();
     assert_eq!(result, Some(KvValue::String("my_value".to_string())));
 }
@@ -28,11 +33,15 @@ fn test_set_overwrite() {
     let mut store = KvStore::new();
 
     // Set initial value
-    store.set(b"key".to_vec(), KvValue::Integer(100), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(100), None)
+        .unwrap();
     assert_eq!(store.get(b"key").unwrap(), Some(KvValue::Integer(100)));
 
     // Overwrite with new value
-    store.set(b"key".to_vec(), KvValue::Integer(200), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(200), None)
+        .unwrap();
     assert_eq!(store.get(b"key").unwrap(), Some(KvValue::Integer(200)));
 
     // Still only one entry
@@ -42,7 +51,9 @@ fn test_set_overwrite() {
 #[test]
 fn test_delete() {
     let mut store = KvStore::new();
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
     assert!(store.exists(b"key"));
 
     store.delete(b"key").unwrap();
@@ -58,7 +69,9 @@ fn test_exists() {
     assert!(!store.exists(b"key"));
 
     // Key exists after set
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(b"key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
     assert!(store.exists(b"key"));
 
     // Key doesn't exist after delete
@@ -71,28 +84,53 @@ fn test_all_value_types() {
     let mut store = KvStore::new();
 
     // Bytes
-    store.set(b"bytes_key".to_vec(), KvValue::Bytes(vec![1, 2, 3]), None).unwrap();
-    assert_eq!(store.get(b"bytes_key").unwrap(), Some(KvValue::Bytes(vec![1, 2, 3])));
+    store
+        .set(b"bytes_key".to_vec(), KvValue::Bytes(vec![1, 2, 3]), None)
+        .unwrap();
+    assert_eq!(
+        store.get(b"bytes_key").unwrap(),
+        Some(KvValue::Bytes(vec![1, 2, 3]))
+    );
 
     // String
-    store.set(b"string_key".to_vec(), KvValue::String("hello".to_string()), None).unwrap();
-    assert_eq!(store.get(b"string_key").unwrap(), Some(KvValue::String("hello".to_string())));
+    store
+        .set(
+            b"string_key".to_vec(),
+            KvValue::String("hello".to_string()),
+            None,
+        )
+        .unwrap();
+    assert_eq!(
+        store.get(b"string_key").unwrap(),
+        Some(KvValue::String("hello".to_string()))
+    );
 
     // Integer
-    store.set(b"int_key".to_vec(), KvValue::Integer(-42), None).unwrap();
+    store
+        .set(b"int_key".to_vec(), KvValue::Integer(-42), None)
+        .unwrap();
     assert_eq!(store.get(b"int_key").unwrap(), Some(KvValue::Integer(-42)));
 
     // Float
-    store.set(b"float_key".to_vec(), KvValue::Float(3.14), None).unwrap();
+    store
+        .set(b"float_key".to_vec(), KvValue::Float(3.14), None)
+        .unwrap();
     assert_eq!(store.get(b"float_key").unwrap(), Some(KvValue::Float(3.14)));
 
     // Boolean
-    store.set(b"bool_key".to_vec(), KvValue::Boolean(true), None).unwrap();
-    assert_eq!(store.get(b"bool_key").unwrap(), Some(KvValue::Boolean(true)));
+    store
+        .set(b"bool_key".to_vec(), KvValue::Boolean(true), None)
+        .unwrap();
+    assert_eq!(
+        store.get(b"bool_key").unwrap(),
+        Some(KvValue::Boolean(true))
+    );
 
     // Json
     let json = serde_json::json!({"foo": "bar", "num": 123});
-    store.set(b"json_key".to_vec(), KvValue::Json(json.clone()), None).unwrap();
+    store
+        .set(b"json_key".to_vec(), KvValue::Json(json.clone()), None)
+        .unwrap();
     assert_eq!(store.get(b"json_key").unwrap(), Some(KvValue::Json(json)));
 }
 
@@ -105,7 +143,9 @@ fn test_ttl_set_and_expire() {
     let mut store = KvStore::new();
 
     // Set value with 1 second TTL
-    store.set(b"temp_key".to_vec(), KvValue::Integer(42), Some(1)).unwrap();
+    store
+        .set(b"temp_key".to_vec(), KvValue::Integer(42), Some(1))
+        .unwrap();
 
     // Value exists immediately
     assert!(store.exists(b"temp_key"));
@@ -124,14 +164,19 @@ fn test_ttl_none_persists() {
     let mut store = KvStore::new();
 
     // Set value without TTL
-    store.set(b"permanent_key".to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(b"permanent_key".to_vec(), KvValue::Integer(42), None)
+        .unwrap();
 
     // Wait
     std::thread::sleep(Duration::from_secs(1));
 
     // Value should still exist
     assert!(store.exists(b"permanent_key"));
-    assert_eq!(store.get(b"permanent_key").unwrap(), Some(KvValue::Integer(42)));
+    assert_eq!(
+        store.get(b"permanent_key").unwrap(),
+        Some(KvValue::Integer(42))
+    );
 }
 
 #[test]
@@ -177,7 +222,9 @@ fn test_manual_cleanup() {
     let mut store = KvStore::new();
 
     // Add non-expired entry
-    store.set(b"permanent".to_vec(), KvValue::Integer(1), None).unwrap();
+    store
+        .set(b"permanent".to_vec(), KvValue::Integer(1), None)
+        .unwrap();
 
     // Add expired entry
     let now = SystemTime::now()
@@ -221,11 +268,16 @@ fn test_ttl_with_snapshot_isolation() {
     let mut store = KvStore::new();
 
     // Set value with short TTL
-    store.set_with_version(b"key".to_vec(), KvValue::Integer(42), Some(1), 100).unwrap();
+    store
+        .set_with_version(b"key".to_vec(), KvValue::Integer(42), Some(1), 100)
+        .unwrap();
 
     // Snapshot at 150 should see it (not yet expired)
     let snapshot = SnapshotId::from_lsn(150);
-    assert_eq!(store.get_at_snapshot(b"key", snapshot).unwrap(), Some(KvValue::Integer(42)));
+    assert_eq!(
+        store.get_at_snapshot(b"key", snapshot).unwrap(),
+        Some(KvValue::Integer(42))
+    );
 
     // Wait for expiration
     std::thread::sleep(Duration::from_secs(2));
@@ -243,7 +295,9 @@ fn test_snapshot_isolation() {
     let mut store = KvStore::new();
 
     // Create key with version 100
-    store.set_with_version(b"key".to_vec(), KvValue::Integer(100), None, 100).unwrap();
+    store
+        .set_with_version(b"key".to_vec(), KvValue::Integer(100), None, 100)
+        .unwrap();
 
     // Snapshot at 50 should NOT see version 100
     let snapshot_old = SnapshotId::from_lsn(50);
@@ -251,7 +305,10 @@ fn test_snapshot_isolation() {
 
     // Snapshot at 150 should see version 100
     let snapshot_new = SnapshotId::from_lsn(150);
-    assert_eq!(store.get_at_snapshot(b"key", snapshot_new).unwrap(), Some(KvValue::Integer(100)));
+    assert_eq!(
+        store.get_at_snapshot(b"key", snapshot_new).unwrap(),
+        Some(KvValue::Integer(100))
+    );
 }
 
 #[test]
@@ -259,7 +316,9 @@ fn test_committed_visible() {
     let mut store = KvStore::new();
 
     // Set value at version 100
-    store.set_with_version(b"key".to_vec(), KvValue::Integer(42), None, 100).unwrap();
+    store
+        .set_with_version(b"key".to_vec(), KvValue::Integer(42), None, 100)
+        .unwrap();
 
     // Current snapshot should see committed data
     let snapshot = SnapshotId::from_lsn(150);
@@ -273,25 +332,43 @@ fn test_version_filtering() {
 
     // Create multiple versions of same key
     // Full MVCC: all versions retained in history
-    store.set_with_version(b"key".to_vec(), KvValue::Integer(100), None, 100).unwrap();
-    store.set_with_version(b"key".to_vec(), KvValue::Integer(200), None, 200).unwrap();
-    store.set_with_version(b"key".to_vec(), KvValue::Integer(300), None, 300).unwrap();
+    store
+        .set_with_version(b"key".to_vec(), KvValue::Integer(100), None, 100)
+        .unwrap();
+    store
+        .set_with_version(b"key".to_vec(), KvValue::Integer(200), None, 200)
+        .unwrap();
+    store
+        .set_with_version(b"key".to_vec(), KvValue::Integer(300), None, 300)
+        .unwrap();
 
     // Zero snapshot (current) sees latest version
     let snapshot_zero = SnapshotId::from_lsn(0);
-    assert_eq!(store.get_at_snapshot(b"key", snapshot_zero).unwrap(), Some(KvValue::Integer(300)));
+    assert_eq!(
+        store.get_at_snapshot(b"key", snapshot_zero).unwrap(),
+        Some(KvValue::Integer(300))
+    );
 
     // Snapshot at 350 should see version 300 (latest visible)
     let snapshot_350 = SnapshotId::from_lsn(350);
-    assert_eq!(store.get_at_snapshot(b"key", snapshot_350).unwrap(), Some(KvValue::Integer(300)));
+    assert_eq!(
+        store.get_at_snapshot(b"key", snapshot_350).unwrap(),
+        Some(KvValue::Integer(300))
+    );
 
     // Snapshot at 250 should see version 200 (TRUE MVCC - version history retained!)
     let snapshot_250 = SnapshotId::from_lsn(250);
-    assert_eq!(store.get_at_snapshot(b"key", snapshot_250).unwrap(), Some(KvValue::Integer(200)));
+    assert_eq!(
+        store.get_at_snapshot(b"key", snapshot_250).unwrap(),
+        Some(KvValue::Integer(200))
+    );
 
     // Snapshot at 150 should see version 100
     let snapshot_150 = SnapshotId::from_lsn(150);
-    assert_eq!(store.get_at_snapshot(b"key", snapshot_150).unwrap(), Some(KvValue::Integer(100)));
+    assert_eq!(
+        store.get_at_snapshot(b"key", snapshot_150).unwrap(),
+        Some(KvValue::Integer(100))
+    );
 
     // Snapshot at 50 should see nothing (all versions > snapshot LSN)
     let snapshot_50 = SnapshotId::from_lsn(50);
@@ -308,7 +385,10 @@ fn test_snapshot_edge_cases() {
 
     // Test with snapshot 0
     let snapshot_zero = SnapshotId::from_lsn(0);
-    assert_eq!(store.get_at_snapshot(b"missing", snapshot_zero).unwrap(), None);
+    assert_eq!(
+        store.get_at_snapshot(b"missing", snapshot_zero).unwrap(),
+        None
+    );
 }
 
 // ============================================================================
@@ -320,8 +400,12 @@ fn test_kv_participates_in_transaction() {
     let mut store = KvStore::new();
 
     // Simulate transaction: set values
-    store.set(b"key1".to_vec(), KvValue::Integer(1), None).unwrap();
-    store.set(b"key2".to_vec(), KvValue::Integer(2), None).unwrap();
+    store
+        .set(b"key1".to_vec(), KvValue::Integer(1), None)
+        .unwrap();
+    store
+        .set(b"key2".to_vec(), KvValue::Integer(2), None)
+        .unwrap();
 
     // Verify both values exist
     assert!(store.exists(b"key1"));
@@ -341,20 +425,36 @@ fn test_version_tracking_for_transactions() {
     let mut store = KvStore::new();
 
     // Simulate transaction at LSN 100
-    store.set_with_version(b"tx1_key".to_vec(), KvValue::Integer(100), None, 100).unwrap();
+    store
+        .set_with_version(b"tx1_key".to_vec(), KvValue::Integer(100), None, 100)
+        .unwrap();
 
     // Simulate transaction at LSN 200
-    store.set_with_version(b"tx2_key".to_vec(), KvValue::Integer(200), None, 200).unwrap();
+    store
+        .set_with_version(b"tx2_key".to_vec(), KvValue::Integer(200), None, 200)
+        .unwrap();
 
     // Snapshot at 150 should only see tx1
     let snapshot_150 = SnapshotId::from_lsn(150);
-    assert_eq!(store.get_at_snapshot(b"tx1_key", snapshot_150).unwrap(), Some(KvValue::Integer(100)));
-    assert_eq!(store.get_at_snapshot(b"tx2_key", snapshot_150).unwrap(), None);
+    assert_eq!(
+        store.get_at_snapshot(b"tx1_key", snapshot_150).unwrap(),
+        Some(KvValue::Integer(100))
+    );
+    assert_eq!(
+        store.get_at_snapshot(b"tx2_key", snapshot_150).unwrap(),
+        None
+    );
 
     // Snapshot at 250 should see both
     let snapshot_250 = SnapshotId::from_lsn(250);
-    assert_eq!(store.get_at_snapshot(b"tx1_key", snapshot_250).unwrap(), Some(KvValue::Integer(100)));
-    assert_eq!(store.get_at_snapshot(b"tx2_key", snapshot_250).unwrap(), Some(KvValue::Integer(200)));
+    assert_eq!(
+        store.get_at_snapshot(b"tx1_key", snapshot_250).unwrap(),
+        Some(KvValue::Integer(100))
+    );
+    assert_eq!(
+        store.get_at_snapshot(b"tx2_key", snapshot_250).unwrap(),
+        Some(KvValue::Integer(200))
+    );
 }
 
 // ============================================================================
@@ -366,8 +466,16 @@ fn test_wal_persistence() {
     let mut store = KvStore::new();
 
     // Set values
-    store.set(b"key1".to_vec(), KvValue::Integer(1), None).unwrap();
-    store.set(b"key2".to_vec(), KvValue::String("persist".to_string()), None).unwrap();
+    store
+        .set(b"key1".to_vec(), KvValue::Integer(1), None)
+        .unwrap();
+    store
+        .set(
+            b"key2".to_vec(),
+            KvValue::String("persist".to_string()),
+            None,
+        )
+        .unwrap();
 
     // Verify values exist
     assert_eq!(store.len(), 2);
@@ -376,7 +484,9 @@ fn test_wal_persistence() {
 
     // In real WAL recovery, store would be recreated from WAL records
     // For this test, we verify that data survives store mutations
-    store.set(b"key3".to_vec(), KvValue::Integer(3), None).unwrap();
+    store
+        .set(b"key3".to_vec(), KvValue::Integer(3), None)
+        .unwrap();
     assert_eq!(store.len(), 3);
 }
 
@@ -385,14 +495,21 @@ fn test_wal_recovery_with_versions() {
     let mut store = KvStore::new();
 
     // Simulate WAL replay with versions
-    store.set_with_version(b"key1".to_vec(), KvValue::Integer(100), None, 100).unwrap();
-    store.set_with_version(b"key2".to_vec(), KvValue::Integer(200), None, 200).unwrap();
+    store
+        .set_with_version(b"key1".to_vec(), KvValue::Integer(100), None, 100)
+        .unwrap();
+    store
+        .set_with_version(b"key2".to_vec(), KvValue::Integer(200), None, 200)
+        .unwrap();
 
     // Verify replay worked
     assert_eq!(store.len(), 2);
 
     let snapshot = SnapshotId::from_lsn(150);
-    assert_eq!(store.get_at_snapshot(b"key1", snapshot).unwrap(), Some(KvValue::Integer(100)));
+    assert_eq!(
+        store.get_at_snapshot(b"key1", snapshot).unwrap(),
+        Some(KvValue::Integer(100))
+    );
     assert_eq!(store.get_at_snapshot(b"key2", snapshot).unwrap(), None);
 }
 
@@ -406,12 +523,14 @@ fn test_wal_recovery_with_ttl() {
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    store.set_with_version(
-        b"temp_key".to_vec(),
-        KvValue::Integer(42),
-        Some(3600), // 1 hour TTL
-        100
-    ).unwrap();
+    store
+        .set_with_version(
+            b"temp_key".to_vec(),
+            KvValue::Integer(42),
+            Some(3600), // 1 hour TTL
+            100,
+        )
+        .unwrap();
 
     // Verify replay preserved TTL
     assert!(store.exists(b"temp_key"));
@@ -433,7 +552,9 @@ fn test_wal_delete_recovery() {
     let mut store = KvStore::new();
 
     // Set then delete (simulating WAL replay)
-    store.set_with_version(b"key".to_vec(), KvValue::Integer(42), None, 100).unwrap();
+    store
+        .set_with_version(b"key".to_vec(), KvValue::Integer(42), None, 100)
+        .unwrap();
     store.delete(b"key").unwrap();
 
     // Verify delete worked
@@ -475,12 +596,16 @@ fn test_large_key_value() {
 
     // Large key (1KB)
     let large_key = vec![b'X'; 1024];
-    store.set(large_key.clone(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(large_key.clone(), KvValue::Integer(42), None)
+        .unwrap();
     assert_eq!(store.get(&large_key).unwrap(), Some(KvValue::Integer(42)));
 
     // Large value (1MB)
     let large_value = KvValue::Bytes(vec![0xAB; 1_048_576]);
-    store.set(b"large_value_key".to_vec(), large_value.clone(), None).unwrap();
+    store
+        .set(b"large_value_key".to_vec(), large_value.clone(), None)
+        .unwrap();
     assert_eq!(store.get(b"large_value_key").unwrap(), Some(large_value));
 }
 
@@ -493,7 +618,9 @@ fn test_empty_key() {
     let mut store = KvStore::new();
 
     // Empty byte array key
-    store.set(vec![].to_vec(), KvValue::Integer(42), None).unwrap();
+    store
+        .set(vec![].to_vec(), KvValue::Integer(42), None)
+        .unwrap();
     assert_eq!(store.get(b"").unwrap(), Some(KvValue::Integer(42)));
     assert!(store.exists(b""));
 
@@ -503,9 +630,9 @@ fn test_empty_key() {
 
 #[test]
 fn test_concurrent_kv_ops() {
+    use parking_lot::RwLock;
     use std::sync::{Arc, Barrier};
     use std::thread;
-    use parking_lot::RwLock;
 
     let store = Arc::new(RwLock::new(KvStore::new()));
     let barrier = Arc::new(Barrier::new(4));
@@ -521,7 +648,10 @@ fn test_concurrent_kv_ops() {
 
             for j in 0..10 {
                 let key = format!("thread_{}_key_{}", i, j);
-                store_clone.write().set(key.into_bytes(), KvValue::Integer(i * 10 + j), None).unwrap();
+                store_clone
+                    .write()
+                    .set(key.into_bytes(), KvValue::Integer(i * 10 + j), None)
+                    .unwrap();
             }
 
             for j in 0..10 {
@@ -551,8 +681,17 @@ fn test_unicode_key() {
     let unicode_key = "🔑_test_key";
     let key_bytes = unicode_key.as_bytes().to_vec();
 
-    store.set(key_bytes.clone(), KvValue::String("value".to_string()), None).unwrap();
-    assert_eq!(store.get(&key_bytes).unwrap(), Some(KvValue::String("value".to_string())));
+    store
+        .set(
+            key_bytes.clone(),
+            KvValue::String("value".to_string()),
+            None,
+        )
+        .unwrap();
+    assert_eq!(
+        store.get(&key_bytes).unwrap(),
+        Some(KvValue::String("value".to_string()))
+    );
 }
 
 #[test]
@@ -560,7 +699,9 @@ fn test_zero_ttl() {
     let mut store = KvStore::new();
 
     // Zero TTL should expire immediately
-    store.set(b"ephemeral".to_vec(), KvValue::Integer(42), Some(0)).unwrap();
+    store
+        .set(b"ephemeral".to_vec(), KvValue::Integer(42), Some(0))
+        .unwrap();
 
     // Small delay to ensure time passes
     std::thread::sleep(Duration::from_millis(10));
@@ -576,11 +717,20 @@ fn test_very_large_ttl() {
     // Very large TTL (100 years)
     let hundred_years_seconds = 100_u64 * 365 * 24 * 60 * 60;
 
-    store.set(b"centennial".to_vec(), KvValue::Integer(42), Some(hundred_years_seconds)).unwrap();
+    store
+        .set(
+            b"centennial".to_vec(),
+            KvValue::Integer(42),
+            Some(hundred_years_seconds),
+        )
+        .unwrap();
 
     // Should not be expired
     assert!(store.exists(b"centennial"));
-    assert_eq!(store.get(b"centennial").unwrap(), Some(KvValue::Integer(42)));
+    assert_eq!(
+        store.get(b"centennial").unwrap(),
+        Some(KvValue::Integer(42))
+    );
 }
 
 #[test]
@@ -589,7 +739,9 @@ fn test_multiple_updates_same_key() {
 
     // Update same key multiple times
     for i in 0..10 {
-        store.set(b"counter".to_vec(), KvValue::Integer(i), None).unwrap();
+        store
+            .set(b"counter".to_vec(), KvValue::Integer(i), None)
+            .unwrap();
     }
 
     // Should have final value
@@ -634,8 +786,12 @@ fn test_cleanup_does_not_affect_valid_entries() {
     let mut store = KvStore::new();
 
     // Add entries with different TTLs
-    store.set(b"no_ttl".to_vec(), KvValue::Integer(1), None).unwrap();
-    store.set(b"long_ttl".to_vec(), KvValue::Integer(2), Some(3600)).unwrap();
+    store
+        .set(b"no_ttl".to_vec(), KvValue::Integer(1), None)
+        .unwrap();
+    store
+        .set(b"long_ttl".to_vec(), KvValue::Integer(2), Some(3600))
+        .unwrap();
 
     // Cleanup should not remove these
     let removed = store.cleanup_expired();

@@ -3,19 +3,15 @@
 //! This module provides production-grade replay operations for V2 WAL recovery.
 //! The functionality is split across focused modules for maintainability.
 
-use crate::backend::native::{
-    GraphFile, NodeStore, EdgeStore,
-};
-use crate::backend::native::v2::{
-    StringTable, FreeSpaceManager, KvStore,
-};
+use crate::backend::native::v2::{FreeSpaceManager, KvStore, StringTable};
+use crate::backend::native::{EdgeStore, GraphFile, NodeStore};
 use std::sync::{Arc, Mutex, RwLock};
 
 // Re-export operation handler implementations
-mod node_ops;
 mod edge_ops;
-mod transaction_ops;
 mod kv_ops;
+mod node_ops;
+mod transaction_ops;
 
 /// Production-grade replay operations handler
 ///
@@ -31,17 +27,22 @@ pub struct DefaultReplayOperations {
     /// Graph file reference
     pub(in crate::backend::native::v2::wal::recovery::replayer) graph_file: Arc<RwLock<GraphFile>>,
     /// Node store (initialized on demand)
-    pub(in crate::backend::native::v2::wal::recovery::replayer) node_store: Arc<Mutex<Option<NodeStore<'static>>>>,
+    pub(in crate::backend::native::v2::wal::recovery::replayer) node_store:
+        Arc<Mutex<Option<NodeStore<'static>>>>,
     /// Edge store (initialized on demand)
-    pub(in crate::backend::native::v2::wal::recovery::replayer) edge_store: Arc<Mutex<Option<EdgeStore<'static>>>>,
+    pub(in crate::backend::native::v2::wal::recovery::replayer) edge_store:
+        Arc<Mutex<Option<EdgeStore<'static>>>>,
     /// String table for V2 string management
-    pub(in crate::backend::native::v2::wal::recovery::replayer) string_table: Arc<Mutex<StringTable>>,
+    pub(in crate::backend::native::v2::wal::recovery::replayer) string_table:
+        Arc<Mutex<StringTable>>,
     /// Free space manager for slot deallocation
-    pub(in crate::backend::native::v2::wal::recovery::replayer) free_space_manager: Arc<Mutex<Option<FreeSpaceManager>>>,
+    pub(in crate::backend::native::v2::wal::recovery::replayer) free_space_manager:
+        Arc<Mutex<Option<FreeSpaceManager>>>,
     /// KV store for key-value operations
     pub(in crate::backend::native::v2::wal::recovery::replayer) kv_store: Arc<Mutex<KvStore>>,
     /// Statistics tracking (lock-free atomic counters)
-    pub(in crate::backend::native::v2::wal::recovery::replayer) statistics: Arc<crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics>,
+    pub(in crate::backend::native::v2::wal::recovery::replayer) statistics:
+        Arc<crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics>,
 }
 
 impl DefaultReplayOperations {
@@ -53,7 +54,9 @@ impl DefaultReplayOperations {
         string_table: Arc<Mutex<StringTable>>,
         free_space_manager: Arc<Mutex<Option<FreeSpaceManager>>>,
         kv_store: Arc<Mutex<KvStore>>,
-        statistics: Arc<crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics>,
+        statistics: Arc<
+            crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics,
+        >,
     ) -> Self {
         Self {
             graph_file,
@@ -83,7 +86,7 @@ impl DefaultReplayOperations {
         let edge_store: Arc<Mutex<Option<EdgeStore<'static>>>> = Arc::new(Mutex::new(None));
         let string_table = Arc::new(Mutex::new(StringTable::new()));
         let mut free_space_mgr = crate::backend::native::v2::free_space::FreeSpaceManager::new(
-            crate::backend::native::v2::free_space::AllocationStrategy::FirstFit
+            crate::backend::native::v2::free_space::AllocationStrategy::FirstFit,
         );
 
         // Add initial free space for testing (like a fresh file with available space)
@@ -92,7 +95,9 @@ impl DefaultReplayOperations {
 
         let free_space_manager = Arc::new(Mutex::new(Some(free_space_mgr)));
         let kv_store = Arc::new(Mutex::new(KvStore::new()));
-        let statistics = Arc::new(crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new());
+        let statistics = Arc::new(
+            crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new(),
+        );
 
         DefaultReplayOperations {
             graph_file,
@@ -126,7 +131,9 @@ mod tests {
         let string_table = Arc::new(Mutex::new(StringTable::new()));
         let free_space_manager = Arc::new(Mutex::new(None));
         let kv_store = Arc::new(Mutex::new(KvStore::new()));
-        let statistics = Arc::new(crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new());
+        let statistics = Arc::new(
+            crate::backend::native::v2::wal::recovery::replayer::types::ReplayStatistics::new(),
+        );
 
         let ops = DefaultReplayOperations::new(
             graph_file,

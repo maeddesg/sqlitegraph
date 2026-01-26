@@ -1,8 +1,8 @@
 //! Comprehensive cache performance tests for traversal-aware LRU-K cache.
 
 use sqlitegraph::backend::native::v2::edge_cluster::{
-    cache::{ThreadSafeCache, TraversalAwareCache},
     CacheKey, CompactEdgeRecord, Direction, EdgeCluster,
+    cache::{ThreadSafeCache, TraversalAwareCache},
 };
 use std::sync::Arc;
 
@@ -66,7 +66,10 @@ fn test_cache_hit_ratio_traversal() {
         hit_ratio * 100.0
     );
 
-    println!("Cache hit ratio for BFS traversal: {:.2}%", hit_ratio * 100.0);
+    println!(
+        "Cache hit ratio for BFS traversal: {:.2}%",
+        hit_ratio * 100.0
+    );
     let stats = cache.stats();
     println!(
         "Stats: hits={}, misses={}, traversals={}, lookups={}",
@@ -201,9 +204,7 @@ fn test_cache_high_degree_not_cached() {
         "Very high-degree node (>1000 edges) should not be cached"
     );
 
-    println!(
-        "High-degree node exclusion test passed: node not cached to reduce memory pressure"
-    );
+    println!("High-degree node exclusion test passed: node not cached to reduce memory pressure");
 }
 
 #[test]
@@ -315,7 +316,5 @@ fn test_cache_capacity_enforcement() {
         "Cache should still be operational after exceeding capacity"
     );
 
-    println!(
-        "Capacity enforcement test passed: cache operates correctly at capacity limit"
-    );
+    println!("Capacity enforcement test passed: cache operates correctly at capacity limit");
 }

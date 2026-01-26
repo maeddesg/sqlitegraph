@@ -3,17 +3,19 @@
 //! This module implements manifest generation and validation for V2 exports,
 //! providing metadata about export consistency, boundaries, and integrity.
 
-use crate::backend::native::types::{NativeBackendError, NativeResult};
-use crate::backend::native::v2::wal::recovery::states::{Authority, RecoveryState as ExplicitRecoveryState};
 use super::ExportMode;
+use crate::backend::native::types::{NativeBackendError, NativeResult};
+use crate::backend::native::v2::wal::recovery::states::{
+    Authority, RecoveryState as ExplicitRecoveryState,
+};
 use std::path::Path;
 
 /// Export manifest containing metadata about exported database state
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExportManifest {
     // Format identification
-    pub magic: [u8; 8],                    // "V2EXPMF"
-    pub version: u32,                      // Manifest format version
+    pub magic: [u8; 8], // "V2EXPMF"
+    pub version: u32,   // Manifest format version
 
     // Consistency information
     pub recovery_state: ExplicitRecoveryState,
@@ -132,31 +134,24 @@ pub struct ManifestSerializer;
 impl ManifestSerializer {
     /// Serialize manifest to bytes using JSON format
     pub fn serialize(manifest: &ExportManifest) -> NativeResult<Vec<u8>> {
-        serde_json::to_vec(manifest)
-            .map_err(|e| NativeBackendError::JsonError(e))
+        serde_json::to_vec(manifest).map_err(|e| NativeBackendError::JsonError(e))
     }
 
     /// Deserialize manifest from bytes using JSON format
     pub fn deserialize(data: &[u8]) -> NativeResult<ExportManifest> {
-        serde_json::from_slice(data)
-            .map_err(|e| NativeBackendError::JsonError(e))
+        serde_json::from_slice(data).map_err(|e| NativeBackendError::JsonError(e))
     }
 
     /// Write manifest to file using JSON format
-    pub fn write_to_file<P: AsRef<Path>>(
-        manifest: &ExportManifest,
-        path: P,
-    ) -> NativeResult<()> {
+    pub fn write_to_file<P: AsRef<Path>>(manifest: &ExportManifest, path: P) -> NativeResult<()> {
         let json_data = Self::serialize(manifest)?;
-        std::fs::write(path, json_data)
-            .map_err(|e| NativeBackendError::Io(e))?;
+        std::fs::write(path, json_data).map_err(|e| NativeBackendError::Io(e))?;
         Ok(())
     }
 
     /// Read manifest from file using JSON format
     pub fn read_from_file<P: AsRef<Path>>(path: P) -> NativeResult<ExportManifest> {
-        let json_data = std::fs::read(path)
-            .map_err(|e| NativeBackendError::Io(e))?;
+        let json_data = std::fs::read(path).map_err(|e| NativeBackendError::Io(e))?;
         Self::deserialize(&json_data)
     }
 }
@@ -193,4 +188,3 @@ impl ManifestValidator {
         })
     }
 }
-

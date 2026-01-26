@@ -4,7 +4,6 @@
 //! data, identifying patterns, detecting anomalies, and generating actionable insights for
 //! optimization and troubleshooting.
 
-
 use crate::backend::native::v2::wal::metrics::aggregation::{LatencyHistogram, ThroughputTracker};
 use crate::backend::native::v2::wal::metrics::core::{V2WALMetrics, WALPerformanceCounters};
 use crate::backend::native::v2::wal::metrics::reporting::{

@@ -441,12 +441,7 @@ where
     /// // Returns immediately if interval hasn't elapsed
     /// progress.update(50, Some(100), "Processing");
     /// ```
-    pub fn update(
-        &mut self,
-        current: usize,
-        total: Option<usize>,
-        message: &str,
-    ) {
+    pub fn update(&mut self, current: usize, total: Option<usize>, message: &str) {
         let mut last_update = match self.last_update.lock() {
             Ok(guard) => guard,
             Err(_) => return, // Mutex poisoned - skip update

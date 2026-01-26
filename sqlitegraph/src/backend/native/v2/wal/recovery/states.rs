@@ -15,12 +15,14 @@
 //! - Checkpoint file existence and LSN ranges
 //! - File size consistency and checksum validation
 
+use super::RecoverySeverity;
 use crate::backend::native::{NativeBackendError, NativeResult};
 use std::path::Path;
-use super::RecoverySeverity;
 
 /// Explicit recovery state determined from existing signals
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum RecoveryState {
     /// No recovery needed - clean shutdown detected
     CleanShutdown,
@@ -86,7 +88,9 @@ impl RecoveryState {
                 }
 
                 // Clean shutdown detected
-                if header.checkpointed_lsn == header.committed_lsn && header.active_transactions == 0 {
+                if header.checkpointed_lsn == header.committed_lsn
+                    && header.active_transactions == 0
+                {
                     return Ok(RecoveryState::CleanShutdown);
                 }
             } else {
@@ -152,7 +156,6 @@ impl std::fmt::Display for RecoveryState {
         }
     }
 }
-
 
 /// Authority resolution between WAL and graph file
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -241,9 +244,14 @@ impl RecoveryContext {
         let wal_header = if wal_exists {
             match Self::read_wal_header(wal_path) {
                 Ok(header) => {
-                    diagnostics.push(format!("WAL LSN state: current={}, committed={}, checkpointed={}",
-                        header.current_lsn, header.committed_lsn, header.checkpointed_lsn));
-                    diagnostics.push(format!("WAL active transactions: {}", header.active_transactions));
+                    diagnostics.push(format!(
+                        "WAL LSN state: current={}, committed={}, checkpointed={}",
+                        header.current_lsn, header.committed_lsn, header.checkpointed_lsn
+                    ));
+                    diagnostics.push(format!(
+                        "WAL active transactions: {}",
+                        header.active_transactions
+                    ));
                     Some(header)
                 }
                 Err(e) => {
@@ -257,9 +265,7 @@ impl RecoveryContext {
 
         // Get graph file size
         let graph_file_size = if graph_file_exists {
-            std::fs::metadata(graph_file_path)
-                .map(|m| m.len())
-                .ok()
+            std::fs::metadata(graph_file_path).map(|m| m.len()).ok()
         } else {
             None
         };
@@ -278,16 +284,26 @@ impl RecoveryContext {
         Ok(Self {
             state,
             authority,
-            wal_path: if wal_exists { Some(wal_path.to_path_buf()) } else { None },
+            wal_path: if wal_exists {
+                Some(wal_path.to_path_buf())
+            } else {
+                None
+            },
             graph_file_path: graph_file_path.to_path_buf(),
-            checkpoint_path: if checkpoint_exists { Some(checkpoint_path.to_path_buf()) } else { None },
+            checkpoint_path: if checkpoint_exists {
+                Some(checkpoint_path.to_path_buf())
+            } else {
+                None
+            },
             timestamp,
             diagnostics,
         })
     }
 
     /// Read WAL header from file
-    fn read_wal_header(wal_path: &Path) -> NativeResult<crate::backend::native::v2::wal::V2WALHeader> {
+    fn read_wal_header(
+        wal_path: &Path,
+    ) -> NativeResult<crate::backend::native::v2::wal::V2WALHeader> {
         use std::io::Read;
 
         let mut file = std::fs::File::open(wal_path).map_err(NativeBackendError::from)?;
@@ -296,13 +312,14 @@ impl RecoveryContext {
         let header_size = std::mem::size_of::<crate::backend::native::v2::wal::V2WALHeader>();
         let mut header_bytes = vec![0u8; header_size];
 
-        file.read_exact(&mut header_bytes).map_err(NativeBackendError::from)?;
+        file.read_exact(&mut header_bytes)
+            .map_err(NativeBackendError::from)?;
 
         // Safety: V2WALHeader is #[repr(C)] with stable layout, and we've validated the byte count
         // We need to cast the pointer from *const u8 to *const V2WALHeader
         let header = unsafe {
             std::ptr::read_unaligned::<crate::backend::native::v2::wal::V2WALHeader>(
-                header_bytes.as_ptr() as *const crate::backend::native::v2::wal::V2WALHeader
+                header_bytes.as_ptr() as *const crate::backend::native::v2::wal::V2WALHeader,
             )
         };
 
@@ -313,9 +330,9 @@ impl RecoveryContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::fs::File;
-    
+    use tempfile::tempdir;
+
     #[test]
     fn test_recovery_state_clean_shutdown() {
         // Create a scenario where all files are clean
@@ -326,8 +343,13 @@ mod tests {
         let graph_file_size = Some(1024);
 
         let state = RecoveryState::determine_from_files(
-            wal_exists, graph_file_exists, checkpoint_exists, wal_header, graph_file_size
-        ).unwrap();
+            wal_exists,
+            graph_file_exists,
+            checkpoint_exists,
+            wal_header,
+            graph_file_size,
+        )
+        .unwrap();
 
         assert_eq!(state, RecoveryState::CleanShutdown);
         assert!(!state.requires_recovery());
@@ -343,8 +365,13 @@ mod tests {
         let graph_file_size = None;
 
         let state = RecoveryState::determine_from_files(
-            wal_exists, graph_file_exists, checkpoint_exists, wal_header, graph_file_size
-        ).unwrap();
+            wal_exists,
+            graph_file_exists,
+            checkpoint_exists,
+            wal_header,
+            graph_file_size,
+        )
+        .unwrap();
 
         assert_eq!(state, RecoveryState::Unrecoverable);
         assert!(!state.is_recoverable());
@@ -376,9 +403,8 @@ mod tests {
         // Create graph file
         File::create(&graph_file_path).unwrap();
 
-        let context = RecoveryContext::analyze_files(
-            &wal_path, &graph_file_path, &checkpoint_path
-        ).unwrap();
+        let context =
+            RecoveryContext::analyze_files(&wal_path, &graph_file_path, &checkpoint_path).unwrap();
 
         assert_eq!(context.state, RecoveryState::CleanShutdown);
         assert_eq!(context.authority, Authority::GraphFile);

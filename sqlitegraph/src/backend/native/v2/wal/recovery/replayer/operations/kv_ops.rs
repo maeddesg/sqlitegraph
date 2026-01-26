@@ -21,19 +21,30 @@ impl super::DefaultReplayOperations {
         version: u64,
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
-        debug_log!("Replaying KvSet: key_len={}, version={}, ttl={:?}", key.len(), version, ttl_seconds);
+        debug_log!(
+            "Replaying KvSet: key_len={}, version={}, ttl={:?}",
+            key.len(),
+            version,
+            ttl_seconds
+        );
 
         // Get access to KvStore
-        let mut kv_store = self.kv_store.lock()
-            .map_err(|e| RecoveryError::replay_failure(
-                format!("Failed to lock KV store: {}", e)
-            ))?;
+        let mut kv_store = self.kv_store.lock().map_err(|e| {
+            RecoveryError::replay_failure(format!("Failed to lock KV store: {}", e))
+        })?;
 
         // Apply the KV set operation using the recovery helper
-        wal::apply_set(&mut *kv_store, key.clone(), value_bytes.clone(), value_type, ttl_seconds, version)
-            .map_err(|e| RecoveryError::replay_failure(
-                format!("Failed to apply KV set during recovery: {}", e)
-            ))?;
+        wal::apply_set(
+            &mut *kv_store,
+            key.clone(),
+            value_bytes.clone(),
+            value_type,
+            ttl_seconds,
+            version,
+        )
+        .map_err(|e| {
+            RecoveryError::replay_failure(format!("Failed to apply KV set during recovery: {}", e))
+        })?;
 
         // Add rollback operation
         rollback_data.push(RollbackOperation::KvSet {
@@ -60,19 +71,24 @@ impl super::DefaultReplayOperations {
         old_version: u64,
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
-        debug_log!("Replaying KvDelete: key_len={}, old_version={}", key.len(), old_version);
+        debug_log!(
+            "Replaying KvDelete: key_len={}, old_version={}",
+            key.len(),
+            old_version
+        );
 
         // Get access to KvStore
-        let mut kv_store = self.kv_store.lock()
-            .map_err(|e| RecoveryError::replay_failure(
-                format!("Failed to lock KV store: {}", e)
-            ))?;
+        let mut kv_store = self.kv_store.lock().map_err(|e| {
+            RecoveryError::replay_failure(format!("Failed to lock KV store: {}", e))
+        })?;
 
         // Apply the KV delete operation using the recovery helper
-        wal::apply_delete(&mut *kv_store, key.clone(), old_version)
-            .map_err(|e| RecoveryError::replay_failure(
-                format!("Failed to apply KV delete during recovery: {}", e)
-            ))?;
+        wal::apply_delete(&mut *kv_store, key.clone(), old_version).map_err(|e| {
+            RecoveryError::replay_failure(format!(
+                "Failed to apply KV delete during recovery: {}",
+                e
+            ))
+        })?;
 
         // Add rollback operation
         rollback_data.push(RollbackOperation::KvDelete {

@@ -4,12 +4,12 @@
 //! snapshots from backup and verifies integrity before restoration.
 
 use crate::backend::native::{
-    types::{NativeResult, NativeBackendError},
+    types::{NativeBackendError, NativeResult},
     v2::{
-        export::manifest::ManifestSerializer,
         export::ExportMode,
-        import::{ImportMode},
-        import::snapshot::{SnapshotImporter, SnapshotImportConfig},
+        export::manifest::ManifestSerializer,
+        import::ImportMode,
+        import::snapshot::{SnapshotImportConfig, SnapshotImporter},
     },
 };
 use std::path::{Path, PathBuf};
@@ -51,10 +51,7 @@ impl Default for RestoreConfig {
 
 impl RestoreConfig {
     /// Create a new restore config with backup directory and target path
-    pub fn new(
-        backup_dir: impl AsRef<Path>,
-        target_path: impl AsRef<Path>,
-    ) -> Self {
+    pub fn new(backup_dir: impl AsRef<Path>, target_path: impl AsRef<Path>) -> Self {
         Self {
             backup_dir: backup_dir.as_ref().to_path_buf(),
             target_path: target_path.as_ref().to_path_buf(),
@@ -143,8 +140,6 @@ pub struct RestoreResult {
 /// # Ok::<(), sqlitegraph::backend::native::NativeBackendError>(())
 /// ```
 pub fn restore_backup(config: RestoreConfig) -> NativeResult<RestoreResult> {
-    
-
     // Step 1: Validate backup directory exists
     if !config.backup_dir.exists() {
         return Err(NativeBackendError::InvalidParameter {
@@ -179,7 +174,10 @@ pub fn restore_backup(config: RestoreConfig) -> NativeResult<RestoreResult> {
     // Step 4: Check target path
     if config.target_path.exists() && !config.overwrite_existing {
         return Err(NativeBackendError::InvalidParameter {
-            context: format!("Target file exists and overwrite disabled: {:?}", config.target_path),
+            context: format!(
+                "Target file exists and overwrite disabled: {:?}",
+                config.target_path
+            ),
             source: None,
         });
     }
@@ -251,17 +249,14 @@ pub fn restore_backup(config: RestoreConfig) -> NativeResult<RestoreResult> {
 /// )?;
 /// # Ok::<(), sqlitegraph::backend::native::NativeBackendError>(())
 /// ```
-pub fn restore(
-    backup_dir: &Path,
-    target_path: &Path,
-) -> NativeResult<RestoreResult> {
+pub fn restore(backup_dir: &Path, target_path: &Path) -> NativeResult<RestoreResult> {
     restore_backup(RestoreConfig::new(backup_dir, target_path))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::native::v2::export::snapshot::{SnapshotExporter, SnapshotExportConfig};
+    use crate::backend::native::v2::export::snapshot::{SnapshotExportConfig, SnapshotExporter};
     use tempfile::TempDir;
 
     /// Create a test snapshot for restore testing
@@ -363,8 +358,7 @@ mod tests {
         std::fs::create_dir(&backup_dir).unwrap();
 
         // Using RestoreConfig directly to test overwrite flag logic
-        let config = RestoreConfig::new(&backup_dir, &target_path)
-            .with_overwrite(false);
+        let config = RestoreConfig::new(&backup_dir, &target_path).with_overwrite(false);
 
         let result = restore_backup(config);
 
@@ -386,8 +380,7 @@ mod tests {
         std::fs::write(&target_path, b"existing data").unwrap();
 
         // Use overwrite flag
-        let config = RestoreConfig::new(&backup_dir, &target_path)
-            .with_overwrite(true);
+        let config = RestoreConfig::new(&backup_dir, &target_path).with_overwrite(true);
 
         let result = restore_backup(config);
 
@@ -402,8 +395,10 @@ mod tests {
             Err(e) => {
                 // May fail due to non-GraphFile target, but not due to overwrite protection
                 let err_msg = format!("{:?}", e);
-                assert!(!err_msg.contains("overwrite disabled"),
-                    "Should not fail due to overwrite protection when flag is set");
+                assert!(
+                    !err_msg.contains("overwrite disabled"),
+                    "Should not fail due to overwrite protection when flag is set"
+                );
             }
         }
     }
@@ -433,11 +428,17 @@ mod tests {
 
         // Verify the restored file can be opened
         let restored_graph = crate::backend::native::graph_file::GraphFile::open(&restore_path);
-        assert!(restored_graph.is_ok(), "Restored file should be a valid GraphFile");
+        assert!(
+            restored_graph.is_ok(),
+            "Restored file should be a valid GraphFile"
+        );
 
         // Verify record counts match
         let restored = restored_graph.unwrap();
-        assert_eq!(restored.persistent_header().node_count as u64, manifest.total_records);
+        assert_eq!(
+            restored.persistent_header().node_count as u64,
+            manifest.total_records
+        );
     }
 
     #[test]

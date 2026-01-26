@@ -36,19 +36,16 @@
 
 use std::time::Duration;
 
-use criterion::{black_box, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use rand::{Rng, SeedableRng};
 use sqlitegraph::backend::native::{
-    edge_store::EdgeStore,
-    graph_file::GraphFile,
-    graph_ops::native_bfs,
+    NativeNodeId, edge_store::EdgeStore, graph_file::GraphFile, graph_ops::native_bfs,
     node_store::NodeStore,
-    NativeNodeId,
 };
 use tempfile::TempDir;
 
 mod bench_utils;
-use bench_utils::{create_benchmark_temp_dir};
+use bench_utils::create_benchmark_temp_dir;
 
 /// Common benchmark configuration
 const MEASURE: Duration = Duration::from_millis(500);
@@ -88,7 +85,9 @@ fn create_chain_graph(size: usize, temp_dir: &TempDir) -> (GraphFile, Vec<Native
             format!("node_{}", i),
             serde_json::json!({"id": i}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -96,8 +95,8 @@ fn create_chain_graph(size: usize, temp_dir: &TempDir) -> (GraphFile, Vec<Native
     let mut edge_store = EdgeStore::new(&mut graph_file);
     for i in 0..size.saturating_sub(1) {
         let edge = sqlitegraph::backend::native::EdgeRecord::new(
-            i as i64 + 1, // edge_id
-            node_ids[i],   // from node i
+            i as i64 + 1,    // edge_id
+            node_ids[i],     // from node i
             node_ids[i + 1], // to node i+1
             "chain".to_string(),
             serde_json::json!({"order": i}),
@@ -203,10 +202,16 @@ fn bench_star_traversal(c: &mut Criterion) {
         let record = sqlitegraph::backend::native::NodeRecord::new(
             node_id,
             "Node".to_string(),
-            if i == 0 { "center".to_string() } else { format!("spoke_{}", i) },
+            if i == 0 {
+                "center".to_string()
+            } else {
+                format!("spoke_{}", i)
+            },
             serde_json::json!({"id": i}),
         );
-        node_store.write_node(&record).expect("Failed to write node");
+        node_store
+            .write_node(&record)
+            .expect("Failed to write node");
         node_ids.push(node_id);
     }
 
@@ -227,21 +232,17 @@ fn bench_star_traversal(c: &mut Criterion) {
             .expect("Failed to write star edge");
     }
 
-    group.bench_function(
-        BenchmarkId::new("star", star_size),
-        |b| {
-            b.iter(|| {
-                // Open graph inside iteration (isolated per measurement)
-                let mut graph_file = GraphFile::open(&db_path)
-                    .expect("Failed to open graph");
+    group.bench_function(BenchmarkId::new("star", star_size), |b| {
+        b.iter(|| {
+            // Open graph inside iteration (isolated per measurement)
+            let mut graph_file = GraphFile::open(&db_path).expect("Failed to open graph");
 
-                // Depth = 2 reaches center node (depth 1) + all spokes (depth 2)
-                let visited = native_bfs(&mut graph_file, center_node, 2)
-                    .expect("Failed to traverse star");
-                black_box(visited)
-            });
-        },
-    );
+            // Depth = 2 reaches center node (depth 1) + all spokes (depth 2)
+            let visited =
+                native_bfs(&mut graph_file, center_node, 2).expect("Failed to traverse star");
+            black_box(visited)
+        });
+    });
 
     // LIFETIME: Prevent temp_dir cleanup during benchmark execution
     std::mem::forget(temp_dir);
@@ -273,7 +274,9 @@ fn bench_random_traversal(c: &mut Criterion) {
     for &random_size in &[100, 500] {
         let edge_count = random_size * 2; // Sparse random graph
         let temp_dir = create_benchmark_temp_dir();
-        let db_path = temp_dir.path().join(format!("benchmark_random_{}.db", random_size));
+        let db_path = temp_dir
+            .path()
+            .join(format!("benchmark_random_{}.db", random_size));
 
         // Create random graph using deterministic seed
         let mut graph_file = GraphFile::create(&db_path).expect("Failed to create graph file");
@@ -291,7 +294,9 @@ fn bench_random_traversal(c: &mut Criterion) {
                 format!("node_{}", i),
                 serde_json::json!({"id": i}),
             );
-            node_store.write_node(&record).expect("Failed to write node");
+            node_store
+                .write_node(&record)
+                .expect("Failed to write node");
             node_ids.push(node_id);
         }
 
@@ -320,21 +325,17 @@ fn bench_random_traversal(c: &mut Criterion) {
 
         let start_node = node_ids[0];
 
-        group.bench_function(
-            BenchmarkId::new("random", random_size),
-            |b| {
-                b.iter(|| {
-                    // Open graph inside iteration (isolated per measurement)
-                    let mut graph_file = GraphFile::open(&db_path)
-                        .expect("Failed to open graph");
+        group.bench_function(BenchmarkId::new("random", random_size), |b| {
+            b.iter(|| {
+                // Open graph inside iteration (isolated per measurement)
+                let mut graph_file = GraphFile::open(&db_path).expect("Failed to open graph");
 
-                    // Depth = 10 for realistic traversal (not full graph exploration)
-                    let visited = native_bfs(&mut graph_file, start_node, 10)
-                        .expect("Failed to traverse random graph");
-                    black_box(visited)
-                });
-            },
-        );
+                // Depth = 10 for realistic traversal (not full graph exploration)
+                let visited = native_bfs(&mut graph_file, start_node, 10)
+                    .expect("Failed to traverse random graph");
+                black_box(visited)
+            });
+        });
 
         // LIFETIME: Prevent temp_dir cleanup during benchmark execution
         std::mem::forget(temp_dir);

@@ -19,8 +19,8 @@ use crate::backend::native::{
     v2::export::{ExportManifest, ManifestSerializer},
     v2::wal::recovery::states::{Authority, RecoveryState as ExplicitRecoveryState},
 };
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Configuration for snapshot import operations
@@ -173,10 +173,12 @@ impl SnapshotImporter {
         report.manifest_valid = self.validate_manifest(&mut report.warnings, &mut report.errors);
 
         // Validate snapshot file accessibility
-        report.snapshot_accessible = self.validate_snapshot_file(&mut report.warnings, &mut report.errors);
+        report.snapshot_accessible =
+            self.validate_snapshot_file(&mut report.warnings, &mut report.errors);
 
         // Validate format compatibility
-        report.format_compatible = self.validate_format_compatibility(&mut report.warnings, &mut report.errors);
+        report.format_compatible =
+            self.validate_format_compatibility(&mut report.warnings, &mut report.errors);
 
         // Validate target readiness
         report.target_ready = self.validate_target(&mut report.warnings, &mut report.errors);
@@ -199,14 +201,16 @@ impl SnapshotImporter {
 
         // Step 2: Ensure target directory exists
         if let Some(parent) = self.config.target_graph_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| NativeBackendError::Io(e))?;
+            fs::create_dir_all(parent).map_err(|e| NativeBackendError::Io(e))?;
         }
 
         // Step 3: Validate target doesn't exist (unless overwrite allowed)
         if self.config.target_graph_path.exists() && !self.config.overwrite_existing {
             return Err(NativeBackendError::InvalidParameter {
-                context: format!("Target file exists and overwrite disabled: {:?}", self.config.target_graph_path),
+                context: format!(
+                    "Target file exists and overwrite disabled: {:?}",
+                    self.config.target_graph_path
+                ),
                 source: None,
             });
         }
@@ -223,8 +227,8 @@ impl SnapshotImporter {
 
         // Step 6: Validate imported file can be opened
         let imported_graph = GraphFile::open(&self.config.target_graph_path)?;
-        let records_imported = imported_graph.persistent_header().node_count as u64 +
-                              imported_graph.persistent_header().edge_count as u64;
+        let records_imported = imported_graph.persistent_header().node_count as u64
+            + imported_graph.persistent_header().edge_count as u64;
 
         let import_duration = start_time.elapsed().unwrap_or_default();
 
@@ -233,7 +237,8 @@ impl SnapshotImporter {
             import_duration,
             snapshot_size_bytes: self.manifest.total_bytes,
             imported_checksum,
-            validation_passed: validation_report.manifest_valid && validation_report.snapshot_accessible,
+            validation_passed: validation_report.manifest_valid
+                && validation_report.snapshot_accessible,
             final_recovery_state: ExplicitRecoveryState::CleanShutdown,
         })
     }
@@ -241,20 +246,30 @@ impl SnapshotImporter {
     /// Validate manifest integrity and snapshot compatibility
     fn validate_manifest(&self, warnings: &mut Vec<String>, errors: &mut Vec<String>) -> bool {
         // Check magic bytes
-        if self.manifest.magic != crate::backend::native::v2::export::manifest::ExportManifest::MAGIC {
+        if self.manifest.magic
+            != crate::backend::native::v2::export::manifest::ExportManifest::MAGIC
+        {
             errors.push("Invalid manifest magic bytes".to_string());
             return false;
         }
 
         // Check version
-        if self.manifest.version != crate::backend::native::v2::export::manifest::ExportManifest::VERSION {
-            errors.push(format!("Unsupported manifest version: {}", self.manifest.version));
+        if self.manifest.version
+            != crate::backend::native::v2::export::manifest::ExportManifest::VERSION
+        {
+            errors.push(format!(
+                "Unsupported manifest version: {}",
+                self.manifest.version
+            ));
             return false;
         }
 
         // Validate export mode is Snapshot
         if self.manifest.export_mode != crate::backend::native::v2::export::ExportMode::Snapshot {
-            errors.push(format!("Expected Snapshot export, got: {:?}", self.manifest.export_mode));
+            errors.push(format!(
+                "Expected Snapshot export, got: {:?}",
+                self.manifest.export_mode
+            ));
             return false;
         }
 
@@ -266,7 +281,10 @@ impl SnapshotImporter {
 
         // Validate authority is GraphFile (expected for snapshots)
         if self.manifest.authority != Authority::GraphFile {
-            warnings.push(format!("Unexpected authority: {:?} (expected GraphFile for snapshots)", self.manifest.authority));
+            warnings.push(format!(
+                "Unexpected authority: {:?} (expected GraphFile for snapshots)",
+                self.manifest.authority
+            ));
         }
 
         // Validate no WAL LSNs (should be None for snapshots)
@@ -313,10 +331,17 @@ impl SnapshotImporter {
     }
 
     /// Validate format compatibility
-    fn validate_format_compatibility(&self, warnings: &mut Vec<String>, errors: &mut Vec<String>) -> bool {
+    fn validate_format_compatibility(
+        &self,
+        warnings: &mut Vec<String>,
+        errors: &mut Vec<String>,
+    ) -> bool {
         // Check V2 format support
         if self.manifest.graph_format_version != 2 {
-            errors.push(format!("Unsupported graph format version: {}", self.manifest.graph_format_version));
+            errors.push(format!(
+                "Unsupported graph format version: {}",
+                self.manifest.graph_format_version
+            ));
             return false;
         }
 
@@ -332,7 +357,8 @@ impl SnapshotImporter {
 
         // Check for reasonable snapshot age (optional)
         let age_seconds = now.saturating_sub(self.manifest.export_timestamp);
-        if age_seconds > 365 * 24 * 60 * 60 { // 1 year
+        if age_seconds > 365 * 24 * 60 * 60 {
+            // 1 year
             warnings.push("Snapshot is very old (over 1 year)".to_string());
         }
 
@@ -368,8 +394,7 @@ impl SnapshotImporter {
     /// Find snapshot file in export directory
     fn find_snapshot_file(export_dir: &Path) -> NativeResult<PathBuf> {
         // Look for .v2 files in the export directory
-        let entries = fs::read_dir(export_dir)
-            .map_err(|e| NativeBackendError::Io(e))?;
+        let entries = fs::read_dir(export_dir).map_err(|e| NativeBackendError::Io(e))?;
 
         for entry in entries {
             let entry = entry.map_err(|e| NativeBackendError::Io(e))?;
@@ -383,7 +408,10 @@ impl SnapshotImporter {
         }
 
         Err(NativeBackendError::InvalidParameter {
-            context: format!("No .v2 snapshot file found in export directory: {:?}", export_dir),
+            context: format!(
+                "No .v2 snapshot file found in export directory: {:?}",
+                export_dir
+            ),
             source: None,
         })
     }
@@ -394,8 +422,7 @@ impl SnapshotImporter {
         let temp_path = self.config.target_graph_path.with_extension("tmp");
 
         // Copy snapshot to temporary location
-        fs::copy(&self.snapshot_path, &temp_path)
-            .map_err(|e| NativeBackendError::Io(e))?;
+        fs::copy(&self.snapshot_path, &temp_path).map_err(|e| NativeBackendError::Io(e))?;
 
         // Sync temporary file to ensure data is durable
         {
@@ -403,7 +430,9 @@ impl SnapshotImporter {
                 .write(true)
                 .open(&temp_path)
                 .map_err(|e| NativeBackendError::Io(e))?;
-            temp_file.sync_all().map_err(|e| NativeBackendError::Io(e))?;
+            temp_file
+                .sync_all()
+                .map_err(|e| NativeBackendError::Io(e))?;
         }
 
         // Atomic rename to final destination
@@ -414,17 +443,16 @@ impl SnapshotImporter {
         // Note: On Linux, opening a directory for write fails with EISDIR
         // We continue anyway as the rename is already durable
         if let Some(parent) = self.config.target_graph_path.parent() {
-            match fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(parent)
-            {
+            match fs::OpenOptions::new().read(true).write(true).open(parent) {
                 Ok(parent_dir) => {
                     let _ = parent_dir.sync_all();
                 }
                 Err(e) => {
                     // Directory sync not supported on this filesystem - continue anyway
-                    eprintln!("Warning: Directory sync not supported: {:?} (error: {})", parent, e);
+                    eprintln!(
+                        "Warning: Directory sync not supported: {:?} (error: {})",
+                        parent, e
+                    );
                 }
             }
         }
@@ -443,7 +471,8 @@ impl SnapshotImporter {
         let mut buffer = [0u8; 8192];
 
         loop {
-            let bytes_read = file.read(&mut buffer)
+            let bytes_read = file
+                .read(&mut buffer)
                 .map_err(|e| NativeBackendError::Io(e))?;
 
             if bytes_read == 0 {
@@ -460,8 +489,8 @@ impl SnapshotImporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::native::v2::export::{SnapshotExportConfig, SnapshotExporter};
     use tempfile::{NamedTempFile, TempDir};
-    use crate::backend::native::v2::export::{SnapshotExporter, SnapshotExportConfig};
 
     fn create_test_snapshot() -> NativeResult<(TempDir, ExportManifest)> {
         let export_dir = TempDir::new().map_err(|e| NativeBackendError::Io(e))?;
@@ -530,7 +559,10 @@ mod tests {
     fn test_snapshot_importer_creation() {
         match create_test_snapshot() {
             Ok((export_dir, manifest)) => {
-                println!("Test snapshot created successfully in: {:?}", export_dir.path());
+                println!(
+                    "Test snapshot created successfully in: {:?}",
+                    export_dir.path()
+                );
                 println!("Manifest: {:?}", manifest);
 
                 let target_path = export_dir.path().join("imported.v2");
@@ -540,7 +572,10 @@ mod tests {
                     Ok(_) => println!("Snapshot importer created successfully"),
                     Err(e) => {
                         println!("Snapshot importer creation failed: {:?}", e);
-                        panic!("Snapshot importer creation should succeed, but got error: {:?}", e);
+                        panic!(
+                            "Snapshot importer creation should succeed, but got error: {:?}",
+                            e
+                        );
                     }
                 }
             }
@@ -559,6 +594,9 @@ mod tests {
 
         let result = SnapshotImporter::from_export_dir(&missing_dir, &target_path, config);
 
-        assert!(result.is_err(), "Snapshot importer creation should fail with missing directory");
+        assert!(
+            result.is_err(),
+            "Snapshot importer creation should fail with missing directory"
+        );
     }
 }

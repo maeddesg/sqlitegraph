@@ -59,8 +59,8 @@ pub use tx_range_index::{TxRange, TxRangeIndex, iter_visible_wal_records};
 pub use v2_integration::{ChangeTracker, V2IntegrationConfig, V2WALIntegrator};
 pub use writer::V2WALWriter;
 
-use crate::backend::native::{NativeBackendError, NativeResult};
 use crate::backend::native::v2::storage::JsonLimits;
+use crate::backend::native::{NativeBackendError, NativeResult};
 use std::path::PathBuf;
 
 /// V2 WAL configuration parameters

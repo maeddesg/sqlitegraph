@@ -54,10 +54,7 @@ impl PoolManager {
     /// # Returns
     ///
     /// A PoolManager with a configured pool
-    pub fn with_max_size<P: AsRef<Path>>(
-        path: P,
-        max_size: u32,
-    ) -> Result<Self, SqliteGraphError> {
+    pub fn with_max_size<P: AsRef<Path>>(path: P, max_size: u32) -> Result<Self, SqliteGraphError> {
         let manager = SqliteConnectionManager::file(path);
         let pool = Pool::builder()
             .max_size(max_size)
@@ -105,7 +102,8 @@ impl PoolManager {
             .as_ref()
             .ok_or_else(|| {
                 SqliteGraphError::connection(
-                    "Cannot checkout from in-memory database (use direct_connection() instead)".to_string(),
+                    "Cannot checkout from in-memory database (use direct_connection() instead)"
+                        .to_string(),
                 )
             })?
             .get()

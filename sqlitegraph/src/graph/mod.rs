@@ -155,10 +155,10 @@ mod adjacency;
 mod core;
 mod edge_ops;
 mod entity_ops;
-pub mod pool;
 mod metrics;
 mod metrics_schema;
 mod pattern_matching;
+pub mod pool;
 mod snapshot;
 mod types;
 

@@ -105,13 +105,16 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
 
             // Validate graph has expected nodes before benchmarking
             let max_id = result.max_node_id();
-            let first_node = *low_degree_nodes.first().expect("low_degree_nodes should not be empty");
+            let first_node = *low_degree_nodes
+                .first()
+                .expect("low_degree_nodes should not be empty");
             // INVARIANT: Verify first_node exists in reopened graph (max_node_id >= first_node)
             // Without this, benchmark would silently measure error path or query non-existent node
             assert!(
                 max_id >= first_node,
                 "Graph max_node_id ({}) >= first target node ({})",
-                max_id, first_node
+                max_id,
+                first_node
             );
 
             group.bench_with_input(
@@ -145,13 +148,16 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
 
             // Validate graph has expected nodes before benchmarking
             let max_id = result.max_node_id();
-            let first_node = *high_degree_nodes.first().expect("high_degree_nodes should not be empty");
+            let first_node = *high_degree_nodes
+                .first()
+                .expect("high_degree_nodes should not be empty");
             // INVARIANT: Verify first_node exists in reopened graph (max_node_id >= first_node)
             // Without this, benchmark would silently measure error path or query non-existent node
             assert!(
                 max_id >= first_node,
                 "Graph max_node_id ({}) >= first target node ({})",
-                max_id, first_node
+                max_id,
+                first_node
             );
 
             group.bench_with_input(
@@ -191,7 +197,8 @@ fn bench_v2_neighbor_queries(c: &mut Criterion) {
             assert!(
                 max_id >= first_node,
                 "Graph max_node_id ({}) >= first target node ({})",
-                max_id, first_node
+                max_id,
+                first_node
             );
 
             group.bench_with_input(
@@ -384,7 +391,8 @@ fn bench_v2_file_growth(c: &mut Criterion) {
                             result.file_size_bytes as f64 / result.edge_count as f64;
                         let bytes_per_node =
                             result.file_size_bytes as f64 / result.node_ids.len() as f64;
-                        let output = black_box((bytes_per_edge, bytes_per_node, result.file_size_bytes));
+                        let output =
+                            black_box((bytes_per_edge, bytes_per_node, result.file_size_bytes));
                         // LIFETIME: Prevent temp_dir deletion during benchmark execution
                         // Criterion runs benchmarks asynchronously; dropping V2GraphResult would delete files
                         std::mem::forget(result);
@@ -411,8 +419,12 @@ fn bench_v2_multiedge_scenarios(c: &mut Criterion) {
     // Test with different multi-edge factors (must fit within node region)
     for &multi_factor in &[3, 5, 10] {
         let node_count = std::cmp::min(500, 2000 / multi_factor);
-        let spec = V2GraphSpec::new(node_count, node_count * multi_factor, V2GraphMode::MultiEdge)
-            .with_multi_edge_factor(multi_factor);
+        let spec = V2GraphSpec::new(
+            node_count,
+            node_count * multi_factor,
+            V2GraphMode::MultiEdge,
+        )
+        .with_multi_edge_factor(multi_factor);
 
         group.bench_with_input(
             BenchmarkId::new("insertion", multi_factor),

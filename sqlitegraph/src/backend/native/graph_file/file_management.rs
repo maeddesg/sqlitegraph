@@ -4,8 +4,9 @@
 //! size validation, memory mapping management, and cleanup operations.
 
 use crate::backend::native::{
-    graph_file::buffers::ReadBuffer, graph_file::buffers::WriteBuffer,
-    types::NativeResult,
+    graph_file::buffers::ReadBuffer,
+    graph_file::buffers::WriteBuffer,
+    types::{NativeBackendError, NativeResult},
 };
 
 #[cfg(feature = "v2_experimental")]

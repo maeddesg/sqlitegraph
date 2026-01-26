@@ -148,8 +148,7 @@ impl AdjacencyWriter {
         cluster_index: u32,
     ) -> NativeResult<WrittenOffset> {
         // Calculate offset within region
-        let offset = region.start_offset
-            + (cluster_index as u64 * region.stride as u64);
+        let offset = region.start_offset + (cluster_index as u64 * region.stride as u64);
 
         // Validate offset is within region bounds
         let cluster_size = cluster.size_bytes() as u64;
@@ -183,17 +182,17 @@ impl AdjacencyWriter {
     ///
     /// # Returns
     /// `Ok(WrittenOffset)` with the offset where the cluster was written
-    fn write_cluster_normal(
-        &mut self,
-        cluster: &EdgeCluster,
-    ) -> NativeResult<WrittenOffset> {
+    fn write_cluster_normal(&mut self, cluster: &EdgeCluster) -> NativeResult<WrittenOffset> {
         // Allocate from fragmented space
         let offset = self.allocate_fragmented(cluster.size_bytes() as u64)?;
 
         // The actual write happens at a higher layer
         // We just return the allocation information
 
-        Ok(WrittenOffset::fragmented(offset, cluster.size_bytes() as u64))
+        Ok(WrittenOffset::fragmented(
+            offset,
+            cluster.size_bytes() as u64,
+        ))
     }
 
     /// Allocate space from the fragmented allocation pool.
@@ -372,10 +371,9 @@ impl AdjacencyWriter {
                 // Use observed_chain_length as prediction for remaining clusters
                 let total_bytes = observed_chain_length as u64 * cluster_stride as u64;
 
-                if let Some(region) = free_space_manager.try_reserve_contiguous(
-                    total_bytes,
-                    cluster_stride as u64,
-                ) {
+                if let Some(region) =
+                    free_space_manager.try_reserve_contiguous(total_bytes, cluster_stride as u64)
+                {
                     trigger.set_region(region);
                 }
                 // If reservation fails, we fall through to normal path
@@ -428,23 +426,16 @@ mod tests {
     fn create_test_cluster_with_size(target_size: usize) -> EdgeCluster {
         // Create a minimal cluster (small)
         let mut string_table = StringTable::new();
-        let edges = vec![
-            EdgeRecord {
-                id: 1,
-                from_id: 1,
-                to_id: 2,
-                edge_type: "test".to_string(),
-                flags: EdgeFlags::empty(),
-                data: serde_json::json!({}),
-            },
-        ];
+        let edges = vec![EdgeRecord {
+            id: 1,
+            from_id: 1,
+            to_id: 2,
+            edge_type: "test".to_string(),
+            flags: EdgeFlags::empty(),
+            data: serde_json::json!({}),
+        }];
 
-        EdgeCluster::create_from_edges(
-            &edges,
-            1,
-            Direction::Outgoing,
-            &mut string_table,
-        ).unwrap()
+        EdgeCluster::create_from_edges(&edges, 1, Direction::Outgoing, &mut string_table).unwrap()
     }
 
     /// Helper to create a test cluster with a specific number of edges.
@@ -470,12 +461,7 @@ mod tests {
             });
         }
 
-        EdgeCluster::create_from_edges(
-            &edges,
-            1,
-            Direction::Outgoing,
-            &mut string_table,
-        ).unwrap()
+        EdgeCluster::create_from_edges(&edges, 1, Direction::Outgoing, &mut string_table).unwrap()
     }
 
     /// Helper to create a test cluster from edges.
@@ -655,7 +641,9 @@ mod tests {
 
         let region = Region::new(0, 10 * 4096).with_clusters(10, 4096);
 
-        let result = writer.write_cluster_with_hint(&cluster, Some(&region), 0).unwrap();
+        let result = writer
+            .write_cluster_with_hint(&cluster, Some(&region), 0)
+            .unwrap();
 
         // Small cluster should use contiguous
         assert!(result.used_contiguous);
@@ -685,7 +673,9 @@ mod tests {
         // Verify cluster is larger than stride
         assert!(cluster_size > 4096);
 
-        let result = writer.write_cluster_with_hint(&cluster, Some(&region), 0).unwrap();
+        let result = writer
+            .write_cluster_with_hint(&cluster, Some(&region), 0)
+            .unwrap();
 
         assert!(!result.used_contiguous); // Should fall back
         assert_eq!(result.offset, 1_000_000);
@@ -698,9 +688,15 @@ mod tests {
 
         let region = Region::new(0, 10 * 4096).with_clusters(10, 4096);
 
-        let result1 = writer.write_cluster_with_hint(&cluster, Some(&region), 0).unwrap();
-        let result2 = writer.write_cluster_with_hint(&cluster, Some(&region), 1).unwrap();
-        let result3 = writer.write_cluster_with_hint(&cluster, Some(&region), 2).unwrap();
+        let result1 = writer
+            .write_cluster_with_hint(&cluster, Some(&region), 0)
+            .unwrap();
+        let result2 = writer
+            .write_cluster_with_hint(&cluster, Some(&region), 1)
+            .unwrap();
+        let result3 = writer
+            .write_cluster_with_hint(&cluster, Some(&region), 2)
+            .unwrap();
 
         assert_eq!(result1.offset, 0);
         assert_eq!(result2.offset, 4096);
@@ -745,7 +741,9 @@ mod tests {
         let region = Region::new(0, 10 * 4096).with_clusters(10, 4096);
 
         let clusters = vec![(&cluster1, 0), (&cluster2, 1), (&cluster3, 2)];
-        let results = writer.write_cluster_batch(clusters.iter().copied(), &region).unwrap();
+        let results = writer
+            .write_cluster_batch(clusters.iter().copied(), &region)
+            .unwrap();
 
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].offset, 0);
@@ -845,7 +843,11 @@ mod tests {
             let result = writer
                 .write_cluster_with_chain_detection(&cluster, i, stride, &mut trigger, &mut fsm)
                 .unwrap();
-            assert!(!result.used_contiguous, "Write {} should not use contiguous", i);
+            assert!(
+                !result.used_contiguous,
+                "Write {} should not use contiguous",
+                i
+            );
         }
 
         // No active region

@@ -230,7 +230,7 @@ fn matches_constraint(
     match constraint {
         Some(constraint) => Ok(constraint.matches(&entry)),
         None => Err(SqliteGraphError::invalid_input(
-            "Pattern constraint not available for matching"
+            "Pattern constraint not available for matching",
         )),
     }
 }

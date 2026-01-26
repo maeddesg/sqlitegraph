@@ -15,21 +15,11 @@ use std::thread;
 // Import all algorithm functions from parent modules
 use super::{
     centrality::{
-        pagerank,
+        betweenness_centrality, betweenness_centrality_with_progress, pagerank,
         pagerank_with_progress,
-        betweenness_centrality,
-        betweenness_centrality_with_progress,
     },
-    community::{
-        label_propagation,
-        louvain_communities,
-        louvain_communities_with_progress,
-    },
-    structure::{
-        connected_components,
-        find_cycles_limited,
-        nodes_by_degree,
-    },
+    community::{label_propagation, louvain_communities, louvain_communities_with_progress},
+    structure::{connected_components, find_cycles_limited, nodes_by_degree},
 };
 
 #[test]
@@ -188,7 +178,10 @@ fn test_nodes_by_degree_descending() {
     let degrees = result.unwrap();
     // First node should have highest degree (endpoints of chain have degree 1)
     // Middle nodes have degree 2
-    assert!(degrees[0].1 >= degrees[degrees.len() - 1].1, "Not sorted descending");
+    assert!(
+        degrees[0].1 >= degrees[degrees.len() - 1].1,
+        "Not sorted descending"
+    );
 }
 
 #[test]
@@ -206,7 +199,10 @@ fn test_progress_callbacks_complete() {
 
     // Test betweenness with progress
     let result = betweenness_centrality_with_progress(&graph, &progress);
-    assert!(result.is_ok(), "betweenness_centrality_with_progress failed");
+    assert!(
+        result.is_ok(),
+        "betweenness_centrality_with_progress failed"
+    );
 
     // Test Louvain with progress
     let result = louvain_communities_with_progress(&graph, 5, &progress);
@@ -228,7 +224,9 @@ fn create_test_graph() -> SqliteGraph {
             file_path: Some(format!("test_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     // Create some edges

@@ -43,12 +43,7 @@ pub fn native_k_hop(
                 ctx.buffer.prefetch_clusters_from(graph_file, node)?;
             }
 
-            let neighbors = get_neighbors_optimized(
-                graph_file,
-                node,
-                direction,
-                &mut ctx,
-            )?;
+            let neighbors = get_neighbors_optimized(graph_file, node, direction, &mut ctx)?;
 
             for neighbor in neighbors {
                 if !visited.contains(&neighbor) {
@@ -71,7 +66,10 @@ pub fn native_k_hop(
         if total_lookups > 0 {
             log::debug!(
                 "K-hop optimized stats: buffer_hits={}, buffer_misses={}, cache_hits={}, cache_misses={}, combined_hit_rate={:.2}%",
-                ctx.buffer_hits, ctx.buffer_misses, ctx.stats.hits, ctx.stats.misses,
+                ctx.buffer_hits,
+                ctx.buffer_misses,
+                ctx.stats.hits,
+                ctx.stats.misses,
                 ctx.combined_hit_rate() * 100.0
             );
         }

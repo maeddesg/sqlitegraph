@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use sqlitegraph::{open_graph, GraphConfig, NodeSpec, EdgeSpec};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
 
 /// Test BFS traversals from different start nodes sequentially
 ///
@@ -20,8 +20,7 @@ fn test_sequential_bfs_no_contention() {
     let db_path = temp_dir.path().join("test_sequential_bfs.db");
 
     // Create graph
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(chain_size);
 
@@ -70,7 +69,11 @@ fn test_sequential_bfs_no_contention() {
         match result {
             Ok(visited) => {
                 // Verify traversal found nodes
-                assert!(!visited.is_empty(), "Traversal {} found no nodes", traversal_id);
+                assert!(
+                    !visited.is_empty(),
+                    "Traversal {} found no nodes",
+                    traversal_id
+                );
 
                 // Check for reasonable completion time (no deadlock)
                 assert!(
@@ -87,7 +90,11 @@ fn test_sequential_bfs_no_contention() {
     }
 
     // Success if we get here
-    assert!(true, "All {} traversals completed successfully", num_traversals);
+    assert!(
+        true,
+        "All {} traversals completed successfully",
+        num_traversals
+    );
 }
 
 /// Test write and read operations mixed
@@ -103,8 +110,7 @@ fn test_write_read_mix() {
     let db_path = temp_dir.path().join("test_write_read_mix.db");
 
     // Create graph
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(chain_size);
 
@@ -186,8 +192,7 @@ fn test_multiple_traversal_isolation() {
     let db_path = temp_dir.path().join("test_isolation.db");
 
     // Create graph
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(chain_size);
 
@@ -263,8 +268,7 @@ fn test_no_deadlock_multiple_traversals() {
     let db_path = temp_dir.path().join("test_deadlock.db");
 
     // Create graph
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create graph");
+    let graph = open_graph(&db_path, &GraphConfig::native()).expect("Failed to create graph");
 
     let mut node_ids = Vec::with_capacity(chain_size);
 

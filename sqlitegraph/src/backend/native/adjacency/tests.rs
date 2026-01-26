@@ -76,24 +76,38 @@ mod linear_detector_tests {
 
         // Step 1: First degree-1 observation
         let pattern = detector.observe(1, 1);
-        assert_eq!(pattern, TraversalPattern::Unknown, "Step 1 should be Unknown");
+        assert_eq!(
+            pattern,
+            TraversalPattern::Unknown,
+            "Step 1 should be Unknown"
+        );
         assert_eq!(
             detector.current_pattern(),
             TraversalPattern::Unknown,
             "Current pattern at step 1"
         );
-        assert!(!detector.is_linear_confirmed(), "Should not be confirmed at step 1");
+        assert!(
+            !detector.is_linear_confirmed(),
+            "Should not be confirmed at step 1"
+        );
         assert!((detector.confidence() - 1.0 / 3.0).abs() < f64::EPSILON);
 
         // Step 2: Second degree-1 observation
         let pattern = detector.observe(2, 1);
-        assert_eq!(pattern, TraversalPattern::Unknown, "Step 2 should be Unknown");
+        assert_eq!(
+            pattern,
+            TraversalPattern::Unknown,
+            "Step 2 should be Unknown"
+        );
         assert_eq!(
             detector.current_pattern(),
             TraversalPattern::Unknown,
             "Current pattern at step 2"
         );
-        assert!(!detector.is_linear_confirmed(), "Should not be confirmed at step 2");
+        assert!(
+            !detector.is_linear_confirmed(),
+            "Should not be confirmed at step 2"
+        );
         assert!((detector.confidence() - 2.0 / 3.0).abs() < f64::EPSILON);
 
         // Step 3: Third degree-1 observation - threshold reached!
@@ -104,16 +118,31 @@ mod linear_detector_tests {
             TraversalPattern::Linear,
             "Current pattern at step 3"
         );
-        assert!(detector.is_linear_confirmed(), "Should be confirmed at step 3");
-        assert_eq!(detector.confidence(), 1.0, "Confidence should be 1.0 at step 3");
+        assert!(
+            detector.is_linear_confirmed(),
+            "Should be confirmed at step 3"
+        );
+        assert_eq!(
+            detector.confidence(),
+            1.0,
+            "Confidence should be 1.0 at step 3"
+        );
 
         // Step 4+: Remain Linear
         let pattern = detector.observe(4, 1);
-        assert_eq!(pattern, TraversalPattern::Linear, "Step 4 should stay Linear");
+        assert_eq!(
+            pattern,
+            TraversalPattern::Linear,
+            "Step 4 should stay Linear"
+        );
         assert!(detector.is_linear_confirmed());
 
         let pattern = detector.observe(5, 1);
-        assert_eq!(pattern, TraversalPattern::Linear, "Step 5 should stay Linear");
+        assert_eq!(
+            pattern,
+            TraversalPattern::Linear,
+            "Step 5 should stay Linear"
+        );
         assert!(detector.is_linear_confirmed());
     }
 
@@ -204,10 +233,7 @@ mod linear_detector_tests {
             TraversalPattern::Branching,
             "Degree 2 should trigger Branching"
         );
-        assert_eq!(
-            detector.current_pattern(),
-            TraversalPattern::Branching
-        );
+        assert_eq!(detector.current_pattern(), TraversalPattern::Branching);
         assert!(!detector.is_linear_confirmed());
         assert_eq!(detector.confidence(), 0.0);
     }
@@ -286,7 +312,11 @@ mod linear_detector_tests {
         let mut detector = LinearDetector::new();
 
         // Initial: no observations
-        assert_eq!(detector.confidence(), 0.0, "Initial confidence should be 0.0");
+        assert_eq!(
+            detector.confidence(),
+            0.0,
+            "Initial confidence should be 0.0"
+        );
         assert_eq!(
             detector.current_pattern(),
             TraversalPattern::Unknown,
@@ -352,7 +382,11 @@ mod linear_detector_tests {
             !detector.is_linear_confirmed(),
             "Should not be confirmed after reset"
         );
-        assert_eq!(detector.confidence(), 0.0, "Confidence should be 0.0 after reset");
+        assert_eq!(
+            detector.confidence(),
+            0.0,
+            "Confidence should be 0.0 after reset"
+        );
         assert_eq!(
             detector.current_pattern(),
             TraversalPattern::Unknown,
@@ -361,12 +395,19 @@ mod linear_detector_tests {
 
         // Can detect again - should work identically
         let pattern = detector.observe(1, 1);
-        assert_eq!(pattern, TraversalPattern::Unknown, "First observation after reset");
+        assert_eq!(
+            pattern,
+            TraversalPattern::Unknown,
+            "First observation after reset"
+        );
         assert!((detector.confidence() - 1.0 / 3.0).abs() < f64::EPSILON);
 
         detector.observe(2, 1);
         detector.observe(3, 1);
-        assert!(detector.is_linear_confirmed(), "Should confirm Linear again");
+        assert!(
+            detector.is_linear_confirmed(),
+            "Should confirm Linear again"
+        );
     }
 
     /// Custom threshold behavior.

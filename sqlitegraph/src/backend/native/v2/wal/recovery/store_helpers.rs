@@ -8,8 +8,8 @@
 //! This is a workaround for the NodeStore/EdgeStore lifetime API requirements.
 //! A future refactor could remove the need for transmute by changing those APIs.
 
+use crate::backend::native::{EdgeStore, GraphFile, NodeStore};
 use std::mem;
-use crate::backend::native::{NodeStore, EdgeStore, GraphFile};
 
 /// # Safety
 /// Caller must ensure the returned NodeStore does not outlive the GraphFile reference.
@@ -19,9 +19,9 @@ use crate::backend::native::{NodeStore, EdgeStore, GraphFile};
 /// - graph_file is owned by the Arc<RwLock<>> stored in the parent struct
 /// - The Arc ensures graph_file lives as long as any store reference exists
 /// - Stores are accessed through Mutex/RwLock guards, preventing use-after-free
-pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static> { unsafe {
-    NodeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file))
-}}
+pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static> {
+    unsafe { NodeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file)) }
+}
 
 /// # Safety
 /// Caller must ensure the returned EdgeStore does not outlive the GraphFile reference.
@@ -31,9 +31,9 @@ pub unsafe fn create_node_store(graph_file: &mut GraphFile) -> NodeStore<'static
 /// - graph_file is owned by the Arc<RwLock<>> stored in the parent struct
 /// - The Arc ensures graph_file lives as long as any store reference exists
 /// - Stores are accessed through Mutex/RwLock guards, preventing use-after-free
-pub unsafe fn create_edge_store(graph_file: &mut GraphFile) -> EdgeStore<'static> { unsafe {
-    EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file))
-}}
+pub unsafe fn create_edge_store(graph_file: &mut GraphFile) -> EdgeStore<'static> {
+    unsafe { EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file)) }
+}
 
 #[cfg(test)]
 mod tests {
@@ -47,9 +47,7 @@ mod tests {
         let mut graph_file = graph_file;
 
         // Create NodeStore using our helper
-        let _node_store = unsafe {
-            create_node_store(&mut graph_file)
-        };
+        let _node_store = unsafe { create_node_store(&mut graph_file) };
         // node_store goes out of scope here
     }
 
@@ -61,9 +59,7 @@ mod tests {
         let mut graph_file = graph_file;
 
         // Create EdgeStore using our helper
-        let _edge_store = unsafe {
-            create_edge_store(&mut graph_file)
-        };
+        let _edge_store = unsafe { create_edge_store(&mut graph_file) };
         // edge_store goes out of scope here
     }
 }
@@ -90,9 +86,7 @@ mod miri_tests {
         // Create NodeStore using our helper
         {
             let mut guard = graph_file.write();
-            let _node_store = unsafe {
-                create_node_store(&mut guard)
-            };
+            let _node_store = unsafe { create_node_store(&mut guard) };
             // node_store goes out of scope here
             // graph_file should still be valid
         }
