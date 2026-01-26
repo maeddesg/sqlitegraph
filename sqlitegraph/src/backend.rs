@@ -24,6 +24,10 @@ pub use sqlite::types::{BackendDirection, EdgeSpec, NeighborQuery, NodeSpec};
 #[cfg(feature = "native-v2")]
 pub use crate::backend::native::v2::kv_store::types::{KvValue, KvStoreError};
 
+// Pub/Sub types (re-exported for public API)
+#[cfg(feature = "native-v2")]
+pub use crate::backend::native::v2::pubsub::{PubSubEvent, SubscriptionFilter};
+
 use crate::{
     SqliteGraphError,
     graph::GraphEntity,
@@ -166,6 +170,59 @@ pub trait GraphBackend {
     /// * `key` - Key to delete
     #[cfg(feature = "native-v2")]
     fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError>;
+
+    // Pub/Sub operations (in-process event notification)
+
+    /// Subscribe to graph change events
+    ///
+    /// Returns a subscriber ID and a receiver channel for events.
+    /// The receiver will receive events that match the given filter.
+    ///
+    /// # Events
+    ///
+    /// Events are emitted ONLY on transaction commit:
+    /// - `NodeChanged` - node created or modified
+    /// - `EdgeChanged` - edge created or modified
+    /// - `KVChanged` - KV entry created, modified, or deleted
+    /// - `SnapshotCommitted` - transaction committed
+    ///
+    /// # Best-Effort Delivery
+    ///
+    /// - No persistence of events
+    /// - If receiver is dropped, events are silently dropped
+    /// - If channel is full, events are silently dropped
+    /// - No delivery guarantees
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let (sub_id, rx) = graph.subscribe(SubscriptionFilter::all());
+    /// // In another thread/task:
+    /// for event in rx {
+    ///     match event {
+    ///         PubSubEvent::NodeChanged { node_id, snapshot_id } => {
+    ///             // Read node state at snapshot_id
+    ///         }
+    ///         _ => {}
+    ///     }
+    /// }
+    /// }
+    /// ```
+    #[cfg(feature = "native-v2")]
+    fn subscribe(
+        &self,
+        filter: SubscriptionFilter,
+    ) -> Result<(u64, std::sync::mpsc::Receiver<PubSubEvent>), SqliteGraphError>;
+
+    /// Unsubscribe from events
+    ///
+    /// Cancels the subscription and stops receiving events.
+    /// Returns true if subscription existed and was removed.
+    ///
+    /// # Arguments
+    /// * `subscriber_id` - The subscriber ID returned by subscribe()
+    #[cfg(feature = "native-v2")]
+    fn unsubscribe(&self, subscriber_id: u64) -> Result<bool, SqliteGraphError>;
 }
 
 /// Metadata returned by snapshot export operations
@@ -330,6 +387,19 @@ where
     #[cfg(feature = "native-v2")]
     fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError> {
         (*self).kv_delete(key)
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn subscribe(
+        &self,
+        filter: SubscriptionFilter,
+    ) -> Result<(u64, std::sync::mpsc::Receiver<PubSubEvent>), SqliteGraphError> {
+        (*self).subscribe(filter)
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn unsubscribe(&self, subscriber_id: u64) -> Result<bool, SqliteGraphError> {
+        (*self).unsubscribe(subscriber_id)
     }
 }
 
