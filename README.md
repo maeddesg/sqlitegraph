@@ -5,7 +5,7 @@
 
 **Embedded Graph Database with Native V2 Backend**
 
-## What's New in v1.2.5
+## What's New in v1.2.6
 
 **Pub/Sub Event System** - In-process event notification for graph changes
 - Four event types: `NodeChanged`, `EdgeChanged`, `KVChanged`, `SnapshotCommitted`
@@ -138,7 +138,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.2.3"
+sqlitegraph = "1.2.6"
 ```
 
 ### SQLite Backend (Default)
@@ -296,7 +296,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (v1.2.3):**
+**Test Coverage (v1.2.6):**
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
@@ -362,7 +362,7 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 
 ## Compiler Warnings
 
-SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.2.3:
+SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.2.6:
 
 | Category | Count | Description |
 |----------|-------|-------------|
