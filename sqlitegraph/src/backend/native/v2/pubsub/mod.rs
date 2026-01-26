@@ -16,9 +16,12 @@
 //!
 //! - [`event`](crate::backend::native::v2::pubsub::event): Event type definitions
 //! - [`subscriber`](crate::backend::native::v2::pubsub::subscriber): Subscription management
+//! - [`publisher`](crate::backend::native::v2::pubsub::publisher): Channel-based event delivery
 
 pub mod event;
 pub mod subscriber;
+pub mod publisher;
 
 pub use event::{PubSubEvent, PubSubEventType};
 pub use subscriber::{Subscriber, SubscriberId, SubscriptionFilter};
+pub use publisher::Publisher;
