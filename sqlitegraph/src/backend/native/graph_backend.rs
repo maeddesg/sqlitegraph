@@ -549,6 +549,32 @@ impl GraphBackend for NativeGraphBackend {
 
         Ok(())
     }
+
+    #[cfg(feature = "native-v2")]
+    fn subscribe(
+        &self,
+        filter: crate::backend::SubscriptionFilter,
+    ) -> Result<(u64, std::sync::mpsc::Receiver<crate::backend::PubSubEvent>), SqliteGraphError> {
+        use crate::backend::native::v2::pubsub::SubscriberId;
+
+        let wal_integrator = self.wal_integrator.as_ref()
+            .ok_or_else(|| SqliteGraphError::connection("WAL not available - pub/sub requires native-v2".to_string()))?;
+
+        let (sub_id, rx) = wal_integrator.wal_manager().get_publisher().subscribe(filter);
+        Ok((sub_id.as_u64(), rx))
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn unsubscribe(&self, subscriber_id: u64) -> Result<bool, SqliteGraphError> {
+        use crate::backend::native::v2::pubsub::SubscriberId;
+
+        let wal_integrator = self.wal_integrator.as_ref()
+            .ok_or_else(|| SqliteGraphError::connection("WAL not available - pub/sub requires native-v2".to_string()))?;
+
+        let sub_id = SubscriberId::from_raw(subscriber_id);
+        let removed = wal_integrator.wal_manager().get_publisher().unsubscribe(sub_id);
+        Ok(removed)
+    }
 }
 
 #[cfg(test)]
@@ -580,5 +606,35 @@ mod tests {
         let node = backend.get_node(snapshot, node_id).unwrap();
         assert_eq!(node.name, "node1");
         assert_eq!(node.kind, "Test");
+    }
+
+    #[cfg(feature = "native-v2")]
+    #[test]
+    fn test_subscribe_to_events() {
+        use crate::backend::SubscriptionFilter;
+        use std::time::Duration;
+
+        // Setup graph
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let filter = SubscriptionFilter::all();
+
+        // Subscribe
+        let (sub_id, mut rx) = backend.subscribe(filter).unwrap();
+
+        // Make a change (direct node insert - no transaction API in this test)
+        let node_id = backend.insert_node(NodeSpec {
+            kind: "Test".to_string(),
+            name: "test_node".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        // Note: Events are only emitted on WAL commit, which requires transaction API
+        // For now, just verify subscription was successful
+        assert!(sub_id > 0);
+
+        // Unsubscribe
+        let removed = backend.unsubscribe(sub_id).unwrap();
+        assert!(removed);
     }
 }
