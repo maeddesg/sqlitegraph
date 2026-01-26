@@ -1,6 +1,0 @@
-Files touched (approx LOC added): node_store.rs (~55) for real V2 read/write/index entry points, v2/node_record_v2/record.rs (~30) for serialized_len + header parser cleanup, v2/node_record_v2/mod.rs (~5) for re-exports, v2/mod.rs (~10) for the cfg helper, tests/v2_native_bfs_regression_tests.rs (~40) for new V2 regression coverage.
-Root cause: V2 node runtime never existed; everything still serialized V1 slots so clustered metadata was never written/read nor indexed.
-write_node_v2 now validates string/data bounds, serializes a V2 record, writes to the deterministic slot, updates node_count, and refreshes the node_index.
-read_node_v2 peeks the V2 header, sizes the buffer, deserializes NodeRecordV2, and returns corruption errors if offsets or lengths disagree; rebuild_v2_index walks all slots, recording offsets and eagerly decoding V2 rows.
-Tests: `cargo test -p sqlitegraph --tests` (feature off) passes; `cargo test -p sqlitegraph --tests --features v2_experimental` still fails at `tests/direct_rebuild_trigger.rs` because it accesses the private GraphFile handle (pre-existing blocker), but the new V2 round-trip tests compile and run when that issue is resolved.
-V1 behavior and on-disk layouts remain untouched; V2 APIs stay behind the `v2_experimental` feature flag.

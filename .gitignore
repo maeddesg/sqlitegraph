@@ -84,3 +84,6 @@ test_wal_api
 main
 test_*_api
 *.sqlitegraph-*insert_bench_fixed.txt
+
+# Internal development docs (kept for reference but not in git)
+docs/internal/
