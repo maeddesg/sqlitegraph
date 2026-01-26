@@ -26,7 +26,12 @@
 //! - No ordering guarantees between subscribers
 //! - In-process delivery only (no networking or IPC)
 
-use crate::backend::native::v2::wal::SnapshotId;
+/// Snapshot identifier (commit sequence number)
+///
+/// In the V2 system, snapshot_id is the commit LSN (log sequence number),
+/// which is a monotonically increasing u64 that uniquely identifies each
+/// committed transaction.
+pub type SnapshotId = u64;
 
 /// Event type categories for filtering
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
