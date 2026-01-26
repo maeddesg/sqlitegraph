@@ -9,14 +9,14 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 43 - Transactional KV Store (5/6 plans complete, plan 06 in progress)
-Previous: Phase 42 - SIMD / AVX Acceleration (COMPLETE)
-Status: Phase 43 IN PROGRESS - Transactional KV Store milestone
-Last activity: 2026-01-26 — Planning 43-06: MVCC multi-version storage for true snapshot isolation
+Phase: 44 - Transactional KV Store (COMPLETE)
+Previous: Phase 43 - Transactional KV Store (COMPLETE)
+Status: Phase 43 COMPLETE - Transactional KV Store milestone
+Last activity: 2026-01-26 — Completed 43-06: MVCC multi-version storage
 
-Progress: [█████████░] 96% of planned phases (43 phases mostly complete, 170/179 plans)
+Progress: [█████████░] 97% of planned phases (43 phases mostly complete, 170/179 plans)
 
-**Phase 43 Status (5/6 COMPLETE):**
+**Phase 43 Status (6/6 COMPLETE):**
 - ✅ Plan 43-01: In-memory KV store with HashMap-based storage (18 tests pass)
 - ✅ Plan 43-02: WAL integration for KV operations (42 tests pass)
 - ✅ Plan 43-03: Snapshot isolation API (48 tests pass)
