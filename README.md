@@ -5,7 +5,7 @@
 
 **Embedded Graph Database with Native V2 Backend**
 
-## What's New in v1.2.4
+## What's New in v1.2.5
 
 **Pub/Sub Event System** - In-process event notification for graph changes
 - Four event types: `NodeChanged`, `EdgeChanged`, `KVChanged`, `SnapshotCommitted`

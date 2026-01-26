@@ -1,68 +1,136 @@
 # SQLiteGraph
 
-Deterministic, embedded graph database with SQLite and high-performance Native V2 backends.
+[![crates.io](https://img.shields.io/crates/v/sqlitegraph.svg)](https://crates.io/crates/sqlitegraph)
+[![Documentation](https://docs.rs/sqlitegraph/badge.svg)](https://docs.rs/sqlitegraph)
 
-**Current Status: Active Development**
+**Embedded Graph Database with Native V2 Backend**
 
-SQLiteGraph provides two backend options for different use cases:
-- **SQLite Backend**: Mature, ACID-compliant, **WAL mode enabled by default** for concurrent performance (file-based databases)
-- **Native V2 Backend**: High-performance, clustered adjacency with **complete WAL implementation** for transactional durability (direct file I/O)
+## What's New in v1.2.4
+
+**Pub/Sub Event System** - In-process event notification for graph changes
+- Four event types: `NodeChanged`, `EdgeChanged`, `KVChanged`, `SnapshotCommitted`
+- ID-only design for decoupled event schemas
+- Channel-based delivery with filtering by event type and entity IDs
+- Native V2 backend only
+
+**Full ACID Transactions** - Complete transaction correctness
+- Atomicity with full rollback support
+- Consistency validation at runtime
+- Isolation via MVCC snapshots
+- Durability with WAL recovery
+
+**Developer Documentation** - Comprehensive guides for contributors
+- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
+- [Testing Guide](docs/TESTING.md) - Test patterns and utilities
+- [Debugging Guide](docs/DEBUGGING.md) - Profiling and troubleshooting
+- [Contributing](docs/CONTRIBUTING.md) - Development workflow
+
+**Test Coverage**: 380+ tests passing (59 pubsub + 42 WAL + 53 MVCC + 27 algorithms + 134 HNSW + 65 others)
+
+---
+
+SQLiteGraph is an embedded graph database in Rust featuring a dual backend architecture. It provides SQLite and Native V2 storage options with graph algorithms, HNSW vector search, and MVCC snapshots.
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+SQLiteGraph provides two backend options:
+- **SQLite Backend**: SQLite storage with ACID transactions
+- **Native V2 Backend**: Clustered adjacency storage with WAL
 
 ## Features
 
-### Dual Backend Architecture
-- **SQLite Backend**: Traditional SQLite storage with full ACID transactions and WAL mode for concurrency
-- **Native V2 Backend**: Custom binary format with clustered adjacency for maximum performance
-- **Backend Abstraction**: Unified API works with either backend
-- **Easy Migration**: Switch backends with configuration changes
+### Native V2 Architecture
+- **Clustered Adjacency Storage**: Stores edges in clusters for locality
+- **Write-Ahead Logging (WAL)**: Transaction logging with crash recovery
+- **Snapshot System**: Export/import with lifecycle management
+- **Cross-Platform Atomic Operations**: Concurrent access across platforms
+- **Storage Format**: Binary format with 70%+ size reduction vs legacy V1
+- **Pub/Sub Events**: In-process event notification for graph changes (Native V2 only)
 
-### WAL Mode (Both Backends)
-- **SQLite Backend**: WAL mode enabled by default for all file-based databases
-- **Native V2 Backend**: Complete WAL implementation with cluster-affinity logging
-- **Automatic Enablement**: WAL enabled by default (SQLite) or available via config (Native V2)
-- **Concurrent Performance**: 30-50% improvement for concurrent read/write workloads
-- **Crash Recovery**: Full transaction recovery from WAL logs
-- **ACID Compliance**: Full transaction support with rollback capabilities
-- **Automatic File Management**: WAL and SHM files created and managed automatically
-- **Network Filesystem Support**: Graceful fallback to DELETE mode when WAL is unsupported
+### Dual Backend Architecture
+- **SQLite Backend**: Traditional SQLite with full ACID transactions
+- **Native V2 Backend**: Clustered adjacency for traversal-heavy workloads
+- **Unified API**: Single API works with both backends
+- **Runtime Selection**: Switch backends via configuration
 
 ### Core Graph Operations
-- **Entity Management**: Insert, update, retrieve, delete graph entities
-- **Edge Management**: Create and manage relationships between entities
-- **JSON Data Storage**: Arbitrary JSON metadata with entities and edges
-- **Deterministic Operations**: Consistent ordering and behavior
+- **Entity/Node Management**: Insert, update, retrieve, delete
+- **Edge Management**: Create and manage typed relationships
+- **JSON Data Storage**: Arbitrary JSON metadata on entities and edges
+- **Bulk Operations**: Batch insert for higher throughput
 
 ### Traversal & Querying
 - **Neighbor Queries**: Get incoming/outgoing connections
-- **Pattern Matching**: Advanced graph pattern queries with fast-path caching
+- **Pattern Matching**: Graph pattern queries
 - **Traversal Algorithms**: BFS, shortest path, connected components
-- **Query Cache**: Cached K-hop and shortest path queries
-- **Reasoning Pipelines**: Multi-step analysis with filtering and scoring
 
-### HNSW Vector Search
-- **Approximate Nearest Neighbor**: O(log N) search complexity
-- **High Performance**: In-memory vector index with 95%+ recall
-- **Multiple Distance Metrics**: Cosine, Euclidean, Dot Product, Manhattan
-- **SIMD Optimized**: AVX2/AVX-512 support for distance calculations
-- **Dynamic Updates**: Insert and delete vectors without full rebuilds
-- **Configuration**: Flexible HNSW parameters for accuracy/speed tradeoffs
+### Graph Algorithms (Phase 8)
+- **PageRank**: Importance ranking (O(|E|) iterations)
+- **Betweenness Centrality**: Node importance via shortest paths (O(|V||E|))
+- **Label Propagation**: Fast community detection (O(|E|))
+- **Louvain Method**: Modularity-based clustering (O(|E| log |V|))
 
-### Bulk Operations & Snapshots
-- **Bulk Insert**: High-performance batch entity and edge insertion
-- **Snapshot Export**: Atomic graph snapshot creation with 70%+ storage efficiency
-- **Snapshot Import**: Fast graph restoration from snapshots
-- **Cross-Platform**: Platform-independent binary snapshot format
+### Performance & Reliability
+- **MVCC Snapshots**: Read isolation with snapshot views
+- **Parallel WAL Recovery**: 2-3x speedup for large WAL files (500+ transactions)
+- **Automated Benchmarks**: Criterion-based regression detection
+- **Safety Tools**: Orphan edge detection and integrity checks
 
-### MVCC & Transactions
-- **MVCC Snapshots**: Read isolation with snapshot consistency
-- **Transaction Support**: Full ACID transactions (SQLite) or WAL transactions (Native V2)
-- **Rollback**: Complete transaction rollback capabilities
+### Vector Search (HNSW)
+- **HNSW Algorithm**: Hierarchical Navigable Small World for ANN search
+- **Supported Metrics**: Cosine, Euclidean, Dot Product, Manhattan
+- **OpenAI Compatible**: Support for 1536-dimensional embeddings
+- **Flexible Dimensions**: Any size from 1-4096
 
-### Performance & Safety
-- **Benchmark Gates**: Automated performance regression prevention
-- **Safety Tools**: Orphan edge detection, integrity validation
-- **Memory Management**: Configurable caching and buffer management
-- **Error Handling**: Comprehensive error reporting and recovery
+### Developer Tools (Phase 9)
+- **Introspection API**: `GraphIntrospection` for statistics and debugging
+- **Progress Tracking**: `ProgressCallback` with `ConsoleProgress`
+- **CLI Debug Commands**: `debug-stats`, `debug-dump`, `debug-trace`
+- **Algorithm CLI Commands**: `pagerank`, `betweenness`, `louvain` with progress bars
+
+## Performance Benchmarks
+
+**Benchmark Methodology:**
+- Hardware: Linux x86_64 (kernel 6.18+)
+- Sizes: 100-500 nodes (V2 backend has 8MB node region limit, ~2048 nodes max)
+- Cache state: Warm (after warmup iterations)
+- Measurements: Criterion-based statistical analysis (95% confidence interval)
+
+**Native V2 vs SQLite Backend (Phase 24, 2026-01-21):**
+
+| Operation | Size | Native V2 | SQLite | Ratio |
+|-----------|------|-----------|--------|-------|
+| Node Insert | 100 | 1.14 ms | 3.63 ms | 3.2x faster |
+| Node Insert | 500 | 4.91 ms | 10.57 ms | 2.2x faster |
+| Edge Insert (star) | 100 | 3.85 ms | 7.18 ms | 1.9x faster |
+| BFS Traversal (star) | 100 | 4.68 ms | 7.28 ms | 1.6x faster |
+| BFS Traversal (chain) | 100 | 15.38 ms | 7.24 ms | 2.1x **slower** |
+| BFS Traversal (chain) | 500 | 266.50 ms | 24.98 ms | 10.7x **slower** |
+| 1-Hop Query | 100 | 3.87 ms | 6.93 ms | 1.8x faster |
+
+**Key Findings:**
+- Native V2 excels at insert operations (1.3-3.2x faster)
+- Star-pattern traversals favor Native V2 (clustered adjacency locality)
+- Chain traversals show regression (V2 cluster lookup overhead vs SQLite indexed adjacency)
+- Workload pattern matters: choose backend based on your graph shape and access patterns
+
+**Connection Pooling:**
+- Warm checkout: 205 ns (pooled) vs 16.4 µs (direct) = **79.8x faster**
+- First checkout overhead: ~5 ms (pool initialization)
+
+**HNSW Vector Search:**
+- Insertion: 3-5 ms for 100 vectors (64-256 dimensions)
+- Search: Sub-millisecond typical latency
+- Accuracy: 95%+ recall on standard datasets
+
+**Storage Efficiency:**
+- Native V2 format: 70%+ size reduction vs legacy V1 format
+
+**Caveats:**
+- Numbers are for single-node embedded use (not distributed)
+- Performance varies based on graph topology, hardware, and configuration
+- V2 backend currently constrained to ~2048 nodes (8MB reserved region)
+- In-memory benchmarks show 1000-10000x headroom for future optimization
 
 ## Quick Start
 
@@ -70,7 +138,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "0.2.1"
+sqlitegraph = "1.2.3"
 ```
 
 ### SQLite Backend (Default)
@@ -79,69 +147,40 @@ sqlitegraph = "0.2.1"
 use sqlitegraph::{SqliteGraph, GraphEntity, GraphEdge};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create in-memory SQLite graph
     let graph = SqliteGraph::open_in_memory()?;
 
-    // Create entities with proper structure
     let user_entity = GraphEntity {
-        id: 0, // Assigned by database
+        id: 0,
         kind: "User".to_string(),
         name: "Alice".to_string(),
         file_path: None,
         data: serde_json::json!({"age": 30}),
     };
 
-    let project_entity = GraphEntity {
-        id: 0,
-        kind: "Project".to_string(),
-        name: "SQLiteGraph".to_string(),
-        file_path: None,
-        data: serde_json::json!({"status": "active"}),
-    };
-
-    // Insert entities
     let user_id = graph.insert_entity(&user_entity)?;
-    let project_id = graph.insert_entity(&project_entity)?;
-
-    // Create relationship
-    let works_on_edge = GraphEdge {
-        id: 0,
-        from_id: user_id,
-        to_id: project_id,
-        edge_type: "works_on".to_string(),
-        data: serde_json::json!({"role": "developer"}),
-    };
-
-    let edge_id = graph.insert_edge(&works_on_edge)?;
-
-    println!("Created graph: {} entities, {} edges", 2, 1);
-    println!("Edge ID: {}", edge_id);
+    println!("Created entity: {}", user_id);
 
     Ok(())
 }
 ```
 
-### Native V2 Backend (High Performance)
-
-Enable the Native V2 backend in your `Cargo.toml`:
+### Native V2 Backend
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "0.2.1", features = ["native-v2"] }
+sqlitegraph = { version = "1.2.5", features = ["native-v2"] }
 ```
 
 ```rust
 use sqlitegraph::{GraphConfig, open_graph, NodeSpec, EdgeSpec};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Use Native V2 backend
     let cfg = GraphConfig::native();
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("graph.db");
 
     let graph = open_graph(&db_path, &cfg)?;
 
-    // Insert nodes
     let node_spec = NodeSpec {
         kind: "User".to_string(),
         name: "Alice".to_string(),
@@ -150,108 +189,236 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let user_id = graph.insert_node(node_spec)?;
 
-    // Insert edges
-    let edge_spec = EdgeSpec {
-        from: user_id,
-        to: user_id, // self-loop for demo
-        edge_type: "self_ref".to_string(),
-        data: serde_json::json!({"type": "demo"}),
-    };
-    let edge_id = graph.insert_edge(edge_spec)?;
-
-    println!("Native V2: Node {}, Edge {}", user_id, edge_id);
+    println!("Created node: {}", user_id);
     Ok(())
 }
 ```
 
+### Pub/Sub Events (Native V2)
+
+```toml
+[dependencies]
+sqlitegraph = { version = "1.2.5", features = ["native-v2"] }
+```
+
+```rust
+use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::backend::SubscriptionFilter;
+
+let cfg = GraphConfig::native();
+let graph = open_graph("graph.db", &cfg)?;
+
+// Subscribe to all node change events
+let filter = SubscriptionFilter::all();
+let (subscriber_id, rx) = graph.subscribe(filter)?;
+
+// In a separate task or thread, receive events
+while let Ok(event) = rx.recv() {
+    println!("Event: {:?}", event);
+    // Events contain only IDs - read actual data from graph using snapshot_id
+}
+
+// Unsubscribe when done
+graph.unsubscribe(subscriber_id)?;
+```
+
+## Backend Selection Guide
+
+| Use Case | Recommended Backend | Why |
+|----------|-------------------|-----|
+| **Write-Heavy Workloads** | Native V2 Backend | 1.3-3.2x faster insert operations |
+| **Star-Pattern Graphs** | Native V2 Backend | Clustered adjacency benefits local queries |
+| **Chain-Depth Traversals** | SQLite Backend | V2 has 2-10x chain traversal regression |
+| **Enterprise Applications** | SQLite Backend | ACID transactions, tooling ecosystem |
+| **Existing SQLite Integration** | SQLite Backend | Direct compatibility |
+| **Vector Search Workloads** | Native V2 Backend | HNSW integration |
+| **Development/Testing** | Either Backend | Unified API, both support in-memory |
+| **Small Graphs (<2K nodes)** | Either Backend | V2 has node region limit, SQLite scales better |
+
+### Feature Flags
+
+```toml
+# Default - SQLite backend only
+sqlitegraph = "1.2.5"
+
+# Native V2 backend (with pub/sub support)
+sqlitegraph = { version = "1.2.5", features = ["native-v2"] }
+
+# Development features - I/O tracing
+sqlitegraph = { version = "1.2.5", features = ["trace_v2_io"] }
+```
+
+## CLI Tool
+
+```bash
+# Basic status
+sqlitegraph --command status --database memory
+
+# List entities
+sqlitegraph --command list --database mygraph.db
+
+# Export/import
+sqlitegraph --command dump-graph --output backup.json --database mygraph.db
+sqlitegraph --command load-graph --input backup.json --database mygraph.db
+
+# HNSW vector search
+sqlitegraph --backend sqlite --db mygraph.db hnsw-create --dimension 768 --distance-metric cosine
+sqlitegraph --backend sqlite --db mygraph.db hnsw-insert --index-name vectors --input vectors.json
+sqlitegraph --backend sqlite --db mygraph.db hnsw-search --index-name vectors --input query.json --k 10
+
+# Algorithm commands (with progress bars)
+sqlitegraph --backend sqlite --db mygraph.db pagerank --progress
+sqlitegraph --backend sqlite --db mygraph.db betweenness --progress
+sqlitegraph --backend sqlite --db mygraph.db louvain --progress
+```
+
+## Graph Algorithms
+
+```rust
+use sqlitegraph::algo;
+
+// PageRank - importance ranking
+let scores = algo::pagerank(&graph, 0.85, 50)?;
+
+// Betweenness Centrality - node importance via shortest paths
+let centrality = algo::betweenness_centrality(&graph)?;
+
+// Label Propagation - fast community detection
+let communities = algo::label_propagation(&graph)?;
+
+// Louvain - modularity-based clustering
+let partition = algo::louvain_communities(&graph, 0.01)?;
+
+// With progress tracking
+use sqlitegraph::progress::ConsoleProgress;
+let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new())?;
+```
+
 ## Testing
+
+**Test Coverage (v1.2.3):**
+- 59 pubsub tests passing (event emission, filtering, multiple subscribers)
+- 42 WAL tests passing (recovery, corruption, checkpoints)
+- 53 concurrent MVCC tests passing (snapshots, stress testing)
+- 27 algorithm tests passing (PageRank, Betweenness, Louvain, Label Propagation)
+- 134 HNSW tests passing
+- 65 MVCC lifecycle tests passing
 
 ```bash
 # Run all tests
-cargo test
+cargo test --workspace
 
-# Test specific backend
-cargo test --features native-v2
+# With Native V2 backend
+cargo test --workspace --features native-v2
 
 # Run benchmarks
 cargo bench
 
-# Run working examples
-cargo run --example basic_functionality_test
-cargo run --example native_v2_test --features native-v2
+# Documentation tests
+cargo test --doc
 ```
 
-## Current Capabilities
+## Grounded Tool Scripts
 
-### **What Works Today**
+Keep every change truth-based by running the Magellan stack before touching files:
 
-**Core Operations:**
-- Entity CRUD operations with JSON metadata
-- Edge creation and management
-- In-memory and persistent storage
-- Both backends fully functional
+- `scripts/watch-magellan.sh` — starts `magellan watch --root sqlitegraph/src` with `.codemcp/codegraph.db` scoped to the Rust sources.
+- `scripts/toolchain-ready.sh [symbol]` — runs `magellan status` + `llmgrep search` (defaults to `ToolRegistry`) so you can verify tool readiness and capture execution IDs before editing.
 
-**Performance:**
-- Native V2: 50K-100K operations/second (benchmarked)
-- SQLite: Standard SQLite performance with optimizations
-- Deterministic behavior across platforms
-
-**Data Integrity:**
-- ACID transactions (SQLite backend)
-- Corruption prevention in V2 backend
-- Comprehensive safety checks
-- Benchmark regression gates
-
-### **Current Limitations**
-
-**Scope:**
-- Focused on embedded use cases (not distributed)
-- Single-machine graph processing
-- No built-in clustering or replication
-
-**API Surface:**
-- Concentrated on graph operations, limited advanced analytics
-- No built-in machine learning or advanced analytics
-- Limited visualization capabilities
-
-**Performance Characteristics:**
-- Native V2 optimized for read-heavy workloads
-- Write performance varies by workload pattern
-- Large graphs (>1M edges) may need tuning
+Run these before any reading/editing steps so the CLI and LLM focus on deterministic spans instead of guessing through `rg`.
 
 ## Documentation
 
-- **[Manual](manual.md)** - Detailed operator guide
-- **[API Documentation](../docs/sqlitegraph_api_documentation.md)** - Complete API reference
-- **[Examples](examples/)** - Working code examples
-- **[CHANGELOG](CHANGELOG.md)** - Version history and changes
+### User Documentation
+- **[Operator Manual](MANUAL.md)** - Comprehensive usage guide (14 sections)
+- **[API Docs](API.md)** - Quick API reference
+- **[CHANGELOG](CHANGELOG.md)** - Version history
+
+### Developer Documentation
+- **[Documentation Index](docs/INDEX.md)** - Navigation for all docs
+- **[Architecture](docs/ARCHITECTURE.md)** - System architecture and design
+- **[Testing Guide](docs/TESTING.md)** - Testing patterns and utilities
+- **[Debugging Guide](docs/DEBUGGING.md)** - Debugging and profiling
+- **[Contributing](docs/CONTRIBUTING.md)** - Contribution guidelines
+
+### Development Guides
+- **[Adding a Graph Algorithm](docs/DEVELOPMENT_GUIDES/adding-a-graph-algorithm.md)**
+- **[Adding a Distance Metric](docs/DEVELOPMENT_GUIDES/adding-a-distance-metric.md)**
+- **[Adding a CLI Command](docs/DEVELOPMENT_GUIDES/adding-a-cli-command.md)**
+
+## Architecture
+
+### Design Principles
+- **300 LOC Module Limit**: Maintainable boundaries
+- **TDD Methodology**: Test-driven development
+- **Performance Benchmarks**: Criterion-based regression gates
+
+### Module Organization
+- Core graph operations with dual backend support
+- Graph algorithms (centrality, community detection)
+- HNSW vector search with persistence
+- MVCC snapshots for read isolation
+- Introspection and debugging tools
+
+## Compiler Warnings
+
+SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.2.3:
+
+| Category | Count | Description |
+|----------|-------|-------------|
+| SIMD unsafe blocks | 18 | Rust 2024 edition requires explicit `unsafe` blocks within `unsafe fn` for SIMD intrinsics (AVX2). These are low-overhead and necessary for performance. |
+| Dead code (API completeness) | ~55 | Intentionally unused methods/fields preserved for: public API stability, future features, test-only functionality, and serialized format compatibility. |
+
+**These warnings are documented and acceptable** - they represent intentional design choices, not technical debt. The codebase compiles cleanly with `cargo check --lib` and all tests pass.
+
+### Grounded Development Workflow
+
+SQLiteGraph uses a **grounded tool workflow** to prevent guessing and ensure code changes are truth-based:
+
+1. **Magellan** - Code graph indexing and symbol discovery
+   ```bash
+   magellan watch --root sqlitegraph/src --db .codemcp/codegraph.db --debounce-ms 500
+   ```
+
+2. **llmgrep** - Semantic code search with span references
+   ```bash
+   llmgrep search --db .codemcp/codegraph.db --query "symbolName" --output json
+   ```
+
+3. **Splice / llm-transform** - Span-safe code editing
+   ```bash
+   splice edit --span-id <id> --execution-id <exec_id> ...
+   ```
+
+This workflow ensures every code change is grounded in actual code graph data rather than assumptions.
+
+## Built With
+
+SQLiteGraph was developed using the following grounded development tools:
+
+| Tool | Description |
+|------|-------------|
+| **[Magellan](https://github.com/oldnordic/magellan)** ([crates.io](https://crates.io/crates/magellan)) | Code graph navigation and symbol analysis |
+| **[Splice](https://github.com/oldnordic/splice)** ([crates.io](https://crates.io/crates/splice)) | Safe code editing with span-based operations |
+| **[llmgrep](https://github.com/oldnordic/llmgrep)** ([crates.io](https://crates.io/crates/llmgrep)) | Semantic code search powered by embeddings |
+
+## Production Usage
+
+SQLiteGraph is actively used in production at [The Root Company](https://root.com) for:
+- Graph-based knowledge representation
+- Vector similarity search with HNSW
+- Transactional graph operations with WAL recovery
 
 ## License
 
-GPL-3.0-only - see [LICENSE](LICENSE) for details.
+GPL-3.0-or-later - see [LICENSE](LICENSE) for details.
 
-## Development Notes
+## Contributing
 
-### V2 Architecture Status
-
-**V2 Native Backend Status**
-- All V1 legacy code removed
-- Clustered adjacency storage implemented
-- Corruption prevention active
-- Comprehensive test coverage
-- Experimental high-performance features
-
-### Performance Benchmarks
-
-Current performance characteristics (Native V2):
-- **Node insertion**: ~50K ops/sec
-- **Edge insertion**: ~100K ops/sec
-- **Traversal**: Varies by graph structure
-- **Memory usage**: Optimized with configurable buffers
-
-### Known Limitations
-
-1. **Compilation Warnings**: ~50 warnings (non-critical, mostly unused code paths)
-2. **Single Machine**: No built-in distributed capabilities
-3. **Memory Usage**: Large graphs may require buffer tuning
-4. **Documentation**: API evolving as new features added
+Contributions welcome. Please:
+1. Read the [Contributing Guide](docs/CONTRIBUTING.md)
+2. Read the [Architecture](docs/ARCHITECTURE.md) for system understanding
+3. Run tests to verify setup
+4. Follow TDD methodology
+5. Keep modules under 300 LOC
+6. Add tests for new features
