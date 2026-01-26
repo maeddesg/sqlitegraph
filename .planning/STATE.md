@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 Phase: 44 - Pub/Sub (In-Process)
 Previous: Phase 43 - Transactional KV Store (COMPLETE)
-Status: Phase 44 In Progress - Event emitter integrated with WAL commit path
-Last activity: 2026-01-26 — Completed 44-03: Emitter integration with commit path
+Status: Phase 44 In Progress - Public subscribe() API added to GraphBackend trait
+Last activity: 2026-01-26 — Completed 44-04: Public subscribe() API on GraphBackend trait
 
 Progress: [█████████░] 97% of planned phases (43 phases mostly complete, 173/179 plans)
 
@@ -24,16 +24,16 @@ Progress: [█████████░] 97% of planned phases (43 phases most
 - ✅ Plan 43-05: SQLite backend KV implementation (29 tests pass)
 - ✅ Plan 43-06: MVCC multi-version storage (COMPLETE)
 
-**Phase 44 Status (3/6 PLANNED):**
+**Phase 44 Status (4/6 PLANNED):**
 - ✅ Plan 44-01: PubSub event types and subscriber structures (COMPLETE - 14 tests pass)
 - ✅ Plan 44-02: Event delivery mechanism (COMPLETE - 10 tests pass)
 - ✅ Plan 44-03: Emitter integration with commit path (COMPLETE - 14 tests pass)
-- ⏳ Plan 44-04: PubSub manager and lifecycle (PLANNED)
+- ✅ Plan 44-04: Public subscribe() API (COMPLETE - 1 test passes)
 - ⏳ Plan 44-05: Integration tests (PLANNED)
 - ⏳ Plan 44-06: Regression validation (PLANNED)
 
 **Phase 44 Implementation Summary (IN PROGRESS):**
-- **Status:** Event emitter integrated with V2WALManager commit path
+- **Status:** Public subscribe() API added to GraphBackend trait, fully implemented in NativeGraphBackend
 - **Architecture:** ID-only event design with best-effort in-process delivery via channels
 - **Event Types:** NodeChanged, EdgeChanged, KVChanged, SnapshotCommitted
 - **Emission Logic:** WAL records → PubSubEvents via emit::records_to_events()
@@ -44,6 +44,18 @@ Progress: [█████████░] 97% of planned phases (43 phases most
   - emit() broadcasts to all matching subscribers (best-effort, no blocking)
   - unsubscribe() removes subscriber by ID
   - Thread-safe via Arc<Mutex<Vec<(SubscriberId, Sender, Filter)>>>
+- **Public API:**
+  - GraphBackend trait has subscribe() and unsubscribe() methods
+  - Returns (u64, Receiver<PubSubEvent>) tuple
+  - Feature-gated with #[cfg(feature = "native-v2")]
+  - Types re-exported: PubSubEvent, SubscriptionFilter
+- **NativeGraphBackend Implementation:**
+  - subscribe() delegates to wal_manager.get_publisher().subscribe()
+  - unsubscribe() converts u64 to SubscriberId and delegates to publisher
+  - Returns explicit error if WAL not available
+- **SQLite Backend Implementation:**
+  - Returns explicit Unsupported error for both methods
+  - Clear message: "Pub/sub is only available on Native V2 backend"
 - **Filtering:** Support for event type, node_ids, edge_ids, key_hashes filtering
 - **Emission Rules:**
   - NodeInsert/NodeUpdate → NodeChanged
@@ -52,10 +64,10 @@ Progress: [█████████░] 97% of planned phases (43 phases most
   - SnapshotCommitted always emitted as final event
   - NodeDelete → NO EVENT (entity gone)
   - Transaction control records → NO EVENT
-- **Tests:** 38 unit tests (14 from 44-01, 10 from 44-02, 12 from 44-03, 2 integration)
+- **Tests:** 39 unit tests (14 from 44-01, 10 from 44-02, 12 from 44-03, 1 from 44-04, 2 integration)
 - **Module Location:** sqlitegraph/src/backend/native/v2/pubsub/
 - **Exports:** PubSubEvent, PubSubEventType, SubscriptionFilter, Subscriber, SubscriberId, Publisher, records_to_events, should_emit_event
-- **Next:** PubSub manager and lifecycle management
+- **Next:** Integration tests for full event emission flow
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -681,20 +693,34 @@ Resume file: None
   - **Rationale:** Complex graph file setup required for V2WALManager tests
   - **Trade-off:** Reduced end-to-end coverage now, but emit module has 12 comprehensive unit tests
 
+**44-04: Public subscribe() API**
+- **Decision:** Return explicit Unsupported error for SQLite backend pub/sub
+  - **Rationale:** Users immediately know feature is Native V2 only, not silently broken
+  - **Trade-off:** Requires error handling vs silent no-op, but clarity is worth it
+- **Decision:** Use (u64, Receiver<PubSubEvent>) tuple return type
+  - **Rationale:** Simple Rust std::sync::mpsc pattern, familiar to Rust developers
+  - **Trade-off:** Tuple is less opaque than custom handle, but more flexible
+- **Decision:** Feature-gate entire pub/sub API with #[cfg(feature = "native-v2")]
+  - **Rationale:** Pub/sub is inherently tied to Native V2 WAL system
+  - **Trade-off:** SQLite backend still needs stub implementations (consistent with KV pattern)
+- **Decision:** Added Unsupported variant to SqliteGraphError
+  - **Rationale:** Generic error type for backend-specific features
+  - **Trade-off:** New error variant, but reusuable for future unsupported features
+
 ## Session Continuity
 
-Last session: 2026-01-26T01:17:11Z
-Stopped at: Completed Phase 44-03 - Emitter integration with commit path
+Last session: 2026-01-26T01:36:00Z
+Stopped at: Completed Phase 44-04 - Public subscribe() API on GraphBackend trait
 Resume file: None
 
 **Phase 44 Deliverables (IN PROGRESS):**
 - PubSub event types and subscriber structures (plan 01) - COMPLETE
 - Event delivery mechanism with Publisher (plan 02) - COMPLETE
 - Emitter integration with commit path (plan 03) - COMPLETE
-- PubSub manager and lifecycle (plan 04) - NEXT
-- Integration tests (plan 05) - PLANNED
+- Public subscribe() API (plan 04) - COMPLETE
+- Integration tests (plan 05) - NEXT
 - Regression validation (plan 06) - PLANNED
 
-**Total Phase 44 Tests (so far):** 38 tests passing (14 from 44-01, 10 from 44-02, 12 from 44-03, 2 integration)
+**Total Phase 44 Tests (so far):** 39 tests passing (14 from 44-01, 10 from 44-02, 12 from 44-03, 1 from 44-04, 2 integration)
 
-**Next:** 44-04 - PubSub manager and lifecycle
+**Next:** 44-05 - Integration tests
