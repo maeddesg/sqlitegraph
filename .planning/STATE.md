@@ -9,19 +9,20 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 43 - Transactional KV Store (5/5 plans complete)
+Phase: 43 - Transactional KV Store (5/6 plans complete, plan 06 in progress)
 Previous: Phase 42 - SIMD / AVX Acceleration (COMPLETE)
-Status: Phase 43 COMPLETE - Transactional KV Store milestone
-Last activity: 2026-01-26 — Completed 43-05: SQLite backend KV implementation (29 tests pass)
+Status: Phase 43 IN PROGRESS - Transactional KV Store milestone
+Last activity: 2026-01-26 — Planning 43-06: MVCC multi-version storage for true snapshot isolation
 
-Progress: [█████████░] 96% of planned phases (43 phases complete, 170/178 plans)
+Progress: [█████████░] 96% of planned phases (43 phases mostly complete, 170/179 plans)
 
-**Phase 43 Status (COMPLETE):**
+**Phase 43 Status (5/6 COMPLETE):**
 - ✅ Plan 43-01: In-memory KV store with HashMap-based storage (18 tests pass)
 - ✅ Plan 43-02: WAL integration for KV operations (42 tests pass)
 - ✅ Plan 43-03: Snapshot isolation API (48 tests pass)
 - ✅ Plan 43-04: TTL cleanup and integration tests (89 tests pass)
 - ✅ Plan 43-05: SQLite backend KV implementation (29 tests pass)
+- 🔄 Plan 43-06: MVCC multi-version storage (PLANNED - extends 43 for true snapshot isolation)
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -625,6 +626,6 @@ Resume file: None
 - TTL cleanup and integration tests (plan 04)
 - SQLite backend KV implementation with feature parity (plan 05)
 
-**Total Phase 43 Tests:** 226 tests (18 + 42 + 48 + 89 + 29)
+**Total Phase 43 Tests:** 108 tests passing (all KV store tests)
 
 **Ready for Phase 44:** Pub/Sub (Minimal, In-Process)

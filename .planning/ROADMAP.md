@@ -306,11 +306,11 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 
 ---
 
-## v1.12 Transactional KV Store (Phase 43) - COMPLETE
+## v1.12 Transactional KV Store (Phase 43) - IN PROGRESS
 
 **Milestone Goal:** Implement transactional KV store as a VIEW over Native V2 storage with snapshot_id versioning and lazy TTL cleanup
 
-**Status:** COMPLETE (2026-01-26)
+**Status:** IN PROGRESS (2026-01-26)
 
 **Problem:** Graph databases need flexible key-value storage for metadata, caching, and application data. SQLiteGraph requires a KV store that participates in the same transaction system as graph operations, ensuring ACID properties across both graph and KV data.
 
@@ -333,6 +333,8 @@ Implement contiguous cluster allocation for linear chains to achieve IO-12 targe
 - [x] 43-02-PLAN.md — WAL integration (KV records and transaction participation)
 - [x] 43-03-PLAN.md — Snapshot-aware read/write API (GraphBackend trait integration)
 - [x] 43-04-PLAN.md — TTL lazy cleanup and integration tests
+- [x] 43-05-PLAN.md — SQLite backend KV implementation and snapshot tests
+- [ ] 43-06-PLAN.md — MVCC multi-version storage (true snapshot isolation)
 
 **Success Criteria:**
 - [x] KvStore module with snapshot-aware get/set/delete operations
