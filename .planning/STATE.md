@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 Phase: 44 - Pub/Sub (In-Process)
 Previous: Phase 43 - Transactional KV Store (COMPLETE)
-Status: Phase 44 In Progress - Event delivery mechanism complete
-Last activity: 2026-01-26 — Completed 44-02: Event delivery mechanism with Publisher
+Status: Phase 44 In Progress - Event emitter integrated with WAL commit path
+Last activity: 2026-01-26 — Completed 44-03: Emitter integration with commit path
 
-Progress: [█████████░] 97% of planned phases (43 phases mostly complete, 172/179 plans)
+Progress: [█████████░] 97% of planned phases (43 phases mostly complete, 173/179 plans)
 
 **Phase 43 Status (6/6 COMPLETE):**
 - ✅ Plan 43-01: In-memory KV store with HashMap-based storage (18 tests pass)
@@ -24,18 +24,20 @@ Progress: [█████████░] 97% of planned phases (43 phases most
 - ✅ Plan 43-05: SQLite backend KV implementation (29 tests pass)
 - ✅ Plan 43-06: MVCC multi-version storage (COMPLETE)
 
-**Phase 44 Status (2/6 PLANNED):**
+**Phase 44 Status (3/6 PLANNED):**
 - ✅ Plan 44-01: PubSub event types and subscriber structures (COMPLETE - 14 tests pass)
 - ✅ Plan 44-02: Event delivery mechanism (COMPLETE - 10 tests pass)
-- ⏳ Plan 44-03: Emitter integration with commit path (PLANNED)
+- ✅ Plan 44-03: Emitter integration with commit path (COMPLETE - 14 tests pass)
 - ⏳ Plan 44-04: PubSub manager and lifecycle (PLANNED)
 - ⏳ Plan 44-05: Integration tests (PLANNED)
 - ⏳ Plan 44-06: Regression validation (PLANNED)
 
 **Phase 44 Implementation Summary (IN PROGRESS):**
-- **Status:** Event delivery mechanism complete with Publisher
+- **Status:** Event emitter integrated with V2WALManager commit path
 - **Architecture:** ID-only event design with best-effort in-process delivery via channels
 - **Event Types:** NodeChanged, EdgeChanged, KVChanged, SnapshotCommitted
+- **Emission Logic:** WAL records → PubSubEvents via emit::records_to_events()
+- **Integration Point:** V2WALManager.commit_transaction() after commit_lsn written
 - **Subscriber Management:** SubscriberId (AtomicU64), SubscriptionFilter (inclusive matching), Subscriber
 - **Publisher:** Channel-based event delivery using std::sync::mpsc
   - subscribe() returns (SubscriberId, Receiver<PubSubEvent>)
@@ -43,10 +45,17 @@ Progress: [█████████░] 97% of planned phases (43 phases most
   - unsubscribe() removes subscriber by ID
   - Thread-safe via Arc<Mutex<Vec<(SubscriberId, Sender, Filter)>>>
 - **Filtering:** Support for event type, node_ids, edge_ids, key_hashes filtering
-- **Tests:** 24 unit tests (14 from 44-01, 10 from 44-02)
+- **Emission Rules:**
+  - NodeInsert/NodeUpdate → NodeChanged
+  - EdgeInsert/EdgeUpdate/EdgeDelete → EdgeChanged
+  - KvSet/KvDelete → KVChanged
+  - SnapshotCommitted always emitted as final event
+  - NodeDelete → NO EVENT (entity gone)
+  - Transaction control records → NO EVENT
+- **Tests:** 38 unit tests (14 from 44-01, 10 from 44-02, 12 from 44-03, 2 integration)
 - **Module Location:** sqlitegraph/src/backend/native/v2/pubsub/
-- **Exports:** PubSubEvent, PubSubEventType, SubscriptionFilter, Subscriber, SubscriberId, Publisher
-- **Next:** Emitter integration with commit path
+- **Exports:** PubSubEvent, PubSubEventType, SubscriptionFilter, Subscriber, SubscriberId, Publisher, records_to_events, should_emit_event
+- **Next:** PubSub manager and lifecycle management
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -655,20 +664,37 @@ Resume file: None
   - **Rationale:** Cleaner lifecycle tracking than global AtomicU64
   - **Trade-off:** Slightly more complex Publisher initialization
 
+**44-03: Emitter integration with commit path**
+- **Decision:** Emit events AFTER commit_lsn is written
+  - **Rationale:** Ensures only committed transactions emit events
+  - **Trade-off:** Events emitted before delta index, but this is correct ordering
+- **Decision:** SnapshotCommitted always emitted as final event
+  - **Rationale:** Subscribers need commit notification even if no entity events
+  - **Trade-off:** Extra event per commit, but minimal overhead
+- **Decision:** NodeDelete emits NO event
+  - **Rationale:** Entity is gone, no meaningful notification possible
+  - **Trade-off:** Subscribers won't know about deletions, but they can check existence
+- **Decision:** Edge deletion emits EdgeChanged with edge_id=0
+  - **Rationale:** Indicates deletion without storing meaningful ID
+  - **Trade-off:** Subscriber must check if edge still exists
+- **Decision:** Full integration tests deferred to Phase 44-05
+  - **Rationale:** Complex graph file setup required for V2WALManager tests
+  - **Trade-off:** Reduced end-to-end coverage now, but emit module has 12 comprehensive unit tests
+
 ## Session Continuity
 
-Last session: 2026-01-26T00:52:15Z
-Stopped at: Completed Phase 44-02 - Event delivery mechanism with Publisher
+Last session: 2026-01-26T01:17:11Z
+Stopped at: Completed Phase 44-03 - Emitter integration with commit path
 Resume file: None
 
 **Phase 44 Deliverables (IN PROGRESS):**
 - PubSub event types and subscriber structures (plan 01) - COMPLETE
 - Event delivery mechanism with Publisher (plan 02) - COMPLETE
-- Emitter integration with commit path (plan 03) - NEXT
-- PubSub manager and lifecycle (plan 04) - PLANNED
+- Emitter integration with commit path (plan 03) - COMPLETE
+- PubSub manager and lifecycle (plan 04) - NEXT
 - Integration tests (plan 05) - PLANNED
 - Regression validation (plan 06) - PLANNED
 
-**Total Phase 44 Tests (so far):** 24 tests passing (14 from 44-01, 10 from 44-02)
+**Total Phase 44 Tests (so far):** 38 tests passing (14 from 44-01, 10 from 44-02, 12 from 44-03, 2 integration)
 
-**Next:** 44-03 - Emitter integration with commit path
+**Next:** 44-04 - PubSub manager and lifecycle
