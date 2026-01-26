@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 
 ## Current Position
 
-Phase: 44 - Transactional KV Store (COMPLETE)
+Phase: 44 - Pub/Sub (In-Process)
 Previous: Phase 43 - Transactional KV Store (COMPLETE)
-Status: Phase 43 COMPLETE - Transactional KV Store milestone
-Last activity: 2026-01-26 — Completed 43-06: MVCC multi-version storage
+Status: Phase 44 In Progress - Event types and subscriber structures complete
+Last activity: 2026-01-26 — Completed 44-01: PubSub event types and subscriber structures
 
-Progress: [█████████░] 97% of planned phases (43 phases mostly complete, 170/179 plans)
+Progress: [█████████░] 97% of planned phases (43 phases mostly complete, 171/179 plans)
 
 **Phase 43 Status (6/6 COMPLETE):**
 - ✅ Plan 43-01: In-memory KV store with HashMap-based storage (18 tests pass)
@@ -22,7 +22,26 @@ Progress: [█████████░] 97% of planned phases (43 phases most
 - ✅ Plan 43-03: Snapshot isolation API (48 tests pass)
 - ✅ Plan 43-04: TTL cleanup and integration tests (89 tests pass)
 - ✅ Plan 43-05: SQLite backend KV implementation (29 tests pass)
-- 🔄 Plan 43-06: MVCC multi-version storage (PLANNED - extends 43 for true snapshot isolation)
+- ✅ Plan 43-06: MVCC multi-version storage (COMPLETE)
+
+**Phase 44 Status (1/6 PLANNED):**
+- ✅ Plan 44-01: PubSub event types and subscriber structures (COMPLETE - 14 tests pass)
+- ⏳ Plan 44-02: Event delivery mechanism (PLANNED)
+- ⏳ Plan 44-03: Emitter integration with commit path (PLANNED)
+- ⏳ Plan 44-04: PubSub manager and lifecycle (PLANNED)
+- ⏳ Plan 44-05: Integration tests (PLANNED)
+- ⏳ Plan 44-06: Regression validation (PLANNED)
+
+**Phase 44 Implementation Summary (IN PROGRESS):**
+- **Status:** Event types and subscriber structures complete
+- **Architecture:** ID-only event design with best-effort in-process delivery
+- **Event Types:** NodeChanged, EdgeChanged, KVChanged, SnapshotCommitted
+- **Subscriber Management:** SubscriberId (AtomicU64), SubscriptionFilter (inclusive matching), Subscriber
+- **Filtering:** Support for event type, node_ids, edge_ids, key_hashes filtering
+- **Tests:** 14 unit tests covering event classification, filter matching, subscriber creation
+- **Module Location:** sqlitegraph/src/backend/native/v2/pubsub/
+- **Exports:** PubSubEvent, PubSubEventType, SubscriptionFilter, Subscriber, SubscriberId
+- **Next:** Channel-based delivery, emitter integration with commit path
 
 **Phase 40 Wave 1 Status (COMPLETE):**
 - ✅ Plan 40-01: Source of truth functions (is_tx_visible, iter_visible_wal_records)
@@ -523,8 +542,8 @@ Next actions:
 
 ## Session Continuity
 
-Last session: 2026-01-26 00:25:00 UTC
-Stopped at: Completed Phase 43-03 (Snapshot isolation API for KV operations)
+Last session: 2026-01-26 00:47:49 UTC
+Stopped at: Completed Phase 44-01 (PubSub event types and subscriber structures)
 Resume file: None
 
 ### Roadmap Evolution
