@@ -64,7 +64,6 @@
 //! }
 //! ```
 
-use std::collections::HashSet;
 use std::fmt;
 
 use ahash::{AHashMap, AHashSet};

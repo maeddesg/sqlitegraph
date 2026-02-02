@@ -26,6 +26,13 @@
 //! - [`nodes_by_degree`] - Rank nodes by degree (hub detection)
 //! - [`topological_sort`] - Compute topological ordering of nodes in DAGs
 //!
+//! ## Dependency Analysis
+//!
+//! - [`critical_path`] - Longest weighted path in DAG for bottleneck identification
+//! - [`critical_path_with_progress`] - Critical path with progress tracking
+//! - [`CriticalPathResult`] - Result with path, distance, bottlenecks, slack
+//! - [`CriticalPathError`] - Error for non-DAG graphs
+//!
 //! ## Reachability Analysis
 //!
 //! - [`transitive_closure`] - Compute all-pairs reachability (can reach relationships)
@@ -85,6 +92,7 @@
 //! | Transitive Closure | O(V × (V + E)) | All-pairs reachability | O(V²) space, use bounds for large graphs |
 //! | Transitive Reduction | O(V × (V + E)) | Graph simplification | Most meaningful for DAGs |
 //! | Topological Sort | O(V + E) | Linear ordering of DAGs | Requires DAG (returns cycle error) |
+//! | Critical Path | O(V + E) | Build systems, bottleneck identification | Requires DAG |
 //! | Reachability | O(V + E) | Impact analysis, slicing | None |
 //! | Dominators | O(V²) worst, faster in practice | CFG analysis, SSA construction | Requires single entry |
 //! | Post-Dominators | O(V²) worst, faster in practice | CFG analysis, control dependence | Requires single exit or virtual exit |
@@ -218,6 +226,7 @@
 //! - [`natural_loops_with_progress`]
 //! - [`enumerate_paths_with_progress`]
 //! - [`enumerate_paths_with_dominance_progress`]
+//! - [`critical_path_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -237,6 +246,12 @@ pub use structure::{connected_components, find_cycles_limited, nodes_by_degree};
 pub use scc::{strongly_connected_components, SccResult};
 pub use wcc::{weakly_connected_components, weakly_connected_components_with_progress};
 pub use topological_sort::{topological_sort, TopoError};
+
+// Dependency analysis algorithms
+pub use critical_path::{
+    critical_path, critical_path_with_progress, CriticalPathError, CriticalPathResult,
+    default_weight_fn, WeightCallback,
+};
 
 // Reachability analysis algorithms
 pub use transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds};
@@ -276,6 +291,7 @@ pub use path_enumeration::{
 mod centrality;
 mod community;
 mod control_dependence;
+mod critical_path;
 mod dominance_frontiers;
 mod dominators;
 mod natural_loops;
