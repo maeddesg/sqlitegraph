@@ -127,6 +127,13 @@
 //! Note: [`WeightCallback`] and [`default_weight_fn`] are re-exported from the
 //! dependency analysis section for use with impact radius computation.
 //!
+//! ## ML / Inference
+//!
+//! - [`find_subgraph_patterns`] - Bounded subgraph isomorphism for pattern matching
+//! - [`find_subgraph_patterns_with_progress`] - Subgraph isomorphism with progress tracking
+//! - [`SubgraphPatternBounds`] - Configuration for bounds (max_matches, timeout_ms, max_pattern_nodes)
+//! - [`SubgraphMatchResult`] - Result with matches, patterns_found, computation_time_ms, bounded_hit
+//!
 //! # Algorithm Characteristics
 //!
 //! | Algorithm | Time Complexity | Best For | Limitations |
@@ -287,6 +294,7 @@
 //! - [`cycle_basis_with_progress`]
 //! - [`backward_slice_with_progress`]
 //! - [`forward_slice_with_progress`]
+//! - [`find_subgraph_patterns_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -378,6 +386,12 @@ pub use observability::{
 };
 // WeightCallback and default_weight_fn are re-exported from critical_path module
 
+// Subgraph isomorphism algorithms
+pub use subgraph_isomorphism::{
+    find_subgraph_patterns, find_subgraph_patterns_with_progress, SubgraphMatchResult,
+    SubgraphPatternBounds,
+};
+
 // Module declarations
 mod call_graph_analysis;
 mod centrality;
@@ -396,6 +410,7 @@ mod program_slicing;
 mod reachability;
 mod scc;
 mod structure;
+mod subgraph_isomorphism;
 mod topological_sort;
 mod transitive_closure;
 mod transitive_reduction;

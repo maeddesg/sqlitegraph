@@ -43,6 +43,10 @@ use super::{
         PathEnumerationConfig, PathEnumerationDominanceConfig, PathEnumerationPruningStats,
         PathEnumerationResult,
     },
+    subgraph_isomorphism::{
+        find_subgraph_patterns, find_subgraph_patterns_with_progress, SubgraphMatchResult,
+        SubgraphPatternBounds,
+    },
 };
 
 #[test]
@@ -3374,6 +3378,278 @@ fn test_enumerate_paths_with_dominance_progress_integration() {
 
     assert!(!result.paths.is_empty());
     assert!(result.pruning_stats.is_some());
+}
+
+// Subgraph Isomorphism Tests
+
+#[test]
+fn test_subgraph_isomorphism_simple_chain() {
+    // Scenario: Find 2-node chain in 4-node path (should find 3 matches)
+    // Expected: Returns 3 matches for positions (0,1), (1,2), (2,3)
+    let graph = create_test_graph();
+
+    // Create path: 0 -> 1 -> 2 -> 3
+    let ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+    for i in 0..3 {
+        graph
+            .insert_edge(ids[i], ids[i + 1], "edge".into(), vec![])
+            .expect("Failed to add edge");
+    }
+
+    // Create pattern: 2-node chain
+    let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
+    pattern
+        .insert_node(GraphEntityCreate {
+            labels: vec!["pattern".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert pattern node");
+    pattern
+        .insert_node(GraphEntityCreate {
+            labels: vec!["pattern".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert pattern node");
+
+    let pattern_ids: Vec<i64> = pattern.list_entity_ids().expect("Failed to get pattern IDs");
+    pattern
+        .insert_edge(pattern_ids[0], pattern_ids[1], "edge".into(), vec![])
+        .expect("Failed to add pattern edge");
+
+    let bounds = SubgraphPatternBounds::default();
+    let result = find_subgraph_patterns(&graph, &pattern, bounds).expect("Search failed");
+
+    assert_eq!(result.patterns_found, 3);
+    assert!(!result.is_empty());
+    assert!(!result.bounded_hit);
+}
+
+#[test]
+fn test_subgraph_isomorphism_max_matches() {
+    // Scenario: Verify max_matches bound stops enumeration
+    // Expected: Returns at most max_matches results
+    let graph = create_test_graph();
+
+    // Create path: 0 -> 1 -> 2 -> ... -> 9 (10 nodes)
+    let ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+    for i in 0..9 {
+        graph
+            .insert_edge(ids[i], ids[i + 1], "edge".into(), vec![])
+            .expect("Failed to add edge");
+    }
+
+    // Create pattern: 2-node chain
+    let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
+    pattern
+        .insert_node(GraphEntityCreate {
+            labels: vec!["pattern".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert pattern node");
+    pattern
+        .insert_node(GraphEntityCreate {
+            labels: vec!["pattern".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert pattern node");
+
+    let pattern_ids: Vec<i64> = pattern.list_entity_ids().expect("Failed to get pattern IDs");
+    pattern
+        .insert_edge(pattern_ids[0], pattern_ids[1], "edge".into(), vec![])
+        .expect("Failed to add pattern edge");
+
+    let bounds = SubgraphPatternBounds {
+        max_matches: Some(3),
+        ..Default::default()
+    };
+    let result = find_subgraph_patterns(&graph, &pattern, bounds).expect("Search failed");
+
+    // Should find at most 3 matches due to bound
+    assert!(result.patterns_found <= 3);
+    assert!(result.bounded_hit); // Should hit the bound
+}
+
+#[test]
+fn test_subgraph_isomorphism_empty_result() {
+    // Scenario: No matches when pattern not in target
+    // Expected: Returns empty result
+    let graph = create_test_graph();
+
+    // Create path: 0 -> 1 -> 2
+    let ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+    for i in 0..2 {
+        graph
+            .insert_edge(ids[i], ids[i + 1], "edge".into(), vec![])
+            .expect("Failed to add edge");
+    }
+
+    // Create pattern: triangle (3-node cycle)
+    let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
+    for _ in 0..3 {
+        pattern
+            .insert_node(GraphEntityCreate {
+                labels: vec!["pattern".into()],
+                properties: vec![],
+            })
+            .expect("Failed to insert pattern node");
+    }
+
+    let pattern_ids: Vec<i64> = pattern.list_entity_ids().expect("Failed to get pattern IDs");
+    // Create triangle edges
+    for (from, to) in &[(0, 1), (1, 2), (2, 0)] {
+        pattern
+            .insert_edge(pattern_ids[*from], pattern_ids[*to], "edge".into(), vec![])
+            .expect("Failed to add pattern edge");
+    }
+
+    let bounds = SubgraphPatternBounds::default();
+    let result = find_subgraph_patterns(&graph, &pattern, bounds).expect("Search failed");
+
+    assert_eq!(result.patterns_found, 0);
+    assert!(result.is_empty());
+    assert!(result.first_match().is_none());
+}
+
+#[test]
+fn test_subgraph_isomorphism_progress() {
+    // Scenario: Verify progress callback is called
+    // Expected: Progress callback reports progress during search
+    use crate::progress::NoProgress;
+
+    let graph = create_test_graph();
+
+    // Create path: 0 -> 1 -> 2 -> 3 -> 4
+    let ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+    for i in 0..4 {
+        graph
+            .insert_edge(ids[i], ids[i + 1], "edge".into(), vec![])
+            .expect("Failed to add edge");
+    }
+
+    // Create pattern: 2-node chain
+    let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
+    pattern
+        .insert_node(GraphEntityCreate {
+            labels: vec!["pattern".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert pattern node");
+    pattern
+        .insert_node(GraphEntityCreate {
+            labels: vec!["pattern".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert pattern node");
+
+    let pattern_ids: Vec<i64> = pattern.list_entity_ids().expect("Failed to get pattern IDs");
+    pattern
+        .insert_edge(pattern_ids[0], pattern_ids[1], "edge".into(), vec![])
+        .expect("Failed to add pattern edge");
+
+    let bounds = SubgraphPatternBounds::default();
+    let progress = NoProgress;
+    let result =
+        find_subgraph_patterns_with_progress(&graph, &pattern, bounds, &progress)
+            .expect("Search with progress failed");
+
+    // Should still find the matches
+    assert_eq!(result.patterns_found, 4); // 4 matches in 5-node path
+}
+
+#[test]
+fn test_subgraph_pattern_bounds_builder() {
+    // Scenario: Verify builder pattern methods chain correctly
+    // Expected: All builder methods return Self with correct values
+    let bounds = SubgraphPatternBounds::new()
+        .with_max_matches(100)
+        .with_timeout(5000)
+        .with_max_pattern_nodes(10);
+
+    assert_eq!(bounds.max_matches, Some(100));
+    assert_eq!(bounds.timeout_ms, Some(5000));
+    assert_eq!(bounds.max_pattern_nodes, Some(10));
+    assert!(bounds.is_bounded());
+}
+
+#[test]
+fn test_subgraph_match_result_helpers() {
+    // Scenario: Verify helper methods work correctly
+    // Expected: is_empty(), count(), first_match() return correct values
+    let result_empty = SubgraphMatchResult {
+        matches: vec![],
+        patterns_found: 0,
+        computation_time_ms: 50,
+        bounded_hit: false,
+    };
+
+    assert!(result_empty.is_empty());
+    assert_eq!(result_empty.count(), 0);
+    assert!(result_empty.first_match().is_none());
+
+    let result_with_data = SubgraphMatchResult {
+        matches: vec![vec![1, 2], vec![2, 3]],
+        patterns_found: 2,
+        computation_time_ms: 100,
+        bounded_hit: false,
+    };
+
+    assert!(!result_with_data.is_empty());
+    assert_eq!(result_with_data.count(), 2);
+    assert_eq!(result_with_data.first_match(), Some(&[1, 2][..]));
+}
+
+#[test]
+fn test_subgraph_isomorphism_single_node_pattern() {
+    // Scenario: Single node pattern (edge case)
+    // Expected: Matches all nodes in target graph
+    let graph = create_test_graph();
+
+    // Create single node pattern
+    let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
+    pattern
+        .insert_node(GraphEntityCreate {
+            labels: vec!["pattern".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert pattern node");
+
+    let bounds = SubgraphPatternBounds::default();
+    let result = find_subgraph_patterns(&graph, &pattern, bounds).expect("Search failed");
+
+    // Single node should match all nodes in target
+    assert_eq!(result.patterns_found, 10); // 10 nodes in test graph
+}
+
+#[test]
+fn test_subgraph_isomorphism_pattern_larger_than_target() {
+    // Scenario: Pattern has more nodes than target graph
+    // Expected: Returns empty result (pattern can't fit)
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+    for _ in 0..2 {
+        graph
+            .insert_node(GraphEntityCreate {
+                labels: vec!["node".into()],
+                properties: vec![],
+            })
+            .expect("Failed to insert node");
+    }
+
+    // Create pattern with 3 nodes
+    let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
+    for _ in 0..3 {
+        pattern
+            .insert_node(GraphEntityCreate {
+                labels: vec!["pattern".into()],
+                properties: vec![],
+            })
+            .expect("Failed to insert pattern node");
+    }
+
+    let bounds = SubgraphPatternBounds::default();
+    let result = find_subgraph_patterns(&graph, &pattern, bounds).expect("Search failed");
+
+    assert_eq!(result.patterns_found, 0);
+    assert!(result.is_empty());
 }
 
 

@@ -38,13 +38,13 @@ binrw = "0.13"
 memmap2 = "0.9"
 log = "0.4"
 rayon = "1.10"
+petgraph = "0.6"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 assert_cmd = "2"
 tempfile = "3"
 rand = "0.8"
-petgraph = "0.6"
 
 
 [features]

@@ -53,9 +53,15 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use petgraph::algo::isomorphism::{self, NodeMatch};
+// Import petgraph types - use fully qualified paths to avoid ambiguity
+use petgraph::algo::isomorphism;
+use petgraph::graph::{DefaultIx, Graph, NodeIndex};
+use petgraph::Directed;
 
 use crate::{errors::SqliteGraphError, graph::SqliteGraph, progress::ProgressCallback};
+
+// Type alias using imported types
+type PgDiGraph = Graph<i64, (), Directed, DefaultIx>;
 
 /// Bounds for limiting subgraph isomorphism search.
 ///
@@ -222,14 +228,14 @@ impl SubgraphMatchResult {
 /// petgraph::DiGraph with:
 /// - Nodes: i64 entity IDs from the original graph
 /// - Edges: () (unweighted, preserving direction)
-fn graph_to_petgraph(graph: &SqliteGraph) -> Result<petgraph::DiGraph<i64, ()>, SqliteGraphError> {
+fn graph_to_petgraph(graph: &SqliteGraph) -> Result<PgDiGraph, SqliteGraphError> {
     let entity_ids = graph.all_entity_ids()?;
 
     // Create directed graph with entity IDs as node indices
-    let mut pg = petgraph::DiGraph::<i64, ()>::new();
+    let mut pg = PgDiGraph::new();
 
     // Map entity IDs to petgraph node indices
-    let mut id_to_index: HashMap<i64, petgraph::graph::NodeIndex> = HashMap::new();
+    let mut id_to_index: HashMap<i64, NodeIndex> = HashMap::new();
 
     for &id in &entity_ids {
         let idx = pg.add_node(id);
@@ -346,7 +352,7 @@ pub fn find_subgraph_patterns(
     // Check max_pattern_nodes bound
     if let Some(max_nodes) = bounds.max_pattern_nodes {
         if pattern_count > max_nodes {
-            return Err(SqliteGraphError::computation(format!(
+            return Err(SqliteGraphError::invalid_input(format!(
                 "Pattern too large: {} nodes exceeds max_pattern_nodes bound of {}",
                 pattern_count, max_nodes
             )));
@@ -354,66 +360,68 @@ pub fn find_subgraph_patterns(
     }
 
     // Convert both graphs to petgraph
-    let target_pg = graph_to_petgraph(graph)?;
-    let pattern_pg = graph_to_petgraph(pattern)?;
+    let target_pg: PgDiGraph = graph_to_petgraph(graph)?;
+    let pattern_pg: PgDiGraph = graph_to_petgraph(pattern)?;
+
+    // Collect target node IDs in index order
+    let target_node_ids: Vec<i64> = target_pg.node_indices().map(|ni| target_pg[ni]).collect();
+    let pattern_node_ids: Vec<i64> = pattern_pg.node_indices().map(|ni| pattern_pg[ni]).collect();
 
     // Use petgraph's subgraph_isomorphisms_iter
-    // Default node_match: all nodes match
-    // Default edge_match: all edges match
     let mut matches = Vec::new();
     let mut bounded_hit = false;
 
     let timeout = bounds.timeout_ms.map(|ms| std::time::Duration::from_millis(ms));
 
-    // Collect pattern node IDs in order for consistent mapping
-    let pattern_node_ids: Vec<i64> = pattern_pg.node_indices().map(|ni| pattern_pg[ni]).collect();
+    // petgraph's subgraph_isomorphisms_iter requires double references (&&Graph)
+    // because IntoEdgesDirected is implemented for &Graph, not Graph itself
+    // Following the pattern from petgraph tests: let a_ref = &a; iter(&a_ref, ...)
+    // We need &a_ref so that G0 = &Graph, which implements IntoEdgesDirected
+    let pattern_ref = &pattern_pg;
+    let target_ref = &target_pg;
+    let mut node_match = |_: &i64, _: &i64| -> bool { true };
+    let mut edge_match = |_: &(), _: &()| -> bool { true };
 
-    for isomorphism in isomorphism::subgraph_isomorphisms_iter(
-        &pattern_pg,
-        &target_pg,
-        // Node match: all nodes match (true for any pair)
-        || true,
-        // Edge match: all edges match (true for any pair)
-        || true,
-    ) {
-        // Check timeout
-        if let Some(to) = timeout {
-            if start_time.elapsed() >= to {
-                bounded_hit = true;
-                break;
+    let iso_iter = isomorphism::subgraph_isomorphisms_iter(
+        &pattern_ref,
+        &target_ref,
+        &mut node_match,
+        &mut edge_match,
+    );
+
+    if let Some(iso_iter) = iso_iter {
+        for mapping in iso_iter {
+            // Check timeout
+            if let Some(to) = timeout {
+                if start_time.elapsed() >= to {
+                    bounded_hit = true;
+                    break;
+                }
             }
-        }
 
-        // Check max_matches
-        if let Some(max) = bounds.max_matches {
-            if matches.len() >= max {
-                bounded_hit = true;
-                break;
+            // Check max_matches
+            if let Some(max) = bounds.max_matches {
+                if matches.len() >= max {
+                    bounded_hit = true;
+                    break;
+                }
             }
+
+            // mapping is Vec<usize> where pattern_idx -> target_idx
+            // Convert to entity IDs: pattern_node_ids[pattern_idx] -> target_node_ids[target_idx]
+            let match_mapping: Vec<i64> = mapping
+                .iter()
+                .map(|&target_idx| {
+                    if target_idx < target_node_ids.len() {
+                        target_node_ids[target_idx]
+                    } else {
+                        0 // Fallback (shouldn't happen)
+                    }
+                })
+                .collect();
+
+            matches.push(match_mapping);
         }
-
-        // Convert petgraph NodeIndex mapping to entity ID mapping
-        // isomorphism maps pattern NodeIndex -> target NodeIndex
-        // We need to map pattern index (0..n) -> target entity ID
-        let mut match_mapping = Vec::with_capacity(pattern_count);
-
-        for (pattern_idx, &pattern_id) in pattern_node_ids.iter().enumerate() {
-            // Find the petgraph node index for this pattern entity ID
-            let pattern_ni = pattern_pg
-                .node_indices()
-                .find(|&ni| pattern_pg[ni] == pattern_id)
-                .unwrap();
-
-            // Get the mapped target node index from isomorphism
-            if let Some(target_ni) = isomorphism.get(&pattern_ni) {
-                match_mapping.push(target_pg[*target_ni]);
-            } else {
-                // Pattern node not in mapping - shouldn't happen
-                match_mapping.push(0);
-            }
-        }
-
-        matches.push(match_mapping);
     }
 
     Ok(SubgraphMatchResult {
@@ -477,7 +485,7 @@ where
     // Check max_pattern_nodes bound
     if let Some(max_nodes) = bounds.max_pattern_nodes {
         if pattern_count > max_nodes {
-            return Err(SqliteGraphError::computation(format!(
+            return Err(SqliteGraphError::invalid_input(format!(
                 "Pattern too large: {} nodes exceeds max_pattern_nodes bound of {}",
                 pattern_count, max_nodes
             )));
@@ -485,8 +493,11 @@ where
     }
 
     // Convert both graphs to petgraph
-    let target_pg = graph_to_petgraph(graph)?;
-    let pattern_pg = graph_to_petgraph(pattern)?;
+    let target_pg: PgDiGraph = graph_to_petgraph(graph)?;
+    let pattern_pg: PgDiGraph = graph_to_petgraph(pattern)?;
+
+    // Collect target node IDs in index order
+    let target_node_ids: Vec<i64> = target_pg.node_indices().map(|ni| target_pg[ni]).collect();
 
     progress.on_progress(
         1,
@@ -497,59 +508,65 @@ where
     let start_time = Instant::now();
     let timeout = bounds.timeout_ms.map(|ms| std::time::Duration::from_millis(ms));
 
-    // Collect pattern node IDs in order for consistent mapping
-    let pattern_node_ids: Vec<i64> = pattern_pg.node_indices().map(|ni| pattern_pg[ni]).collect();
-
     let mut matches = Vec::new();
     let mut bounded_hit = false;
 
-    for isomorphism in isomorphism::subgraph_isomorphisms_iter(
-        &pattern_pg,
-        &target_pg,
-        || true,
-        || true,
-    ) {
-        // Check timeout
-        if let Some(to) = timeout {
-            if start_time.elapsed() >= to {
-                bounded_hit = true;
-                break;
+    // petgraph's subgraph_isomorphisms_iter requires double references (&&Graph)
+    // because IntoEdgesDirected is implemented for &Graph, not Graph itself
+    // Following the pattern from petgraph tests: let a_ref = &a; iter(&a_ref, ...)
+    // We need &a_ref so that G0 = &Graph, which implements IntoEdgesDirected
+    let pattern_ref = &pattern_pg;
+    let target_ref = &target_pg;
+    let mut node_match = |_: &i64, _: &i64| -> bool { true };
+    let mut edge_match = |_: &(), _: &()| -> bool { true };
+
+    let iso_iter = isomorphism::subgraph_isomorphisms_iter(
+        &pattern_ref,
+        &target_ref,
+        &mut node_match,
+        &mut edge_match,
+    );
+
+    if let Some(iso_iter) = iso_iter {
+        for mapping in iso_iter {
+            // Check timeout
+            if let Some(to) = timeout {
+                if start_time.elapsed() >= to {
+                    bounded_hit = true;
+                    break;
+                }
             }
-        }
 
-        // Check max_matches
-        if let Some(max) = bounds.max_matches {
-            if matches.len() >= max {
-                bounded_hit = true;
-                break;
+            // Check max_matches
+            if let Some(max) = bounds.max_matches {
+                if matches.len() >= max {
+                    bounded_hit = true;
+                    break;
+                }
             }
-        }
 
-        // Convert petgraph mapping to entity ID mapping
-        let mut match_mapping = Vec::with_capacity(pattern_count);
+            // Convert Vec<usize> mapping to entity IDs
+            let match_mapping: Vec<i64> = mapping
+                .iter()
+                .map(|&target_idx| {
+                    if target_idx < target_node_ids.len() {
+                        target_node_ids[target_idx]
+                    } else {
+                        0
+                    }
+                })
+                .collect();
 
-        for (pattern_idx, &pattern_id) in pattern_node_ids.iter().enumerate() {
-            let pattern_ni = pattern_pg
-                .node_indices()
-                .find(|&ni| pattern_pg[ni] == pattern_id)
-                .unwrap();
+            matches.push(match_mapping);
 
-            if let Some(target_ni) = isomorphism.get(&pattern_ni) {
-                match_mapping.push(target_pg[*target_ni]);
-            } else {
-                match_mapping.push(0);
+            // Report progress every 10 matches
+            if matches.len() % 10 == 0 {
+                progress.on_progress(
+                    2,
+                    Some(3),
+                    &format!("Found {} matches so far", matches.len()),
+                );
             }
-        }
-
-        matches.push(match_mapping);
-
-        // Report progress every 10 matches
-        if matches.len() % 10 == 0 {
-            progress.on_progress(
-                2,
-                Some(3),
-                &format!("Found {} matches so far", matches.len()),
-            );
         }
     }
 
