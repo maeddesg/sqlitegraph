@@ -45,11 +45,11 @@
 //! }
 //! ```
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use ahash::AHashMap;
 
-use crate::{errors::SqliteGraphError, graph::SqliteGraph};
+use crate::graph::SqliteGraph;
 
 /// Error type for topological sort.
 ///
@@ -193,7 +193,7 @@ pub fn topological_sort(graph: &SqliteGraph) -> Result<Vec<i64>, TopoError> {
     }
 
     for &node in &all_nodes {
-        for &target in graph
+        for target in graph
             .fetch_outgoing(node)
             .map_err(|e| TopoError::CycleDetected {
                 cycle: vec![],
@@ -207,7 +207,7 @@ pub fn topological_sort(graph: &SqliteGraph) -> Result<Vec<i64>, TopoError> {
     // Process nodes with zero in-degree
     let mut queue: VecDeque<i64> = in_degree
         .iter()
-        .filter(|(_, &deg)| deg == 0)
+        .filter(|(_, deg)| **deg == 0)
         .map(|(&node, _)| node)
         .collect();
 
@@ -215,7 +215,7 @@ pub fn topological_sort(graph: &SqliteGraph) -> Result<Vec<i64>, TopoError> {
 
     while let Some(node) = queue.pop_front() {
         result.push(node);
-        for &target in graph
+        for target in graph
             .fetch_outgoing(node)
             .map_err(|e| TopoError::CycleDetected {
                 cycle: vec![],
@@ -262,13 +262,13 @@ pub fn topological_sort(graph: &SqliteGraph) -> Result<Vec<i64>, TopoError> {
 /// 1. Pick any node from the SCC as start
 /// 2. Follow outgoing edges until we revisit a node
 /// 3. Extract the cycle portion from the path
-fn extract_cycle_path(graph: &SqliteGraph, scc: &ahash::AHashSet<i64>) -> Vec<i64> {
+fn extract_cycle_path(graph: &SqliteGraph, scc: &HashSet<i64>) -> Vec<i64> {
     // Pick any node from the SCC
     let &start = scc.iter().next().unwrap_or(&1);
 
     // DFS to find a path that returns to a node in the SCC
     let mut path = vec![start];
-    let mut visited = ahash::AHashSet::new();
+    let mut visited = HashSet::new();
     visited.insert(start);
 
     loop {
