@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 51 of 57 (Program Analysis & Tooling) — IN PROGRESS
-Status: Phase 51 Plan 02 COMPLETE - SCC collapse for call graph analysis
-Last activity: 2026-02-02 — Phase 51 Plan 02 complete (2/2 TBD: program slicing, SCC collapse - both done)
+Phase: 52 of 57 (Databases & Distributed Systems) — In Progress (Plan 1 of 2 complete)
+Status: Phase 52-01 COMPLETE - Min cut algorithms using Edmonds-Karp max-flow
+Last activity: 2026-02-02 — Phase 52-01 complete (min_st_cut, min_vertex_cut with vertex splitting)
 
-Progress: [████░░░░░░░] 38% of v1.14 (17/195 plans complete, 6/14 phases done, Phase 52 next)
+Progress: [█████████░░░] 40% of v1.14 (20/197 plans complete, 7/14 phases done, Phase 52-02 next)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 194 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02)
+- Total plans completed: 197 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01)
 - Average duration: ~20 min/plan
 - Total execution time: ~80 hours across v1.0-v1.14
 
@@ -34,7 +34,7 @@ Progress: [████░░░░░░░] 38% of v1.14 (17/195 plans complet
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (17/195 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (20/197 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete, 52-01 complete) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -44,6 +44,7 @@ Progress: [████░░░░░░░] 38% of v1.14 (17/195 plans complet
 - v1.14 phase 48: ~7 min/plan (2 plans complete)
 - v1.14 phase 49: ~9 min/plan (2 plans complete)
 - v1.14 phase 50: ~6 min/plan (2 plans complete)
+- v1.14 phase 51: ~7 min/plan (2 plans complete)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -95,6 +96,11 @@ Recent decisions affecting current work:
 - **Bidirectional SCC mappings:** Provide both node_to_supernode and supernode_members for efficient queries in both directions; enables reversible collapse
 - **Condensation graph edge deduplication:** Use AHashSet during construction, then sort/dedup final Vec for deterministic output; prevents duplicate edges between supernodes
 - **Condensation graph self-loop filtering:** Explicitly check from_supernode != to_supernode when adding edges; condensed graph is always acyclic by definition
+- **Edmonds-Karp over Dinic for max-flow:** Chose Edmonds-Karp (BFS-based, O(VE^2)) over Dinic (O(V^2E)) for simpler implementation despite worse theoretical complexity; sufficient for sparse graphs typical in sqlitegraph use cases
+- **Vertex splitting encoding:** Used x*2 for x_in, x*2+1 for x_out encoding to avoid collisions with original node IDs; source and sink remain unsplit for edge case simplicity
+- **Unit capacities for unweighted min-cut:** Each edge has capacity 1 for unweighted graph cut computation; weighted min-cut deferred to future phase (requires extracting weights from JSON data field)
+- **Self-loop filtering in flow networks:** Self-loops removed during flow network construction as they don't affect s-t connectivity in directed graphs
+- **Sparse adjacency for flow networks:** Used HashMap-based adjacency instead of dense matrix; sqlitegraph graphs are sparse so dense representation wastes memory
 
 ### Pending Todos
 
@@ -112,5 +118,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 51 Plan 02 (SCC Collapse for Call Graph Analysis). 4/4 tasks complete, collapse_sccs and collapse_sccs_with_progress implemented with SccCollapseResult type, bidirectional mappings, 16 comprehensive tests, full module documentation, mod.rs wiring complete.
+Stopped at: Phase 52-01 complete. Min cut algorithms implemented: min_st_cut, min_st_cut_with_progress, min_vertex_cut, min_vertex_cut_with_progress. Edmonds-Karp max-flow with BFS augmenting paths. Vertex splitting transformation (x_in/x_out encoding). 11 unit tests. Ready to proceed to Phase 52-02 (graph partitioning).
 Resume file: None
