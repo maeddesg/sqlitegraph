@@ -92,6 +92,12 @@
 //! - [`min_vertex_cut_with_progress`] - Minimum vertex cut with progress tracking
 //! - [`MinCutResult`] - Result of minimum edge cut computation
 //! - [`MinVertexCutResult`] - Result of minimum vertex cut computation
+//! - [`partition_bfs_level`] - BFS-level graph partitioning for sharding
+//! - [`partition_greedy`] - Greedy partitioning with boundary improvement
+//! - [`partition_kway`] - Size-bounded k-way partitioning
+//! - [`partition_kway_with_progress`] - K-way partitioning with progress tracking
+//! - [`PartitionConfig`] - Configuration for k-way partitioning
+//! - [`PartitionResult`] - Result of graph partitioning computation
 //!
 //! ## Path Analysis
 //!
@@ -133,6 +139,11 @@
 //! | SCC Collapse | O(V + E) | Call graph analysis, mutual recursion detection | None |
 //! | Path Enumeration | O(P × L) | Test coverage, symbolic execution | Bounds required for cyclic CFGs |
 //! | Path Enumeration (Dominance) | O(P² × L) amortized | Path pruning for complex CFGs | Requires dominators, control dependence, natural loops |
+//! | Min s-t Edge Cut | O(V × E²) | Fault tolerance, security boundaries | Requires connected source/sink |
+//! | Min Vertex Cut | O(V × E²) | Critical node identification | Requires connected source/sink |
+//! | BFS-Level Partitioning | O(V + E) | Graph sharding, locality | Local optimum based on seeds |
+//! | Greedy Partitioning | O(I × E) | Cut minimization | Local optimum (I = iterations) |
+//! | K-way Partitioning | O(V + E) | Multi-way sharding, load balancing | Requires k >= 2 |
 //!
 //! Where:
 //! - V = number of vertices
@@ -333,6 +344,8 @@ pub use call_graph_analysis::{
 pub use cut_partition::{
     min_st_cut, min_st_cut_with_progress, min_vertex_cut, min_vertex_cut_with_progress,
     MinCutResult, MinVertexCutResult,
+    partition_bfs_level, partition_greedy, partition_kway, partition_kway_with_progress,
+    PartitionConfig, PartitionResult,
 };
 
 // Path analysis algorithms

@@ -1,15 +1,29 @@
 //! Graph cut and partitioning algorithms.
 //!
-//! This module provides algorithms for computing minimum cuts in directed graphs,
-//! enabling fault tolerance analysis, security boundary analysis, and critical node
-//! identification for distributed systems design.
+//! This module provides algorithms for computing minimum cuts in directed graphs
+//! and partitioning graphs into subsets, enabling fault tolerance analysis,
+//! security boundary analysis, graph sharding for distributed systems, and
+//! critical node identification.
 //!
 //! # Available Algorithms
+//!
+//! ## Minimum Cut
 //!
 //! - [`min_st_cut`] - Minimum s-t edge cut (smallest set of edges whose removal disconnects source from target)
 //! - [`min_st_cut_with_progress`] - Minimum s-t edge cut with progress tracking
 //! - [`min_vertex_cut`] - Minimum vertex cut (smallest set of vertices whose removal disconnects source from target)
 //! - [`min_vertex_cut_with_progress`] - Minimum vertex cut with progress tracking
+//! - [`MinCutResult`] - Result of minimum edge cut computation
+//! - [`MinVertexCutResult`] - Result of minimum vertex cut computation
+//!
+//! ## Graph Partitioning
+//!
+//! - [`partition_bfs_level`] - BFS-level partitioning (level-based split using multi-source BFS)
+//! - [`partition_greedy`] - Greedy partitioning with iterative boundary improvement
+//! - [`partition_kway`] - Size-bounded k-way partitioning with balance constraints
+//! - [`partition_kway_with_progress`] - K-way partitioning with progress tracking
+//! - [`PartitionResult`] - Result of graph partitioning computation
+//! - [`PartitionConfig`] - Configuration for k-way partitioning
 //!
 //! # When to Use Cut Algorithms
 //!
@@ -165,6 +179,100 @@ pub struct MinVertexCutResult {
     pub sink_side: AHashSet<i64>,
     /// Number of vertices in the minimum vertex cut
     pub cut_size: usize,
+}
+
+// ============================================================================
+// Partitioning Result Types
+// ============================================================================
+
+/// Result of graph partitioning computation.
+///
+/// Represents a partitioning of a graph into k subsets, used for sharding,
+/// load balancing, and locality optimization in distributed systems.
+///
+/// # Fields
+///
+/// - `partitions`: Vector of partitions, each a set of node IDs
+/// - `cut_edges`: Edges crossing partition boundaries (communication cost)
+/// - `node_to_partition`: Mapping from node ID to partition index (0-based)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// # use sqlitegraph::algo::partition_kway;
+/// # use sqlitegraph::SqliteGraph;
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph ...
+/// let result = partition_kway(&graph, &PartitionConfig::default())?;
+///
+/// println!("Number of partitions: {}", result.partitions.len());
+/// println!("Cut edges (communication cost): {}", result.cut_edges.len());
+/// // Find which partition node 5 is in
+/// if let Some(&pidx) = result.node_to_partition.get(&5) {
+///     println!("Node 5 is in partition {}", pidx);
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartitionResult {
+    /// Vector of partitions, each a set of node IDs
+    pub partitions: Vec<AHashSet<i64>>,
+    /// Edges crossing partition boundaries (for communication cost analysis)
+    pub cut_edges: Vec<(i64, i64)>,
+    /// Node ID -> partition index mapping
+    pub node_to_partition: HashMap<i64, usize>,
+}
+
+/// Configuration for k-way partitioning.
+///
+/// Controls the behavior of [`partition_kway`] and [`partition_kway_with_progress`].
+///
+/// # Fields
+///
+/// - `k`: Number of partitions (default: 2)
+/// - `max_size`: Maximum nodes per partition for balance (default: usize::MAX)
+/// - `max_imbalance`: Allowed size deviation as ratio (default: 0.1 for 10%)
+/// - `seeds`: Optional seed nodes for each partition (indices 0..k)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// # use sqlitegraph::algo::PartitionConfig;
+/// // Balanced 4-way partitioning
+/// let config = PartitionConfig {
+///     k: 4,
+///     max_size: 100,
+///     max_imbalance: 0.15,  // Allow 15% imbalance
+///     seeds: None,  // Auto-select seeds by degree
+/// };
+///
+/// // Use specific seed nodes
+/// let config = PartitionConfig {
+///     k: 3,
+///     ..Default::default()
+/// };
+/// config.seeds = Some(vec![1, 5, 10]);  // Use these as seeds
+/// ```
+#[derive(Debug, Clone)]
+pub struct PartitionConfig {
+    /// Number of partitions (default: 2, must be >= 2)
+    pub k: usize,
+    /// Maximum nodes per partition (for balance, default: usize::MAX)
+    pub max_size: usize,
+    /// Maximum allowed size imbalance as ratio (default: 0.1 for 10%)
+    pub max_imbalance: f64,
+    /// Optional seed nodes for each partition (indices 0..k)
+    pub seeds: Option<Vec<i64>>,
+}
+
+impl Default for PartitionConfig {
+    fn default() -> Self {
+        Self {
+            k: 2,
+            max_size: usize::MAX,
+            max_imbalance: 0.1,
+            seeds: None,
+        }
+    }
 }
 
 // ============================================================================
@@ -1047,6 +1155,794 @@ where
 }
 
 // ============================================================================
+// Graph Partitioning Algorithms
+// ============================================================================
+
+/// Compute cut edges crossing partition boundaries.
+///
+/// Helper function that computes all edges where endpoints are in different partitions.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `node_to_partition` - Mapping from node ID to partition index
+///
+/// # Returns
+/// Vector of (from, to) tuples representing edges crossing partition boundaries.
+fn compute_cut_edges(
+    graph: &SqliteGraph,
+    node_to_partition: &HashMap<i64, usize>,
+) -> Vec<(i64, i64)> {
+    let mut cut_edges = Vec::new();
+
+    // Iterate through all nodes and their outgoing edges
+    let nodes_to_check: Vec<i64> = if let Ok(all_ids) = graph.all_entity_ids() {
+        all_ids
+    } else {
+        return cut_edges;
+    };
+
+    for &from_node in &nodes_to_check {
+        if let Ok(neighbors) = graph.fetch_outgoing(from_node) {
+            for &to_node in &neighbors {
+                // Check if endpoints are in different partitions
+                if let (Some(&from_partition), Some(&to_partition)) = (
+                    node_to_partition.get(&from_node),
+                    node_to_partition.get(&to_node),
+                ) {
+                    if from_partition != to_partition {
+                        cut_edges.push((from_node, to_node));
+                    }
+                }
+            }
+        }
+    }
+
+    cut_edges
+}
+
+/// Partition graph using BFS-level assignment.
+///
+/// Runs multi-source BFS from seed nodes, assigning each node to the partition
+/// of the seed that reaches it first (by BFS level). Ties are broken by
+/// choosing the partition with the smallest seed ID.
+///
+/// # Arguments
+/// * `graph` - The graph to partition
+/// * `seeds` - Seed node IDs for each partition (one per partition)
+/// * `k` - Number of partitions to create
+///
+/// # Returns
+/// `PartitionResult` containing k partitions, cut edges, and node mapping.
+///
+/// # Errors
+/// Returns error if graph traversal fails.
+///
+/// # Algorithm
+/// 1. Initialize k partitions with seed nodes
+/// 2. Run multi-source BFS: all seeds in queue at level 0
+/// 3. For each node discovered, assign to partition of first seed to reach it
+/// 4. Compute cut edges from partition assignments
+///
+/// # Complexity
+/// - **Time**: O(|V| + |E|) - single BFS pass
+/// - **Space**: O(|V|) for partition assignments and BFS queue
+///
+/// # Edge Cases
+/// - **Empty seeds**: Use first k nodes by ID as seeds
+/// - **seeds.len() > k**: Use only first k seeds
+/// - **seeds.len() < k**: Create empty partitions to match k
+/// - **Disconnected components**: Each component assigned to nearest seed
+///
+/// # Example
+///
+/// ```rust,ignore
+/// # use sqlitegraph::algo::partition_bfs_level;
+/// # use sqlitegraph::SqliteGraph;
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph ...
+///
+/// // 2-way partition using nodes 1 and 5 as seeds
+/// let result = partition_bfs_level(&graph, vec![1, 5], 2)?;
+///
+/// println!("Partition 0: {:?}, Partition 1: {:?}", result.partitions[0], result.partitions[1]);
+/// println!("Cut edges: {}", result.cut_edges.len());
+/// ```
+pub fn partition_bfs_level(
+    graph: &SqliteGraph,
+    seeds: Vec<i64>,
+    k: usize,
+) -> Result<PartitionResult, SqliteGraphError> {
+    // Validate k
+    if k < 2 {
+        return Ok(PartitionResult {
+            partitions: vec![AHashSet::new()],
+            cut_edges: vec![],
+            node_to_partition: HashMap::new(),
+        });
+    }
+
+    // Get all nodes in graph
+    let all_nodes: AHashSet<i64> = graph.all_entity_ids()?.into_iter().collect();
+
+    // Handle empty graph
+    if all_nodes.is_empty() {
+        return Ok(PartitionResult {
+            partitions: vec![AHashSet::new(); k],
+            cut_edges: vec![],
+            node_to_partition: HashMap::new(),
+        });
+    }
+
+    // Determine seeds to use
+    let mut effective_seeds = seeds;
+    if effective_seeds.is_empty() {
+        // Use first k nodes by ID as seeds
+        let mut sorted_nodes: Vec<i64> = all_nodes.iter().copied().collect();
+        sorted_nodes.sort();
+        effective_seeds = sorted_nodes.into_iter().take(k).collect();
+    }
+    // Truncate if too many seeds
+    effective_seeds.truncate(k.min(effective_seeds.len()));
+
+    // Initialize partitions
+    let num_partitions = k.max(effective_seeds.len());
+    let mut partitions: Vec<AHashSet<i64>> = (0..num_partitions).map(|_| AHashSet::new()).collect();
+    let mut node_to_partition: HashMap<i64, usize> = HashMap::new();
+
+    // Multi-source BFS: track (node, level, seed_index)
+    let mut queue: VecDeque<(i64, usize, usize)> = VecDeque::new();
+    let mut visited: AHashSet<i64> = AHashSet::new();
+
+    // Initialize with all seeds at level 0
+    for (seed_idx, &seed) in effective_seeds.iter().enumerate() {
+        if all_nodes.contains(&seed) {
+            partitions[seed_idx].insert(seed);
+            node_to_partition.insert(seed, seed_idx);
+            visited.insert(seed);
+            queue.push_back((seed, 0, seed_idx));
+        }
+    }
+
+    // BFS assignment
+    while let Some((node, _level, seed_idx)) = queue.pop_front() {
+        // Explore neighbors
+        if let Ok(neighbors) = graph.fetch_outgoing(node) {
+            for &neighbor in &neighbors {
+                if visited.insert(neighbor) {
+                    // Assign to this seed's partition
+                    partitions[seed_idx].insert(neighbor);
+                    node_to_partition.insert(neighbor, seed_idx);
+                    queue.push_back((neighbor, 0, seed_idx));
+                }
+            }
+        }
+    }
+
+    // Ensure we have exactly k partitions
+    while partitions.len() < k {
+        partitions.push(AHashSet::new());
+    }
+
+    // Compute cut edges
+    let cut_edges = compute_cut_edges(graph, &node_to_partition);
+
+    Ok(PartitionResult {
+        partitions,
+        cut_edges,
+        node_to_partition,
+    })
+}
+
+/// Partition graph using greedy iterative boundary improvement.
+///
+/// Starts with an initial partition (2-way) and iteratively moves boundary
+/// nodes to the other partition if it reduces the cut size. Converges to
+/// a local minimum where no single-node move improves the cut.
+///
+/// # Arguments
+/// * `graph` - The graph to partition
+/// * `initial_partition` - Optional initial 2-partition (Vec of 2 AHashSets)
+/// * `max_iterations` - Maximum iterations for convergence (default: 100)
+///
+/// # Returns
+/// `PartitionResult` containing 2 partitions with minimized cut edges.
+///
+/// # Errors
+/// Returns error if graph traversal fails.
+///
+/// # Algorithm
+/// 1. If no initial partition, run BFS-level partitioning for initialization
+/// 2. Identify boundary nodes (nodes with edges to other partition)
+/// 3. For each boundary node, compute gain if moved to other partition:
+///    - gain = edges_to_other_partition - edges_within_current_partition
+/// 4. Move node with maximum positive gain
+/// 5. Repeat until no positive gains or max_iterations reached
+/// 6. Return best partition found
+///
+/// # Complexity
+/// - **Time**: O(I * |E|) where I = iterations until convergence
+/// - **Space**: O(|V|) for partition assignments and boundary tracking
+///
+/// # Edge Cases
+/// - **Empty initial_partition**: Runs BFS-level for initialization
+/// - **Single node graph**: Returns single partition with that node
+/// - **No improvement possible**: Returns initial partition unchanged
+///
+/// # Example
+///
+/// ```rust,ignore
+/// # use sqlitegraph::algo::partition_greedy;
+/// # use sqlitegraph::SqliteGraph;
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph ...
+///
+/// // Greedy partitioning with automatic initialization
+/// let result = partition_greedy(&graph, None, 100)?;
+///
+/// println!("Cut edges after refinement: {}", result.cut_edges.len());
+/// ```
+pub fn partition_greedy(
+    graph: &SqliteGraph,
+    initial_partition: Option<Vec<AHashSet<i64>>>,
+    max_iterations: usize,
+) -> Result<PartitionResult, SqliteGraphError> {
+    // Get all nodes in graph
+    let all_nodes: AHashSet<i64> = graph.all_entity_ids()?.into_iter().collect();
+
+    // Handle empty graph
+    if all_nodes.is_empty() {
+        return Ok(PartitionResult {
+            partitions: vec![AHashSet::new(), AHashSet::new()],
+            cut_edges: vec![],
+            node_to_partition: HashMap::new(),
+        });
+    }
+
+    // Initialize or use provided partition
+    let (mut partitions, mut node_to_partition) = if let Some(init) = initial_partition {
+        if init.len() < 2 {
+            // Need at least 2 partitions
+            let init_result = partition_bfs_level(graph, vec![], 2)?;
+            (init_result.partitions, init_result.node_to_partition)
+        } else {
+            // Use provided partition
+            let mut mapping = HashMap::new();
+            for (pidx, partition) in init.iter().enumerate() {
+                for &node in partition {
+                    mapping.insert(node, pidx);
+                }
+            }
+            (init, mapping)
+        }
+    } else {
+        // Initialize with BFS-level
+        let init_result = partition_bfs_level(graph, vec![], 2)?;
+        (init_result.partitions, init_result.node_to_partition)
+    };
+
+    // Ensure we have exactly 2 partitions
+    if partitions.len() != 2 {
+        partitions.resize(2, AHashSet::new());
+    }
+
+    let initial_cut_size = compute_cut_edges(graph, &node_to_partition).len();
+    let mut best_partitions = partitions.clone();
+    let mut best_mapping = node_to_partition.clone();
+    let mut best_cut_size = initial_cut_size;
+
+    // Greedy improvement iterations
+    for _iteration in 0..max_iterations {
+        let mut improvement_found = false;
+        let mut best_move: Option<(i64, usize, i64)> = None; // (node, from_partition, gain)
+        let mut best_gain: i64 = 0;
+
+        // Identify boundary nodes and compute gains
+        for &node in all_nodes.iter() {
+            if let Some(&from_partition) = node_to_partition.get(&node) {
+                let to_partition = 1 - from_partition; // Switch between 0 and 1
+
+                // Compute gain: edges crossing cut removed - new edges crossing cut added
+                let mut edges_to_other = 0i64;
+                let mut edges_within = 0i64;
+
+                if let Ok(neighbors) = graph.fetch_outgoing(node) {
+                    for &neighbor in &neighbors {
+                        if let Some(&neighbor_partition) = node_to_partition.get(&neighbor) {
+                            if neighbor_partition == to_partition {
+                                edges_to_other += 1;
+                            } else if neighbor_partition == from_partition && neighbor != node {
+                                edges_within += 1;
+                            }
+                        }
+                    }
+                }
+
+                let gain = edges_to_other - edges_within;
+
+                if gain > best_gain {
+                    best_gain = gain;
+                    best_move = Some((node, from_partition, gain));
+                    improvement_found = true;
+                }
+            }
+        }
+
+        if !improvement_found || best_gain <= 0 {
+            break; // No improvement, converged
+        }
+
+        // Apply the best move
+        if let Some((node, from_partition, _gain)) = best_move {
+            let to_partition = 1 - from_partition;
+
+            // Update partitions
+            partitions[from_partition].remove(&node);
+            partitions[to_partition].insert(node);
+
+            // Update mapping
+            node_to_partition.insert(node, to_partition);
+
+            // Check if this is the best so far
+            let current_cut_size = compute_cut_edges(graph, &node_to_partition).len();
+            if current_cut_size < best_cut_size {
+                best_cut_size = current_cut_size;
+                best_partitions = partitions.clone();
+                best_mapping = node_to_partition.clone();
+            }
+        }
+    }
+
+    // Compute final cut edges
+    let cut_edges = compute_cut_edges(graph, &best_mapping);
+
+    Ok(PartitionResult {
+        partitions: best_partitions,
+        cut_edges,
+        node_to_partition: best_mapping,
+    })
+}
+
+/// Select k seed nodes by degree (highest degree first).
+///
+/// Helper for k-way partitioning when seeds are not provided.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `k` - Number of seeds to select
+/// * `available_nodes` - Nodes to consider (already assigned nodes excluded)
+///
+/// # Returns
+/// Vector of k node IDs to use as seeds.
+fn select_seeds_by_degree(
+    graph: &SqliteGraph,
+    k: usize,
+    available_nodes: &AHashSet<i64>,
+) -> Vec<i64> {
+    let mut node_degrees: Vec<(i64, usize)> = Vec::new();
+
+    for &node in available_nodes {
+        if let Ok(outgoing) = graph.fetch_outgoing(node) {
+            let degree = outgoing.len();
+            node_degrees.push((node, degree));
+        }
+    }
+
+    // Sort by degree descending, take top k
+    node_degrees.sort_by(|a, b| b.1.cmp(&a.1));
+    node_degrees.truncate(k);
+    node_degrees.into_iter().map(|(node, _)| node).collect()
+}
+
+/// Compute shortest path distance from node to any node in target set.
+///
+/// Helper for k-way partitioning: assigns unassigned nodes to nearest partition.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `from` - Starting node ID
+/// * `targets` - Set of target node IDs
+///
+/// # Returns
+/// Minimum distance (number of edges) to any target, or usize::MAX if unreachable.
+fn shortest_distance_to_targets(
+    graph: &SqliteGraph,
+    from: i64,
+    targets: &AHashSet<i64>,
+) -> usize {
+    if targets.contains(&from) {
+        return 0;
+    }
+
+    let mut visited: AHashSet<i64> = AHashSet::new();
+    let mut queue: VecDeque<(i64, usize)> = VecDeque::new();
+
+    visited.insert(from);
+    queue.push_back((from, 0));
+
+    while let Some((node, dist)) = queue.pop_front() {
+        if let Ok(neighbors) = graph.fetch_outgoing(node) {
+            for &neighbor in &neighbors {
+                if targets.contains(&neighbor) {
+                    return dist + 1;
+                }
+                if visited.insert(neighbor) {
+                    queue.push_back((neighbor, dist + 1));
+                }
+            }
+        }
+    }
+
+    usize::MAX // Unreachable
+}
+
+/// Partition graph into k balanced partitions using BFS growth from seeds.
+///
+/// Creates k partitions by growing them from seed nodes using BFS while
+/// respecting size bounds. Unassigned nodes are assigned to their nearest
+/// partition by shortest path distance.
+///
+/// # Arguments
+/// * `graph` - The graph to partition
+/// * `config` - Partitioning configuration (k, max_size, max_imbalance, seeds)
+///
+/// # Returns
+/// `PartitionResult` containing k balanced partitions.
+///
+/// # Errors
+/// - Returns `SqliteGraphError::InvalidInput` if config.k < 2
+///
+/// # Algorithm
+/// 1. Validate config.k >= 2
+/// 2. Select seeds: use config.seeds or select k nodes by highest degree
+/// 3. Grow partitions using BFS while respecting max_size
+/// 4. For unassigned nodes: assign to nearest partition (shortest path)
+/// 5. Compute cut edges
+///
+/// # Complexity
+/// - **Time**: O(|V| + |E|) for single pass with size checks
+/// - **Space**: O(|V| + k) for partition assignments
+///
+/// # Example
+///
+/// ```rust,ignore
+/// # use sqlitegraph::algo::{partition_kway, PartitionConfig};
+/// # use sqlitegraph::SqliteGraph;
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph ...
+///
+/// // 4-way partition with size bounds
+/// let config = PartitionConfig {
+///     k: 4,
+///     max_size: 100,
+///     max_imbalance: 0.1,
+///     seeds: None,
+/// };
+/// let result = partition_kway(&graph, &config)?;
+///
+/// for (i, partition) in result.partitions.iter().enumerate() {
+///     println!("Partition {}: {} nodes", i, partition.len());
+/// }
+/// ```
+pub fn partition_kway(
+    graph: &SqliteGraph,
+    config: &PartitionConfig,
+) -> Result<PartitionResult, SqliteGraphError> {
+    if config.k < 2 {
+        return Err(SqliteGraphError::InvalidInput(
+            "k must be at least 2 for partitioning".to_string(),
+        ));
+    }
+
+    // Get all nodes in graph
+    let all_nodes: AHashSet<i64> = graph.all_entity_ids()?.into_iter().collect();
+
+    // Handle empty graph
+    if all_nodes.is_empty() {
+        return Ok(PartitionResult {
+            partitions: vec![AHashSet::new(); config.k],
+            cut_edges: vec![],
+            node_to_partition: HashMap::new(),
+        });
+    }
+
+    // Handle case where k > number of nodes
+    let effective_k = config.k.min(all_nodes.len());
+    let mut partitions: Vec<AHashSet<i64>> = (0..effective_k).map(|_| AHashSet::new()).collect();
+    let mut node_to_partition: HashMap<i64, usize> = HashMap::new();
+
+    // Select seeds
+    let seeds = if let Some(ref provided_seeds) = config.seeds {
+        provided_seeds.clone()
+    } else {
+        select_seeds_by_degree(graph, effective_k, &all_nodes)
+    };
+
+    // Truncate or pad seeds to match effective_k
+    let mut effective_seeds = seeds;
+    effective_seeds.truncate(effective_k);
+    while effective_seeds.len() < effective_k {
+        // Add remaining nodes as seeds if not enough
+        for &node in &all_nodes {
+            if !effective_seeds.contains(&node) {
+                effective_seeds.push(node);
+                if effective_seeds.len() >= effective_k {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Initialize target size for balance
+    let target_size = (all_nodes.len() / effective_k).max(1);
+    let max_allowed = if config.max_size == usize::MAX {
+        ((target_size as f64) * (1.0 + config.max_imbalance)) as usize
+    } else {
+        config.max_size.min(all_nodes.len())
+    };
+
+    // Initialize partitions with seeds and grow via BFS
+    let mut queue: VecDeque<(i64, usize)> = VecDeque::new(); // (node, partition_idx)
+    let mut unassigned: AHashSet<i64> = AHashSet::new();
+
+    // Add seeds to partitions and queue
+    for (pidx, &seed) in effective_seeds.iter().enumerate() {
+        if all_nodes.contains(&seed) {
+            partitions[pidx].insert(seed);
+            node_to_partition.insert(seed, pidx);
+            queue.push_back((seed, pidx));
+        }
+    }
+
+    // Mark remaining nodes as unassigned
+    for &node in &all_nodes {
+        if !node_to_partition.contains_key(&node) {
+            unassigned.insert(node);
+        }
+    }
+
+    // Grow partitions via BFS
+    while let Some((node, pidx)) = queue.pop_front() {
+        // Skip if partition is at max size
+        if partitions[pidx].len() >= max_allowed {
+            continue;
+        }
+
+        // Explore neighbors
+        if let Ok(neighbors) = graph.fetch_outgoing(node) {
+            for &neighbor in &neighbors {
+                if unassigned.remove(&neighbor) {
+                    partitions[pidx].insert(neighbor);
+                    node_to_partition.insert(neighbor, pidx);
+                    queue.push_back((neighbor, pidx));
+                }
+            }
+        }
+    }
+
+    // Assign remaining unassigned nodes to nearest partition
+    for &node in &unassigned {
+        let mut best_partition = 0;
+        let mut best_distance = usize::MAX;
+
+        for pidx in 0..effective_k {
+            // Get target nodes for this partition
+            let target_nodes: AHashSet<i64> = partitions[pidx].iter().copied().collect();
+            if target_nodes.is_empty() {
+                continue;
+            }
+
+            let distance = shortest_distance_to_targets(graph, node, &target_nodes);
+            if distance < best_distance {
+                best_distance = distance;
+                best_partition = pidx;
+            }
+        }
+
+        partitions[best_partition].insert(node);
+        node_to_partition.insert(node, best_partition);
+    }
+
+    // Pad partitions to exactly k if needed
+    while partitions.len() < config.k {
+        partitions.push(AHashSet::new());
+    }
+
+    // Compute cut edges
+    let cut_edges = compute_cut_edges(graph, &node_to_partition);
+
+    Ok(PartitionResult {
+        partitions,
+        cut_edges,
+        node_to_partition,
+    })
+}
+
+/// Partition graph into k balanced partitions with progress tracking.
+///
+/// Same algorithm as [`partition_kway`] but reports progress during execution.
+/// Useful for long-running operations on large graphs.
+///
+/// # Arguments
+/// * `graph` - The graph to partition
+/// * `config` - Partitioning configuration
+/// * `progress` - Progress callback for reporting execution status
+///
+/// # Returns
+/// `PartitionResult` containing k balanced partitions.
+///
+/// # Progress Reporting
+///
+/// The callback receives:
+/// - `current`: Current number of nodes assigned
+/// - `total`: Total number of nodes in graph
+/// - `message`: "K-way partition: assigned {current}/{total} nodes"
+///
+/// Progress is reported during BFS growth phase as nodes are assigned.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// # use sqlitegraph::{algo::partition_kway_with_progress, progress::ConsoleProgress, algo::PartitionConfig};
+/// let progress = ConsoleProgress::new();
+/// let config = PartitionConfig::default();
+/// let result = partition_kway_with_progress(&graph, &config, &progress)?;
+/// // Output: K-way partition: assigned 10/100 nodes...
+/// ```
+pub fn partition_kway_with_progress<F>(
+    graph: &SqliteGraph,
+    config: &PartitionConfig,
+    progress: &F,
+) -> Result<PartitionResult, SqliteGraphError>
+where
+    F: ProgressCallback,
+{
+    if config.k < 2 {
+        return Err(SqliteGraphError::InvalidInput(
+            "k must be at least 2 for partitioning".to_string(),
+        ));
+    }
+
+    // Get all nodes in graph
+    let all_nodes: AHashSet<i64> = graph.all_entity_ids()?.into_iter().collect();
+    let total_nodes = all_nodes.len();
+
+    // Handle empty graph
+    if all_nodes.is_empty() {
+        progress.on_complete();
+        return Ok(PartitionResult {
+            partitions: vec![AHashSet::new(); config.k],
+            cut_edges: vec![],
+            node_to_partition: HashMap::new(),
+        });
+    }
+
+    // Handle case where k > number of nodes
+    let effective_k = config.k.min(all_nodes.len());
+    let mut partitions: Vec<AHashSet<i64>> = (0..effective_k).map(|_| AHashSet::new()).collect();
+    let mut node_to_partition: HashMap<i64, usize> = HashMap::new();
+
+    // Select seeds
+    let seeds = if let Some(ref provided_seeds) = config.seeds {
+        provided_seeds.clone()
+    } else {
+        select_seeds_by_degree(graph, effective_k, &all_nodes)
+    };
+
+    // Truncate or pad seeds to match effective_k
+    let mut effective_seeds = seeds;
+    effective_seeds.truncate(effective_k);
+    while effective_seeds.len() < effective_k {
+        for &node in &all_nodes {
+            if !effective_seeds.contains(&node) {
+                effective_seeds.push(node);
+                if effective_seeds.len() >= effective_k {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Initialize target size for balance
+    let target_size = (all_nodes.len() / effective_k).max(1);
+    let max_allowed = if config.max_size == usize::MAX {
+        ((target_size as f64) * (1.0 + config.max_imbalance)) as usize
+    } else {
+        config.max_size.min(all_nodes.len())
+    };
+
+    // Initialize partitions with seeds and grow via BFS
+    let mut queue: VecDeque<(i64, usize)> = VecDeque::new();
+    let mut unassigned: AHashSet<i64> = AHashSet::new();
+    let mut assigned_count = 0;
+
+    // Add seeds to partitions and queue
+    for (pidx, &seed) in effective_seeds.iter().enumerate() {
+        if all_nodes.contains(&seed) {
+            partitions[pidx].insert(seed);
+            node_to_partition.insert(seed, pidx);
+            assigned_count += 1;
+            queue.push_back((seed, pidx));
+        }
+    }
+
+    // Mark remaining nodes as unassigned
+    for &node in &all_nodes {
+        if !node_to_partition.contains_key(&node) {
+            unassigned.insert(node);
+        }
+    }
+
+    // Grow partitions via BFS with progress reporting
+    while let Some((node, pidx)) = queue.pop_front() {
+        // Skip if partition is at max size
+        if partitions[pidx].len() >= max_allowed {
+            continue;
+        }
+
+        // Explore neighbors
+        if let Ok(neighbors) = graph.fetch_outgoing(node) {
+            for &neighbor in &neighbors {
+                if unassigned.remove(&neighbor) {
+                    partitions[pidx].insert(neighbor);
+                    node_to_partition.insert(neighbor, pidx);
+                    assigned_count += 1;
+                    queue.push_back((neighbor, pidx));
+
+                    // Report progress every 10 nodes
+                    if assigned_count % 10 == 0 {
+                        progress.on_progress(
+                            assigned_count,
+                            Some(total_nodes),
+                            &format!("K-way partition: assigned {}/{} nodes", assigned_count, total_nodes),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Assign remaining unassigned nodes to nearest partition
+    for &node in &unassigned {
+        let mut best_partition = 0;
+        let mut best_distance = usize::MAX;
+
+        for pidx in 0..effective_k {
+            let target_nodes: AHashSet<i64> = partitions[pidx].iter().copied().collect();
+            if target_nodes.is_empty() {
+                continue;
+            }
+
+            let distance = shortest_distance_to_targets(graph, node, &target_nodes);
+            if distance < best_distance {
+                best_distance = distance;
+                best_partition = pidx;
+            }
+        }
+
+        partitions[best_partition].insert(node);
+        node_to_partition.insert(node, best_partition);
+        assigned_count += 1;
+    }
+
+    // Report completion
+    progress.on_complete();
+
+    // Pad partitions to exactly k if needed
+    while partitions.len() < config.k {
+        partitions.push(AHashSet::new());
+    }
+
+    // Compute cut edges
+    let cut_edges = compute_cut_edges(graph, &node_to_partition);
+
+    Ok(PartitionResult {
+        partitions,
+        cut_edges,
+        node_to_partition,
+    })
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1439,5 +2335,612 @@ mod tests {
             "Three parallel paths should have vertex cut size 3"
         );
         assert_eq!(result.separator.len(), 3, "Should have 3 separator vertices");
+    }
+
+    // ============================================================================
+    // Tests for Graph Partitioning
+    // ============================================================================
+
+    /// Helper: Create path graph: 0 -> 1 -> 2 -> 3 -> 4
+    fn create_path_graph() -> SqliteGraph {
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        for i in 0..5 {
+            let entity = GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({"index": i}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        for i in 0..entity_ids.len().saturating_sub(1) {
+            let edge = GraphEdge {
+                id: 0,
+                from_id: entity_ids[i],
+                to_id: entity_ids[i + 1],
+                edge_type: "next".to_string(),
+                data: serde_json::json!({}),
+            };
+            graph.insert_edge(&edge).expect("Failed to insert edge");
+        }
+
+        graph
+    }
+
+    /// Helper: Create star graph with center connected to all leaves
+    fn create_star_graph(leaves: usize) -> SqliteGraph {
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        // Create center node
+        let center_entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: "center".to_string(),
+            file_path: Some("center.rs".to_string()),
+            data: serde_json::json!({}),
+        };
+        graph.insert_entity(&center_entity).expect("Failed to insert entity");
+
+        // Create leaf nodes
+        for i in 0..leaves {
+            let leaf_entity = GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("leaf_{}", i),
+                file_path: Some(format!("leaf_{}.rs", i)),
+                data: serde_json::json!({}),
+            };
+            graph.insert_entity(&leaf_entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        let center_id = entity_ids[0];
+
+        // Connect center to all leaves
+        for i in 1..entity_ids.len() {
+            let edge = GraphEdge {
+                id: 0,
+                from_id: center_id,
+                to_id: entity_ids[i],
+                edge_type: "edge".to_string(),
+                data: serde_json::json!({}),
+            };
+            graph.insert_edge(&edge).expect("Failed to insert edge");
+        }
+
+        graph
+    }
+
+    /// Helper: Create binary tree of height h
+    fn create_binary_tree(height: usize) -> SqliteGraph {
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        let num_nodes = 2_usize.pow(height as u32 + 1) - 1;
+        for i in 0..num_nodes {
+            let entity = GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({"index": i}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Create tree edges: node i has children 2i+1 and 2i+2
+        for i in 0..num_nodes / 2 {
+            let left_child = 2 * i + 1;
+            let right_child = 2 * i + 2;
+
+            if left_child < num_nodes {
+                let edge = GraphEdge {
+                    id: 0,
+                    from_id: entity_ids[i],
+                    to_id: entity_ids[left_child],
+                    edge_type: "left".to_string(),
+                    data: serde_json::json!({}),
+                };
+                graph.insert_edge(&edge).expect("Failed to insert edge");
+            }
+
+            if right_child < num_nodes {
+                let edge = GraphEdge {
+                    id: 0,
+                    from_id: entity_ids[i],
+                    to_id: entity_ids[right_child],
+                    edge_type: "right".to_string(),
+                    data: serde_json::json!({}),
+                };
+                graph.insert_edge(&edge).expect("Failed to insert edge");
+            }
+        }
+
+        graph
+    }
+
+    /// Helper: Create two cliques connected by single edge
+    fn create_two_cliques() -> SqliteGraph {
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        // Create clique 1: nodes 0, 1, 2
+        for i in 0..3 {
+            let entity = GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("c1_{}", i),
+                file_path: Some(format!("c1_{}.rs", i)),
+                data: serde_json::json!({"clique": 1}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        // Create clique 2: nodes 3, 4, 5
+        for i in 3..6 {
+            let entity = GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("c2_{}", i),
+                file_path: Some(format!("c2_{}.rs", i)),
+                data: serde_json::json!({"clique": 2}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Fully connect clique 1
+        for i in 0..3 {
+            for j in (i + 1)..3 {
+                let edge = GraphEdge {
+                    id: 0,
+                    from_id: entity_ids[i],
+                    to_id: entity_ids[j],
+                    edge_type: "intra".to_string(),
+                    data: serde_json::json!({}),
+                };
+                graph.insert_edge(&edge).expect("Failed to insert edge");
+            }
+        }
+
+        // Fully connect clique 2
+        for i in 3..6 {
+            for j in (i + 1)..6 {
+                let edge = GraphEdge {
+                    id: 0,
+                    from_id: entity_ids[i],
+                    to_id: entity_ids[j],
+                    edge_type: "intra".to_string(),
+                    data: serde_json::json!({}),
+                };
+                graph.insert_edge(&edge).expect("Failed to insert edge");
+            }
+        }
+
+        // Single edge between cliques
+        let bridge = GraphEdge {
+            id: 0,
+            from_id: entity_ids[1],
+            to_id: entity_ids[4],
+            edge_type: "bridge".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&bridge).expect("Failed to insert edge");
+
+        graph
+    }
+
+    // Tests for partition_bfs_level
+
+    #[test]
+    fn test_partition_bfs_level_path_graph() {
+        // Scenario: Path graph 0 -> 1 -> 2 -> 3 -> 4
+        // Expected: BFS splits near middle based on level assignment
+        let graph = create_path_graph();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let result = partition_bfs_level(&graph, vec![entity_ids[0], entity_ids[4]], 2)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+        assert_eq!(
+            result.partitions[0].len() + result.partitions[1].len(),
+            5,
+            "All nodes should be assigned"
+        );
+        // Cut edges should be minimal (ideally 1 for path graph)
+        assert!(result.cut_edges.len() <= 2, "Cut edges should be minimal");
+    }
+
+    #[test]
+    fn test_partition_bfs_level_star_graph() {
+        // Scenario: Star graph with center connected to leaves
+        // Expected: Center in one partition, leaves may split
+        let graph = create_star_graph(4);
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let result = partition_bfs_level(&graph, vec![entity_ids[0], entity_ids[2]], 2)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+        // All nodes should be assigned
+        assert_eq!(
+            result.partitions[0].len() + result.partitions[1].len(),
+            5,
+            "All nodes should be assigned"
+        );
+    }
+
+    #[test]
+    fn test_partition_bfs_level_binary_tree() {
+        // Scenario: Binary tree of height 2
+        // Expected: Level-based split separates at depth
+        let graph = create_binary_tree(2);
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let result = partition_bfs_level(&graph, vec![entity_ids[0], entity_ids[6]], 2)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+        assert_eq!(
+            result.partitions[0].len() + result.partitions[1].len(),
+            7,
+            "All nodes should be assigned"
+        );
+    }
+
+    #[test]
+    fn test_partition_bfs_level_disconnected() {
+        // Scenario: Disconnected graph (two components)
+        // Expected: Each component forms separate partition based on nearest seed
+        let (graph, node_a, node_b) = create_disconnected();
+
+        let result = partition_bfs_level(&graph, vec![node_a, node_b], 2)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+        // Nodes from different components should be in different partitions
+        assert!(
+            result.partitions.iter().all(|p| p.len() > 0),
+            "Each partition should have at least one node"
+        );
+    }
+
+    #[test]
+    fn test_partition_bfs_level_empty_seeds() {
+        // Scenario: No seeds provided
+        // Expected: Uses first k nodes by ID as seeds
+        let graph = create_path_graph();
+
+        let result = partition_bfs_level(&graph, vec![], 2)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+    }
+
+    // Tests for partition_greedy
+
+    #[test]
+    fn test_partition_greedy_two_cliques() {
+        // Scenario: Two cliques connected by single edge
+        // Expected: Greedy finds single cut edge
+        let graph = create_two_cliques();
+
+        let result = partition_greedy(&graph, None, 100)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+        assert_eq!(
+            result.partitions[0].len() + result.partitions[1].len(),
+            6,
+            "All nodes should be assigned"
+        );
+        // Cut edges should be minimal for two cliques
+        assert_eq!(result.cut_edges.len(), 1, "Should have exactly 1 cut edge");
+    }
+
+    #[test]
+    fn test_partition_greedy_cut_size_decreases() {
+        // Scenario: Greedy should improve initial partition
+        // Expected: Cut size decreases or stays same
+        let graph = create_binary_tree(2);
+
+        // Get initial partition from BFS
+        let initial = partition_bfs_level(&graph, vec![], 2).expect("Failed");
+        let initial_cut_size = initial.cut_edges.len();
+
+        // Apply greedy refinement
+        let result = partition_greedy(&graph, None, 100)
+            .expect("Failed to partition");
+
+        assert!(
+            result.cut_edges.len() <= initial_cut_size,
+            "Greedy should not increase cut size"
+        );
+    }
+
+    #[test]
+    fn test_partition_greedy_with_initial_partition() {
+        // Scenario: Provide initial partition
+        // Expected: Greedy refines the initial partition
+        let graph = create_path_graph();
+
+        let initial_partition = vec![
+            graph.all_entity_ids().unwrap().into_iter().take(2).collect(),
+            graph.all_entity_ids().unwrap().into_iter().skip(2).collect(),
+        ];
+
+        let result = partition_greedy(&graph, Some(initial_partition), 10)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+    }
+
+    // Tests for partition_kway
+
+    #[test]
+    fn test_partition_kway_balanced() {
+        // Scenario: 10 nodes, k=2, max_size=5
+        // Expected: Balanced partitions [5, 5]
+        let graph = create_path_graph(); // 5 nodes, will test with 10
+
+        // Create a larger graph for this test
+        let large_graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+        for i in 0..10 {
+            let entity = GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({"index": i}),
+            };
+            large_graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = large_graph.list_entity_ids().expect("Failed to get IDs");
+        for i in 0..entity_ids.len().saturating_sub(1) {
+            let edge = GraphEdge {
+                id: 0,
+                from_id: entity_ids[i],
+                to_id: entity_ids[i + 1],
+                edge_type: "next".to_string(),
+                data: serde_json::json!({}),
+            };
+            large_graph.insert_edge(&edge).expect("Failed to insert edge");
+        }
+
+        let config = PartitionConfig {
+            k: 2,
+            max_size: 5,
+            max_imbalance: 0.1,
+            seeds: None,
+        };
+
+        let result = partition_kway(&large_graph, &config)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+        // Check balance - each should have at most 5 nodes
+        for (i, partition) in result.partitions.iter().enumerate() {
+            assert!(
+                partition.len() <= 5,
+                "Partition {} should have at most 5 nodes, got {}",
+                i,
+                partition.len()
+            );
+        }
+    }
+
+    #[test]
+    fn test_partition_kway_three_way() {
+        // Scenario: 10 nodes, k=3, max_size=4
+        // Expected: Partitions like [4, 3, 3] or [4, 4, 2]
+        let graph = create_path_graph(); // 5 nodes
+
+        let config = PartitionConfig {
+            k: 3,
+            max_size: 4,
+            max_imbalance: 0.5, // Allow more imbalance for small graph
+            seeds: None,
+        };
+
+        let result = partition_kway(&graph, &config)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 3, "Should have 3 partitions");
+        // All nodes assigned
+        let total_assigned: usize = result.partitions.iter().map(|p| p.len()).sum();
+        assert_eq!(total_assigned, 5, "All 5 nodes should be assigned");
+    }
+
+    #[test]
+    fn test_partition_kway_with_isolated_node() {
+        // Scenario: Graph with isolated node
+        // Expected: Isolated node assigned to nearest partition
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        // Create connected component: 0 -> 1 -> 2
+        for i in 0..3 {
+            let entity = GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        // Create isolated node
+        let isolated = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: "isolated".to_string(),
+            file_path: Some("isolated.rs".to_string()),
+            data: serde_json::json!({}),
+        };
+        graph.insert_entity(&isolated).expect("Failed to insert entity");
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Connect first three nodes
+        for i in 0..2 {
+            let edge = GraphEdge {
+                id: 0,
+                from_id: entity_ids[i],
+                to_id: entity_ids[i + 1],
+                edge_type: "next".to_string(),
+                data: serde_json::json!({}),
+            };
+            graph.insert_edge(&edge).expect("Failed to insert edge");
+        }
+
+        let config = PartitionConfig {
+            k: 2,
+            max_size: usize::MAX,
+            max_imbalance: 0.1,
+            seeds: None,
+        };
+
+        let result = partition_kway(&graph, &config)
+            .expect("Failed to partition");
+
+        // All nodes should be assigned
+        let total_assigned: usize = result.partitions.iter().map(|p| p.len()).sum();
+        assert_eq!(total_assigned, 4, "All nodes including isolated should be assigned");
+    }
+
+    #[test]
+    fn test_partition_kway_with_seeds() {
+        // Scenario: Provide specific seed nodes
+        // Expected: Partitions grow from provided seeds
+        let graph = create_path_graph();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = PartitionConfig {
+            k: 2,
+            max_size: usize::MAX,
+            max_imbalance: 0.1,
+            seeds: Some(vec![entity_ids[0], entity_ids[4]]),
+        };
+
+        let result = partition_kway(&graph, &config)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
+        // First and last should be in different partitions
+        let p0 = result.node_to_partition.get(&entity_ids[0]);
+        let p4 = result.node_to_partition.get(&entity_ids[4]);
+        assert!(p0.is_some() && p4.is_some(), "All seeds should be assigned");
+        assert_ne!(p0, p4, "Seeds should be in different partitions");
+    }
+
+    #[test]
+    fn test_partition_kway_invalid_k() {
+        // Scenario: k < 2
+        // Expected: Returns error
+        let graph = create_path_graph();
+
+        let config = PartitionConfig {
+            k: 1, // Invalid
+            ..Default::default()
+        };
+
+        let result = partition_kway(&graph, &config);
+        assert!(result.is_err(), "Should return error for k < 2");
+    }
+
+    #[test]
+    fn test_partition_kway_with_progress_matches() {
+        // Scenario: Progress variant matches non-progress variant
+        // Expected: Same results
+        use crate::progress::NoProgress;
+
+        let graph = create_path_graph();
+        let config = PartitionConfig::default();
+
+        let progress = NoProgress;
+        let result_with = partition_kway_with_progress(&graph, &config, &progress)
+            .expect("Failed");
+        let result_without = partition_kway(&graph, &config)
+            .expect("Failed");
+
+        assert_eq!(
+            result_with.partitions.len(),
+            result_without.partitions.len(),
+            "Partition count should match"
+        );
+
+        let total_with: usize = result_with.partitions.iter().map(|p| p.len()).sum();
+        let total_without: usize = result_without.partitions.iter().map(|p| p.len()).sum();
+        assert_eq!(total_with, total_without, "Total assigned nodes should match");
+    }
+
+    #[test]
+    fn test_partition_result_consistency() {
+        // Scenario: Verify partition result internal consistency
+        // Expected: node_to_partition matches partitions
+        let graph = create_binary_tree(2);
+
+        let result = partition_bfs_level(&graph, vec![], 3)
+            .expect("Failed to partition");
+
+        // Verify node_to_partition is consistent with partitions
+        for (pidx, partition) in result.partitions.iter().enumerate() {
+            for &node in partition {
+                assert_eq!(
+                    result.node_to_partition.get(&node),
+                    Some(&pidx),
+                    "Node {} should map to partition {}",
+                    node,
+                    pidx
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_partition_empty_graph() {
+        // Scenario: Empty graph
+        // Expected: Returns empty partitions
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        let result = partition_bfs_level(&graph, vec![], 2)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 2, "Should have k partitions");
+        assert!(result.partitions.iter().all(|p| p.is_empty()), "All partitions should be empty");
+        assert!(result.cut_edges.is_empty(), "No cut edges for empty graph");
+    }
+
+    #[test]
+    fn test_partition_k_greater_than_nodes() {
+        // Scenario: k > number of nodes
+        // Expected: Some partitions will be empty
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        // Create only 3 nodes
+        for i in 0..3 {
+            let entity = GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let result = partition_bfs_level(&graph, vec![], 10)
+            .expect("Failed to partition");
+
+        assert_eq!(result.partitions.len(), 10, "Should have 10 partitions");
+        let non_empty_count = result.partitions.iter().filter(|p| !p.is_empty()).count();
+        assert_eq!(non_empty_count, 3, "Only 3 partitions should be non-empty");
     }
 }
