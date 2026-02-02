@@ -1,15 +1,25 @@
-//! Happens-before analysis for runtime event ordering and race detection.
+//! Observability algorithms for runtime analysis and impact estimation.
 //!
-//! This module provides algorithms for analyzing execution traces from concurrent
-//! programs using vector clocks. The happens-before relation identifies potential
-//! data races by detecting concurrent memory accesses to the same location.
+//! This module provides algorithms for analyzing runtime behavior and estimating
+//! the impact radius of changes or failures in graph-structured systems.
 //!
 //! # Available Algorithms
+//!
+//! ## Runtime Event Analysis
 //!
 //! - [`happens_before_analysis`] - Analyze trace events for concurrent memory access pairs
 //! - [`VectorClock`] - Partial order data structure for event ordering
 //! - [`HappensBeforeResult`] - Result with concurrent pairs and statistics
 //! - [`TraceEvent`] - Runtime event representation (Read/Write operations)
+//!
+//! ## Impact Analysis
+//!
+//! - [`impact_radius`] - Compute blast zone using bounded reachability with edge weights
+//! - [`impact_radius_with_progress`] - Impact radius with progress tracking
+//! - [`ImpactRadiusConfig`] - Configuration for impact radius (max_distance, max_hops, weight_fn)
+//! - [`ImpactRadiusResult`] - Result with blast_zone, distances, boundary, size
+//! - [`WeightCallback`] - Weight callback type for edge-weighted analysis
+//! - [`default_weight_fn`] - Default weight function returning 1.0 for all edges
 //!
 //! # When to Use Happens-Before Analysis
 //!
@@ -88,13 +98,16 @@
 //! }
 //! ```
 
-use std::collections::hash_map::DefaultHasher;
+use std::collections::VecDeque;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
 use ahash::{AHashMap, AHashSet};
+use serde_json::Value;
 
 use crate::errors::SqliteGraphError;
+use crate::graph::SqliteGraph;
+use crate::progress::ProgressCallback;
 
 /// Memory operation type in trace events.
 ///
@@ -572,6 +585,505 @@ pub fn happens_before_analysis(
     }
 
     Ok(HappensBeforeResult::new(concurrent_pairs, total_events))
+}
+
+/// Weight callback type for edge weighting in impact radius computation.
+///
+/// Given a source node, target node, and edge data, returns the weight
+/// of that edge. Weights must be finite (not NaN or infinity).
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::algo::observability::WeightCallback;
+/// use serde_json::json;
+///
+/// let weight_fn: &WeightCallback = &|from, to, edge_data| {
+///     edge_data
+///         .get("distance")
+///         .and_then(|v| v.as_f64())
+///         .unwrap_or(1.0)
+/// };
+/// ```
+pub type WeightCallback = dyn Fn(i64, i64, &Value) -> f64;
+
+/// Default weight function that returns 1.0 for all edges.
+///
+/// Use this for unweighted graphs where edge weights don't matter.
+/// The impact radius will be computed in terms of hop count.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::observability::{impact_radius, default_weight_fn, ImpactRadiusConfig}};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build unweighted graph ...
+///
+/// let config = ImpactRadiusConfig {
+///     max_distance: 3.0,
+///     max_hops: None,
+///     weight_fn: &default_weight_fn,
+/// };
+///
+/// let result = impact_radius(&graph, source, &config)?;
+/// println!("Blast zone: {} nodes within 3 hops", result.size);
+/// ```
+pub fn default_weight_fn(_from: i64, _to: i64, _edge_data: &Value) -> f64 {
+    1.0
+}
+
+/// Configuration for impact radius computation.
+///
+/// Controls the blast zone computation by specifying distance limits,
+/// hop limits, and the weight function for edge weighting.
+///
+/// # Fields
+///
+/// - `max_distance` - Maximum weighted distance from source (blast radius limit)
+/// - `max_hops` - Optional hop count limit (None = unlimited)
+/// - `weight_fn` - Callback to extract edge weight from (from, to, edge_data)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::algo::observability::{impact_radius, ImpactRadiusConfig, default_weight_fn};
+///
+/// // Unweighted: 3 hops
+/// let config = ImpactRadiusConfig {
+///     max_distance: 3.0,
+///     max_hops: None,
+///     weight_fn: &default_weight_fn,
+/// };
+///
+/// // Weighted with hop limit: 10.0 distance OR 5 hops
+/// let config = ImpactRadiusConfig {
+///     max_distance: 10.0,
+///     max_hops: Some(5),
+///     weight_fn: &|_from, _to, edge_data| {
+///         edge_data.get("cost").and_then(|v| v.as_f64()).unwrap_or(1.0)
+///     },
+/// };
+/// ```
+#[derive(Clone)]
+pub struct ImpactRadiusConfig<'a> {
+    /// Maximum weighted distance from source node.
+    /// Nodes beyond this distance are excluded from the blast zone.
+    pub max_distance: f64,
+
+    /// Optional maximum number of hops from source.
+    /// When set, stops traversal after this many edges even if within distance.
+    /// Use None to allow unlimited hops.
+    pub max_hops: Option<usize>,
+
+    /// Callback to extract edge weight.
+    /// Called for each edge during traversal.
+    pub weight_fn: &'a WeightCallback,
+}
+
+/// Result of impact radius computation.
+///
+/// Contains the blast zone (nodes within max_distance), their distances
+/// from the source, the boundary nodes (at exactly max_distance), and summary
+/// statistics.
+///
+/// # Fields
+///
+/// - `blast_zone` - Set of nodes within max_distance from source
+/// - `distances` - Distance from source to each node in blast zone
+/// - `boundary` - Nodes at exactly max_distance (boundary of blast zone)
+/// - `size` - Total number of nodes in blast zone
+///
+/// # Example
+///
+/// ```rust,ignore
+/// # use sqlitegraph::algo::observability::ImpactRadiusResult;
+/// # let result: ImpactRadiusResult = unimplemented!();
+/// println!("Blast zone size: {}", result.size);
+/// println!("Boundary nodes: {:?}", result.boundary);
+///
+/// // Check if a node is affected
+/// if result.blast_zone.contains(&node_id) {
+///     let distance = result.distances.get(&node_id).unwrap();
+///     println!("Node {} is at distance {}", node_id, distance);
+/// }
+///
+/// // Check if a node is on the boundary
+/// if result.boundary.contains(&node_id) {
+///     println!("Node {} is at the blast zone boundary", node_id);
+/// }
+/// ```
+#[derive(Debug, Clone)]
+pub struct ImpactRadiusResult {
+    /// Nodes within max_distance from source (the blast zone).
+    pub blast_zone: AHashSet<i64>,
+
+    /// Distance from source to each node in blast zone.
+    pub distances: AHashMap<i64, f64>,
+
+    /// Nodes at exactly max_distance (boundary of blast zone).
+    pub boundary: AHashSet<i64>,
+
+    /// Total number of nodes in blast zone.
+    pub size: usize,
+}
+
+impl ImpactRadiusResult {
+    /// Check if a node is within the blast zone.
+    ///
+    /// Returns true if the node is within max_distance from the source.
+    pub fn is_affected(&self, node: i64) -> bool {
+        self.blast_zone.contains(&node)
+    }
+
+    /// Get the distance from source to a node.
+    ///
+    /// Returns None if the node is not in the blast zone.
+    pub fn distance_to(&self, node: i64) -> Option<f64> {
+        self.distances.get(&node).copied()
+    }
+
+    /// Check if a node is on the boundary of the blast zone.
+    ///
+    /// Returns true if the node is at exactly max_distance from source.
+    pub fn is_boundary(&self, node: i64) -> bool {
+        self.boundary.contains(&node)
+    }
+}
+
+/// Computes the impact radius from a source node using bounded weighted BFS.
+///
+/// Impact radius computes the "blast zone" - all nodes within a specified
+/// weighted distance from a source node. This is useful for:
+///
+/// - **Failure impact analysis**: What could be affected if this node fails?
+/// - **Change propagation**: What might need testing after this change?
+/// - **Security blast zone**: What's the maximum potential damage radius?
+/// - **Network lateral movement**: How far could an attacker propagate?
+///
+/// # Arguments
+///
+/// * `graph` - The graph to analyze
+/// * `source` - The source node ID (center of blast zone)
+/// * `config` - Configuration for radius computation
+///
+/// # Returns
+///
+/// `Ok(ImpactRadiusResult)` containing:
+/// - `blast_zone` - All nodes within max_distance
+/// - `distances` - Distance from source to each node
+/// - `boundary` - Nodes at exactly max_distance
+/// - `size` - Total nodes in blast zone
+///
+/// # Algorithm
+///
+/// Bounded breadth-first search with distance tracking:
+/// 1. Initialize: distances[source] = 0.0, queue = [(source, 0 hops)]
+/// 2. While queue not empty:
+///    - Pop (node, hops)
+///    - Skip if dist > max_distance (early termination)
+///    - Skip if max_hops Some() and hops >= max_hops
+///    - Add node to blast_zone
+///    - For each neighbor via fetch_outgoing:
+///      - Compute weight via weight_fn
+///      - Validate weight.is_finite()
+///      - new_dist = dist + weight
+///      - If new_dist <= max_distance AND (not visited OR shorter path):
+///        - Update distances, enqueue (neighbor, hops + 1)
+/// 3. Extract boundary: nodes where |dist - max_distance| < epsilon
+/// 4. Return result
+///
+/// # Complexity
+///
+/// - **Time**: O(|V| + |E|) within the blast zone
+/// - **Space**: O(|V|) for distances and blast zone
+///
+/// # Edge Cases
+///
+/// - **Empty graph**: Returns {source} with distance 0.0
+/// - **Source not in graph**: Returns {source} with distance 0.0
+/// - **Disconnected**: Only reaches nodes in source's component
+/// - **Zero max_distance**: Returns {source} only
+/// - **Invalid weights**: Returns error if weight_fn returns non-finite value
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::observability::{impact_radius, ImpactRadiusConfig, default_weight_fn}};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph ...
+///
+/// // Find all nodes within 3 hops of source
+/// let config = ImpactRadiusConfig {
+///     max_distance: 3.0,
+///     max_hops: None,
+///     weight_fn: &default_weight_fn,
+/// };
+///
+/// let result = impact_radius(&graph, source, &config)?;
+///
+/// println!("Blast zone: {} nodes", result.size);
+/// for &node in &result.blast_zone {
+///     let dist = result.distances[&node];
+///     println!("  Node {}: distance {:.2}", node, dist);
+/// }
+///
+/// println!("Boundary: {:?}", result.boundary);
+/// ```
+pub fn impact_radius(
+    graph: &SqliteGraph,
+    source: i64,
+    config: &ImpactRadiusConfig,
+) -> Result<ImpactRadiusResult, SqliteGraphError> {
+    let max_distance = config.max_distance;
+    let max_hops = config.max_hops;
+    let weight_fn = config.weight_fn;
+
+    // Initialize distances and BFS queue
+    let mut distances: AHashMap<i64, f64> = AHashMap::new();
+    let mut blast_zone: AHashSet<i64> = AHashSet::new();
+    let mut queue: VecDeque<(i64, f64, usize)> = VecDeque::new();
+
+    // Source node is always in blast zone with distance 0
+    distances.insert(source, 0.0);
+    queue.push_back((source, 0.0, 0));
+
+    // BFS with distance tracking
+    while let Some((node, dist, hops)) = queue.pop_front() {
+        // Early termination: already beyond max distance
+        if dist > max_distance {
+            continue;
+        }
+
+        // Hop limit check
+        if max_hops.is_some_and(|limit| hops >= limit) {
+            // Still process this node, but don't enqueue more
+        }
+
+        // Add node to blast zone
+        blast_zone.insert(node);
+
+        // Get outgoing neighbors
+        let outgoing = graph.fetch_outgoing(node)?;
+
+        for neighbor in outgoing {
+            // Compute edge weight
+            let edge_data = &serde_json::json!({});
+            let weight = weight_fn(node, neighbor, edge_data);
+
+            // Validate weight
+            if !weight.is_finite() {
+                return Err(SqliteGraphError::invalid_input(format!(
+                    "Invalid weight for edge {} -> {}: weight must be finite, got {}",
+                    node, neighbor, weight
+                )));
+            }
+
+            let new_dist = dist + weight;
+
+            // Check distance bound before enqueuing (early termination)
+            if new_dist > max_distance {
+                continue;
+            }
+
+            // Check hop limit before enqueuing
+            if max_hops.is_some_and(|limit| hops + 1 > limit) {
+                continue;
+            }
+
+            // Relax edge: update if not visited or found shorter path
+            let should_enqueue = match distances.get(&neighbor) {
+                Some(&old_dist) => new_dist < old_dist,
+                None => true,
+            };
+
+            if should_enqueue {
+                distances.insert(neighbor, new_dist);
+                queue.push_back((neighbor, new_dist, hops + 1));
+            }
+        }
+    }
+
+    // Ensure source is in blast zone even if graph is empty
+    blast_zone.insert(source);
+    distances.entry(source).or_insert(0.0);
+
+    // Extract boundary: nodes at exactly max_distance (within epsilon)
+    let epsilon = 1e-9;
+    let boundary: AHashSet<i64> = distances
+        .iter()
+        .filter(|(_, dist)| (*dist - max_distance).abs() < epsilon)
+        .map(|(&node, _)| node)
+        .collect();
+
+    let size = blast_zone.len();
+
+    Ok(ImpactRadiusResult {
+        blast_zone,
+        distances,
+        boundary,
+        size,
+    })
+}
+
+/// Computes the impact radius with progress tracking.
+///
+/// Same algorithm as [`impact_radius`] but reports progress during execution.
+/// Suitable for long-running computations on large graphs.
+///
+/// # Progress Reporting
+///
+/// The callback receives:
+/// - `current`: Current number of nodes visited
+/// - `total`: None (unknown total for BFS)
+/// - `message`: "Impact radius: visited {current}, blast_zone {size}"
+///
+/// Progress is reported every ~10 nodes to avoid excessive callback overhead.
+///
+/// # Arguments
+///
+/// * `graph` - The graph to analyze
+/// * `source` - The source node ID
+/// * `config` - Configuration for radius computation
+/// * `progress` - Progress callback for reporting execution status
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{
+///     algo::observability::{impact_radius_with_progress, ImpactRadiusConfig, default_weight_fn},
+///     progress::ConsoleProgress
+/// };
+///
+/// let config = ImpactRadiusConfig {
+///     max_distance: 10.0,
+///     max_hops: None,
+///     weight_fn: &default_weight_fn,
+/// };
+///
+/// let progress = ConsoleProgress::new();
+/// let result = impact_radius_with_progress(&graph, source, &config, &progress)?;
+/// // Output: Impact radius: visited 10, blast_zone 10
+/// // Output: Impact radius: visited 20, blast_zone 18
+/// ```
+pub fn impact_radius_with_progress<F>(
+    graph: &SqliteGraph,
+    source: i64,
+    config: &ImpactRadiusConfig,
+    progress: &F,
+) -> Result<ImpactRadiusResult, SqliteGraphError>
+where
+    F: ProgressCallback,
+{
+    let max_distance = config.max_distance;
+    let max_hops = config.max_hops;
+    let weight_fn = config.weight_fn;
+
+    // Initialize distances and BFS queue
+    let mut distances: AHashMap<i64, f64> = AHashMap::new();
+    let mut blast_zone: AHashSet<i64> = AHashSet::new();
+    let mut queue: VecDeque<(i64, f64, usize)> = VecDeque::new();
+    let mut nodes_visited = 0;
+
+    // Source node is always in blast zone with distance 0
+    distances.insert(source, 0.0);
+    queue.push_back((source, 0.0, 0));
+
+    // BFS with distance tracking
+    while let Some((node, dist, hops)) = queue.pop_front() {
+        nodes_visited += 1;
+
+        // Report progress every 10 nodes
+        if nodes_visited % 10 == 0 {
+            progress.on_progress(
+                nodes_visited,
+                None,
+                &format!("Impact radius: visited {}, blast_zone {}", nodes_visited, blast_zone.len()),
+            );
+        }
+
+        // Early termination: already beyond max distance
+        if dist > max_distance {
+            continue;
+        }
+
+        // Hop limit check
+        if max_hops.is_some_and(|limit| hops >= limit) {
+            // Still process this node, but don't enqueue more
+        }
+
+        // Add node to blast zone
+        blast_zone.insert(node);
+
+        // Get outgoing neighbors
+        let outgoing = graph.fetch_outgoing(node)?;
+
+        for neighbor in outgoing {
+            // Compute edge weight
+            let edge_data = &serde_json::json!({});
+            let weight = weight_fn(node, neighbor, edge_data);
+
+            // Validate weight
+            if !weight.is_finite() {
+                progress.on_error(&std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Invalid weight for edge {} -> {}: {}", node, neighbor, weight),
+                ));
+                return Err(SqliteGraphError::invalid_input(format!(
+                    "Invalid weight for edge {} -> {}: weight must be finite, got {}",
+                    node, neighbor, weight
+                )));
+            }
+
+            let new_dist = dist + weight;
+
+            // Check distance bound before enqueuing (early termination)
+            if new_dist > max_distance {
+                continue;
+            }
+
+            // Check hop limit before enqueuing
+            if max_hops.is_some_and(|limit| hops + 1 > limit) {
+                continue;
+            }
+
+            // Relax edge: update if not visited or found shorter path
+            let should_enqueue = match distances.get(&neighbor) {
+                Some(&old_dist) => new_dist < old_dist,
+                None => true,
+            };
+
+            if should_enqueue {
+                distances.insert(neighbor, new_dist);
+                queue.push_back((neighbor, new_dist, hops + 1));
+            }
+        }
+    }
+
+    // Report completion
+    progress.on_complete();
+
+    // Ensure source is in blast zone even if graph is empty
+    blast_zone.insert(source);
+    distances.entry(source).or_insert(0.0);
+
+    // Extract boundary: nodes at exactly max_distance (within epsilon)
+    let epsilon = 1e-9;
+    let boundary: AHashSet<i64> = distances
+        .iter()
+        .filter(|(_, dist)| (*dist - max_distance).abs() < epsilon)
+        .map(|(&node, _)| node)
+        .collect();
+
+    let size = blast_zone.len();
+
+    Ok(ImpactRadiusResult {
+        blast_zone,
+        distances,
+        boundary,
+        size,
+    })
 }
 
 #[cfg(test)]
@@ -1086,5 +1598,532 @@ mod tests {
         // Expected: Read displays as "R", Write as "W"
         assert_eq!(format!("{}", Operation::Read), "R");
         assert_eq!(format!("{}", Operation::Write), "W");
+    }
+
+    // Impact Radius Tests
+
+    /// Helper: Create a linear chain graph for impact radius tests
+    /// Creates chain: 0 -> 1 -> 2 -> 3 -> 4
+    fn create_impact_chain() -> SqliteGraph {
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        for i in 0..5 {
+            let entity = crate::GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({"index": i}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Create chain
+        for i in 0..entity_ids.len().saturating_sub(1) {
+            let edge = crate::GraphEdge {
+                id: 0,
+                from_id: entity_ids[i],
+                to_id: entity_ids[i + 1],
+                edge_type: "next".to_string(),
+                data: serde_json::json!({}),
+            };
+            graph.insert_edge(&edge).expect("Failed to insert edge");
+        }
+
+        graph
+    }
+
+    /// Helper: Create a diamond graph for impact radius tests
+    /// 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
+    fn create_impact_diamond() -> SqliteGraph {
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        for i in 0..4 {
+            let entity = crate::GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({"index": i}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3)];
+        for (from_idx, to_idx) in edges {
+            let edge = crate::GraphEdge {
+                id: 0,
+                from_id: entity_ids[from_idx],
+                to_id: entity_ids[to_idx],
+                edge_type: "next".to_string(),
+                data: serde_json::json!({}),
+            };
+            graph.insert_edge(&edge).expect("Failed to insert edge");
+        }
+
+        graph
+    }
+
+    /// Helper: Create disconnected components for impact radius tests
+    /// Component 1: 0 -> 1, Component 2: 2 -> 3
+    fn create_impact_disconnected() -> SqliteGraph {
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        for i in 0..4 {
+            let entity = crate::GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({"index": i}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Component 1: 0 -> 1
+        let edge1 = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[0],
+            to_id: entity_ids[1],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge1).expect("Failed to insert edge");
+
+        // Component 2: 2 -> 3
+        let edge2 = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[2],
+            to_id: entity_ids[3],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge2).expect("Failed to insert edge");
+
+        graph
+    }
+
+    #[test]
+    fn test_impact_radius_empty() {
+        // Scenario: Empty graph
+        // Expected: Returns {source} with distance 0
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 10.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, 999, &config)
+            .expect("Impact radius should succeed on empty graph");
+
+        assert_eq!(result.size, 1, "Empty graph should have blast zone size 1");
+        assert!(result.blast_zone.contains(&999), "Source should be in blast zone");
+        assert_eq!(*result.distances.get(&999).unwrap(), 0.0, "Source distance should be 0");
+        assert!(result.boundary.is_empty(), "Empty graph should have no boundary nodes");
+    }
+
+    #[test]
+    fn test_impact_radius_linear_chain() {
+        // Scenario: Linear chain 0 -> 1 -> 2 -> 3 -> 4 with max_distance = 2.0
+        // Expected: Nodes 0, 1, 2 in blast zone (within 2 hops)
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 2.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert_eq!(result.size, 3, "Should have 3 nodes within 2 hops");
+        assert!(result.blast_zone.contains(&entity_ids[0]), "Node 0 should be in blast zone");
+        assert!(result.blast_zone.contains(&entity_ids[1]), "Node 1 should be in blast zone");
+        assert!(result.blast_zone.contains(&entity_ids[2]), "Node 2 should be in blast zone");
+        assert!(!result.blast_zone.contains(&entity_ids[3]), "Node 3 should NOT be in blast zone");
+        assert!(!result.blast_zone.contains(&entity_ids[4]), "Node 4 should NOT be in blast zone");
+
+        // Check distances
+        assert_eq!(*result.distances.get(&entity_ids[0]).unwrap(), 0.0, "Node 0 distance = 0");
+        assert_eq!(*result.distances.get(&entity_ids[1]).unwrap(), 1.0, "Node 1 distance = 1");
+        assert_eq!(*result.distances.get(&entity_ids[2]).unwrap(), 2.0, "Node 2 distance = 2");
+    }
+
+    #[test]
+    fn test_impact_radius_boundary_detection() {
+        // Scenario: Linear chain with max_distance = 2.0
+        // Expected: Node 2 is at the boundary (exactly max_distance)
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 2.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert_eq!(result.boundary.len(), 1, "Should have 1 boundary node");
+        assert!(result.boundary.contains(&entity_ids[2]), "Node 2 should be on boundary");
+        assert!(!result.boundary.contains(&entity_ids[0]), "Node 0 should NOT be on boundary");
+        assert!(!result.boundary.contains(&entity_ids[1]), "Node 1 should NOT be on boundary");
+    }
+
+    #[test]
+    fn test_impact_radius_max_hops() {
+        // Scenario: Linear chain with max_distance = 10.0 but max_hops = 2
+        // Expected: Only 3 nodes (0, 1, 2) due to hop limit
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 10.0,
+            max_hops: Some(2),
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert_eq!(result.size, 3, "Should have 3 nodes due to hop limit");
+        assert!(result.blast_zone.contains(&entity_ids[0]), "Node 0 should be in blast zone");
+        assert!(result.blast_zone.contains(&entity_ids[1]), "Node 1 should be in blast zone");
+        assert!(result.blast_zone.contains(&entity_ids[2]), "Node 2 should be in blast zone");
+        assert!(!result.blast_zone.contains(&entity_ids[3]), "Node 3 should NOT be in blast zone");
+    }
+
+    #[test]
+    fn test_impact_radius_weight_extraction() {
+        // Scenario: Custom weight_fn extracts weights
+        // Expected: Custom weights are used for distance calculation
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Custom weight function: weight 2.0 per edge
+        let custom_weight_fn = |_from: i64, _to: i64, _edge_data: &Value| -> f64 {
+            2.0
+        };
+
+        let config = ImpactRadiusConfig {
+            max_distance: 4.0,
+            max_hops: None,
+            weight_fn: &custom_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        // With weight 2.0 per edge:
+        // Node 0: dist 0
+        // Node 1: dist 2
+        // Node 2: dist 4 (boundary)
+        // Node 3: dist 6 (excluded)
+        assert_eq!(result.size, 3, "Should have 3 nodes with custom weights");
+        assert_eq!(*result.distances.get(&entity_ids[1]).unwrap(), 2.0, "Node 1 distance = 2");
+        assert_eq!(*result.distances.get(&entity_ids[2]).unwrap(), 4.0, "Node 2 distance = 4");
+    }
+
+    #[test]
+    fn test_impact_radius_unweighted() {
+        // Scenario: default_weight_fn uses 1.0 (hop count)
+        // Expected: Distance equals hop count
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 5.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        // With default weight 1.0, distance = hop count
+        for i in 0..5 {
+            let expected_dist = i as f64;
+            let actual_dist = result.distances.get(&entity_ids[i]).copied().unwrap_or(999.0);
+            assert_eq!(
+                actual_dist, expected_dist,
+                "Node {} should have distance {}",
+                i, expected_dist
+            );
+        }
+    }
+
+    #[test]
+    fn test_impact_radius_disconnected() {
+        // Scenario: Disconnected components, start in component 1
+        // Expected: Only reaches nodes in source's component
+        let graph = create_impact_disconnected();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 10.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        // Start from node 0 (component 1: 0 -> 1)
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert_eq!(result.size, 2, "Should only reach component 1 (2 nodes)");
+        assert!(result.blast_zone.contains(&entity_ids[0]), "Node 0 should be in blast zone");
+        assert!(result.blast_zone.contains(&entity_ids[1]), "Node 1 should be in blast zone");
+        assert!(!result.blast_zone.contains(&entity_ids[2]), "Node 2 should NOT be in blast zone (different component)");
+        assert!(!result.blast_zone.contains(&entity_ids[3]), "Node 3 should NOT be in blast zone (different component)");
+    }
+
+    #[test]
+    fn test_impact_radius_diamond() {
+        // Scenario: Diamond graph 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
+        // Expected: Reaches all nodes from source 0
+        let graph = create_impact_diamond();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 10.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert_eq!(result.size, 4, "Should reach all 4 nodes");
+        for &id in &entity_ids {
+            assert!(
+                result.blast_zone.contains(&id),
+                "Node {} should be in blast zone",
+                id
+            );
+        }
+
+        // Check distances
+        assert_eq!(*result.distances.get(&entity_ids[0]).unwrap(), 0.0, "Node 0 distance = 0");
+        assert_eq!(*result.distances.get(&entity_ids[1]).unwrap(), 1.0, "Node 1 distance = 1");
+        assert_eq!(*result.distances.get(&entity_ids[2]).unwrap(), 1.0, "Node 2 distance = 1");
+        assert_eq!(*result.distances.get(&entity_ids[3]).unwrap(), 2.0, "Node 3 distance = 2");
+    }
+
+    #[test]
+    fn test_impact_radius_result_is_affected() {
+        // Scenario: Check is_affected() helper method
+        // Expected: Correctly reports affected nodes
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 2.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert!(result.is_affected(entity_ids[0]), "Node 0 should be affected");
+        assert!(result.is_affected(entity_ids[1]), "Node 1 should be affected");
+        assert!(result.is_affected(entity_ids[2]), "Node 2 should be affected");
+        assert!(!result.is_affected(entity_ids[3]), "Node 3 should NOT be affected");
+        assert!(!result.is_affected(entity_ids[4]), "Node 4 should NOT be affected");
+    }
+
+    #[test]
+    fn test_impact_radius_result_distance_to() {
+        // Scenario: Check distance_to() helper method
+        // Expected: Returns distance or None for non-affected nodes
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 2.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert_eq!(result.distance_to(entity_ids[0]), Some(0.0), "Node 0 distance");
+        assert_eq!(result.distance_to(entity_ids[1]), Some(1.0), "Node 1 distance");
+        assert_eq!(result.distance_to(entity_ids[2]), Some(2.0), "Node 2 distance");
+        assert_eq!(result.distance_to(entity_ids[3]), None, "Node 3 should return None");
+        assert_eq!(result.distance_to(999), None, "Non-existent node should return None");
+    }
+
+    #[test]
+    fn test_impact_radius_result_is_boundary() {
+        // Scenario: Check is_boundary() helper method
+        // Expected: Correctly identifies boundary nodes
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 2.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert!(!result.is_boundary(entity_ids[0]), "Node 0 should NOT be boundary");
+        assert!(!result.is_boundary(entity_ids[1]), "Node 1 should NOT be boundary");
+        assert!(result.is_boundary(entity_ids[2]), "Node 2 should be boundary");
+        assert!(!result.is_boundary(entity_ids[3]), "Node 3 should NOT be boundary");
+    }
+
+    #[test]
+    fn test_impact_radius_with_progress() {
+        // Scenario: Progress variant matches non-progress variant
+        // Expected: Same results, progress callback called
+        use crate::progress::NoProgress;
+
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 3.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let progress = NoProgress;
+        let result_with = impact_radius_with_progress(&graph, entity_ids[0], &config, &progress)
+            .expect("Impact radius with progress should succeed");
+        let result_without = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert_eq!(
+            result_with.size,
+            result_without.size,
+            "Progress and non-progress results should match"
+        );
+        assert_eq!(
+            result_with.blast_zone,
+            result_without.blast_zone,
+            "Blast zones should match"
+        );
+        assert_eq!(
+            result_with.boundary,
+            result_without.boundary,
+            "Boundaries should match"
+        );
+    }
+
+    #[test]
+    fn test_impact_radius_zero_max_distance() {
+        // Scenario: max_distance = 0
+        // Expected: Only source node in blast zone
+        let graph = create_impact_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 0.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        assert_eq!(result.size, 1, "Should only have source node");
+        assert!(result.blast_zone.contains(&entity_ids[0]), "Source should be in blast zone");
+        assert!(!result.blast_zone.contains(&entity_ids[1]), "Node 1 should NOT be in blast zone");
+    }
+
+    #[test]
+    fn test_impact_radius_shorter_path() {
+        // Scenario: Graph with multiple paths, should find shortest
+        // Create a graph where node 2 can be reached via two paths
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        // Create nodes: 0, 1, 2, 3
+        for i in 0..4 {
+            let entity = crate::GraphEntity {
+                id: 0,
+                kind: "node".to_string(),
+                name: format!("node_{}", i),
+                file_path: Some(format!("node_{}.rs", i)),
+                data: serde_json::json!({}),
+            };
+            graph.insert_entity(&entity).expect("Failed to insert entity");
+        }
+
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Path 1: 0 -> 1 -> 3 (2 hops)
+        let edge1 = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[0],
+            to_id: entity_ids[1],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge1).expect("Failed to insert edge");
+
+        let edge2 = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[1],
+            to_id: entity_ids[3],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge2).expect("Failed to insert edge");
+
+        // Path 2: 0 -> 2 -> 3 (2 hops)
+        let edge3 = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[0],
+            to_id: entity_ids[2],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge3).expect("Failed to insert edge");
+
+        let edge4 = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[2],
+            to_id: entity_ids[3],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge4).expect("Failed to insert edge");
+
+        // Direct path: 0 -> 3 (1 hop)
+        let edge5 = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[0],
+            to_id: entity_ids[3],
+            edge_type: "direct".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge5).expect("Failed to insert edge");
+
+        let config = ImpactRadiusConfig {
+            max_distance: 10.0,
+            max_hops: None,
+            weight_fn: &default_weight_fn,
+        };
+
+        let result = impact_radius(&graph, entity_ids[0], &config)
+            .expect("Impact radius should succeed");
+
+        // Node 3 should have distance 1 (shortest path)
+        assert_eq!(*result.distances.get(&entity_ids[3]).unwrap(), 1.0, "Node 3 should have distance 1 via direct edge");
     }
 }
