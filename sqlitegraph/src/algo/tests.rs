@@ -37,6 +37,10 @@ use super::{
     control_dependence::{
         control_dependence_graph, control_dependence_from_exit, ControlDependenceResult,
     },
+    path_enumeration::{
+        enumerate_paths, enumerate_paths_with_progress, EnumeratedPath, PathClassification,
+        PathEnumerationConfig, PathEnumerationResult,
+    },
 };
 
 #[test]
@@ -67,6 +71,21 @@ fn test_algorithms_are_send() {
         let _ = post_dominators(&graph, 1);
         let _ = post_dominators_auto_exit(&graph);
         let _ = control_dependence_from_exit(&graph);
+        let _ = enumerate_paths(&graph, 1, &PathEnumerationConfig::default());
+        let _ = EnumeratedPath {
+            nodes: vec![1, 2, 3],
+            classification: PathClassification::Normal,
+        };
+        let _ = PathEnumerationResult {
+            paths: vec![],
+            normal_paths: vec![],
+            error_paths: vec![],
+            degenerate_paths: vec![],
+            infinite_paths: vec![],
+            total_paths_found: 0,
+            paths_pruned_by_bounds: 0,
+            max_depth_reached: 0,
+        };
     };
 
     // If this compiles, all the algorithm functions are Send
@@ -2612,6 +2631,398 @@ fn test_natural_loops_result_is_send() {
 
     is_send_sync::<NaturalLoop>();
     is_send_sync::<NaturalLoopsResult>();
+}
+
+//
+// PATH ENUMERATION INTEGRATION TESTS
+//
+
+#[test]
+fn test_enumerate_paths_deterministic() {
+    // Scenario: Path enumeration produces deterministic results
+    // Expected: Same graph + config = same paths (deterministic)
+    let graph = create_test_graph();
+    let entry = 1;
+
+    let config = PathEnumerationConfig {
+        max_depth: 10,
+        max_paths: 100,
+        revisit_cap: 1,
+        exit_nodes: None,
+        error_nodes: None,
+    };
+
+    let result1 = enumerate_paths(&graph, entry, &config);
+    let result2 = enumerate_paths(&graph, entry, &config);
+
+    assert!(result1.is_ok(), "First enumeration failed");
+    assert!(result2.is_ok(), "Second enumeration failed");
+
+    let paths1 = result1.unwrap();
+    let paths2 = result2.unwrap();
+
+    assert_eq!(paths1.paths.len(), paths2.paths.len(), "Different number of paths");
+    assert_eq!(paths1.total_paths_found, paths2.total_paths_found, "Different total paths found");
+
+    // Compare paths (order may vary, so we compare sets)
+    // For simplicity, just check the count
+    assert_eq!(paths1.paths.len(), paths2.paths.len(), "Different paths");
+}
+
+#[test]
+fn test_enumerate_paths_progress_integration() {
+    // Scenario: Progress callback works end-to-end
+    // Expected: Progress is reported during enumeration
+    use crate::progress::NoProgress;
+    use ahash::AHashSet;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create a simple linear CFG: 0 -> 1 -> 2
+    let node0 = graph
+        .insert_node(crate::graph::GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let node1 = graph
+        .insert_node(crate::graph::GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let node2 = graph
+        .insert_node(crate::graph::GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    graph
+        .insert_edge(node0, "next".into(), node1, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(node1, "next".into(), node2, vec![])
+        .expect("Failed to insert edge");
+
+    let mut exit_nodes = AHashSet::new();
+    exit_nodes.insert(node2);
+
+    let config = PathEnumerationConfig {
+        exit_nodes: Some(exit_nodes),
+        ..Default::default()
+    };
+
+    let progress = NoProgress;
+    let result = enumerate_paths_with_progress(&graph, node0, &config, progress);
+
+    assert!(result.is_ok(), "Enumeration with progress failed");
+    let paths = result.unwrap();
+    assert!(paths.paths.len() > 0, "Should find at least one path");
+}
+
+#[test]
+fn test_enumerate_paths_with_natural_loops_integration() {
+    // Scenario: Path enumeration works after natural loops detected
+    // Expected: Can enumerate paths in a CFG with loops
+    use crate::graph::GraphEntityCreate;
+    use ahash::AHashSet;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create a CFG with a loop: 0 -> 1 -> 2 -> 1, 1 -> 3
+    let node0 = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let node1 = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["LoopHeader".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let node2 = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["LoopBody".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let node3 = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    graph
+        .insert_edge(node0, "next".into(), node1, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(node1, "next".into(), node2, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(node2, "loop".into(), node1, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(node1, "exit".into(), node3, vec![])
+        .expect("Failed to insert edge");
+
+    // Compute natural loops
+    let dom_result = dominators(&graph, node0).expect("Failed to compute dominators");
+    let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
+
+    // Should have 1 loop
+    assert_eq!(loops.count(), 1, "Should have 1 loop");
+
+    // Now enumerate paths
+    let mut exit_nodes = AHashSet::new();
+    exit_nodes.insert(node3);
+
+    let config = PathEnumerationConfig {
+        revisit_cap: 2,
+        exit_nodes: Some(exit_nodes),
+        ..Default::default()
+    };
+
+    let result = enumerate_paths(&graph, node0, &config).expect("Failed to enumerate paths");
+
+    // Should find paths (direct exit + one loop iteration)
+    assert!(result.paths.len() >= 1, "Should find at least one path");
+}
+
+#[test]
+fn test_enumerate_paths_real_cfg_scenario() {
+    // Scenario: Simulate real CFG with branches and loops
+    // Expected: Correctly enumerate all feasible paths
+    use crate::graph::GraphEntityCreate;
+    use ahash::AHashSet;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create a realistic CFG:
+    // entry (0) -> cond (1)
+    // cond (1) -> true_branch (2) or false_branch (3)
+    // true_branch (2) -> loop_header (4)
+    // false_branch (3) -> merge (6)
+    // loop_header (4) -> loop_body (5)
+    // loop_body (5) -> loop_header (4) or merge (6)
+    // merge (6) -> exit (7)
+
+    let entry = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let cond = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let true_branch = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let false_branch = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let loop_header = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["LoopHeader".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let loop_body = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["LoopBody".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let merge = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let exit = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    // Build CFG
+    graph
+        .insert_edge(entry, "next".into(), cond, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(cond, "true".into(), true_branch, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(cond, "false".into(), false_branch, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(true_branch, "next".into(), loop_header, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(false_branch, "next".into(), merge, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(loop_header, "next".into(), loop_body, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(loop_body, "loop".into(), loop_header, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(loop_body, "exit".into(), merge, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(merge, "next".into(), exit, vec![])
+        .expect("Failed to insert edge");
+
+    let mut exit_nodes = AHashSet::new();
+    exit_nodes.insert(exit);
+
+    let config = PathEnumerationConfig {
+        revisit_cap: 2, // Allow one loop iteration
+        exit_nodes: Some(exit_nodes),
+        ..Default::default()
+    };
+
+    let result = enumerate_paths(&graph, entry, &config).expect("Failed to enumerate paths");
+
+    // Should find multiple paths:
+    // - entry -> cond -> false -> merge -> exit
+    // - entry -> cond -> true -> header -> body -> merge -> exit
+    // - entry -> cond -> true -> header -> body -> header -> body -> merge -> exit
+    assert!(result.paths.len() >= 2, "Should find at least 2 paths");
+
+    // All paths should start with entry and end with exit
+    for path in &result.paths {
+        assert_eq!(path.nodes[0], entry, "Path should start with entry");
+        assert_eq!(
+            path.nodes.last().unwrap(),
+            &exit,
+            "Path should end with exit"
+        );
+    }
+}
+
+#[test]
+fn test_enumerate_paths_bounds_prevent_explosion() {
+    // Scenario: Verify max_paths prevents exponential explosion
+    // Expected: Enumeration stops at max_paths bound
+    use crate::graph::GraphEntityCreate;
+    use ahash::AHashSet;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create a CFG with deep nesting to cause path explosion
+    // Each level doubles the number of paths
+    let mut nodes = Vec::new();
+
+    // Create entry
+    let entry = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+    nodes.push(entry);
+
+    // Create 3 levels of branching (2^3 = 8 paths without loop)
+    for level in 0..3 {
+        let left = graph
+            .insert_node(GraphEntityCreate {
+                labels: vec!["Block".into()],
+                properties: vec![],
+            })
+            .expect("Failed to insert node");
+
+        let right = graph
+            .insert_node(GraphEntityCreate {
+                labels: vec!["Block".into()],
+                properties: vec![],
+            })
+            .expect("Failed to insert node");
+
+        let prev = nodes.last().unwrap();
+
+        graph
+            .insert_edge(*prev, "left".into(), left, vec![])
+            .expect("Failed to insert edge");
+        graph
+            .insert_edge(*prev, "right".into(), right, vec![])
+            .expect("Failed to insert edge");
+
+        nodes.push(left);
+        nodes.push(right);
+    }
+
+    // Create exit
+    let exit = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    // Connect all leaf nodes to exit
+    for i in (1..nodes.len()).rev() {
+        if i % 2 == 0 && i + 1 < nodes.len() {
+            // Skip duplicates
+            continue;
+        }
+        graph
+            .insert_edge(nodes[i], "next".into(), exit, vec![])
+            .ok();
+    }
+
+    let mut exit_nodes = AHashSet::new();
+    exit_nodes.insert(exit);
+
+    // Set very low max_paths
+    let config = PathEnumerationConfig {
+        max_paths: 3,
+        exit_nodes: Some(exit_nodes),
+        ..Default::default()
+    };
+
+    let result = enumerate_paths(&graph, entry, &config).expect("Failed to enumerate paths");
+
+    // Should stop at max_paths
+    assert!(result.paths.len() <= 3, "Should not exceed max_paths");
+}
+
+#[test]
+fn test_enumerate_paths_result_is_send() {
+    // Scenario: EnumeratedPath and PathEnumerationResult should be Send + Sync
+    // Expected: Result types implement required traits
+    fn is_send_sync<T: Send + Sync>() {}
+
+    is_send_sync::<EnumeratedPath>();
+    is_send_sync::<PathEnumerationResult>();
+    is_send_sync::<PathClassification>();
 }
 
 

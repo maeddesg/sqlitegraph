@@ -244,47 +244,6 @@ pub struct PathEnumerationResult {
     pub max_depth_reached: usize,
 }
 
-/// Progress reporting during path enumeration.
-#[derive(Debug, Clone)]
-pub enum PathEnumerationProgress {
-    /// Enumeration started.
-    Started,
-
-    /// Progress update with current path count.
-    InProgress {
-        /// Number of paths found so far.
-        paths_found: usize,
-        /// Current depth being explored.
-        current_depth: usize,
-    },
-
-    /// Enumeration completed.
-    Completed {
-        /// Total paths found.
-        total_paths: usize,
-        /// Paths pruned by bounds.
-        paths_pruned: usize,
-    },
-}
-
-impl ProgressCallback for PathEnumerationProgress {
-    fn report(&self) {
-        match self {
-            PathEnumerationProgress::Started => {
-                // Silent start
-            }
-            PathEnumerationProgress::InProgress { paths_found, current_depth } => {
-                // Report progress every 100 paths
-                if paths_found % 100 == 0 {
-                    println!("Path enumeration: {} paths found, depth {}", paths_found, current_depth);
-                }
-            }
-            PathEnumerationProgress::Completed { total_paths, paths_pruned } => {
-                println!("Path enumeration complete: {} paths, {} pruned", total_paths, paths_pruned);
-            }
-        }
-    }
-}
 
 /// Enumerates all execution paths from entry node using DFS with bounds.
 ///
@@ -320,54 +279,6 @@ pub fn enumerate_paths(
     entry: i64,
     config: &PathEnumerationConfig,
 ) -> Result<PathEnumerationResult, SqliteGraphError> {
-    enumerate_paths_internal(graph, entry, config, &mut None)
-}
-
-/// Enumerates all execution paths with progress tracking.
-///
-/// Same as `enumerate_paths` but reports progress during enumeration.
-///
-/// # Arguments
-///
-/// * `graph` - The control flow graph
-/// * `entry` - Entry node ID
-/// * `config` - Configuration for bounds
-/// * `progress` - Progress callback for reporting enumeration status
-///
-/// # Returns
-///
-/// * `Result<PathEnumerationResult, SqliteGraphError>` - Enumeration result
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use sqlitegraph::{SqliteGraph, algo::enumerate_paths_with_progress};
-/// use sqlitegraph::progress::ConsoleProgress;
-///
-/// let progress = ConsoleProgress::new();
-/// let result = enumerate_paths_with_progress(&graph, 0, &config, progress)?;
-/// ```
-pub fn enumerate_paths_with_progress<P: ProgressCallback>(
-    graph: &SqliteGraph,
-    entry: i64,
-    config: &PathEnumerationConfig,
-    mut progress: P,
-) -> Result<PathEnumerationResult, SqliteGraphError> {
-    enumerate_paths_internal(graph, entry, config, &mut Some(&mut progress))
-}
-
-/// Internal implementation of path enumeration.
-fn enumerate_paths_internal(
-    graph: &SqliteGraph,
-    entry: i64,
-    config: &PathEnumerationConfig,
-    progress_callback: &mut Option<&mut dyn ProgressCallback>,
-) -> Result<PathEnumerationResult, SqliteGraphError> {
-    // Report start
-    if let Some(cb) = progress_callback {
-        cb.report(&PathEnumerationProgress::Started);
-    }
-
     let mut all_paths = Vec::new();
     let mut current_path = Vec::new();
     let mut visited = AHashMap::new();
@@ -386,7 +297,6 @@ fn enumerate_paths_internal(
         &mut total_found,
         &mut pruned_by_bounds,
         &mut max_depth_reached,
-        progress_callback,
     )?;
 
     // Classify paths
@@ -421,18 +331,99 @@ fn enumerate_paths_internal(
         infinite_paths,
     };
 
+    Ok(result)
+}
+
+/// Enumerates all execution paths with progress tracking.
+///
+/// Same as `enumerate_paths` but reports progress during enumeration.
+///
+/// # Arguments
+///
+/// * `graph` - The control flow graph
+/// * `entry` - Entry node ID
+/// * `config` - Configuration for bounds
+/// * `progress` - Progress callback for reporting enumeration status
+///
+/// # Returns
+///
+/// * `Result<PathEnumerationResult, SqliteGraphError>` - Enumeration result
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::enumerate_paths_with_progress};
+/// use sqlitegraph::progress::ConsoleProgress;
+///
+/// let progress = ConsoleProgress::new();
+/// let result = enumerate_paths_with_progress(&graph, 0, &config, progress)?;
+/// ```
+pub fn enumerate_paths_with_progress<P: ProgressCallback>(
+    graph: &SqliteGraph,
+    entry: i64,
+    config: &PathEnumerationConfig,
+    progress: P,
+) -> Result<PathEnumerationResult, SqliteGraphError> {
+    let mut all_paths = Vec::new();
+    let mut current_path = Vec::new();
+    let mut visited = AHashMap::new();
+    let mut total_found = 0;
+    let mut pruned_by_bounds = 0;
+    let mut max_depth_reached = 0;
+
+    // DFS with backtracking and progress reporting
+    dfs_enumerate_with_progress(
+        graph,
+        entry,
+        config,
+        &mut current_path,
+        &mut visited,
+        &mut all_paths,
+        &mut total_found,
+        &mut pruned_by_bounds,
+        &mut max_depth_reached,
+        &progress,
+    )?;
+
     // Report completion
-    if let Some(cb) = progress_callback {
-        cb.report(&PathEnumerationProgress::Completed {
-            total_paths: result.total_paths_found,
-            paths_pruned: result.paths_pruned_by_bounds,
-        });
+    progress.on_complete();
+
+    // Classify paths
+    let mut normal_paths = Vec::new();
+    let mut error_paths = Vec::new();
+    let mut degenerate_paths = Vec::new();
+    let mut infinite_paths = Vec::new();
+
+    for path in all_paths {
+        match &path.classification {
+            PathClassification::Normal => normal_paths.push(path),
+            PathClassification::Error => error_paths.push(path),
+            PathClassification::Degenerate => degenerate_paths.push(path),
+            PathClassification::Infinite => infinite_paths.push(path),
+        }
     }
+
+    let result = PathEnumerationResult {
+        total_paths_found: total_found,
+        paths_pruned_by_bounds: pruned_by_bounds,
+        max_depth_reached,
+        paths: normal_paths
+            .iter()
+            .chain(error_paths.iter())
+            .chain(degenerate_paths.iter())
+            .chain(infinite_paths.iter())
+            .cloned()
+            .collect(),
+        normal_paths,
+        error_paths,
+        degenerate_paths,
+        infinite_paths,
+    };
 
     Ok(result)
 }
 
-/// DFS with backtracking and revisit counting.
+/// DFS with backtracking and revisit counting (no progress reporting).
 fn dfs_enumerate(
     graph: &SqliteGraph,
     node: i64,
@@ -443,7 +434,111 @@ fn dfs_enumerate(
     total_found: &mut usize,
     pruned_by_bounds: &mut usize,
     max_depth_reached: &mut usize,
-    progress_callback: &mut Option<&mut dyn ProgressCallback>,
+) -> Result<(), SqliteGraphError> {
+    // Add node to current path
+    current_path.push(node);
+    *visited.entry(node).or_insert(0) += 1;
+
+    let depth = current_path.len();
+    *max_depth_reached = (*max_depth_reached).max(depth);
+
+    // Check max_depth bound
+    let hit_max_depth = depth > config.max_depth;
+
+    // Check if node is terminal (exit or error)
+    let is_exit = config.exit_nodes.as_ref().map_or(false, |exits| exits.contains(&node));
+    let is_error = config.error_nodes.as_ref().map_or(false, |errors| errors.contains(&node));
+    let is_terminal = is_exit || is_error || hit_max_depth;
+
+    // Determine path classification
+    let classification = if is_error {
+        PathClassification::Error
+    } else if hit_max_depth {
+        PathClassification::Degenerate
+    } else if is_exit {
+        PathClassification::Normal
+    } else {
+        // Check for cycles (repeated nodes indicate potential infinite path)
+        let mut seen = AHashSet::new();
+        let has_cycle = current_path.iter().any(|n| !seen.insert(*n));
+        if has_cycle {
+            PathClassification::Infinite
+        } else {
+            PathClassification::Normal
+        }
+    };
+
+    // If terminal, add path to results
+    if is_terminal {
+        let path = EnumeratedPath {
+            nodes: current_path.clone(),
+            classification,
+        };
+
+        // Only add if we haven't hit max_paths
+        if all_paths.len() < config.max_paths {
+            all_paths.push(path);
+            *total_found += 1;
+        } else {
+            *pruned_by_bounds += 1;
+        }
+
+        // Backtrack
+        current_path.pop();
+        *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+        return Ok(());
+    }
+
+    // Explore successors
+    let successors = graph.fetch_outgoing(node)?;
+
+    for &successor in &successors {
+        // Check max_paths bound
+        if all_paths.len() >= config.max_paths {
+            break;
+        }
+
+        // Check revisit cap - skip if we've visited this node too many times
+        let visit_count = visited.get(&successor).copied().unwrap_or(0);
+        if visit_count >= config.revisit_cap {
+            // This branch would exceed revisit cap
+            *pruned_by_bounds += 1;
+            continue;
+        }
+
+        // Recurse
+        dfs_enumerate(
+            graph,
+            successor,
+            config,
+            current_path,
+            visited,
+            all_paths,
+            total_found,
+            pruned_by_bounds,
+            max_depth_reached,
+        )?;
+    }
+
+    // Backtrack
+    current_path.pop();
+    *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+
+    Ok(())
+}
+
+/// DFS with backtracking and progress reporting.
+fn dfs_enumerate_with_progress<P: ProgressCallback>(
+    graph: &SqliteGraph,
+    node: i64,
+    config: &PathEnumerationConfig,
+    current_path: &mut Vec<i64>,
+    visited: &mut AHashMap<i64, usize>,
+    all_paths: &mut Vec<EnumeratedPath>,
+    total_found: &mut usize,
+    pruned_by_bounds: &mut usize,
+    max_depth_reached: &mut usize,
+    progress: &P,
 ) -> Result<(), SqliteGraphError> {
     // Add node to current path
     current_path.push(node);
@@ -490,12 +585,9 @@ fn dfs_enumerate(
             all_paths.push(path);
             *total_found += 1;
 
-            // Report progress
-            if let Some(cb) = progress_callback {
-                cb.report(&PathEnumerationProgress::InProgress {
-                    paths_found: *total_found,
-                    current_depth: depth,
-                });
+            // Report progress every 100 paths
+            if *total_found % 100 == 0 {
+                progress.on_progress(*total_found, Some(config.max_paths), "Enumerating paths");
             }
         } else {
             *pruned_by_bounds += 1;
@@ -525,7 +617,7 @@ fn dfs_enumerate(
         }
 
         // Recurse
-        dfs_enumerate(
+        dfs_enumerate_with_progress(
             graph,
             successor,
             config,
@@ -535,7 +627,7 @@ fn dfs_enumerate(
             total_found,
             pruned_by_bounds,
             max_depth_reached,
-            progress_callback,
+            progress,
         )?;
     }
 

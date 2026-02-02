@@ -58,6 +58,15 @@
 //! - [`control_dependence_from_exit`] - Compute CDG with automatic exit detection
 //! - [`ControlDependenceResult`] - Control dependence edges and reverse mapping
 //!
+//! ## Path Analysis
+//!
+//! - [`enumerate_paths`] - Enumerate all execution paths using DFS with bounds
+//! - [`enumerate_paths_with_progress`] - Path enumeration with progress tracking
+//! - [`PathEnumerationConfig`] - Configuration for bounds (max_depth, max_paths, revisit_cap)
+//! - [`PathClassification`] - Path classification (Normal, Error, Degenerate, Infinite)
+//! - [`EnumeratedPath`] - Single execution path with nodes and classification
+//! - [`PathEnumerationResult`] - Enumeration result with categorized paths and statistics
+//!
 //! # Algorithm Characteristics
 //!
 //! | Algorithm | Time Complexity | Best For | Limitations |
@@ -79,10 +88,13 @@
 //! | Iterated DF | O(V × iterations) | SSA construction, φ-node placement | Fixed-point iteration |
 //! | Natural Loops | O(E × N) worst | Loop optimization, program analysis | Requires dominators |
 //! | Control Dependence | O(E) after post-dom | Program slicing, impact analysis | Requires post-dominators |
+//! | Path Enumeration | O(P × L) | Test coverage, symbolic execution | Bounds required for cyclic CFGs |
 //!
 //! Where:
 //! - V = number of vertices
 //! - E = number of edges
+//! - P = number of paths
+//! - L = average path length
 //! - k = number of iterations (algorithm-dependent)
 //!
 //! # Input Requirements
@@ -199,6 +211,7 @@
 //! - [`post_dominators_with_progress`]
 //! - [`dominance_frontiers_with_progress`]
 //! - [`natural_loops_with_progress`]
+//! - [`enumerate_paths_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -245,6 +258,12 @@ pub use control_dependence::{
     control_dependence_graph, control_dependence_from_exit, ControlDependenceResult,
 };
 
+// Path analysis algorithms
+pub use path_enumeration::{
+    enumerate_paths, enumerate_paths_with_progress, EnumeratedPath, PathClassification,
+    PathEnumerationConfig, PathEnumerationResult,
+};
+
 // Module declarations
 mod centrality;
 mod community;
@@ -252,6 +271,7 @@ mod control_dependence;
 mod dominance_frontiers;
 mod dominators;
 mod natural_loops;
+mod path_enumeration;
 mod post_dominators;
 mod reachability;
 mod scc;
