@@ -244,6 +244,240 @@ where
     Ok(visited)
 }
 
+/// Computes backward reachability to a target node.
+///
+/// Returns the set of all nodes that can reach `target` via incoming edges.
+/// This answers "what affects this node?" - the backward slice to target.
+/// The target node itself is included in the result (self-reachability).
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `target` - The target node ID
+///
+/// # Returns
+/// Set of all node IDs that can reach `target` (including `target` itself).
+///
+/// # Complexity
+/// - **Time**: O(|V| + |E|) - visits each node and edge at most once
+/// - **Space**: O(|V|) for visited set and BFS queue
+///
+/// # Algorithm
+/// Uses reverse BFS traversal following incoming edges:
+/// 1. Mark target as visited and add to queue
+/// 2. While queue not empty:
+///    - Pop node from queue
+///    - For each incoming neighbor (nodes that point to this node): if not visited, mark and enqueue
+/// 3. Return visited set
+///
+/// # Edge Cases
+/// - **Empty graph**: Returns set containing only target
+/// - **Target not in graph**: Returns set containing only target (no edges to traverse)
+/// - **Disconnected components**: Only returns nodes that can reach target
+/// - **Cycles**: Handled correctly by visited set (no infinite loops)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::reverse_reachable_from};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph: 0 -> 1 -> 2 -> 3 ...
+///
+/// // What affects node 3?
+/// let ancestors = reverse_reachable_from(&graph, 3)?;
+/// // Returns {0, 1, 2, 3} - all nodes upstream from 3
+///
+/// // What affects node 0?
+/// let ancestors = reverse_reachable_from(&graph, 0)?;
+/// // Returns {0} - only itself (no incoming edges)
+/// ```
+pub fn reverse_reachable_from(
+    graph: &SqliteGraph,
+    target: i64,
+) -> Result<AHashSet<i64>, SqliteGraphError> {
+    let mut visited = AHashSet::new();
+    let mut queue = VecDeque::new();
+
+    // Target node is always reachable from itself
+    visited.insert(target);
+    queue.push_back(target);
+
+    // Reverse BFS traversal on incoming edges
+    while let Some(node) = queue.pop_front() {
+        // Fetch incoming neighbors (ancestors) and enqueue unvisited ones
+        for ancestor in graph.fetch_incoming(node)? {
+            if visited.insert(ancestor) {
+                queue.push_back(ancestor);
+            }
+        }
+    }
+
+    Ok(visited)
+}
+
+/// Computes backward reachability with progress tracking.
+///
+/// Same algorithm as [`reverse_reachable_from`] but reports progress during execution.
+/// Useful for long-running operations on large graphs.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `target` - The target node ID
+/// * `progress` - Progress callback for reporting execution status
+///
+/// # Returns
+/// Set of all node IDs that can reach `target` (including `target` itself).
+///
+/// # Progress Reporting
+///
+/// The callback receives:
+/// - `current`: Current number of nodes visited
+/// - `total`: None (unknown total for single-target BFS)
+/// - `message`: "Backward reachability: visited {current}"
+///
+/// Progress is reported periodically (every ~10 nodes visited) to avoid
+/// excessive callback overhead while still providing feedback.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{
+///     algo::reverse_reachable_from_with_progress,
+///     progress::ConsoleProgress
+/// };
+///
+/// let progress = ConsoleProgress::new();
+/// let ancestors = reverse_reachable_from_with_progress(&graph, target, &progress)?;
+/// // Output: Backward reachability: visited 10...
+/// // Output: Backward reachability: visited 20...
+/// ```
+pub fn reverse_reachable_from_with_progress<F>(
+    graph: &SqliteGraph,
+    target: i64,
+    progress: &F,
+) -> Result<AHashSet<i64>, SqliteGraphError>
+where
+    F: ProgressCallback,
+{
+    let mut visited = AHashSet::new();
+    let mut queue = VecDeque::new();
+    let mut nodes_processed = 0;
+
+    // Target node is always reachable from itself
+    visited.insert(target);
+    queue.push_back(target);
+
+    // Reverse BFS traversal on incoming edges
+    while let Some(node) = queue.pop_front() {
+        nodes_processed += 1;
+
+        // Report progress every 10 nodes
+        if nodes_processed % 10 == 0 {
+            progress.on_progress(
+                nodes_processed,
+                None,
+                &format!("Backward reachability: visited {}", nodes_processed),
+            );
+        }
+
+        // Fetch incoming neighbors (ancestors) and enqueue unvisited ones
+        for ancestor in graph.fetch_incoming(node)? {
+            if visited.insert(ancestor) {
+                queue.push_back(ancestor);
+            }
+        }
+    }
+
+    // Report completion
+    progress.on_complete();
+
+    Ok(visited)
+}
+
+/// Checks if one node can reach another (point-to-point reachability).
+///
+/// Returns `true` if there exists a path from `from` to `to`, `false` otherwise.
+/// This is more efficient than computing full reachability when you only need
+/// to check a single pair of nodes, as it terminates early when the target is found.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `from` - The source node ID
+/// * `to` - The target node ID
+///
+/// # Returns
+/// `true` if `to` is reachable from `from`, `false` otherwise.
+///
+/// # Complexity
+/// - **Time**: O(|V| + |E|) worst case, but often much faster due to early termination
+/// - **Space**: O(|V|) for visited set and BFS queue
+///
+/// # Algorithm
+/// Uses BFS with early termination:
+/// 1. Start from `from` node
+/// 2. Traverse outgoing edges
+/// 3. Return `true` immediately if `to` is found
+/// 4. Return `false` if BFS completes without finding `to`
+///
+/// # Edge Cases
+/// - **Self-reachability**: `can_reach(g, n, n)` returns `true` (every node reaches itself)
+/// - **Empty graph**: Returns `false` unless `from == to`
+/// - **Disconnected components**: Returns `false` for nodes in different components
+/// - **Non-existent nodes**: Returns `false` if path doesn't exist
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::can_reach};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph: 0 -> 1 -> 2 -> 3 ...
+///
+/// // Can node 0 reach node 3?
+/// let reaches = can_reach(&graph, 0, 3)?;
+/// assert_eq!(reaches, true);
+///
+/// // Can node 3 reach node 0?
+/// let reaches = can_reach(&graph, 3, 0)?;
+/// assert_eq!(reaches, false);
+///
+/// // Self-reachability
+/// let reaches = can_reach(&graph, 1, 1)?;
+/// assert_eq!(reaches, true);
+/// ```
+pub fn can_reach(
+    graph: &SqliteGraph,
+    from: i64,
+    to: i64,
+) -> Result<bool, SqliteGraphError> {
+    // Self-reachability: every node can reach itself
+    if from == to {
+        return Ok(true);
+    }
+
+    let mut visited = AHashSet::new();
+    let mut queue = VecDeque::new();
+
+    visited.insert(from);
+    queue.push_back(from);
+
+    // BFS traversal with early termination
+    while let Some(node) = queue.pop_front() {
+        for neighbor in graph.fetch_outgoing(node)? {
+            // Early termination: found target
+            if neighbor == to {
+                return Ok(true);
+            }
+
+            if visited.insert(neighbor) {
+                queue.push_back(neighbor);
+            }
+        }
+    }
+
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
