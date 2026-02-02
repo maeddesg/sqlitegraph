@@ -112,6 +112,14 @@
 //! - [`PathEnumerationResult`] - Enumeration result with categorized paths and statistics
 //! - [`PathEnumerationPruningStats`] - Statistics for dominance-based pruning effectiveness
 //!
+//! ## Observability Algorithms
+//!
+//! - [`happens_before_analysis`] - Event ordering for concurrent trace analysis
+//! - [`VectorClock`] - Partial order data structure for happens-before analysis
+//! - [`HappensBeforeResult`] - Result with concurrent pairs and race statistics
+//! - [`TraceEvent`] - Runtime trace event representation
+//! - [`Operation`] - Memory operation type (Read/Write)
+//!
 //! # Algorithm Characteristics
 //!
 //! | Algorithm | Time Complexity | Best For | Limitations |
@@ -356,6 +364,11 @@ pub use path_enumeration::{
     PathEnumerationResult,
 };
 
+// Observability algorithms
+pub use observability::{
+    happens_before_analysis, HappensBeforeResult, Operation, TraceEvent, VectorClock,
+};
+
 // Module declarations
 mod call_graph_analysis;
 mod centrality;
@@ -367,6 +380,7 @@ mod critical_path;
 mod dominance_frontiers;
 mod dominators;
 mod natural_loops;
+mod observability;
 mod path_enumeration;
 mod post_dominators;
 mod program_slicing;
