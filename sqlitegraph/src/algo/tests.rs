@@ -30,6 +30,7 @@ use super::{
         DominanceFrontierResult, IteratedDominanceFrontierResult,
     },
     dominators::{dominators, dominators_with_progress, DominatorResult},
+    natural_loops::{natural_loops, natural_loops_with_progress, NaturalLoop, NaturalLoopsResult},
     post_dominators::{
         post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
     },
@@ -62,6 +63,7 @@ fn test_algorithms_are_send() {
         let _ = can_reach(&graph, 1, 2);
         let _ = unreachable_from(&graph, 1);
         let _ = dominators(&graph, 1);
+        let _ = natural_loops(&graph, &dominators(&graph, 1).unwrap());
         let _ = post_dominators(&graph, 1);
         let _ = post_dominators_auto_exit(&graph);
         let _ = control_dependence_from_exit(&graph);
@@ -2193,4 +2195,423 @@ fn test_iterated_dominance_frontiers_empty_definitions() {
         assert_eq!(idf_result.iterations, 0);
     }
 }
+
+// Natural loops integration tests
+
+#[test]
+fn test_natural_loops_deterministic() {
+    // Scenario: Natural loops produces deterministic output
+    // Expected: Same graph produces same loop detection
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create simple loop: 0 -> 1 -> 2 -> 1
+    for i in 0..3 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create loop edges
+    let edges = vec![(0, 1), (1, 2), (2, 1)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+
+    let loops1 = natural_loops(&graph, &dom_result).expect("First natural loops failed");
+    let loops2 = natural_loops(&graph, &dom_result).expect("Second natural loops failed");
+
+    // Results should match
+    assert_eq!(loops1.count(), loops2.count(), "Different number of loops");
+
+    for (&header, loop_) in &loops1.loops {
+        assert!(
+            loops2.loops.contains_key(&header),
+            "Second result missing loop for header {}",
+            header
+        );
+        assert_eq!(
+            loops2.loops.get(&header),
+            Some(loop_),
+            "Loops differ for header {}",
+            header
+        );
+    }
+}
+
+#[test]
+fn test_natural_loops_progress_integration() {
+    // Scenario: Progress callback works end-to-end
+    // Expected: Progress variant matches non-progress variant
+    use crate::progress::NoProgress;
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create simple loop: 0 -> 1 -> 2 -> 1
+    for i in 0..3 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create loop edges
+    let edges = vec![(0, 1), (1, 2), (2, 1)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+
+    let progress = NoProgress;
+    let result_with = natural_loops_with_progress(&graph, &dom_result, &progress)
+        .expect("Progress natural loops failed");
+    let result_without = natural_loops(&graph, &dom_result).expect("Non-progress natural loops failed");
+
+    // Results should match
+    assert_eq!(result_with.count(), result_without.count());
+}
+
+#[test]
+fn test_natural_loops_with_dominators_integration() {
+    // Scenario: End-to-end with dominators
+    // Expected: Loops work after dominators computed
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create nested loops: 0 -> 1 -> 2 -> 3, 3 -> 2, 3 -> 1
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create nested loop edges
+    let edges = vec![(0, 1), (1, 2), (2, 3), (3, 2), (3, 1)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    // Compute dominators first
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+
+    // Compute natural loops from dominators
+    let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
+
+    // Should find 2 loops (outer and inner)
+    assert_eq!(loops.count(), 2, "Should find 2 loops");
+
+    // Outer loop (header 1) should contain inner loop header (2)
+    let outer = loops.loop_with_header(entity_ids[1]).expect("Should have outer loop");
+    let inner = loops.loop_with_header(entity_ids[2]).expect("Should have inner loop");
+
+    assert!(inner.is_nested_in(&outer), "Inner should be nested in outer");
+}
+
+#[test]
+fn test_natural_loops_loop_body_complete() {
+    // Scenario: Verify loop body includes all reachable nodes
+    // Expected: Loop body includes all nodes reachable from tail (excluding header)
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create while loop: 0 -> 1, 1 -> 2, 2 -> 1, 1 -> 3
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create while loop edges
+    let edges = vec![(0, 1), (1, 2), (2, 1), (1, 3)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
+
+    let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+
+    // Body should contain node 2 (reachable from tail 2 without passing through header 1)
+    assert!(loop_.body.contains(&entity_ids[2]), "Body should contain node 2");
+
+    // Exit node 3 should NOT be in loop (not reachable from tail)
+    assert!(!loop_.contains(entity_ids[3]), "Exit node should not be in loop");
+}
+
+#[test]
+fn test_natural_loops_header_dominates_body() {
+    // Scenario: Verify header dominates all body nodes
+    // Expected: For all body nodes, header is in their dominance set
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create simple loop: 0 -> 1 -> 2 -> 1
+    for i in 0..3 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create loop edges
+    let edges = vec![(0, 1), (1, 2), (2, 1)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
+
+    let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+
+    // Header should dominate all body nodes
+    for &body_node in &loop_.body {
+        assert!(
+            dom_result.dominates(loop_.header, body_node),
+            "Header should dominate body node {}",
+            body_node
+        );
+    }
+}
+
+#[test]
+fn test_natural_loops_no_false_positives_irreducible() {
+    // Scenario: Irreducible CFGs return empty
+    // Expected: No false positives on irreducible CFGs
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create irreducible CFG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3, 3 -> 1, 3 -> 2
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create irreducible edges
+    let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3), (3, 1), (3, 2)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
+
+    // Should not detect any natural loops (irreducible CFG)
+    assert_eq!(loops.count(), 0, "Irreducible CFG should have 0 natural loops");
+}
+
+#[test]
+fn test_natural_loops_nesting_consistent_with_dominator_tree() {
+    // Scenario: Nesting matches idom structure
+    // Expected: Loop nesting consistent with dominator tree
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create nested loops: 0 -> 1 -> 2 -> 3, 3 -> 2, 3 -> 1
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create nested loop edges
+    let edges = vec![(0, 1), (1, 2), (2, 3), (3, 2), (3, 1)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
+
+    // In dominator tree: idom(2) = 1 or 3, idom(1) = 0
+    // Inner loop header (2) should be in outer loop body
+    let outer = loops.loop_with_header(entity_ids[1]).expect("Should have outer loop");
+    let inner = loops.loop_with_header(entity_ids[2]).expect("Should have inner loop");
+
+    // Inner header should be in outer loop body
+    assert!(outer.contains(inner.header), "Outer loop should contain inner header");
+
+    // Outer header should NOT be in inner loop
+    assert!(!inner.contains(outer.header), "Inner loop should not contain outer header");
+}
+
+#[test]
+fn test_natural_loops_multiple_entries_single_header() {
+    // Scenario: Multiple back-edges grouped correctly
+    // Expected: Multiple back-edges to same header grouped into single loop
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create multiple back-edges: 0 -> 1, 1 -> 2, 2 -> 1, 1 -> 3, 3 -> 1
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create multiple back-edges
+    let edges = vec![(0, 1), (1, 2), (2, 1), (1, 3), (3, 1)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
+
+    // Should have 1 loop with header 1
+    assert_eq!(loops.count(), 1, "Should have 1 loop");
+
+    let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+
+    // Should have 2 back-edges
+    assert_eq!(loop_.back_edges.len(), 2, "Should have 2 back-edges");
+    assert!(loop_.back_edges.contains(&(entity_ids[2], entity_ids[1])), "Should have back-edge (2, 1)");
+    assert!(loop_.back_edges.contains(&(entity_ids[3], entity_ids[1])), "Should have back-edge (3, 1)");
+
+    // Body should include both 2 and 3
+    assert!(loop_.body.contains(&entity_ids[2]), "Body should contain node 2");
+    assert!(loop_.body.contains(&entity_ids[3]), "Body should contain node 3");
+}
+
+#[test]
+fn test_natural_loops_result_is_send() {
+    // Scenario: NaturalLoop and NaturalLoopsResult should be Send + Sync
+    // Expected: Result types implement required traits
+    fn is_send_sync<T: Send + Sync>() {}
+
+    is_send_sync::<NaturalLoop>();
+    is_send_sync::<NaturalLoopsResult>();
+}
+
 
