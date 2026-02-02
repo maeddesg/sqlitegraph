@@ -478,6 +478,67 @@ pub fn can_reach(
     Ok(false)
 }
 
+/// Finds nodes unreachable from an entry point.
+///
+/// Returns the set of all nodes that are NOT reachable from `entry`.
+/// This is the complement of forward reachability, useful for dead code detection.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `entry` - The entry point node ID
+///
+/// # Returns
+/// Set of all node IDs NOT reachable from `entry` (dead code).
+///
+/// # Complexity
+/// - **Time**: O(|V| + |E|) - one BFS pass plus set difference operation
+/// - **Space**: O(|V|) for visited sets
+///
+/// # Algorithm
+/// 1. Compute forward reachability from entry using BFS
+/// 2. Get all nodes in the graph
+/// 3. Return set difference: all_nodes - reachable_nodes
+///
+/// # Edge Cases
+/// - **Empty graph**: Returns empty set (no nodes at all)
+/// - **Entry not in graph**: Returns all nodes in graph (none reachable)
+/// - **Fully connected graph**: Returns empty set (all nodes reachable)
+/// - **Disconnected components**: Returns nodes in other components
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::unreachable_from};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph: 0 -> 1 -> 2 and 3 -> 4 (disconnected)
+///
+/// // What code is unreachable from entry 0?
+/// let dead = unreachable_from(&graph, 0)?;
+/// // Returns {3, 4} - nodes in disconnected component
+/// ```
+pub fn unreachable_from(
+    graph: &SqliteGraph,
+    entry: i64,
+) -> Result<AHashSet<i64>, SqliteGraphError> {
+    // Get all nodes in the graph
+    let all_nodes: AHashSet<i64> = graph.all_entity_ids()?.into_iter().collect();
+
+    // If entry is not in graph, all nodes are unreachable
+    if !all_nodes.contains(&entry) {
+        return Ok(all_nodes);
+    }
+
+    // Compute reachable nodes from entry
+    let reachable = reachable_from(graph, entry)?;
+
+    // Return set difference: all_nodes - reachable
+    Ok(all_nodes
+        .difference(&reachable)
+        .copied()
+        .collect::<AHashSet<_>>())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -784,6 +845,359 @@ mod tests {
             assert!(
                 result_without.contains(&id),
                 "Progress result contains node not in non-progress result"
+            );
+        }
+    }
+
+    // Tests for reverse_reachable_from
+
+    #[test]
+    fn test_reverse_reachable_from_empty() {
+        // Scenario: Empty graph returns set containing only target
+        // Expected: {target}
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        let result = reverse_reachable_from(&graph, 999);
+        assert!(result.is_ok(), "reverse_reachable_from failed on empty graph");
+
+        let reachable = result.unwrap();
+        assert_eq!(reachable.len(), 1, "Expected only target node in empty graph");
+        assert!(reachable.contains(&999), "Target node should be in result");
+    }
+
+    #[test]
+    fn test_reverse_reachable_from_single() {
+        // Scenario: Single node returns set containing itself
+        // Expected: {node_id}
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: "single_node".to_string(),
+            file_path: Some("single_node.rs".to_string()),
+            data: serde_json::json!({}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+
+        let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+        let node_id = entity_ids[0];
+
+        let result = reverse_reachable_from(&graph, node_id);
+        assert!(result.is_ok(), "reverse_reachable_from failed on single node");
+
+        let reachable = result.unwrap();
+        assert_eq!(reachable.len(), 1, "Expected 1 node reachable");
+        assert!(reachable.contains(&node_id), "Node should reach itself");
+    }
+
+    #[test]
+    fn test_reverse_reachable_from_linear() {
+        // Scenario: Linear chain 0 -> 1 -> 2 -> 3
+        // Expected: node 3 reached by all, node 0 reaches only itself
+        let graph = create_linear_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Node 3 (last) should be reachable from all nodes
+        let reverse_3 = reverse_reachable_from(&graph, entity_ids[3]).expect("Failed");
+        assert_eq!(
+            reverse_3.len(),
+            4,
+            "Node 3 should be reachable from all 4 nodes in chain"
+        );
+        for &id in &entity_ids {
+            assert!(
+                reverse_3.contains(&id),
+                "Node {} should be able to reach node 3",
+                id
+            );
+        }
+
+        // Node 0 (first) should only reach itself
+        let reverse_0 = reverse_reachable_from(&graph, entity_ids[0]).expect("Failed");
+        assert_eq!(reverse_0.len(), 1, "Node 0 should only reach itself");
+        assert!(
+            reverse_0.contains(&entity_ids[0]),
+            "Node 0 should reach itself"
+        );
+    }
+
+    #[test]
+    fn test_reverse_reachable_from_diamond() {
+        // Scenario: Diamond graph: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
+        // Expected: Node 3 reached by all nodes
+        let graph = create_diamond();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let reverse_3 = reverse_reachable_from(&graph, entity_ids[3]).expect("Failed");
+        assert_eq!(
+            reverse_3.len(),
+            4,
+            "Node 3 should be reachable from all 4 nodes in diamond"
+        );
+        for &id in &entity_ids {
+            assert!(
+                reverse_3.contains(&id),
+                "Node {} should be able to reach node 3",
+                id
+            );
+        }
+    }
+
+    #[test]
+    fn test_reverse_reachable_from_cycle() {
+        // Scenario: Graph with cycle: 0 -> 1 -> 2 -> 1
+        // Expected: Nodes 1 and 2 mutually reachable
+        let graph = create_cycle();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        let node_0 = entity_ids[0];
+        let node_1 = entity_ids[1];
+        let node_2 = entity_ids[2];
+
+        // Node 1 should be reachable from nodes 1 and 2 (cycle)
+        let reverse_1 = reverse_reachable_from(&graph, node_1).expect("Failed");
+        assert_eq!(
+            reverse_1.len(),
+            2,
+            "Node 1 should be reachable from 2 nodes (0 and itself, or 2 and itself)"
+        );
+        assert!(reverse_1.contains(&node_1), "Node 1 should reach itself");
+        // Note: In the cycle 1 <-> 2, node 1 is reachable from both 1 and 2
+
+        // Node 2 should be reachable from nodes 1 and 2
+        let reverse_2 = reverse_reachable_from(&graph, node_2).expect("Failed");
+        assert_eq!(
+            reverse_2.len(),
+            2,
+            "Node 2 should be reachable from 2 nodes"
+        );
+        assert!(reverse_2.contains(&node_1), "Node 1 should reach node 2");
+        assert!(reverse_2.contains(&node_2), "Node 2 should reach itself");
+    }
+
+    #[test]
+    fn test_reverse_reachable_from_with_progress() {
+        // Scenario: Progress variant matches non-progress variant
+        // Expected: Same results, progress callback called
+        use crate::progress::NoProgress;
+
+        let graph = create_linear_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let progress = NoProgress;
+        let result_with = reverse_reachable_from_with_progress(&graph, entity_ids[3], &progress)
+            .expect("Failed");
+        let result_without = reverse_reachable_from(&graph, entity_ids[3]).expect("Failed");
+
+        assert_eq!(
+            result_with.len(),
+            result_without.len(),
+            "Progress and non-progress results should match"
+        );
+        for &id in &result_with {
+            assert!(
+                result_without.contains(&id),
+                "Progress result contains node not in non-progress result"
+            );
+        }
+    }
+
+    // Tests for can_reach
+
+    #[test]
+    fn test_can_reach_self() {
+        // Scenario: All nodes can reach themselves
+        // Expected: can_reach(g, n, n) returns true for all n
+        let graph = create_linear_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        for &node_id in &entity_ids {
+            let result = can_reach(&graph, node_id, node_id).expect("Failed");
+            assert!(
+                result,
+                "Node {} should be able to reach itself",
+                node_id
+            );
+        }
+    }
+
+    #[test]
+    fn test_can_reach_linear() {
+        // Scenario: Linear chain 0 -> 1 -> 2 -> 3
+        // Expected: Earlier nodes reach later, not vice versa
+        let graph = create_linear_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Node 0 can reach all nodes
+        assert!(
+            can_reach(&graph, entity_ids[0], entity_ids[0]).expect("Failed"),
+            "Node 0 should reach itself"
+        );
+        assert!(
+            can_reach(&graph, entity_ids[0], entity_ids[1]).expect("Failed"),
+            "Node 0 should reach node 1"
+        );
+        assert!(
+            can_reach(&graph, entity_ids[0], entity_ids[2]).expect("Failed"),
+            "Node 0 should reach node 2"
+        );
+        assert!(
+            can_reach(&graph, entity_ids[0], entity_ids[3]).expect("Failed"),
+            "Node 0 should reach node 3"
+        );
+
+        // Node 3 can only reach itself
+        assert!(
+            can_reach(&graph, entity_ids[3], entity_ids[3]).expect("Failed"),
+            "Node 3 should reach itself"
+        );
+        assert!(
+            !can_reach(&graph, entity_ids[3], entity_ids[0]).expect("Failed"),
+            "Node 3 should NOT reach node 0"
+        );
+    }
+
+    #[test]
+    fn test_can_reach_cycle() {
+        // Scenario: Graph with cycle: 0 -> 1 -> 2 -> 1
+        // Expected: Cycle nodes can reach each other
+        let graph = create_cycle();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        let node_0 = entity_ids[0];
+        let node_1 = entity_ids[1];
+        let node_2 = entity_ids[2];
+
+        // Node 1 and 2 are mutually reachable (cycle)
+        assert!(
+            can_reach(&graph, node_1, node_2).expect("Failed"),
+            "Node 1 should reach node 2 (in cycle)"
+        );
+        assert!(
+            can_reach(&graph, node_2, node_1).expect("Failed"),
+            "Node 2 should reach node 1 (in cycle)"
+        );
+    }
+
+    #[test]
+    fn test_can_reach_disconnected() {
+        // Scenario: Disconnected graph: 0 -> 1 and 2 -> 3
+        // Expected: Returns false for unreachable nodes
+        let graph = create_disconnected();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // Node 0 cannot reach nodes 2 and 3 (different component)
+        assert!(
+            !can_reach(&graph, entity_ids[0], entity_ids[2]).expect("Failed"),
+            "Node 0 should NOT reach node 2 (disconnected)"
+        );
+        assert!(
+            !can_reach(&graph, entity_ids[0], entity_ids[3]).expect("Failed"),
+            "Node 0 should NOT reach node 3 (disconnected)"
+        );
+    }
+
+    #[test]
+    fn test_can_reach_nonexistent() {
+        // Scenario: Check reachability for non-existent nodes
+        // Expected: Returns false (no path exists)
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        let result = can_reach(&graph, 999, 888);
+        assert!(result.is_ok(), "can_reach should not error on non-existent nodes");
+        assert!(!result.unwrap(), "Non-existent nodes should not reach each other");
+    }
+
+    // Tests for unreachable_from
+
+    #[test]
+    fn test_unreachable_from_empty() {
+        // Scenario: Empty graph returns empty set
+        // Expected: No unreachable nodes
+        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        let result = unreachable_from(&graph, 0);
+        assert!(result.is_ok(), "unreachable_from failed on empty graph");
+
+        let unreachable = result.unwrap();
+        assert_eq!(unreachable.len(), 0, "Expected 0 unreachable nodes in empty graph");
+    }
+
+    #[test]
+    fn test_unreachable_from_linear() {
+        // Scenario: Linear chain: 0 -> 1 -> 2 -> 3
+        // Expected: No unreachable nodes (all reachable from 0)
+        let graph = create_linear_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let unreachable = unreachable_from(&graph, entity_ids[0]).expect("Failed");
+        assert_eq!(
+            unreachable.len(),
+            0,
+            "Expected 0 unreachable nodes in fully connected chain"
+        );
+    }
+
+    #[test]
+    fn test_unreachable_from_disconnected() {
+        // Scenario: Disconnected graph: 0 -> 1 and 2 -> 3
+        // Expected: Returns nodes in other component
+        let graph = create_disconnected();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        // From node 0, nodes 2 and 3 are unreachable
+        let unreachable = unreachable_from(&graph, entity_ids[0]).expect("Failed");
+        assert_eq!(unreachable.len(), 2, "Expected 2 unreachable nodes");
+        assert!(
+            unreachable.contains(&entity_ids[2]),
+            "Node 2 should be unreachable from node 0"
+        );
+        assert!(
+            unreachable.contains(&entity_ids[3]),
+            "Node 3 should be unreachable from node 0"
+        );
+        assert!(
+            !unreachable.contains(&entity_ids[0]),
+            "Node 0 should not be unreachable from itself"
+        );
+        assert!(
+            !unreachable.contains(&entity_ids[1]),
+            "Node 1 should be reachable from node 0"
+        );
+    }
+
+    #[test]
+    fn test_unreachable_from_diamond() {
+        // Scenario: Diamond graph: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
+        // Expected: All nodes reachable from entry 0
+        let graph = create_diamond();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let unreachable = unreachable_from(&graph, entity_ids[0]).expect("Failed");
+        assert_eq!(
+            unreachable.len(),
+            0,
+            "Expected 0 unreachable nodes in diamond (all reachable from 0)"
+        );
+    }
+
+    #[test]
+    fn test_unreachable_from_nonexistent_entry() {
+        // Scenario: Entry not in graph
+        // Expected: All nodes are unreachable
+        let graph = create_linear_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+        let unreachable = unreachable_from(&graph, 999).expect("Failed");
+        assert_eq!(
+            unreachable.len(),
+            4,
+            "Expected all 4 nodes to be unreachable from non-existent entry"
+        );
+        for &id in &entity_ids {
+            assert!(
+                unreachable.contains(&id),
+                "Node {} should be unreachable from non-existent entry",
+                id
             );
         }
     }
