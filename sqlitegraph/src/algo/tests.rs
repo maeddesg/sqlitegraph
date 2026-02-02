@@ -22,6 +22,7 @@ use super::{
     scc::{strongly_connected_components, SccResult},
     structure::{connected_components, find_cycles_limited, nodes_by_degree},
     transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds},
+    transitive_reduction::{transitive_reduction, transitive_reduction_with_progress},
     wcc::{weakly_connected_components, weakly_connected_components_with_progress},
 };
 
@@ -43,6 +44,7 @@ fn test_algorithms_are_send() {
         let _ = betweenness_centrality(&graph);
         let _ = nodes_by_degree(&graph, true);
         let _ = transitive_closure(&graph, None);
+        let _ = transitive_reduction(&graph);
     };
 
     // If this compiles, all the algorithm functions are Send
@@ -831,3 +833,259 @@ fn test_wcc_bidirectional_edges() {
     assert_eq!(result.len(), 1, "Expected 1 component");
     assert_eq!(result[0].len(), 3, "Expected all 3 nodes in single component");
 }
+
+#[test]
+fn test_transitive_reduction_empty() {
+    // Scenario: Transitive reduction on empty graph
+    // Expected: Returns empty set
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    let result = transitive_reduction(&graph);
+    assert!(result.is_ok(), "transitive_reduction failed on empty graph");
+
+    let essential = result.unwrap();
+    assert_eq!(essential.len(), 0, "Expected 0 edges in empty graph");
+}
+
+#[test]
+fn test_transitive_reduction_linear() {
+    // Scenario: Transitive reduction on linear chain
+    // Expected: All edges are essential (no redundancy in chain)
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create linear chain: 0 -> 1 -> 2 -> 3
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create chain edges
+    for i in 0..entity_ids.len().saturating_sub(1) {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[i],
+            to_id: entity_ids[i + 1],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let result = transitive_reduction(&graph);
+    assert!(result.is_ok(), "transitive_reduction failed on linear chain");
+
+    let essential = result.unwrap();
+
+    // All 3 edges should be essential
+    assert_eq!(essential.len(), 3, "All edges in linear chain should be essential");
+    assert!(essential.contains(&(entity_ids[0], entity_ids[1])));
+    assert!(essential.contains(&(entity_ids[1], entity_ids[2])));
+    assert!(essential.contains(&(entity_ids[2], entity_ids[3])));
+}
+
+#[test]
+fn test_transitive_reduction_diamond() {
+    // Scenario: Transitive reduction on diamond graph
+    // Expected: Direct edge from source to sink is redundant
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create 4 nodes
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create diamond: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3, 0 -> 3
+    let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3), (0, 3)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "connects".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let result = transitive_reduction(&graph);
+    assert!(result.is_ok(), "transitive_reduction failed on diamond graph");
+
+    let essential = result.unwrap();
+
+    // Should have 4 edges (0->3 removed)
+    assert_eq!(essential.len(), 4, "Should have 4 essential edges");
+
+    // Verify essential edges
+    assert!(essential.contains(&(entity_ids[0], entity_ids[1])));
+    assert!(essential.contains(&(entity_ids[0], entity_ids[2])));
+    assert!(essential.contains(&(entity_ids[1], entity_ids[3])));
+    assert!(essential.contains(&(entity_ids[2], entity_ids[3])));
+
+    // Verify redundant edge is removed
+    assert!(!essential.contains(&(entity_ids[0], entity_ids[3])));
+}
+
+#[test]
+fn test_transitive_reduction_fully_connected() {
+    // Scenario: Transitive reduction on complete DAG
+    // Expected: Only direct edges (i -> i+1) are essential
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create 4 nodes
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create complete DAG: all edges from lower to higher indices
+    for i in 0..entity_ids.len() {
+        for j in (i + 1)..entity_ids.len() {
+            let edge = crate::GraphEdge {
+                id: 0,
+                from_id: entity_ids[i],
+                to_id: entity_ids[j],
+                edge_type: "connects".to_string(),
+                data: serde_json::json!({}),
+            };
+            graph.insert_edge(&edge).ok();
+        }
+    }
+
+    let result = transitive_reduction(&graph);
+    assert!(result.is_ok(), "transitive_reduction failed on complete DAG");
+
+    let essential = result.unwrap();
+
+    // In complete DAG of 4 nodes: 6 edges total, 3 essential
+    assert_eq!(essential.len(), 3, "Should have 3 essential edges");
+
+    // Only the minimal edges remain
+    assert!(essential.contains(&(entity_ids[0], entity_ids[1])));
+    assert!(essential.contains(&(entity_ids[1], entity_ids[2])));
+    assert!(essential.contains(&(entity_ids[2], entity_ids[3])));
+
+    // Long edges are removed
+    assert!(!essential.contains(&(entity_ids[0], entity_ids[2])));
+    assert!(!essential.contains(&(entity_ids[0], entity_ids[3])));
+    assert!(!essential.contains(&(entity_ids[1], entity_ids[3])));
+}
+
+#[test]
+fn test_transitive_reduction_with_progress() {
+    // Scenario: Transitive reduction with progress callback
+    // Expected: Results match non-progress version
+    use crate::progress::NoProgress;
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create simple diamond graph
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3), (0, 3)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "connects".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let progress = NoProgress;
+    let result = transitive_reduction_with_progress(&graph, &progress);
+
+    assert!(result.is_ok(), "transitive_reduction_with_progress failed");
+
+    let essential = result.unwrap();
+    assert_eq!(essential.len(), 4, "Should have 4 essential edges");
+
+    // Also compare with non-progress version
+    let result_no_progress = transitive_reduction(&graph).expect("Non-progress version failed");
+    assert_eq!(essential, result_no_progress, "Progress and non-progress results should match");
+}
+
+#[test]
+fn test_transitive_reduction_deterministic() {
+    // Scenario: Transitive reduction produces deterministic output
+    // Expected: Same graph produces same essential edges
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create diamond graph
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3), (0, 3)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "connects".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let result1 = transitive_reduction(&graph).expect("First reduction failed");
+    let result2 = transitive_reduction(&graph).expect("Second reduction failed");
+
+    assert_eq!(result1, result2, "Transitive reduction should be deterministic");
+}
+
