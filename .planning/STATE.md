@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 48 of 57 (Derived CFG Algorithms) — 2/2 plans ready
-Status: Phase 48 Plan 01 complete - Dominance frontiers (Cytron et al.)
-Last activity: 2026-02-02 — Phase 48 Plan 01 complete (48-02: Natural Loops pending)
+Phase: 48 of 57 (Derived CFG Algorithms) — 2/2 plans complete
+Status: Phase 48 COMPLETE - Dominance frontiers and natural loops
+Last activity: 2026-02-02 — Phase 48 complete (both 48-01 and 48-02 done)
 
-Progress: [████░░░░░░░] 30% of v1.14 (12/191 plans complete, 2/13 phases done, Phase 48-01 done)
+Progress: [████░░░░░░░] 31% of v1.14 (13/191 plans complete, 2/13 phases done, Phase 48 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 187 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01)
+- Total plans completed: 188 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02)
 - Average duration: ~20 min/plan
 - Total execution time: ~77 hours across v1.0-v1.14
 
@@ -34,14 +34,14 @@ Progress: [████░░░░░░░] 30% of v1.14 (12/191 plans complet
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (10/183 complete - Phase 45 done, 46-01 done, 47-01 through 47-03 done, 48-01 done) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (13/183 complete - Phase 45 done, 46-01 done, 47-01 through 47-03 done, 48-01 through 48-02 done) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
 - v1.14 phase 45: ~8 min/plan (5 plans complete)
 - v1.14 phase 46: ~7 min/plan (1 plan complete)
 - v1.14 phase 47: ~10 min/plan (3 plans complete)
-- v1.14 phase 48: ~6 min/plan (1 plan complete)
+- v1.14 phase 48: ~7 min/plan (2 plans complete)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -71,6 +71,10 @@ Recent decisions affecting current work:
 - **Dominance frontiers algorithm:** Chose Cytron et al. walk-up algorithm (1991) over naive O(N³) definition-based approach; O(N²) worst case but faster in practice for realistic CFGs
 - **Iterated DF iteration limit:** Set to 100 iterations to prevent non-termination on pathological inputs while never triggering on valid CFGs (real-world convergence in 2-4 iterations)
 - **Entry node DF handling:** Stop walk-up when idom is None (reached entry node) to prevent infinite loop; correctly handles entry node which has no immediate dominator
+- **Natural loop definition:** Use back-edge dominance check (header dominates tail) per Muchnick and Cooper et al.; distinguishes reducible CFGs (natural loops) from irreducible cycles
+- **Loop body computation:** DFS from tail, add all reachable nodes except header; O(E) per back-edge, correctly captures all nodes in loop
+- **Multiple back-edges grouping:** Group all back-edges to same header into single NaturalLoop; matches programmer intuition (one loop, multiple continue points)
+- **Nesting analysis API:** Provide is_nested_in(), nesting_tree(), nesting_depth() helper methods; enables hierarchical loop optimization passes
 
 ### Pending Todos
 
@@ -88,5 +92,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 48 Plan 01 (Dominance Frontiers). 3/3 tasks complete, dominance frontiers with Cytron et al. walk-up algorithm, iterated DF for SSA phi-placement, and 18 tests implemented.
+Stopped at: Completed Phase 48 Plan 02 (Natural Loops). 3/3 tasks complete, natural loop detection with back-edge dominance analysis, loop body computation, nesting analysis, and 31 tests implemented (22 unit + 9 integration).
 Resume file: None
