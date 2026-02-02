@@ -117,3 +117,8 @@ harness = false
 [[bench]]
 name = "io12_validation"
 harness = false
+
+# Phase 45: Graph Theory algorithms benchmarks
+[[bench]]
+name = "graph_theory_benchmarks"
+harness = false
