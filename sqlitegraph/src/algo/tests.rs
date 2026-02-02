@@ -38,8 +38,10 @@ use super::{
         control_dependence_graph, control_dependence_from_exit, ControlDependenceResult,
     },
     path_enumeration::{
-        enumerate_paths, enumerate_paths_with_progress, EnumeratedPath, PathClassification,
-        PathEnumerationConfig, PathEnumerationResult,
+        enumerate_paths, enumerate_paths_with_progress, enumerate_paths_with_dominance,
+        enumerate_paths_with_dominance_progress, EnumeratedPath, PathClassification,
+        PathEnumerationConfig, PathEnumerationDominanceConfig, PathEnumerationPruningStats,
+        PathEnumerationResult,
     },
 };
 
@@ -72,6 +74,14 @@ fn test_algorithms_are_send() {
         let _ = post_dominators_auto_exit(&graph);
         let _ = control_dependence_from_exit(&graph);
         let _ = enumerate_paths(&graph, 1, &PathEnumerationConfig::default());
+        let _ = enumerate_paths_with_dominance(
+            &graph,
+            1,
+            &dominators(&graph, 1).unwrap(),
+            &control_dependence_from_exit(&graph).unwrap(),
+            &natural_loops(&graph, &dominators(&graph, 1).unwrap()).unwrap(),
+            &PathEnumerationDominanceConfig::default(),
+        );
         let _ = EnumeratedPath {
             nodes: vec![1, 2, 3],
             classification: PathClassification::Normal,
@@ -85,6 +95,12 @@ fn test_algorithms_are_send() {
             total_paths_found: 0,
             paths_pruned_by_bounds: 0,
             max_depth_reached: 0,
+            pruning_stats: None,
+        };
+        let _ = PathEnumerationPruningStats {
+            paths_pruned: 0,
+            total_considered: 0,
+            reduction_ratio: 0.0,
         };
     };
 
@@ -3023,6 +3039,341 @@ fn test_enumerate_paths_result_is_send() {
     is_send_sync::<EnumeratedPath>();
     is_send_sync::<PathEnumerationResult>();
     is_send_sync::<PathClassification>();
+    is_send_sync::<PathEnumerationDominanceConfig>();
+    is_send_sync::<PathEnumerationPruningStats>();
+}
+
+// ============================================================================
+// Dominance-Constrained Enumeration Integration Tests
+// ============================================================================
+
+#[test]
+fn test_enumerate_paths_with_dominance_deterministic() {
+    // Scenario: Same input produces same output with dominance constraints
+    // Expected: Deterministic results across multiple runs
+    use crate::graph::GraphEntityCreate;
+    use ahash::AHashSet;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create simple CFG: entry -> branch -> exit
+    let entry = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let branch = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let exit = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    graph
+        .insert_edge(entry, "next".into(), branch, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(branch, "next".into(), exit, vec![])
+        .expect("Failed to insert edge");
+
+    let mut exit_nodes = AHashSet::new();
+    exit_nodes.insert(exit);
+
+    // Compute analysis results
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let cd_result = control_dependence_from_exit(&graph).expect("Failed to compute CD");
+    let loops_result = natural_loops(&graph, &dom_result).expect("Failed to compute loops");
+
+    let config = PathEnumerationDominanceConfig {
+        base: PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        },
+        use_dominance_pruning: true,
+        use_control_dependence_pruning: true,
+        use_loop_constraint_pruning: true,
+    };
+
+    // Run twice
+    let result1 = enumerate_paths_with_dominance(
+        &graph,
+        entry,
+        &dom_result,
+        &cd_result,
+        &loops_result,
+        &config,
+    )
+    .expect("First enumeration failed");
+
+    let result2 = enumerate_paths_with_dominance(
+        &graph,
+        entry,
+        &dom_result,
+        &cd_result,
+        &loops_result,
+        &config,
+    )
+    .expect("Second enumeration failed");
+
+    // Results should be identical
+    assert_eq!(result1.paths.len(), result2.paths.len());
+    assert_eq!(
+        result1.pruning_stats.as_ref().unwrap().paths_pruned,
+        result2.pruning_stats.as_ref().unwrap().paths_pruned
+    );
+}
+
+#[test]
+fn test_enumerate_paths_with_dominance_full_integration() {
+    // Scenario: All three analysis results (dom, cd, loops) used together
+    // Expected: Successful integration with all constraint types enabled
+    use crate::graph::GraphEntityCreate;
+    use ahash::AHashSet;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create CFG with loop: entry -> header -> body -> header, header -> exit
+    let entry = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let header = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["LoopHeader".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let body = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["LoopBody".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let exit = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    graph
+        .insert_edge(entry, "next".into(), header, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(header, "next".into(), body, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(body, "loop".into(), header, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(header, "exit".into(), exit, vec![])
+        .expect("Failed to insert edge");
+
+    let mut exit_nodes = AHashSet::new();
+    exit_nodes.insert(exit);
+
+    // Compute all analysis results
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let cd_result = control_dependence_from_exit(&graph).expect("Failed to compute CD");
+    let loops_result = natural_loops(&graph, &dom_result).expect("Failed to compute loops");
+
+    let config = PathEnumerationDominanceConfig {
+        base: PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            revisit_cap: 2,
+            ..Default::default()
+        },
+        use_dominance_pruning: true,
+        use_control_dependence_pruning: true,
+        use_loop_constraint_pruning: true,
+    };
+
+    let result = enumerate_paths_with_dominance(
+        &graph,
+        entry,
+        &dom_result,
+        &cd_result,
+        &loops_result,
+        &config,
+    )
+    .expect("Enumeration with all constraints failed");
+
+    // Should find paths respecting all constraints
+    assert!(!result.paths.is_empty(), "Should find at least one path");
+    assert!(
+        result.pruning_stats.is_some(),
+        "Should have pruning statistics"
+    );
+}
+
+#[test]
+fn test_enumerate_paths_with_dominance_vs_base() {
+    // Scenario: Compare constrained vs unconstrained enumeration
+    // Expected: Constrained enumeration finds same valid paths, fewer invalid paths
+    use crate::graph::GraphEntityCreate;
+    use ahash::AHashSet;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create diamond CFG
+    let entry = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let left = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let right = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let exit = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    graph
+        .insert_edge(entry, "left".into(), left, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(entry, "right".into(), right, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(left, "next".into(), exit, vec![])
+        .expect("Failed to insert edge");
+    graph
+        .insert_edge(right, "next".into(), exit, vec![])
+        .expect("Failed to insert edge");
+
+    let mut exit_nodes = AHashSet::new();
+    exit_nodes.insert(exit);
+
+    // Base enumeration
+    let base_config = PathEnumerationConfig {
+        exit_nodes: Some(exit_nodes.clone()),
+        ..Default::default()
+    };
+    let base_result =
+        enumerate_paths(&graph, entry, &base_config).expect("Base enumeration failed");
+
+    // Constrained enumeration
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let cd_result = control_dependence_from_exit(&graph).expect("Failed to compute CD");
+    let loops_result = natural_loops(&graph, &dom_result).expect("Failed to compute loops");
+
+    let constrained_config = PathEnumerationDominanceConfig {
+        base: PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        },
+        use_dominance_pruning: true,
+        use_control_dependence_pruning: true,
+        use_loop_constraint_pruning: true,
+    };
+    let constrained_result = enumerate_paths_with_dominance(
+        &graph,
+        entry,
+        &dom_result,
+        &cd_result,
+        &loops_result,
+        &constrained_config,
+    )
+    .expect("Constrained enumeration failed");
+
+    // Both should find the same valid paths
+    assert_eq!(base_result.paths.len(), constrained_result.paths.len());
+    assert!(
+        constrained_result.pruning_stats.is_some(),
+        "Constrained should have pruning stats"
+    );
+}
+
+#[test]
+fn test_enumerate_paths_with_dominance_progress_integration() {
+    // Scenario: Progress callback works with dominance-constrained enumeration
+    // Expected: Progress callback is invoked during enumeration
+    use crate::graph::GraphEntityCreate;
+    use crate::progress::NoProgress;
+    use ahash::AHashSet;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create simple linear path
+    let entry = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    let exit = graph
+        .insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })
+        .expect("Failed to insert node");
+
+    graph
+        .insert_edge(entry, "next".into(), exit, vec![])
+        .expect("Failed to insert edge");
+
+    let mut exit_nodes = AHashSet::new();
+    exit_nodes.insert(exit);
+
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let cd_result = control_dependence_from_exit(&graph).expect("Failed to compute CD");
+    let loops_result = natural_loops(&graph, &dom_result).expect("Failed to compute loops");
+
+    let config = PathEnumerationDominanceConfig {
+        base: PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        },
+        use_dominance_pruning: true,
+        use_control_dependence_pruning: true,
+        use_loop_constraint_pruning: true,
+    };
+
+    let progress = NoProgress;
+    let result = enumerate_paths_with_dominance_progress(
+        &graph,
+        entry,
+        &dom_result,
+        &cd_result,
+        &loops_result,
+        &config,
+        progress,
+    )
+    .expect("Enumeration with progress failed");
+
+    assert!(!result.paths.is_empty());
+    assert!(result.pruning_stats.is_some());
 }
 
 
