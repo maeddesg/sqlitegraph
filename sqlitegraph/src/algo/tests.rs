@@ -25,6 +25,10 @@ use super::{
     transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds},
     transitive_reduction::{transitive_reduction, transitive_reduction_with_progress},
     wcc::{weakly_connected_components, weakly_connected_components_with_progress},
+    dominance_frontiers::{
+        dominance_frontiers, dominance_frontiers_with_progress, iterated_dominance_frontiers,
+        DominanceFrontierResult, IteratedDominanceFrontierResult,
+    },
     dominators::{dominators, dominators_with_progress, DominatorResult},
     post_dominators::{
         post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
@@ -60,6 +64,7 @@ fn test_algorithms_are_send() {
         let _ = dominators(&graph, 1);
         let _ = post_dominators(&graph, 1);
         let _ = post_dominators_auto_exit(&graph);
+        let _ = control_dependence_from_exit(&graph);
     };
 
     // If this compiles, all the algorithm functions are Send
@@ -1841,5 +1846,351 @@ fn test_control_dependence_diamond_cfg() {
         cdg_result.depends_on(entity_ids[3], entity_ids[0]),
         "Node 3 should depend on node 0"
     );
+}
+
+// Dominance frontiers integration tests
+
+#[test]
+fn test_dominance_frontiers_deterministic() {
+    // Scenario: Dominance frontiers produces deterministic output
+    // Expected: Same graph produces same dominance frontier sets
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create diamond CFG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+
+    let df1 = dominance_frontiers(&graph, &dom_result).expect("First DF failed");
+    let df2 = dominance_frontiers(&graph, &dom_result).expect("Second DF failed");
+
+    // Results should match
+    assert_eq!(df1.frontiers.len(), df2.frontiers.len());
+    for (&node, frontier_set) in &df1.frontiers {
+        assert!(
+            df2.frontiers.contains_key(&node),
+            "Second result missing node {}",
+            node
+        );
+        assert_eq!(
+            df2.frontiers.get(&node),
+            Some(frontier_set),
+            "DF sets differ for node {}",
+            node
+        );
+    }
+}
+
+#[test]
+fn test_dominance_frontiers_progress_integration() {
+    // Scenario: Progress callback works end-to-end
+    // Expected: Progress variant matches non-progress variant
+    use crate::progress::NoProgress;
+
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let entry = entity_ids[0];
+        let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+
+        let progress = NoProgress;
+        let result_with = dominance_frontiers_with_progress(&graph, &dom_result, &progress)
+            .expect("Progress DF failed");
+        let result_without = dominance_frontiers(&graph, &dom_result).expect("Non-progress DF failed");
+
+        // Results should match
+        assert_eq!(result_with.frontiers.len(), result_without.frontiers.len());
+    }
+}
+
+#[test]
+fn test_dominance_frontiers_with_dominators_integration() {
+    // Scenario: End-to-end with dominators
+    // Expected: DF computed correctly from dominator result
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create diamond CFG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    // Compute dominators first
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+
+    // Compute dominance frontiers from dominators
+    let df_result = dominance_frontiers(&graph, &dom_result)
+        .expect("Failed to compute dominance frontiers");
+
+    // Node 3 (merge point) should be in DF(0)
+    assert!(
+        df_result.in_frontier(entity_ids[0], entity_ids[3]),
+        "Node 3 should be in DF(0) - it's the merge point"
+    );
+}
+
+#[test]
+fn test_iterated_dominance_frontiers_ssa_use_case() {
+    // Scenario: Simulate SSA phi-placement scenario
+    // Expected: IDF correctly identifies all phi-node locations
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create nested if CFG: 0 -> 1, 0 -> 4, 1 -> 2, 1 -> 3, 2 -> 5, 3 -> 5, 4 -> 5
+    for i in 0..6 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    let edges = vec![(0, 1), (0, 4), (1, 2), (1, 3), (2, 5), (3, 5), (4, 5)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+
+    // Variables defined at nodes 1 and 4
+    let mut definitions = std::collections::HashSet::new();
+    definitions.insert(entity_ids[1]);
+    definitions.insert(entity_ids[4]);
+
+    let idf_result = iterated_dominance_frontiers(&graph, &dom_result, &definitions)
+        .expect("Failed to compute IDF");
+
+    // IDF should contain convergence points
+    assert!(
+        idf_result.iterations > 0,
+        "IDF should require at least 1 iteration"
+    );
+
+    // The merge point (5) should need phi-nodes
+    assert!(
+        idf_result.phi_nodes.contains(&entity_ids[5]),
+        "Merge point should need phi-nodes"
+    );
+}
+
+#[test]
+fn test_dominance_frontiers_empty_after_entry() {
+    // Scenario: Entry node has no predecessors
+    // Expected: Entry DF is empty (no convergence at entry)
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create single node
+    let entity = GraphEntity {
+        id: 0,
+        kind: "node".to_string(),
+        name: "entry".to_string(),
+        file_path: Some("entry.rs".to_string()),
+        data: serde_json::json!({}),
+    };
+    graph.insert_entity(&entity).expect("Failed to insert entity");
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+    let entry = entity_ids[0];
+
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let df_result = dominance_frontiers(&graph, &dom_result)
+        .expect("Failed to compute dominance frontiers");
+
+    // Entry should have empty DF
+    assert_eq!(
+        df_result.frontier(entry),
+        None,
+        "Entry should have empty DF"
+    );
+}
+
+#[test]
+fn test_dominance_frontiers_result_is_send() {
+    // Scenario: DominanceFrontierResult should be Send + Sync
+    // Expected: Result types implement required traits
+    fn is_send_sync<T: Send + Sync>() {}
+
+    is_send_sync::<DominanceFrontierResult>();
+    is_send_sync::<IteratedDominanceFrontierResult>();
+}
+
+#[test]
+fn test_dominance_frontiers_linear_chain_empty() {
+    // Scenario: Linear chain has no dominance frontiers
+    // Expected: All DF sets are empty
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create linear chain: 0 -> 1 -> 2 -> 3
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    for i in 0..entity_ids.len().saturating_sub(1) {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[i],
+            to_id: entity_ids[i + 1],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let df_result = dominance_frontiers(&graph, &dom_result)
+        .expect("Failed to compute dominance frontiers");
+
+    // All nodes should have empty DF
+    assert_eq!(
+        df_result.frontiers.len(),
+        0,
+        "Linear chain should have no dominance frontiers"
+    );
+}
+
+#[test]
+fn test_dominance_frontiers_loop_creates_frontier() {
+    // Scenario: Loop CFG creates dominance frontier at back-edge
+    // Expected: Loop body has loop header in its DF
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create loop: 0 -> 1 -> 2 -> 1
+    for i in 0..3 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    let edges = vec![(0, 1), (1, 2), (2, 1)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let entry = entity_ids[0];
+    let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+    let df_result = dominance_frontiers(&graph, &dom_result)
+        .expect("Failed to compute dominance frontiers");
+
+    // Loop body (2) should have loop header (1) in its DF
+    assert!(
+        df_result.in_frontier(entity_ids[2], entity_ids[1]),
+        "Loop body should have loop header in DF"
+    );
+}
+
+#[test]
+fn test_iterated_dominance_frontiers_empty_definitions() {
+    // Scenario: No definition nodes
+    // Expected: Returns empty phi_nodes set
+    use ahash::AHashSet;
+
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let entry = entity_ids[0];
+        let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
+
+        let definitions = AHashSet::new();
+        let idf_result = iterated_dominance_frontiers(&graph, &dom_result, &definitions)
+            .expect("Failed to compute IDF");
+
+        assert_eq!(idf_result.phi_nodes.len(), 0);
+        assert_eq!(idf_result.iterations, 0);
+    }
 }
 

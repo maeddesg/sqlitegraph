@@ -45,6 +45,11 @@
 //! - [`post_dominators_with_progress`] - Post-dominator computation with progress tracking
 //! - [`post_dominators_auto_exit`] - Post-dominators with automatic exit detection
 //! - [`PostDominatorResult`] - Post-dominance sets and immediate post-dominator tree
+//! - [`dominance_frontiers`] - Compute dominance frontiers for SSA construction
+//! - [`dominance_frontiers_with_progress`] - Dominance frontier computation with progress tracking
+//! - [`iterated_dominance_frontiers`] - Compute iterated dominance frontiers for SSA φ-placement
+//! - [`DominanceFrontierResult`] - Dominance frontier sets
+//! - [`IteratedDominanceFrontierResult`] - Iterated dominance frontier result with φ-node placements
 //! - [`control_dependence_graph`] - Compute Control Dependence Graph from post-dominators
 //! - [`control_dependence_from_exit`] - Compute CDG with automatic exit detection
 //! - [`ControlDependenceResult`] - Control dependence edges and reverse mapping
@@ -66,6 +71,8 @@
 //! | Reachability | O(V + E) | Impact analysis, slicing | None |
 //! | Dominators | O(V²) worst, faster in practice | CFG analysis, SSA construction | Requires single entry |
 //! | Post-Dominators | O(V²) worst, faster in practice | CFG analysis, control dependence | Requires single exit or virtual exit |
+//! | Dominance Frontiers | O(V²) worst | SSA φ-node placement, convergence points | Requires dominators |
+//! | Iterated DF | O(V × iterations) | SSA construction, φ-node placement | Fixed-point iteration |
 //! | Control Dependence | O(E) after post-dom | Program slicing, impact analysis | Requires post-dominators |
 //!
 //! Where:
@@ -185,6 +192,7 @@
 //! - [`reverse_reachable_from_with_progress`]
 //! - [`dominators_with_progress`]
 //! - [`post_dominators_with_progress`]
+//! - [`dominance_frontiers_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -218,6 +226,10 @@ pub use reachability::{
 };
 
 // Control flow analysis algorithms
+pub use dominance_frontiers::{
+    dominance_frontiers, dominance_frontiers_with_progress, iterated_dominance_frontiers,
+    DominanceFrontierResult, IteratedDominanceFrontierResult,
+};
 pub use dominators::{dominators, dominators_with_progress, DominatorResult};
 pub use post_dominators::{
     post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
@@ -230,6 +242,7 @@ pub use control_dependence::{
 mod centrality;
 mod community;
 mod control_dependence;
+mod dominance_frontiers;
 mod dominators;
 mod post_dominators;
 mod reachability;
