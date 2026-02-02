@@ -21,6 +21,7 @@
 //!
 //! - [`connected_components`] - Find all connected components in the graph
 //! - [`weakly_connected_components`] - Find weakly connected components (undirected connectivity)
+//! - [`strongly_connected_components`] - Find strongly connected components using Tarjan's algorithm
 //! - [`find_cycles_limited`] - Enumerate cycles up to a limit
 //! - [`nodes_by_degree`] - Rank nodes by degree (hub detection)
 //!
@@ -39,6 +40,7 @@
 //! | Louvain | O(k × V × E) | Quality communities | Slower than label propagation |
 //! | Connected Components | O(V + E) | Graph connectivity | None |
 //! | Weakly Connected Components | O(V + E) | Undirected connectivity | None |
+//! | Strongly Connected Components | O(V + E) | Cycle detection, loop analysis | None |
 //! | Transitive Closure | O(V × (V + E)) | All-pairs reachability | O(V²) space, use bounds for large graphs |
 //!
 //! Where:
@@ -51,6 +53,8 @@
 //! ## Graph Connectivity
 //!
 //! - **Connected components**: Works on disconnected graphs (finds all components)
+//! - **Weakly connected components**: Works on disconnected graphs (finds all components treating edges as undirected)
+//! - **Strongly connected components**: Works on disconnected graphs (finds all SCCs including trivial)
 //! - **PageRank**: Handles disconnected components (splits rank)
 //! - **Betweenness**: Handles disconnected components (each component separately)
 //! - **Label propagation**: Works on disconnected graphs (each component independently)
@@ -147,6 +151,7 @@
 //! - [`pagerank_with_progress`]
 //! - [`betweenness_centrality_with_progress`]
 //! - [`louvain_communities_with_progress`]
+//! - [`weakly_connected_components_with_progress`]
 //! - [`transitive_closure_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
@@ -164,6 +169,7 @@ pub use community::{label_propagation, louvain_communities, louvain_communities_
 
 // Structural analysis algorithms
 pub use structure::{connected_components, find_cycles_limited, nodes_by_degree};
+pub use scc::{strongly_connected_components, SccResult};
 pub use wcc::{weakly_connected_components, weakly_connected_components_with_progress};
 
 // Reachability analysis algorithms
@@ -172,6 +178,7 @@ pub use transitive_closure::{transitive_closure, transitive_closure_with_progres
 // Module declarations
 mod centrality;
 mod community;
+mod scc;
 mod structure;
 mod transitive_closure;
 mod wcc;
