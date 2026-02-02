@@ -20,6 +20,8 @@ use super::{
     },
     community::{label_propagation, louvain_communities, louvain_communities_with_progress},
     structure::{connected_components, find_cycles_limited, nodes_by_degree},
+    transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds},
+    wcc::{weakly_connected_components, weakly_connected_components_with_progress},
 };
 
 #[test]
@@ -32,11 +34,13 @@ fn test_algorithms_are_send() {
     let _ = || {
         let graph = create_test_graph();
         let _ = connected_components(&graph);
+        let _ = weakly_connected_components(&graph);
         let _ = label_propagation(&graph, 10);
         let _ = louvain_communities(&graph, 10);
         let _ = pagerank(&graph, 0.85, 10);
         let _ = betweenness_centrality(&graph);
         let _ = nodes_by_degree(&graph, true);
+        let _ = transitive_closure(&graph, None);
     };
 
     // If this compiles, all the algorithm functions are Send
@@ -207,6 +211,143 @@ fn test_progress_callbacks_complete() {
     // Test Louvain with progress
     let result = louvain_communities_with_progress(&graph, 5, &progress);
     assert!(result.is_ok(), "louvain_communities_with_progress failed");
+
+    // Test transitive closure with progress
+    let result = transitive_closure_with_progress(&graph, None, &progress);
+    assert!(result.is_ok(), "transitive_closure_with_progress failed");
+}
+
+#[test]
+fn test_transitive_closure_deterministic() {
+    // Scenario: Transitive closure produces deterministic output
+    // Expected: Same graph produces same reachable pairs
+    let graph = create_test_graph();
+
+    let result1 = transitive_closure(&graph, None);
+    let result2 = transitive_closure(&graph, None);
+
+    assert!(result1.is_ok(), "First transitive_closure failed");
+    assert!(result2.is_ok(), "Second transitive_closure failed");
+
+    let closure1 = result1.unwrap();
+    let closure2 = result2.unwrap();
+
+    assert_eq!(closure1.len(), closure2.len(), "Different number of pairs");
+
+    // Compare all pairs
+    assert_eq!(closure1, closure2, "Transitive closures differ");
+}
+
+#[test]
+fn test_transitive_closure_bounded_depth() {
+    // Scenario: Transitive closure with max_depth limit
+    // Expected: Only pairs within depth limit are included
+    let graph = create_test_graph();
+
+    let bounds = TransitiveClosureBounds {
+        max_depth: Some(2),
+        max_sources: None,
+        max_pairs: None,
+    };
+
+    let result = transitive_closure(&graph, Some(bounds));
+    assert!(result.is_ok(), "transitive_closure with bounds failed");
+
+    let closure = result.unwrap();
+
+    // In a chain graph with depth 2, first node can reach itself + 2 more
+    // So total pairs should be less than full closure
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // With depth 2: node[0] can reach node[0], node[1], node[2]
+    // Cannot reach node[3] and beyond
+    let first_node = entity_ids[0];
+    let third_node = entity_ids.get(2).copied().unwrap_or(entity_ids[0]);
+    let fourth_node = entity_ids.get(3).copied().unwrap_or(first_node);
+
+    // First node should reach itself
+    assert_eq!(
+        closure.get(&(first_node, first_node)),
+        Some(&true),
+        "Node should reach itself"
+    );
+
+    // First node should reach third node (depth 2)
+    if entity_ids.len() > 2 {
+        assert_eq!(
+            closure.get(&(first_node, third_node)),
+            Some(&true),
+            "Node should reach node at depth 2"
+        );
+    }
+
+    // First node should NOT reach fourth node (depth 3 exceeds limit)
+    if entity_ids.len() > 3 {
+        assert_eq!(
+            closure.get(&(first_node, fourth_node)),
+            None,
+            "Node should NOT reach node at depth 3 (depth limit)"
+        );
+    }
+}
+
+#[test]
+fn test_transitive_closure_bounded_pairs() {
+    // Scenario: Transitive closure with max_pairs limit
+    // Expected: Stops early after reaching max_pairs
+    let graph = create_test_graph();
+
+    let bounds = TransitiveClosureBounds {
+        max_depth: None,
+        max_sources: None,
+        max_pairs: Some(5),
+    };
+
+    let result = transitive_closure(&graph, Some(bounds));
+    assert!(result.is_ok(), "transitive_closure with max_pairs failed");
+
+    let closure = result.unwrap();
+    assert_eq!(closure.len(), 5, "Should stop at exactly 5 pairs");
+}
+
+#[test]
+fn test_transitive_closure_with_progress_callback() {
+    // Scenario: Progress callback is invoked correctly
+    // Expected: Progress callback called for each source node
+    use crate::progress::{NoProgress, ProgressCallback};
+
+    let graph = create_test_graph();
+
+    // Test with progress callback
+    let progress = NoProgress;
+    let result = transitive_closure_with_progress(&graph, None, &progress);
+    assert!(result.is_ok(), "transitive_closure_with_progress failed");
+
+    let closure = result.unwrap();
+    assert!(closure.len() > 0, "Should have reachable pairs");
+}
+
+#[test]
+fn test_transitive_closure_self_reachability() {
+    // Scenario: Every node should be able to reach itself
+    // Expected: (n, n) = true for all nodes
+    let graph = create_test_graph();
+
+    let result = transitive_closure(&graph, None);
+    assert!(result.is_ok(), "transitive_closure failed");
+
+    let closure = result.unwrap();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Verify self-reachability for all nodes
+    for &node_id in &entity_ids {
+        assert_eq!(
+            closure.get(&(node_id, node_id)),
+            Some(&true),
+            "Node {} should reach itself",
+            node_id
+        );
+    }
 }
 
 // Helper: Create test graph
