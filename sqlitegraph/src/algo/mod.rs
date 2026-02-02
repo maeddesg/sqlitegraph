@@ -78,6 +78,12 @@
 //! - [`forward_slice_with_progress`] - Forward slicing with progress tracking
 //! - [`SliceResult`] - Result with control_nodes, data_nodes, and slice_nodes
 //!
+//! ## Call Graph Analysis
+//!
+//! - [`collapse_sccs`] - Collapse SCCs to form condensation DAG for call graph analysis
+//! - [`collapse_sccs_with_progress`] - SCC collapse with progress tracking
+//! - [`SccCollapseResult`] - Result with node_to_supernode, supernode_members, supernode_edges
+//!
 //! ## Path Analysis
 //!
 //! - [`enumerate_paths`] - Enumerate all execution paths using DFS with bounds
@@ -115,6 +121,7 @@
 //! | Natural Loops | O(E × N) worst | Loop optimization, program analysis | Requires dominators |
 //! | Control Dependence | O(E) after post-dom | Program slicing, impact analysis | Requires post-dominators |
 //! | Program Slicing | O(V + E) | Bug isolation, impact analysis | Requires CDG + reachability |
+//! | SCC Collapse | O(V + E) | Call graph analysis, mutual recursion detection | None |
 //! | Path Enumeration | O(P × L) | Test coverage, symbolic execution | Bounds required for cyclic CFGs |
 //! | Path Enumeration (Dominance) | O(P² × L) amortized | Path pruning for complex CFGs | Requires dominators, control dependence, natural loops |
 //!
@@ -308,6 +315,11 @@ pub use program_slicing::{
     SliceResult,
 };
 
+// Call graph analysis algorithms
+pub use call_graph_analysis::{
+    collapse_sccs, collapse_sccs_with_progress, SccCollapseResult,
+};
+
 // Path analysis algorithms
 pub use path_enumeration::{
     enumerate_paths, enumerate_paths_with_progress, enumerate_paths_with_dominance,
@@ -317,6 +329,7 @@ pub use path_enumeration::{
 };
 
 // Module declarations
+mod call_graph_analysis;
 mod centrality;
 mod community;
 mod control_dependence;
