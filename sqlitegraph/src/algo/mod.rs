@@ -41,6 +41,10 @@
 //! - [`dominators`] - Compute dominators and immediate dominator tree
 //! - [`dominators_with_progress`] - Dominator computation with progress tracking
 //! - [`DominatorResult`] - Dominance sets and immediate dominator tree
+//! - [`post_dominators`] - Compute post-dominators and immediate post-dominator tree
+//! - [`post_dominators_with_progress`] - Post-dominator computation with progress tracking
+//! - [`post_dominators_auto_exit`] - Post-dominators with automatic exit detection
+//! - [`PostDominatorResult`] - Post-dominance sets and immediate post-dominator tree
 //!
 //! # Algorithm Characteristics
 //!
@@ -58,6 +62,7 @@
 //! | Topological Sort | O(V + E) | Linear ordering of DAGs | Requires DAG (returns cycle error) |
 //! | Reachability | O(V + E) | Impact analysis, slicing | None |
 //! | Dominators | O(V²) worst, faster in practice | CFG analysis, SSA construction | Requires single entry |
+//! | Post-Dominators | O(V²) worst, faster in practice | CFG analysis, control dependence | Requires single exit or virtual exit |
 //!
 //! Where:
 //! - V = number of vertices
@@ -175,6 +180,7 @@
 //! - [`reachable_from_with_progress`]
 //! - [`reverse_reachable_from_with_progress`]
 //! - [`dominators_with_progress`]
+//! - [`post_dominators_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -209,11 +215,15 @@ pub use reachability::{
 
 // Control flow analysis algorithms
 pub use dominators::{dominators, dominators_with_progress, DominatorResult};
+pub use post_dominators::{
+    post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
+};
 
 // Module declarations
 mod centrality;
 mod community;
 mod dominators;
+mod post_dominators;
 mod reachability;
 mod scc;
 mod structure;
