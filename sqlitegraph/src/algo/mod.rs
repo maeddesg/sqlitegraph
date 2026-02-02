@@ -84,6 +84,15 @@
 //! - [`collapse_sccs_with_progress`] - SCC collapse with progress tracking
 //! - [`SccCollapseResult`] - Result with node_to_supernode, supernode_members, supernode_edges
 //!
+//! ## Cut and Partitioning
+//!
+//! - [`min_st_cut`] - Minimum s-t edge cut for fault tolerance analysis
+//! - [`min_st_cut_with_progress`] - Minimum s-t edge cut with progress tracking
+//! - [`min_vertex_cut`] - Minimum vertex cut for critical node identification
+//! - [`min_vertex_cut_with_progress`] - Minimum vertex cut with progress tracking
+//! - [`MinCutResult`] - Result of minimum edge cut computation
+//! - [`MinVertexCutResult`] - Result of minimum vertex cut computation
+//!
 //! ## Path Analysis
 //!
 //! - [`enumerate_paths`] - Enumerate all execution paths using DFS with bounds
@@ -320,6 +329,12 @@ pub use call_graph_analysis::{
     collapse_sccs, collapse_sccs_with_progress, SccCollapseResult,
 };
 
+// Cut and partitioning algorithms
+pub use cut_partition::{
+    min_st_cut, min_st_cut_with_progress, min_vertex_cut, min_vertex_cut_with_progress,
+    MinCutResult, MinVertexCutResult,
+};
+
 // Path analysis algorithms
 pub use path_enumeration::{
     enumerate_paths, enumerate_paths_with_progress, enumerate_paths_with_dominance,
@@ -333,6 +348,7 @@ mod call_graph_analysis;
 mod centrality;
 mod community;
 mod control_dependence;
+mod cut_partition;
 mod cycle_basis;
 mod critical_path;
 mod dominance_frontiers;
