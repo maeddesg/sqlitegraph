@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 47 of 57 (Core CFG Algorithms) — 2/3 plans complete
-Status: Phase 47 Plan 02 complete - Post-dominators with virtual graph reversal and multiple exit handling
-Last activity: 2026-02-02 — Phase 47-02 complete (post-dominators algorithm, PostDominatorResult, 25 tests)
+Phase: 47 of 57 (Core CFG Algorithms) — 3/3 plans complete
+Status: Phase 47 complete - Core CFG algorithms (dominators, post-dominators, control dependence)
+Last activity: 2026-02-02 — Phase 47-03 complete (control dependence CDG with Cytron et al. algorithm, 29 tests)
 
-Progress: [████░░░░░░░] 26% of v1.14 (8/183 plans complete, 1/13 phases done)
+Progress: [████░░░░░░░] 27% of v1.14 (9/183 plans complete, 1/13 phases done)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 185 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01, plus 47-02)
+- Total plans completed: 186 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03)
 - Average duration: ~20 min/plan
 - Total execution time: ~77 hours across v1.0-v1.14
 
@@ -34,13 +34,13 @@ Progress: [████░░░░░░░] 26% of v1.14 (8/183 plans complete
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (8/183 complete - Phase 45 done, 46-01 done, 47-01 done, 47-02 done) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (9/183 complete - Phase 45 done, 46-01 done, 47-01 through 47-03 done) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
 - v1.14 phase 45: ~8 min/plan (5 plans complete)
 - v1.14 phase 46: ~7 min/plan (1 plan complete)
-- v1.14 phase 47: ~10 min/plan (2 plans complete)
+- v1.14 phase 47: ~10 min/plan (3 plans complete)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -64,6 +64,9 @@ Recent decisions affecting current work:
 - **Dominators optimization:** Optimistic initialization (all nodes dominate all) accelerates convergence by only removing from sets; reverse postorder traversal improves speed by processing predecessors before successors
 - **Post-dominators via virtual reversal:** Compute post-dominators using predecessor maps instead of physically reversing graph; post_dom(graph, exit) = dominators(reversed(graph), exit) using same Cooper algorithm
 - **Multiple exit handling:** Automatically detect exit nodes and unify multiple exits with virtual exit node (id: -1) that is stripped from final results; enables correct post-dominator computation on real-world CFGs with multiple returns
+- **Control dependence edge-based definition:** Use Cytron et al. (1991) edge-based conditions directly instead of dominance frontier; node Y is control-dependent on X iff (1) edge X->Y exists, (2) X does NOT post-dominate Y, (3) ipdom[Y] != X
+- **Bidirectional CDG mappings:** Provide both cdg (what does this control?) and reverse_cdg (what does this depend on?) for efficient queries in both directions; enables both forward and backward program slicing
+- **CDG acyclicity verification:** Control dependence graphs are always acyclic by definition; implemented is_acyclic() method to verify this fundamental property across all CFG structures
 
 ### Pending Todos
 
@@ -81,5 +84,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 47 Plan 02 (Post-dominators). 3/3 tasks complete, post-dominators with virtual graph reversal, multiple exit handling, and 25 tests implemented.
+Stopped at: Completed Phase 47 Plan 03 (Control Dependence). 3/3 tasks complete, control dependence CDG with Cytron et al. algorithm, bidirectional mappings, and 29 tests implemented.
 Resume file: None

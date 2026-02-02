@@ -75,10 +75,10 @@ See milestone archives for complete history.
   1. User can compute dominators using Cooper et al. simple_fast algorithm, receiving dominator sets and immediate dominator tree
   2. User can compute post-dominators on reversed graph, receiving post-dominator sets and immediate post-dominator tree
   3. User can compute Control Dependence Graph derived from post-dominators for "this block executes because of that condition" explanations
-**Plans**: 3 plans in 1 wave
-  - [ ] 47-01-PLAN.md — Dominators (Cooper et al. simple_fast algorithm) (Wave 1)
-  - [ ] 47-02-PLAN.md — Post-Dominators (reversed graph dominators) (Wave 1, depends on 47-01)
-  - [ ] 47-03-PLAN.md — Control Dependence Graph (from post-dominators) (Wave 1, depends on 47-02)
+**Plans**: 3 plans in 3 waves
+  - [x] 47-01-PLAN.md — Dominators (Cooper et al. simple_fast algorithm) (Wave 1)
+  - [x] 47-02-PLAN.md — Post-Dominators (reversed graph dominators) (Wave 2, depends on 47-01)
+  - [x] 47-03-PLAN.md — Control Dependence Graph (from post-dominators) (Wave 3, depends on 47-02)
 
 #### Phase 48: Derived CFG Algorithms
 **Goal**: Dominance frontiers and natural loop detection
@@ -87,7 +87,9 @@ See milestone archives for complete history.
 **Success Criteria** (what must be TRUE):
   1. User can compute dominance frontiers for all nodes using Cytron et al. efficient algorithm, supporting iterated dominance frontier for SSA phi-placement
   2. User can detect natural loops by finding back-edges where head dominates tail, receiving loop headers, back-edges, and loop bodies with nested loop detection
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+  - [ ] 48-01-PLAN.md — Dominance Frontiers (Cytron et al. algorithm) (Wave 1)
+  - [ ] 48-02-PLAN.md — Natural Loops (back-edge detection) (Wave 2, depends on 48-01)
 
 #### Phase 49: Path Analysis
 **Goal**: Execution path enumeration with feasibility pruning
@@ -184,8 +186,8 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 | 1-44 | v0.2-v1.13 | 182/182 | Complete | 2026-02-02 |
 | 45. Core Graph Theory | v1.14 | 5/5 | Complete | 2026-02-02 |
 | 46. Reachability & Slicing | v1.14 | 1/1 | Complete | 2026-02-02 |
-| 47. Core CFG Algorithms | v1.14 | 0/3 | Not started | - |
-| 48. Derived CFG Algorithms | v1.14 | 0/TBD | Not started | - |
+| 47. Core CFG Algorithms | v1.14 | 3/3 | Complete | 2026-02-02 |
+| 48. Derived CFG Algorithms | v1.14 | 0/2 | Not started | - |
 | 49. Path Analysis | v1.14 | 0/TBD | Not started | - |
 | 50. Dependency & Build Systems | v1.14 | 0/TBD | Not started | - |
 | 51. Program Analysis & Tooling | v1.14 | 0/TBD | Not started | - |
@@ -196,4 +198,4 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 | 56. Security & Compliance | v1.14 | 0/TBD | Not started | - |
 | 57. CLI Commands | v1.14 | 0/TBD | Not started | - |
 
-**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). v1.14: 6/186 plans complete (3.2%).
+**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). v1.14: 9/191 plans complete (4.7%).
