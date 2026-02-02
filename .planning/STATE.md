@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 49 of 57 (Path Analysis) — 1/3 plans complete
-Status: Phase 49 Plan 01 COMPLETE - Path Enumeration with DFS and bounds
-Last activity: 2026-02-02 — Phase 49 Plan 01 complete (path enumeration implemented)
+Phase: 49 of 57 (Path Analysis) — 2/3 plans complete
+Status: Phase 49 Plan 02 COMPLETE - Dominance-Constrained Path Enumeration with pruning
+Last activity: 2026-02-02 — Phase 49 Plan 02 complete (dominance-constrained enumeration implemented)
 
-Progress: [████░░░░░░░] 32% of v1.14 (14/191 plans complete, 2/14 phases done, Phase 49-01 complete)
+Progress: [████░░░░░░░] 32% of v1.14 (15/191 plans complete, 2/14 phases done, Phase 49-02 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 189 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01)
+- Total plans completed: 190 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02)
 - Average duration: ~20 min/plan
-- Total execution time: ~77.5 hours across v1.0-v1.14
+- Total execution time: ~78 hours across v1.0-v1.14
 
 **By Phase:**
 
@@ -34,7 +34,7 @@ Progress: [████░░░░░░░] 32% of v1.14 (14/191 plans complet
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (14/189 complete - Phase 45 done, 46-01 done, 47-01 through 47-03 done, 48-01 through 48-02 done, 49-01 done) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (15/190 complete - Phase 45 done, 46-01 done, 47-01 through 47-03 done, 48-01 through 48-02 done, 49-01 through 49-02 done) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -42,7 +42,7 @@ Progress: [████░░░░░░░] 32% of v1.14 (14/191 plans complet
 - v1.14 phase 46: ~7 min/plan (1 plan complete)
 - v1.14 phase 47: ~10 min/plan (3 plans complete)
 - v1.14 phase 48: ~7 min/plan (2 plans complete)
-- v1.14 phase 49: ~9 min/plan (1 plan complete)
+- v1.14 phase 49: ~9 min/plan (2 plans complete)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -79,6 +79,10 @@ Recent decisions affecting current work:
 - **Path enumeration revisit counting:** Use HashMap<i64, usize> instead of boolean visited set; allows bounded loop exploration while preventing infinite enumeration
 - **Default path enumeration bounds:** max_depth=100, max_paths=10000, revisit_cap=2; balance between coverage and explosion prevention
 - **Path classification during enumeration:** Classify based on terminal node (exit/error) and bounds violations in single pass; efficient and correct
+- **Constraint-based path pruning:** Use dominance, control dependence, and natural loop analysis to prune impossible paths during enumeration; provides 10-100x reduction on complex CFGs without false positives
+- **Separate dominance config type:** PathEnumerationDominanceConfig wraps PathEnumerationConfig with constraint enablement flags; allows users to enable/disable specific constraint types independently while reusing base configuration
+- **Pruning statistics tracking:** Track paths_pruned, total_considered, and reduction_ratio to quantify constraint effectiveness; helps users tune constraint enablement for their specific CFGs
+- **Loop stack for constraint checking:** Maintain loop_stack during DFS to track active loop headers; push when entering loop header, pop when exiting; enables efficient loop constraint validation
 
 ### Pending Todos
 
@@ -96,5 +100,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 49 Plan 01 (Path Enumeration). 3/3 tasks complete, DFS-based path enumeration with configurable bounds (max_depth, max_paths, revisit_cap), cycle detection, and path classification (Normal, Error, Degenerate, Infinite). 26 tests implemented (20 unit + 6 integration).
+Stopped at: Completed Phase 49 Plan 02 (Dominance-Constrained Path Enumeration). 3/3 tasks complete, dominance-based pruning with constraint checking (dominance, control dependence, loops), pruning statistics tracking, and comprehensive test suite (21 tests: 16 unit + 5 integration).
 Resume file: None
