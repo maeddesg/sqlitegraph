@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 47 of 57 (Core CFG Algorithms) — 3/3 plans complete
-Status: Phase 47 complete - Core CFG algorithms (dominators, post-dominators, control dependence)
-Last activity: 2026-02-02 — Phase 47-03 complete (control dependence CDG with Cytron et al. algorithm, 29 tests)
+Phase: 48 of 57 (Derived CFG Algorithms) — 2/2 plans ready
+Status: Phase 48 planned - Dominance frontiers (Cytron et al.) and natural loop detection
+Last activity: 2026-02-02 — Phase 48 planned (2 plans: dominance frontiers, natural loops)
 
-Progress: [████░░░░░░░] 27% of v1.14 (9/183 plans complete, 1/13 phases done)
+Progress: [████░░░░░░░] 29% of v1.14 (11/191 plans complete, 2/13 phases done, Phase 48 ready)
 
 ## Performance Metrics
 

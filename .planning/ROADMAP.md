@@ -88,8 +88,8 @@ See milestone archives for complete history.
   1. User can compute dominance frontiers for all nodes using Cytron et al. efficient algorithm, supporting iterated dominance frontier for SSA phi-placement
   2. User can detect natural loops by finding back-edges where head dominates tail, receiving loop headers, back-edges, and loop bodies with nested loop detection
 **Plans**: 2 plans in 2 waves
-  - [ ] 48-01-PLAN.md — Dominance Frontiers (Cytron et al. algorithm) (Wave 1)
-  - [ ] 48-02-PLAN.md — Natural Loops (back-edge detection) (Wave 2, depends on 48-01)
+  - [x] 48-01-PLAN.md — Dominance Frontiers (Cytron et al. algorithm) (Wave 1)
+  - [x] 48-02-PLAN.md — Natural Loops (back-edge detection) (Wave 2, depends on 48-01)
 
 #### Phase 49: Path Analysis
 **Goal**: Execution path enumeration with feasibility pruning
