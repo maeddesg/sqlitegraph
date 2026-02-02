@@ -50,6 +50,10 @@
 //! - [`iterated_dominance_frontiers`] - Compute iterated dominance frontiers for SSA φ-placement
 //! - [`DominanceFrontierResult`] - Dominance frontier sets
 //! - [`IteratedDominanceFrontierResult`] - Iterated dominance frontier result with φ-node placements
+//! - [`natural_loops`] - Detect natural loops using back-edge dominance analysis
+//! - [`natural_loops_with_progress`] - Natural loop detection with progress tracking
+//! - [`NaturalLoop`] - Natural loop with header, back-edges, and body
+//! - [`NaturalLoopsResult`] - Natural loop detection result with nesting analysis
 //! - [`control_dependence_graph`] - Compute Control Dependence Graph from post-dominators
 //! - [`control_dependence_from_exit`] - Compute CDG with automatic exit detection
 //! - [`ControlDependenceResult`] - Control dependence edges and reverse mapping
@@ -73,6 +77,7 @@
 //! | Post-Dominators | O(V²) worst, faster in practice | CFG analysis, control dependence | Requires single exit or virtual exit |
 //! | Dominance Frontiers | O(V²) worst | SSA φ-node placement, convergence points | Requires dominators |
 //! | Iterated DF | O(V × iterations) | SSA construction, φ-node placement | Fixed-point iteration |
+//! | Natural Loops | O(E × N) worst | Loop optimization, program analysis | Requires dominators |
 //! | Control Dependence | O(E) after post-dom | Program slicing, impact analysis | Requires post-dominators |
 //!
 //! Where:
@@ -193,6 +198,7 @@
 //! - [`dominators_with_progress`]
 //! - [`post_dominators_with_progress`]
 //! - [`dominance_frontiers_with_progress`]
+//! - [`natural_loops_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -231,6 +237,7 @@ pub use dominance_frontiers::{
     DominanceFrontierResult, IteratedDominanceFrontierResult,
 };
 pub use dominators::{dominators, dominators_with_progress, DominatorResult};
+pub use natural_loops::{natural_loops, natural_loops_with_progress, NaturalLoop, NaturalLoopsResult};
 pub use post_dominators::{
     post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
 };
@@ -244,6 +251,7 @@ mod community;
 mod control_dependence;
 mod dominance_frontiers;
 mod dominators;
+mod natural_loops;
 mod post_dominators;
 mod reachability;
 mod scc;
