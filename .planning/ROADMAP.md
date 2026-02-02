@@ -2,387 +2,194 @@
 
 ## Overview
 
-Complete and improve SQLiteGraph, an embedded graph database in Rust with dual backend support (SQLite and Native V2), HNSW vector search, and CLI interface. The journey from current state to a production-ready, high-performance graph database with complete Native V2 backend, persistent HNSW vector search, advanced algorithms, and comprehensive developer tooling.
-
-## Domain Expertise
-
-None — No specialized domain expertise directories available. Relying on codebase documentation and Rust embedded systems patterns.
+SQLiteGraph roadmap from v1.0 through current milestone. Continuous phase numbering across all milestones — phases 1-44 completed in prior milestones, phases 45-57 planned for v1.14 Graph Algorithms Library.
 
 ## Milestones
 
-- **v0.2 Foundation** — Phases 1-7 (shipped 2026-01-17) → [Archive](milestones/v0.2-ROADMAP.md)
-- **v1.0 Production** — Phases 8-10 (shipped 2026-01-17) → [Archive](milestones/v1.0-ROADMAP.md)
-- **v1.1 ACID & Reliability** — Phases 11-22 (shipped 2026-01-20) → [Archive](milestones/v1.1-ROADMAP.md)
-- **v1.2 Benchmark Infrastructure** — Phases 23-24 (shipped 2026-01-21) → [Archive](milestones/v1.2-ROADMAP.md)
-- **v1.3 Chain Traversal Performance** — Phases 25-28 (shipped 2026-01-21)
-- **v1.4 Sequential I/O Optimization** — Phases 29-32 (shipped 2026-01-21)
-- **v1.6 Chain Locality** — Phases 33-36 (shipped 2026-01-21)
-- **v1.7 Gap Closure** — Phase 37 (implementation complete)
-- **v1.8 ACID API Fix** — Phase 38 (complete)
-- **v1.9 WAL Filtering & Allocation Optimization** — Phase 40 (complete)
-- **v1.10 ACID API Completion** — Phase 41 (planned)
-- **v1.11 SIMD / AVX Acceleration** — Phase 42 (complete)
-- **v1.12 Transactional KV Store** — Phase 43 (complete)
-- **v1.13 Pub/Sub (Minimal)** — Phase 44 (complete) → [Archive](milestones/v1.13-ROADMAP.md)
-
----
+- ✅ **v1.0 MVP** - Phases 1-10 (shipped 2026-01-17)
+- ✅ **v1.1 ACID & Reliability** - Phases 11-22 (shipped 2026-01-20)
+- ✅ **v1.2 Benchmark Infrastructure** - Phases 23-24 (shipped 2026-01-21)
+- ✅ **v1.3 Chain Traversal Performance** - Phases 25-29 (shipped 2026-01-21)
+- ✅ **v1.4 Sequential I/O Optimization** - Phases 30-32 (shipped 2026-01-21)
+- ✅ **v1.6 Chain Locality** - Phases 33-36 (shipped 2026-01-21)
+- ✅ **v1.13 Pub/Sub** - Phases 37-44 (shipped 2026-01-26)
+- 🚧 **v1.14 Graph Algorithms Library** - Phases 45-57 (in progress)
 
 ## Phases
 
 <details>
-<summary>v0.2-v1.6 Archive</summary>
+<summary>v0.2-v1.13 Archive</summary>
 
 See milestone archives for complete history.
 - v0.2 Foundation: Phases 1-7
 - v1.0 Production: Phases 8-10
 - v1.1 ACID & Reliability: Phases 11-22
 - v1.2 Benchmark Infrastructure: Phases 23-24
-- v1.3 Chain Traversal Performance: Phases 25-28
-- v1.4 Sequential I/O Optimization: Phases 29-32
+- v1.3 Chain Traversal Performance: Phases 25-29
+- v1.4 Sequential I/O Optimization: Phases 30-32
 - v1.6 Chain Locality: Phases 33-36
+- v1.13 Pub/Sub: Phases 37-44
 
 </details>
 
 ---
 
-## v1.6 Chain Locality (Phases 33-36) - COMPLETE
-
-**Milestone Goal:** Achieve IO-12 target (Chain(500) <=75ms, 3x SQLite) through traversal-time sequential cluster reads.
-
-**Status:** COMPLETE (2026-01-21)
-- IO-12 Target: NOT ACHIEVED (Chain(500) = 231.12ms vs 75ms target, 3.08x gap)
-- MVCC Isolation: CONFIRMED (15/15 tests passed)
-- Requirements: 5/5 satisfied
-- Next: Gap closure via Phase 37
-
-**Background:** v1.4 achieved linear pattern detection and sequential slot reading. However, edge clusters for sequential chains are stored non-contiguously in the global cluster pool. The IO-12 target (9.96x gap) remains unmet because prefetching non-contiguous clusters is still random I/O.
-
-**Surgical Solution:** Traversal-time sequential cluster reads. Detect chains during traversal (not at write time), read all clusters in single I/O when chain confirmed, fall back immediately when pattern breaks. No write-time allocation, no migration, no metadata storage.
-
-**Why surgical:** Write-time detection risks false positives and schema debt. Traversal-time approach is reversible, honest, and closes IO-12 without collateral damage.
-
-### Phase 33: Traversal-Time Chain Detection
-**Goal:** Traversal detects linear chains and switches to sequential cluster reads
-**Depends on**: Phase 32 (v1.4 complete)
-**Requirements:** CL-01 ✓ SATISFIED, CL-03 ✓ SATISFIED
-**Plans:** 5/5 complete (extend LinearDetector with cluster offset tracking, contiguity validation, sequential read trigger, instrumentation, integration tests)
-
-**Plans:**
-- [x] 33-01-PLAN.md — Cluster offset tracking in LinearDetector
-- [x] 33-02-PLAN.md — Cluster contiguity validation
-- [x] 33-03-PLAN.md — Sequential read trigger condition
-- [x] 33-04-PLAN.md — Chain detection instrumentation
-- [x] 33-05-PLAN.md — Integration tests for graph patterns
-
-### Phase 34: Sequential Cluster Reader
-**Goal:** Sequential cluster reader reads all clusters for a chain in single I/O operation
-**Depends on**: Phase 33
-**Requirements:** CL-02 (with Phase 35 split)
-**Plans:** 3/3 complete
-
-**Plans:**
-- [x] 34-01-PLAN.md — Create SequentialClusterReader module with read_chain_clusters() method
-- [x] 34-02-PLAN.md — Add cluster buffer fields to TraversalContext
-- [x] 34-03-PLAN.md — Integrate sequential cluster read into get_neighbors_optimized()
-
-### Phase 35: Neighbor Extraction and Fallback
-**Goal:** Extract neighbors from cluster buffer and fall back immediately when pattern breaks
-**Depends on**: Phase 34
-**Requirements:** CL-02 (completion), CL-04
-**Plans:** 4/4 complete
-
-**Plans:**
-- [x] 35-01-PLAN.md — Add node_cluster_index field to TraversalContext
-- [x] 35-02-PLAN.md — Extract neighbors from cluster_buffer using mapping
-- [x] 35-03-PLAN.md — Add traverse_with_detection helper and unit tests
-- [x] 35-04-PLAN.md — Integration tests for extraction and fallback
-
-### Phase 36: IO-12 Validation
-**Goal:** MVCC isolation preserved and IO-12 target achieved
-**Depends on**: Phase 35
-**Requirements:** CL-05
-**Plans:** 4/4 complete
-**Status:** Complete (2026-01-21) - IO-12 target NOT achieved
-
-**Actual Results:**
-- Chain(500): 231.12ms (target: <=75ms)
-- MVCC isolation: 15/15 tests passed
-- Star/Random: No regression detected
-
-**Plans:**
-- [x] 36-01-PLAN.md — Create Criterion benchmark suite for IO-12 validation
-- [x] 36-02-PLAN.md — Validate MVCC isolation for sequential cluster reads
-- [x] 36-03-PLAN.md — Run benchmarks and document IO-12 status
-- [x] 36-04-PLAN.md — Update documentation with Phase 36 completion
-
----
-
-## v1.7 Gap Closure (Phase 37) - IMPLEMENTATION COMPLETE
-
-**Milestone Goal:** Close the 156.12ms gap to achieve IO-12 target (Chain(500) <=75ms)
-
-**Status:** IMPLEMENTATION COMPLETE (2026-01-25)
-- Gap: 156.12ms remaining (231.12ms actual vs 75ms target) - from v1.6 baseline
-- Root cause: IDENTIFIED - BFS used observe() instead of observe_with_cluster()
-- Fix: IMPLEMENTED - All 4 BFS implementations now call observe_with_cluster()
-- Verification: INTEGRATION TESTS PASS - cluster_offsets_count: 500, fragmentation_score: 0.0
-- **BENCHMARK REQUIRED** - Fix implemented but Chain(500) benchmark needs to run to confirm target achieved
-
-**Approach:** Diagnostic investigation first, then surgical optimization:
-1. Add internal instrumentation to LinearDetector, SequentialClusterReader, TraversalContext
-2. Run external profiling (perf flamegraphs, strace I/O tracing)
-3. Create microbenchmark suite to isolate component costs
-4. Analyze telemetry to identify root cause (I/O vs CPU vs fragmentation)
-5. Implement surgical optimization based on diagnosis
-6. Verify no regressions (write cost, memory, concurrency)
-
-**Success Criteria:**
-- Chain(500) <= 75ms (IO-12 target achieved)
-- Write-path cost increase <= +5%
-- Memory overhead <= +5%
-- No new lock contention
-- Star/Random traversals within 10% of v1.6 baseline
-
-**Plans:**
-- [x] 37-01-PLAN.md — Internal instrumentation (LinearDetector, SequentialClusterReader, TraversalContext telemetry)
-- [x] 37-02-PLAN.md — External profiling scripts (perf flamegraphs, strace I/O tracing)
-- [x] 37-03-PLAN.md — Microbenchmark suite (cluster population, LinearDetector overhead, fragmentation)
-- [x] 37-04-PLAN.md — Root cause analysis (run Chain(500) with instrumentation, interpret data, generate diagnosis)
-- [x] 37-05-PLAN.md — Surgical optimization (BFS observe_with_cluster() fix based on diagnosis)
-- [x] 37-06-PLAN.md — Regression testing (write cost, memory, concurrency, non-chain patterns)
-
----
-
-## v1.8 ACID API Fix (Phase 38) - INFRASTRUCTURE COMPLETE
-
-**Milestone Goal:** Fix public read APIs to enforce snapshot isolation - no API may observe state not bound to a committed snapshot_id
-
-**Status:** INFRASTRUCTURE COMPLETE (2026-01-25)
-- **SnapshotId Type:** Implemented (38-02) - `SnapshotId(pub u64)` with current/from_tx/invalid/as_lsn methods
-- **GraphBackend Trait:** Updated (38-03) - All read methods accept snapshot_id parameter
-- **LSN-Based Architecture:** Designed (38-01/38-04) - SnapshotId = CommitLSN, TxRangeIndex for tracking
-- **WAL Infrastructure:** Built (38-04) - TxRangeIndex, build_tx_index(), snapshot-aware helpers
-- **Regression Tests:** Created (38-05) - acid_regression_test.rs, acid_snapshot_test.rs
-- **Performance Baseline:** Verified (38-06) - Chain(500) = 234.79ms, no regression from API changes
-
-**Deferred Work (Full WAL Filtering):**
-- Actual WAL record filtering in read paths is deferred
-- Snapshot-aware methods have TODO placeholders
-- Integration tests commented out pending full implementation
-- Required for complete snapshot isolation (committed-but-not-checkpointed data visibility)
-
-**Architecture Decision - LSN-Based Snapshot Isolation:**
-- SnapshotId = CommitLSN (commit sequence number, monotonic u64)
-- Visibility Rule: tx.commit_lsn <= snapshot_id
-- WAL Contiguity Invariant: Records for a transaction are contiguous in WAL (single-writer model)
-- TxRangeIndex tracks transaction begin_lsn and commit_lsn for visibility filtering
-
-**Plans:**
-- [x] 38-01-PLAN.md — Audit all public read APIs for snapshot_id violations
-- [x] 38-02-PLAN.md — Design snapshot_id architecture
-- [x] 38-03-PLAN.md — Implement snapshot_id parameter in GraphBackend trait
-- [x] 38-04-PLAN.md — Implement WAL filtering infrastructure (full filtering deferred)
-- [x] 38-05-PLAN.md — Add regression tests for ACID snapshot isolation
-- [x] 38-06-PLAN.md — Verify no performance regression
-
----
-
-## v1.9 WAL Filtering & Allocation Optimization (Phase 40) - COMPLETE
-
-**Milestone Goal:** Complete WAL filtering (Phase 38 deferred work) and achieve IO-12 target (Chain(500) <=75ms) through allocation-aware sequential cluster optimization.
-
-**Status:** COMPLETE (2026-01-25)
-- **Wave 1:** COMPLETE - Delta-index filtering implemented and validated
-- **Wave 2:** COMPLETE - Allocation-aware optimization implemented
-- **IO-12 Target:** NOT ACHIEVED (Chain(500) = 213.24ms vs target of <=75ms, ~3x gap)
-
-**Wave 1 - WAL Filtering Completion (40-01 to 40-06):** ✅ COMPLETE
-Implemented commit-delta index for snapshot isolation correctness. The original "WAL overlay per read" design was replaced with "commit-built delta overlay" to preserve the mmap fast path.
-
-- **40-01:** ✅ Source of truth functions (is_tx_visible, iter_visible_wal_records)
-- **40-02:** ✅ WAL contiguity invariant enforcement
-- **40-03:** ✅ DeltaIndex module (commit-time delta building, not WAL scanning)
-- **40-04:** ✅ Commit-time delta integration with V2WALManager
-- **40-05:** ✅ Delta-aware read paths
-- **40-06:** ✅ Regression validation (Chain(500) = 238.00ms, -0.8% change, <1% overhead target met)
-
-**Wave 2 - Allocation-Aware Optimization (40-07 to 40-12):** ✅ COMPLETE
-Implement contiguous cluster allocation for linear chains to achieve IO-12 target.
-
-- **40-07:** ✅ FreeSpaceManager contiguous reservation API (15 tests pass)
-- **40-08:** ✅ Region accounting (commit/rollback/recovery, 32 tests pass)
-- **40-09:** ✅ AdjacencyWriter write_cluster_with_hint() (22 tests pass)
-- **40-10:** ✅ Threshold-gated activation (39 tests pass)
-- **40-11:** ✅ WAL records for contiguous allocation (73 tests pass)
-- **40-12:** ✅ Benchmark gates (IO-12 validation - TARGET NOT ACHIEVED)
-
-**Benchmark Results:**
-- Chain(500): 213.24ms (target: <=75ms, FAIL)
-- Star(100): 23.094us (7.1% improvement, PASS)
-- Random(100): 22.839us (8.2% improvement, PASS)
-- Random(500): 14.856us (4.7% improvement, PASS)
-- Snapshot isolation: 1/1 tests pass (PASS)
-
-**Key Finding:** The contiguous allocation optimization implementation is complete but did NOT produce the expected 3x performance improvement. The IO-12 target remains unmet.
-
-**Plans:**
-- [x] 40-01-PLAN.md — Source of truth functions for WAL visibility
-- [x] 40-02-PLAN.md — Enforce WAL contiguity invariants
-- [x] 40-03-PLAN.md — Implement DeltaIndex module (commit-time delta building)
-- [x] 40-04-PLAN.md — Commit-time delta integration with V2WALManager
-- [x] 40-05-PLAN.md — Delta-aware read paths
-- [x] 40-06-PLAN.md — Regression gates and validation
-- [x] 40-07-PLAN.md — FreeSpaceManager contiguous reservation API
-- [x] 40-08-PLAN.md — Region accounting (commit/rollback/recovery)
-- [x] 40-09-PLAN.md — AdjacencyWriter write_cluster_with_hint()
-- [x] 40-10-PLAN.md — Threshold-gated activation
-- [x] 40-11-PLAN.md — WAL records for contiguous allocation
-- [x] 40-12-PLAN.md — Benchmark gates and IO-12 validation
-
----
-
-## v1.10 ACID API Completion (Phase 41) - COMPLETE
-
-**Milestone Goal:** Complete the ACID API fix by removing `*_current()` convenience methods that allow implicit snapshot usage
-
-**Status:** COMPLETE (2026-01-25)
-
-**Problem:** Phase 38 added convenience methods (`get_node_current`, `neighbors_current`, etc.) that implicitly use `SnapshotId::current()`, violating the hard rule that no API may observe state not bound to a committed snapshot_id.
-
-**Hard Rule (NON-NEGOTIABLE):**
-> No API may observe state not bound to a committed snapshot_id.
-> If a value cannot be tied to a committed snapshot → it does not exist.
-
-**Solution:** Removed the `impl dyn GraphBackend` block containing all 9 `*_current()` convenience methods (backend.rs:266-352). Clean removal - no call sites existed.
-
-**Plans:**
-- [x] 41-01-PLAN.md — Remove `*_current()` convenience methods from GraphBackend
-
-**Success Criteria:**
-- ✅ All public read APIs require explicit snapshot_id parameter
-- ✅ No convenience shortcut exists for implicit snapshot usage
-- ✅ Compiler enforces snapshot passing at all call sites
-- ✅ Architectural decision logged documenting hard rule enforcement
-
----
-
-## v1.11 SIMD / AVX Acceleration (Phase 42) - COMPLETE
-
-**Milestone Goal:** Add feature-gated SIMD/AVX acceleration for HNSW distance computations with runtime CPU feature detection
-
-**Status:** COMPLETE (2026-01-25)
-
-**Problem:** HNSW vector search performs millions of distance calculations during search operations. The current scalar implementations are correct but not optimized for modern CPU SIMD instructions (AVX2/AVX-512). This limits HNSW search performance, especially for high-dimensional vectors (768, 1536 dimensions common in text embeddings).
-
-**Solution:** Add feature-gated SIMD modules using Rust `cfg(target_feature)` and `std::arch::x86_64` intrinsics. Runtime CPU feature detection dispatches to AVX2, AVX-512, or scalar fallback. No API changes - transparent acceleration.
-
-**NON-GOALS (explicitly out of scope):**
-- No API changes to HNSW distance functions
-- No storage semantic changes
-- No changes to HNSW graph structure or persistence format
-
-**Plans:**
-- [x] 42-01-PLAN.md — SIMD dot product with AVX2 support
-- [x] 42-02-PLAN.md — SIMD euclidean (L2) distance with AVX2 support
-- [x] 42-03-PLAN.md — SIMD cosine similarity with AVX2 support
-- [x] 42-04-PLAN.md — SIMD batch ID filtering for multi-tenant operations
-- [x] 42-05-PLAN.md — SIMD varint/delta encoding for persistence
-- [x] 42-06-PLAN.md — Benchmark suite and correctness validation
-
-**Success Criteria - ALL MET:**
-- AVX2 implementations for dot_product, euclidean_distance, cosine_similarity ✓
-- Runtime CPU feature detection (is_x86_feature_detected!) ✓
-- Scalar fallback always available (works on non-AVX CPUs) ✓
-- All existing tests pass without modification ✓
-- Correctness tests verify SIMD matches scalar results ✓
-- **4-10x performance improvement on large vectors** (exceeded target!) ✓
-- No API or storage format changes ✓
-
-**Benchmark Results (AMD Ryzen 7 7800X3D):**
-- Norm squared: 10.4x speedup
-- Dot product: 9.5x speedup
-- Cosine similarity: 4.6x speedup
-- Euclidean distance: 4.5x speedup
-
----
-
-## v1.12 Transactional KV Store (Phase 43) - IN PROGRESS
-
-**Milestone Goal:** Implement transactional KV store as a VIEW over Native V2 storage with snapshot_id versioning and lazy TTL cleanup
-
-**Status:** IN PROGRESS (2026-01-26)
-
-**Problem:** Graph databases need flexible key-value storage for metadata, caching, and application data. SQLiteGraph requires a KV store that participates in the same transaction system as graph operations, ensuring ACID properties across both graph and KV data.
-
-**Architecture:**
-- KV is a VIEW over Native V2 storage, not a separate system
-- Keys map to internal object IDs (stored in node/edge storage or as special KV nodes)
-- KV reads/writes participate in the same transaction as graph ops
-- All operations versioned by snapshot_id (enforced from Phase 41)
-- TTL implemented as metadata + lazy cleanup only (no background threads)
-- No separate WAL or allocator - uses existing V2WALWriter and storage
-
-**NON-GOALS (explicitly out of scope):**
-- Redis-style cache with networked access
-- Background TTL sweepers
-- Separate consistency models
-- Performance shortcuts that weaken determinism
-
-**Plans:**
-- [x] 43-01-PLAN.md — KV store module (data structures and in-memory storage)
-- [x] 43-02-PLAN.md — WAL integration (KV records and transaction participation)
-- [x] 43-03-PLAN.md — Snapshot-aware read/write API (GraphBackend trait integration)
-- [x] 43-04-PLAN.md — TTL lazy cleanup and integration tests
-- [x] 43-05-PLAN.md — SQLite backend KV implementation and snapshot tests
-- [ ] 43-06-PLAN.md — MVCC multi-version storage (true snapshot isolation)
-
-**Success Criteria:**
-- [x] KvStore module with snapshot-aware get/set/delete operations
-- [x] KV operations write WAL records (KvSet, KvDelete) for persistence
-- [x] WAL recovery replays KV records correctly
-- [x] GraphBackend trait has kv_get, kv_set, kv_delete methods requiring snapshot_id
-- [x] TTL lazy cleanup implemented (checked on read, no background threads)
-- [x] Integration tests cover: basic ops, TTL, snapshot isolation, transactions, WAL recovery
-- [x] All tests pass (89 tests: 17 unit + 7 snapshot + 9 TTL + 10 WAL + 14 WAL integration + 32 comprehensive integration)
-
-**Implementation Metrics:**
-- Files created: 7 (mod.rs, types.rs, store.rs, tests.rs, wal.rs, wal_tests.rs, ttl.rs, integration_tests.rs)
-- Lines of code: ~1,800 lines
-- Test coverage: 89 tests passing
-- API methods: 8 public methods (new, get, get_at_snapshot, set, delete, exists, len, cleanup_expired)
-- WAL record types: 2 (KvSet=31, KvDelete=32)
-
----
-
-## v1.13 Pub/Sub (Minimal, In-Process) (Phase 44) - COMPLETE
-
-**Status:** COMPLETE (2026-01-26)
-**Plans:** 5/5 complete
-**Tests:** 59/59 passing
-**Archive:** [milestones/v1.13-ROADMAP.md](milestones/v1.13-ROADMAP.md)
-
-Implemented minimal in-process pub/sub system with ID-only events, channel-based delivery, and emission on commit only.
+### 🚧 v1.14 Graph Algorithms Library (In Progress)
+
+**Milestone Goal:** Implement comprehensive graph algorithms library for CFG analysis, program slicing, and general graph reasoning.
+
+#### Phase 45: Core Graph Theory
+**Goal**: Fundamental graph decomposition and ordering algorithms
+**Depends on**: Phase 44 (v1.13 Pub/Sub complete)
+**Requirements**: GRT-01, GRT-02, GRT-03, GRT-04, GRT-05
+**Success Criteria** (what must be TRUE):
+  1. User can compute Strongly Connected Components with Tarjan's algorithm, receiving components, node-to-component mapping, and condensed DAG
+  2. User can compute topological sort on DAGs and receive CycleDetected error with cycle path when cycles exist
+  3. User can compute Weakly Connected Components for undirected connectivity analysis
+  4. User can compute transitive reduction to remove redundant edges from DAGs
+  5. User can compute transitive closure for all-pairs reachability with bounded computation and caching
+**Plans**: 5 plans in 2 waves
+  - [ ] 45-01-PLAN.md — Weakly Connected Components (Wave 1)
+  - [ ] 45-02-PLAN.md — Strongly Connected Components / Tarjan (Wave 1)
+  - [ ] 45-03-PLAN.md — Transitive Closure (Wave 1)
+  - [ ] 45-04-PLAN.md — Transitive Reduction (Wave 1)
+  - [ ] 45-05-PLAN.md — Topological Sort with Cycle Detection (Wave 2, depends on 45-02)
+
+#### Phase 46: Reachability & Slicing
+**Goal**: Forward and backward reachability queries
+**Depends on**: Phase 45
+**Requirements**: RCH-01, RCH-02, RCH-03, RCH-04
+**Success Criteria** (what must be TRUE):
+  1. User can compute forward reachability from a start node to answer "what does this affect?" queries
+  2. User can compute backward reachability to a target node to answer "what affects this?" queries
+  3. User can perform point-to-point reachability checks with efficient can_reach(from, to) query
+  4. User can find unreachable nodes from entry point for dead code detection
+**Plans**: TBD
+
+#### Phase 47: Core CFG Algorithms
+**Goal**: Dominator and post-dominator computation for control flow analysis
+**Depends on**: Phase 46
+**Requirements**: CFG-01, CFG-02, CFG-03
+**Success Criteria** (what must be TRUE):
+  1. User can compute dominators using Cooper et al. simple_fast algorithm, receiving dominator sets and immediate dominator tree
+  2. User can compute post-dominators on reversed graph, receiving post-dominator sets and immediate post-dominator tree
+  3. User can compute Control Dependence Graph derived from post-dominators for "this block executes because of that condition" explanations
+**Plans**: TBD
+
+#### Phase 48: Derived CFG Algorithms
+**Goal**: Dominance frontiers and natural loop detection
+**Depends on**: Phase 47
+**Requirements**: DCFG-01, DCFG-02
+**Success Criteria** (what must be TRUE):
+  1. User can compute dominance frontiers for all nodes using Cytron et al. efficient algorithm, supporting iterated dominance frontier for SSA phi-placement
+  2. User can detect natural loops by finding back-edges where head dominates tail, receiving loop headers, back-edges, and loop bodies with nested loop detection
+**Plans**: TBD
+
+#### Phase 49: Path Analysis
+**Goal**: Execution path enumeration with feasibility pruning
+**Depends on**: Phase 48
+**Requirements**: PATH-01, PATH-02
+**Success Criteria** (what must be TRUE):
+  1. User can enumerate execution paths with DFS, cycle detection, and bounds (max depth, max paths, revisit cap), receiving path classifications (Normal, Error, Degenerate, Infinite)
+  2. User can apply dominance constraints to path enumeration to prune impossible branch combinations and reduce path explosion
+**Plans**: TBD
+
+#### Phase 50: Dependency & Build Systems
+**Goal**: Critical path and cycle analysis for dependency graphs
+**Depends on**: Phase 45
+**Requirements**: DEP-01, DEP-02
+**Success Criteria** (what must be TRUE):
+  1. User can compute critical path in DAG using longest path computation (not shortest) to identify bottlenecks in dependency chains, supporting weighted edges
+  2. User can compute minimal cycle basis that explains "why" not just "that" for cycles, with bounded enumeration
+**Plans**: TBD
+
+#### Phase 51: Program Analysis & Tooling
+**Goal**: Program slicing and call graph analysis
+**Depends on**: Phase 46
+**Requirements**: PROG-01, PROG-02, PROG-03
+**Success Criteria** (what must be TRUE):
+  1. User can perform backward program slicing to answer "what can affect this node?" for bug isolation and refactoring safety
+  2. User can perform forward program slicing to answer "what does this node affect?" for impact analysis
+  3. User can collapse SCCs in call graphs to merge mutual recursion into supernodes, making call graphs readable and analyses tractable
+**Plans**: TBD
+
+#### Phase 52: Databases & Distributed Systems
+**Goal**: Cut computation and graph partitioning
+**Depends on**: Phase 46
+**Requirements**: DIST-01, DIST-02, DIST-03
+**Success Criteria** (what must be TRUE):
+  1. User can compute minimum cut (smallest edge cut between source and target) for fault tolerance and security boundary analysis
+  2. User can compute minimum vertex cut (smallest node cut between source and target)
+  3. User can partition graphs using greedy, BFS-based, and size-bounded partitioning for sharding and locality optimization
+**Plans**: TBD
+
+#### Phase 53: Observability & Runtime
+**Goal**: Runtime event ordering and impact analysis
+**Depends on**: Phase 46
+**Requirements**: OBS-01, OBS-02
+**Success Criteria** (what must be TRUE):
+  1. User can perform happens-before analysis for event ordering in traces with lightweight race detection hints
+  2. User can compute impact radius using bounded reachability with weights for blast zone estimation
+**Plans**: TBD
+
+#### Phase 54: ML / Inference / Compute Graphs
+**Goal**: Pattern matching and graph isomorphism
+**Depends on**: Phase 45
+**Requirements**: ML-01, ML-02, ML-03
+**Success Criteria** (what must be TRUE):
+  1. User can find subgraph patterns using bounded subgraph isomorphism for common subexpression detection
+  2. User can rewrite patterns with graph rewriting support for compiler and ML framework optimization
+  3. User can compute structural similarity using practical isomorphism check for regression detection and refactor verification
+**Plans**: TBD
+
+#### Phase 55: Graph Diff
+**Goal**: Structural and semantic graph comparison
+**Depends on**: Phase 45
+**Requirements**: DIFF-01, DIFF-02
+**Success Criteria** (what must be TRUE):
+  1. User can compute structural graph delta comparing two snapshots, receiving nodes/edges added/removed and structural similarity score
+  2. User can validate refactors with graph diff to answer "did I break anything structural?" and verify optimizer equivalence
+**Plans**: TBD
+
+#### Phase 56: Security & Compliance
+**Goal**: Taint propagation for security analysis
+**Depends on**: Phase 46
+**Requirements**: SEC-01
+**Success Criteria** (what must be TRUE):
+  1. User can propagate taint on graph from sources, performing sink reachability analysis for security and compliance tooling
+**Plans**: TBD
+
+#### Phase 57: CLI Commands
+**Goal**: Command-line interface for all graph algorithms
+**Depends on**: Phases 45-56 (all algorithm phases)
+**Requirements**: CLI-01, CLI-02
+**Success Criteria** (what must be TRUE):
+  1. User can invoke all 26 graph algorithms via CLI with consistent interface and backend selection support
+  2. CLI commands show progress tracking for long-running algorithms consistent with existing progress infrastructure
+**Plans**: TBD
 
 ---
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → ... → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 40 → 41 → 42 → 43 → 44
+Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1-32 | v0.2-v1.4 | 109/109 | Complete | 2026-01-21 |
-| 33. Traversal-Time Chain Detection | v1.6 | 5/5 | Complete | 2026-01-21 |
-| 34. Sequential Cluster Reader | v1.6 | 3/3 | Complete | 2026-01-21 |
-| 35. Neighbor Extraction and Fallback | v1.6 | 4/4 | Complete | 2026-01-21 |
-| 36. IO-12 Validation | v1.6 | 4/4 | Complete | 2026-01-21 |
-| 37. Gap Analysis and Closure | v1.7 | 6/6 | Implementation Complete | 2026-01-25 |
-| 38. ACID API Fix | v1.8 | 6/6 | Infrastructure Complete | 2026-01-25 |
-| 40. WAL Filtering & Allocation Optimization | v1.9 | 12/12 | Complete (IO-12 target NOT achieved) | 2026-01-25 |
-| 41. ACID API Completion | v1.10 | 1/1 | Complete | 2026-01-25 |
-| 42. SIMD / AVX Acceleration | v1.11 | 6/6 | Complete | 2026-01-25 |
-| 43. Transactional KV Store | v1.12 | 4/4 | Complete | 2026-01-26 |
-| 44. Pub/Sub (Minimal) | v1.13 | 5/5 | Complete | 2026-01-26 |
+| 1-44 | v0.2-v1.13 | 178/178 | Complete | 2026-01-26 |
+| 45. Core Graph Theory | v1.14 | 0/5 | Ready to execute | - |
+| 46. Reachability & Slicing | v1.14 | 0/TBD | Not started | - |
+| 47. Core CFG Algorithms | v1.14 | 0/TBD | Not started | - |
+| 48. Derived CFG Algorithms | v1.14 | 0/TBD | Not started | - |
+| 49. Path Analysis | v1.14 | 0/TBD | Not started | - |
+| 50. Dependency & Build Systems | v1.14 | 0/TBD | Not started | - |
+| 51. Program Analysis & Tooling | v1.14 | 0/TBD | Not started | - |
+| 52. Databases & Distributed Systems | v1.14 | 0/TBD | Not started | - |
+| 53. Observability & Runtime | v1.14 | 0/TBD | Not started | - |
+| 54. ML / Inference / Compute Graphs | v1.14 | 0/TBD | Not started | - |
+| 55. Graph Diff | v1.14 | 0/TBD | Not started | - |
+| 56. Security & Compliance | v1.14 | 0/TBD | Not started | - |
+| 57. CLI Commands | v1.14 | 0/TBD | Not started | - |
 
-**Overall Progress:** 178/178 plans planned (171 complete, 7 planned). v0.2-v1.13 complete.
+**Overall Progress:** 178/178 plans complete for v0.2-v1.13. v1.14 phase 45 planning complete (5 plans, 2 waves).
