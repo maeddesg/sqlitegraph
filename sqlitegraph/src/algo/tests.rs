@@ -19,6 +19,7 @@ use super::{
         pagerank_with_progress,
     },
     community::{label_propagation, louvain_communities, louvain_communities_with_progress},
+    reachability::{can_reach, reachable_from, reverse_reachable_from, unreachable_from},
     scc::{strongly_connected_components, SccResult},
     structure::{connected_components, find_cycles_limited, nodes_by_degree},
     transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds},
@@ -45,6 +46,10 @@ fn test_algorithms_are_send() {
         let _ = nodes_by_degree(&graph, true);
         let _ = transitive_closure(&graph, None);
         let _ = transitive_reduction(&graph);
+        let _ = reachable_from(&graph, 1);
+        let _ = reverse_reachable_from(&graph, 1);
+        let _ = can_reach(&graph, 1, 2);
+        let _ = unreachable_from(&graph, 1);
     };
 
     // If this compiles, all the algorithm functions are Send
@@ -1088,4 +1093,110 @@ fn test_transitive_reduction_deterministic() {
 
     assert_eq!(result1, result2, "Transitive reduction should be deterministic");
 }
+
+// Reachability integration tests
+
+#[test]
+fn test_reachable_from_deterministic() {
+    // Scenario: Reachability produces deterministic output
+    // Expected: Multiple calls produce same results
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let start = entity_ids[0];
+        let result1 = reachable_from(&graph, start).expect("First reachability failed");
+        let result2 = reachable_from(&graph, start).expect("Second reachability failed");
+
+        assert_eq!(
+            result1.len(),
+            result2.len(),
+            "Reachability results should have same size"
+        );
+        for &id in &result1 {
+            assert!(
+                result2.contains(&id),
+                "Second result missing node {}",
+                id
+            );
+        }
+    }
+}
+
+#[test]
+fn test_reachable_from_with_progress_callback() {
+    // Scenario: Reachability with progress callback
+    // Expected: Progress callback is called, results match non-progress
+    use crate::progress::NoProgress;
+
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let start = entity_ids[0];
+        let progress = NoProgress;
+        let result_with = crate::algo::reachable_from_with_progress(&graph, start, &progress)
+            .expect("Progress reachability failed");
+        let result_without = reachable_from(&graph, start).expect("Non-progress reachability failed");
+
+        assert_eq!(
+            result_with.len(),
+            result_without.len(),
+            "Progress and non-progress results should match"
+        );
+    }
+}
+
+#[test]
+fn test_can_reach_all_pairs() {
+    // Scenario: Verify can_reach symmetry with reachable_from
+    // Expected: can_reach(a, b) == reachable_from(a).contains(b)
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if entity_ids.len() >= 2 {
+        let from = entity_ids[0];
+        let to = entity_ids[entity_ids.len() - 1];
+
+        let reachable = reachable_from(&graph, from).expect("reachable_from failed");
+        let can = can_reach(&graph, from, to).expect("can_reach failed");
+
+        // can_reach should match reachable_from check
+        let expected = reachable.contains(&to);
+        assert_eq!(can, expected, "can_reach should match reachable_from");
+    }
+}
+
+#[test]
+fn test_unreachable_from_integration() {
+    // Scenario: Unreachable nodes as complement of reachable
+    // Expected: unreachable = all_nodes - reachable
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let entry = entity_ids[0];
+        let reachable = reachable_from(&graph, entry).expect("reachable_from failed");
+        let unreachable = unreachable_from(&graph, entry).expect("unreachable_from failed");
+
+        // Union of reachable and unreachable should be all nodes
+        let all_nodes: std::collections::HashSet<i64> =
+            entity_ids.into_iter().collect();
+        let mut union = reachable.clone();
+        union.extend(unreachable.iter());
+
+        assert_eq!(
+            union.len(),
+            all_nodes.len(),
+            "Union of reachable and unreachable should be all nodes"
+        );
+        for &id in &all_nodes {
+            assert!(
+                union.contains(&id),
+                "All nodes should be in reachable or unreachable"
+            );
+        }
+    }
+}
+
 

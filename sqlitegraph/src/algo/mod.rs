@@ -31,6 +31,10 @@
 //! - [`transitive_closure`] - Compute all-pairs reachability (can reach relationships)
 //! - [`transitive_reduction`] - Remove redundant edges while preserving reachability
 //! - [`TransitiveClosureBounds`] - Bounds for limiting transitive closure computation
+//! - [`reachable_from`] - Forward reachability (what does this affect?)
+//! - [`reverse_reachable_from`] - Backward reachability (what affects this?)
+//! - [`can_reach`] - Point-to-point reachability check
+//! - [`unreachable_from`] - Find unreachable nodes from entry
 //!
 //! # Algorithm Characteristics
 //!
@@ -46,6 +50,7 @@
 //! | Transitive Closure | O(V × (V + E)) | All-pairs reachability | O(V²) space, use bounds for large graphs |
 //! | Transitive Reduction | O(V × (V + E)) | Graph simplification | Most meaningful for DAGs |
 //! | Topological Sort | O(V + E) | Linear ordering of DAGs | Requires DAG (returns cycle error) |
+//! | Reachability | O(V + E) | Impact analysis, slicing | None |
 //!
 //! Where:
 //! - V = number of vertices
@@ -160,6 +165,8 @@
 //! - [`weakly_connected_components_with_progress`]
 //! - [`transitive_closure_with_progress`]
 //! - [`transitive_reduction_with_progress`]
+//! - [`reachable_from_with_progress`]
+//! - [`reverse_reachable_from_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -183,10 +190,19 @@ pub use topological_sort::{topological_sort, TopoError};
 // Reachability analysis algorithms
 pub use transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds};
 pub use transitive_reduction::{transitive_reduction, transitive_reduction_with_progress};
+pub use reachability::{
+    can_reach,
+    reachable_from,
+    reachable_from_with_progress,
+    reverse_reachable_from,
+    reverse_reachable_from_with_progress,
+    unreachable_from,
+};
 
 // Module declarations
 mod centrality;
 mod community;
+mod reachability;
 mod scc;
 mod structure;
 mod topological_sort;
