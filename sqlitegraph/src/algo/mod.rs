@@ -28,6 +28,7 @@
 //! ## Reachability Analysis
 //!
 //! - [`transitive_closure`] - Compute all-pairs reachability (can reach relationships)
+//! - [`transitive_reduction`] - Remove redundant edges while preserving reachability
 //! - [`TransitiveClosureBounds`] - Bounds for limiting transitive closure computation
 //!
 //! # Algorithm Characteristics
@@ -42,6 +43,7 @@
 //! | Weakly Connected Components | O(V + E) | Undirected connectivity | None |
 //! | Strongly Connected Components | O(V + E) | Cycle detection, loop analysis | None |
 //! | Transitive Closure | O(V × (V + E)) | All-pairs reachability | O(V²) space, use bounds for large graphs |
+//! | Transitive Reduction | O(V × (V + E)) | Graph simplification | Most meaningful for DAGs |
 //!
 //! Where:
 //! - V = number of vertices
@@ -60,6 +62,7 @@
 //! - **Label propagation**: Works on disconnected graphs (each component independently)
 //! - **Louvain**: Works on disconnected graphs (each component independently)
 //! - **Transitive closure**: Works on disconnected graphs (each component independently)
+//! - **Transitive reduction**: Works on disconnected graphs (each component independently)
 //!
 //! ## Edge Directionality
 //!
@@ -153,6 +156,7 @@
 //! - [`louvain_communities_with_progress`]
 //! - [`weakly_connected_components_with_progress`]
 //! - [`transitive_closure_with_progress`]
+//! - [`transitive_reduction_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -174,6 +178,7 @@ pub use wcc::{weakly_connected_components, weakly_connected_components_with_prog
 
 // Reachability analysis algorithms
 pub use transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds};
+pub use transitive_reduction::{transitive_reduction, transitive_reduction_with_progress};
 
 // Module declarations
 mod centrality;
@@ -181,6 +186,7 @@ mod community;
 mod scc;
 mod structure;
 mod transitive_closure;
+mod transitive_reduction;
 mod wcc;
 
 // Test module
