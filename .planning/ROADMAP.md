@@ -49,11 +49,11 @@ See milestone archives for complete history.
   4. User can compute transitive reduction to remove redundant edges from DAGs
   5. User can compute transitive closure for all-pairs reachability with bounded computation and caching
 **Plans**: 5 plans in 2 waves
-  - [ ] 45-01-PLAN.md — Weakly Connected Components (Wave 1)
-  - [ ] 45-02-PLAN.md — Strongly Connected Components / Tarjan (Wave 1)
-  - [ ] 45-03-PLAN.md — Transitive Closure (Wave 1)
-  - [ ] 45-04-PLAN.md — Transitive Reduction (Wave 1)
-  - [ ] 45-05-PLAN.md — Topological Sort with Cycle Detection (Wave 2, depends on 45-02)
+  - [x] 45-01-PLAN.md — Weakly Connected Components (Wave 1)
+  - [x] 45-02-PLAN.md — Strongly Connected Components / Tarjan (Wave 1)
+  - [x] 45-03-PLAN.md — Transitive Closure (Wave 1)
+  - [x] 45-04-PLAN.md — Transitive Reduction (Wave 2, depends on 45-03)
+  - [x] 45-05-PLAN.md — Topological Sort with Cycle Detection + Benchmarks (Wave 2, depends on 45-02)
 
 #### Phase 46: Reachability & Slicing
 **Goal**: Forward and backward reachability queries
