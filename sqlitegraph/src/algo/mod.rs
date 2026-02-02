@@ -24,6 +24,7 @@
 //! - [`strongly_connected_components`] - Find strongly connected components using Tarjan's algorithm
 //! - [`find_cycles_limited`] - Enumerate cycles up to a limit
 //! - [`nodes_by_degree`] - Rank nodes by degree (hub detection)
+//! - [`topological_sort`] - Compute topological ordering of nodes in DAGs
 //!
 //! ## Reachability Analysis
 //!
@@ -44,6 +45,7 @@
 //! | Strongly Connected Components | O(V + E) | Cycle detection, loop analysis | None |
 //! | Transitive Closure | O(V × (V + E)) | All-pairs reachability | O(V²) space, use bounds for large graphs |
 //! | Transitive Reduction | O(V × (V + E)) | Graph simplification | Most meaningful for DAGs |
+//! | Topological Sort | O(V + E) | Linear ordering of DAGs | Requires DAG (returns cycle error) |
 //!
 //! Where:
 //! - V = number of vertices
@@ -57,6 +59,7 @@
 //! - **Connected components**: Works on disconnected graphs (finds all components)
 //! - **Weakly connected components**: Works on disconnected graphs (finds all components treating edges as undirected)
 //! - **Strongly connected components**: Works on disconnected graphs (finds all SCCs including trivial)
+//! - **Topological sort**: Only works on DAGs (returns cycle error with cycle path for cyclic graphs)
 //! - **PageRank**: Handles disconnected components (splits rank)
 //! - **Betweenness**: Handles disconnected components (each component separately)
 //! - **Label propagation**: Works on disconnected graphs (each component independently)
@@ -175,6 +178,7 @@ pub use community::{label_propagation, louvain_communities, louvain_communities_
 pub use structure::{connected_components, find_cycles_limited, nodes_by_degree};
 pub use scc::{strongly_connected_components, SccResult};
 pub use wcc::{weakly_connected_components, weakly_connected_components_with_progress};
+pub use topological_sort::{topological_sort, TopoError};
 
 // Reachability analysis algorithms
 pub use transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds};
@@ -185,6 +189,7 @@ mod centrality;
 mod community;
 mod scc;
 mod structure;
+mod topological_sort;
 mod transitive_closure;
 mod transitive_reduction;
 mod wcc;
