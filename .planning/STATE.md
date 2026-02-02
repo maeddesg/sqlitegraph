@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 50 of 57 (Dependency & Build Systems) — 1/TBD plans
-Status: Phase 50 Plan 01 COMPLETE - Critical path analysis (longest weighted path in DAG)
-Last activity: 2026-02-02 — Phase 50-01 complete (critical path with topological sort + DP, 1/1 plans)
+Phase: 50 of 57 (Dependency & Build Systems) — 2/2 plans
+Status: Phase 50 Plan 02 COMPLETE - Minimal cycle basis using Paton's algorithm
+Last activity: 2026-02-02 — Phase 50-02 complete (cycle basis with SCC decomposition, 2/2 plans)
 
-Progress: [████░░░░░░░] 35% of v1.14 (16/193 plans complete, 5/14 phases done, Phase 50-02 next)
+Progress: [████░░░░░░░] 35% of v1.14 (17/193 plans complete, 5/14 phases done, Phase 51 next)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 191 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01)
+- Total plans completed: 192 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02)
 - Average duration: ~20 min/plan
 - Total execution time: ~79 hours across v1.0-v1.14
 
@@ -34,7 +34,7 @@ Progress: [████░░░░░░░] 35% of v1.14 (16/193 plans complet
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (16/191 complete - Phase 45 done, 46-01 done, 47-01 through 47-03 done, 48-01 through 48-02 done, 49-01 through 49-02 done, 50-01 done) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (17/192 complete - Phase 45 done, 46-01 done, 47-01 through 47-03 done, 48-01 through 48-02 done, 49-01 through 49-02 done, 50-01 through 50-02 done) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -43,7 +43,7 @@ Progress: [████░░░░░░░] 35% of v1.14 (16/193 plans complet
 - v1.14 phase 47: ~10 min/plan (3 plans complete)
 - v1.14 phase 48: ~7 min/plan (2 plans complete)
 - v1.14 phase 49: ~9 min/plan (2 plans complete)
-- v1.14 phase 50: ~4 min/plan (1 plan complete)
+- v1.14 phase 50: ~6 min/plan (2 plans complete)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -87,6 +87,10 @@ Recent decisions affecting current work:
 - **Critical path multi-source DAG:** Initialize all distances to 0 (not -infinity) to handle DAGs with multiple source nodes; each source starts at 0, algorithm finds longest path from any source to any sink
 - **Critical path MAX relaxation:** Use max() for longest path computation (opposite of shortest path's min()) - if distance[u] + weight > distance[v], update; this is the key algorithmic difference from shortest path
 - **Critical path f64 weights:** Use floating point for edge weights to avoid integer overflow on large DAGs and support fractional durations (e.g., 2.5 hours for task completion)
+- **Cycle basis algorithm selection:** Chose Paton's O(V+E+C*V) algorithm over Horton's O(V^3) - simpler, faster for most graphs, produces fundamental cycle basis sufficient for cycle explanation
+- **Cycle basis SCC-first decomposition:** Compute SCC decomposition first, then find cycles within each non-trivial SCC - isolates cyclic regions and avoids processing DAG nodes
+- **Cycle canonicalization by rotation:** Rotate cycles so minimum node ID is first element - ensures [A,B,C,A], [B,C,A,B], and [C,A,B,C] all deduplicate to same representation
+- **Bounded cycle enumeration:** max_cycles (global limit), max_cycle_length (filter long cycles), max_per_scc (limit per SCC) - prevents resource exhaustion on dense graphs
 
 ### Pending Todos
 
@@ -104,5 +108,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 50 Plan 01 (Critical Path Analysis). 3/3 tasks complete, critical path algorithm using topological sort + DP for longest weighted path in DAG, bottleneck identification with slack computation, 12 comprehensive tests covering linear chain, diamond DAG, weight extraction, cycle detection, and edge cases.
+Stopped at: Completed Phase 50 Plan 02 (Minimal Cycle Basis). 3/3 tasks complete, cycle basis using Paton's algorithm with SCC decomposition, bounded enumeration with CycleBasisBounds, helper methods for cycle explanation (cyclic_nodes, is_cyclic, cycles_containing, explain_cycle), 20 comprehensive tests covering simple cycles, mutual recursion, DAGs, SCCs, and bounded enumeration. Fixed critical_path.rs blocking issue (fetch_edge_data doesn't exist).
 Resume file: None

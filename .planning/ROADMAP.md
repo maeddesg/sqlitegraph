@@ -90,6 +90,7 @@ See milestone archives for complete history.
 **Plans**: 2 plans in 2 waves
   - [x] 48-01-PLAN.md — Dominance Frontiers (Cytron et al. algorithm) (Wave 1)
   - [x] 48-02-PLAN.md — Natural Loops (back-edge detection) (Wave 2, depends on 48-01)
+**Status**: Complete (2026-02-02)
 
 #### Phase 49: Path Analysis
 **Goal**: Execution path enumeration with feasibility pruning
@@ -98,7 +99,10 @@ See milestone archives for complete history.
 **Success Criteria** (what must be TRUE):
   1. User can enumerate execution paths with DFS, cycle detection, and bounds (max depth, max paths, revisit cap), receiving path classifications (Normal, Error, Degenerate, Infinite)
   2. User can apply dominance constraints to path enumeration to prune impossible branch combinations and reduce path explosion
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+  - [x] 49-01-PLAN.md — Path Enumeration with DFS and Bounds (Wave 1)
+  - [x] 49-02-PLAN.md — Dominance-Constrained Path Enumeration (Wave 2, depends on 49-01)
+**Status**: Complete (2026-02-02)
 
 #### Phase 50: Dependency & Build Systems
 **Goal**: Critical path and cycle analysis for dependency graphs
@@ -107,7 +111,9 @@ See milestone archives for complete history.
 **Success Criteria** (what must be TRUE):
   1. User can compute critical path in DAG using longest path computation (not shortest) to identify bottlenecks in dependency chains, supporting weighted edges
   2. User can compute minimal cycle basis that explains "why" not just "that" for cycles, with bounded enumeration
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+  - [x] 50-01-PLAN.md — Critical Path Analysis (Wave 1)
+  - [x] 50-02-PLAN.md — Minimal Cycle Basis (Wave 2, depends on 50-01)
 
 #### Phase 51: Program Analysis & Tooling
 **Goal**: Program slicing and call graph analysis
@@ -117,7 +123,9 @@ See milestone archives for complete history.
   1. User can perform backward program slicing to answer "what can affect this node?" for bug isolation and refactoring safety
   2. User can perform forward program slicing to answer "what does this node affect?" for impact analysis
   3. User can collapse SCCs in call graphs to merge mutual recursion into supernodes, making call graphs readable and analyses tractable
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+  - [ ] 51-01-PLAN.md — Backward/Forward Program Slicing (Wave 1)
+  - [ ] 51-02-PLAN.md — SCC Collapse for Call Graphs (Wave 2, depends on 51-01)
 
 #### Phase 52: Databases & Distributed Systems
 **Goal**: Cut computation and graph partitioning
@@ -187,10 +195,10 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 | 45. Core Graph Theory | v1.14 | 5/5 | Complete | 2026-02-02 |
 | 46. Reachability & Slicing | v1.14 | 1/1 | Complete | 2026-02-02 |
 | 47. Core CFG Algorithms | v1.14 | 3/3 | Complete | 2026-02-02 |
-| 48. Derived CFG Algorithms | v1.14 | 0/2 | Not started | - |
-| 49. Path Analysis | v1.14 | 0/TBD | Not started | - |
-| 50. Dependency & Build Systems | v1.14 | 0/TBD | Not started | - |
-| 51. Program Analysis & Tooling | v1.14 | 0/TBD | Not started | - |
+| 48. Derived CFG Algorithms | v1.14 | 2/2 | Complete | 2026-02-02 |
+| 49. Path Analysis | v1.14 | 2/2 | Complete | 2026-02-02 |
+| 50. Dependency & Build Systems | v1.14 | 2/2 | Complete | 2026-02-02 |
+| 51. Program Analysis & Tooling | v1.14 | 0/2 | Not started | - |
 | 52. Databases & Distributed Systems | v1.14 | 0/TBD | Not started | - |
 | 53. Observability & Runtime | v1.14 | 0/TBD | Not started | - |
 | 54. ML / Inference / Compute Graphs | v1.14 | 0/TBD | Not started | - |
@@ -198,4 +206,4 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 | 56. Security & Compliance | v1.14 | 0/TBD | Not started | - |
 | 57. CLI Commands | v1.14 | 0/TBD | Not started | - |
 
-**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). v1.14: 9/191 plans complete (4.7%).
+**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). Phase 48 complete (2/2 plans). Phase 49 complete (2/2 plans). Phase 50 complete (2/2 plans). v1.14: 15/197 plans complete (7.6%).
