@@ -124,8 +124,9 @@ See milestone archives for complete history.
   2. User can perform forward program slicing to answer "what does this node affect?" for impact analysis
   3. User can collapse SCCs in call graphs to merge mutual recursion into supernodes, making call graphs readable and analyses tractable
 **Plans**: 2 plans in 2 waves
-  - [ ] 51-01-PLAN.md — Backward/Forward Program Slicing (Wave 1)
-  - [ ] 51-02-PLAN.md — SCC Collapse for Call Graphs (Wave 2, depends on 51-01)
+  - [x] 51-01-PLAN.md — Backward/Forward Program Slicing (Wave 1)
+  - [x] 51-02-PLAN.md — SCC Collapse for Call Graphs (Wave 2, depends on 51-01)
+**Status**: Complete (2026-02-02)
 
 #### Phase 52: Databases & Distributed Systems
 **Goal**: Cut computation and graph partitioning
@@ -135,8 +136,10 @@ See milestone archives for complete history.
   1. User can compute minimum cut (smallest edge cut between source and target) for fault tolerance and security boundary analysis
   2. User can compute minimum vertex cut (smallest node cut between source and target)
   3. User can partition graphs using greedy, BFS-based, and size-bounded partitioning for sharding and locality optimization
-**Plans**: TBD
-
+**Plans**: 2 plans in 2 waves
+  - [x] 52-01-PLAN.md — Minimum s-t Edge Cut and Vertex Cut (Edmonds-Karp max-flow) (Wave 1)
+  - [x] 52-02-PLAN.md — Graph Partitioning (BFS-level, greedy, k-way) (Wave 2)
+**Status**: Complete (2026-02-02)
 #### Phase 53: Observability & Runtime
 **Goal**: Runtime event ordering and impact analysis
 **Depends on**: Phase 46
@@ -144,7 +147,10 @@ See milestone archives for complete history.
 **Success Criteria** (what must be TRUE):
   1. User can perform happens-before analysis for event ordering in traces with lightweight race detection hints
   2. User can compute impact radius using bounded reachability with weights for blast zone estimation
-**Plans**: TBD
+**Plans**: 2 plans in 1 wave
+  - [x] 53-01-PLAN.md — Happens-Before Analysis (VectorClock, happens_before_analysis) (Wave 1)
+  - [x] 53-02-PLAN.md — Impact Radius (Bounded weighted BFS for blast zone) (Wave 1)
+**Status**: Complete (2026-02-02)
 
 #### Phase 54: ML / Inference / Compute Graphs
 **Goal**: Pattern matching and graph isomorphism
@@ -154,7 +160,10 @@ See milestone archives for complete history.
   1. User can find subgraph patterns using bounded subgraph isomorphism for common subexpression detection
   2. User can rewrite patterns with graph rewriting support for compiler and ML framework optimization
   3. User can compute structural similarity using practical isomorphism check for regression detection and refactor verification
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
+  - [ ] 54-01-PLAN.md — Bounded Subgraph Isomorphism (VF2 for pattern matching) (Wave 1)
+  - [ ] 54-02-PLAN.md — Graph Rewriting (DPO-style transformations) (Wave 2, depends on 54-01)
+  - [ ] 54-03-PLAN.md — Structural Similarity (Isomorphism + MCS) (Wave 2, depends on 54-01)
 
 #### Phase 55: Graph Diff
 **Goal**: Structural and semantic graph comparison
@@ -198,12 +207,12 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 | 48. Derived CFG Algorithms | v1.14 | 2/2 | Complete | 2026-02-02 |
 | 49. Path Analysis | v1.14 | 2/2 | Complete | 2026-02-02 |
 | 50. Dependency & Build Systems | v1.14 | 2/2 | Complete | 2026-02-02 |
-| 51. Program Analysis & Tooling | v1.14 | 0/2 | Not started | - |
-| 52. Databases & Distributed Systems | v1.14 | 0/TBD | Not started | - |
-| 53. Observability & Runtime | v1.14 | 0/TBD | Not started | - |
-| 54. ML / Inference / Compute Graphs | v1.14 | 0/TBD | Not started | - |
+| 51. Program Analysis & Tooling | v1.14 | 2/2 | Complete | 2026-02-02 |
+| 52. Databases & Distributed Systems | v1.14 | 2/2 | Complete | 2026-02-02 |
+| 53. Observability & Runtime | v1.14 | 2/2 | Complete | 2026-02-02 |
+| 54. ML / Inference / Compute Graphs | v1.14 | 0/3 | Not started | - |
 | 55. Graph Diff | v1.14 | 0/TBD | Not started | - |
 | 56. Security & Compliance | v1.14 | 0/TBD | Not started | - |
 | 57. CLI Commands | v1.14 | 0/TBD | Not started | - |
 
-**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). Phase 48 complete (2/2 plans). Phase 49 complete (2/2 plans). Phase 50 complete (2/2 plans). v1.14: 15/197 plans complete (7.6%).
+**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). Phase 48 complete (2/2 plans). Phase 49 complete (2/2 plans). Phase 50 complete (2/2 plans). Phase 51 complete (2/2 plans). Phase 52 complete (2/2 plans). Phase 53 complete (2/2 plans). v1.14: 23/197 plans complete (11.7%).
