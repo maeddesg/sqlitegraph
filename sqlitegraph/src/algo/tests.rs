@@ -25,6 +25,7 @@ use super::{
     transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds},
     transitive_reduction::{transitive_reduction, transitive_reduction_with_progress},
     wcc::{weakly_connected_components, weakly_connected_components_with_progress},
+    dominators::{dominators, dominators_with_progress, DominatorResult},
 };
 
 #[test]
@@ -50,6 +51,7 @@ fn test_algorithms_are_send() {
         let _ = reverse_reachable_from(&graph, 1);
         let _ = can_reach(&graph, 1, 2);
         let _ = unreachable_from(&graph, 1);
+        let _ = dominators(&graph, 1);
     };
 
     // If this compiles, all the algorithm functions are Send
@@ -1199,4 +1201,164 @@ fn test_unreachable_from_integration() {
     }
 }
 
+// Dominator integration tests
 
+#[test]
+fn test_dominators_deterministic() {
+    // Scenario: Dominators produces deterministic output
+    // Expected: Same graph produces same dominance sets
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let entry = entity_ids[0];
+        let result1 = dominators(&graph, entry).expect("First dominators failed");
+        let result2 = dominators(&graph, entry).expect("Second dominators failed");
+
+        // Check dominance sets match
+        assert_eq!(
+            result1.dom.len(),
+            result2.dom.len(),
+            "Different number of nodes"
+        );
+
+        for (&node, dom_set) in &result1.dom {
+            assert!(
+                result2.dom.contains_key(&node),
+                "Second result missing node {}",
+                node
+            );
+            assert_eq!(
+                result2.dom.get(&node),
+                Some(dom_set),
+                "Dominance sets differ for node {}",
+                node
+            );
+        }
+
+        // Check immediate dominators match
+        assert_eq!(result1.idom, result2.idom, "Immediate dominators differ");
+    }
+}
+
+#[test]
+fn test_dominators_progress_integration() {
+    // Scenario: Progress callback works end-to-end
+    // Expected: Progress variant matches non-progress variant
+    use crate::progress::NoProgress;
+
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let entry = entity_ids[0];
+        let progress = NoProgress;
+
+        let result_with = dominators_with_progress(&graph, entry, &progress)
+            .expect("Progress dominators failed");
+        let result_without = dominators(&graph, entry).expect("Non-progress dominators failed");
+
+        // Results should match
+        assert_eq!(result_with.dom.len(), result_without.dom.len());
+        assert_eq!(result_with.idom, result_without.idom);
+    }
+}
+
+#[test]
+fn test_dominators_entry_only_dominates_itself_single_node() {
+    // Scenario: Single node graph
+    // Expected: Entry dominates only itself
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    let entity = GraphEntity {
+        id: 0,
+        kind: "node".to_string(),
+        name: "single".to_string(),
+        file_path: Some("single.rs".to_string()),
+        data: serde_json::json!({}),
+    };
+    graph.insert_entity(&entity).expect("Failed to insert entity");
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+    let entry = entity_ids[0];
+
+    let result = dominators(&graph, entry).expect("Dominators failed");
+
+    // Entry should dominate only itself
+    assert!(result.dominates(entry, entry));
+    assert_eq!(result.dom.get(&entry).map(|set| set.len()), Some(1));
+}
+
+#[test]
+fn test_dominators_entry_dominates_all_reachable() {
+    // Scenario: Entry node should dominate all reachable nodes
+    // Expected: For all reachable nodes, entry is in their dominance set
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if entity_ids.len() > 1 {
+        let entry = entity_ids[0];
+        let result = dominators(&graph, entry).expect("Dominators failed");
+
+        // Entry should dominate all nodes
+        for &node in &entity_ids {
+            assert!(
+                result.dominates(entry, node),
+                "Entry should dominate node {}",
+                node
+            );
+        }
+    }
+}
+
+#[test]
+fn test_dominators_idom_tree_consistency() {
+    // Scenario: Immediate dominator tree should be acyclic
+    // Expected: Following idom links should terminate at entry (no cycles)
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if entity_ids.len() > 1 {
+        let entry = entity_ids[0];
+        let result = dominators(&graph, entry).expect("Dominators failed");
+
+        // For each node, follow idom links - should reach entry without cycles
+        for &node in &entity_ids {
+            let mut current = result.immediate_dominator(node);
+            let mut visited = std::collections::HashSet::new();
+
+            while let Some(idom) = current {
+                // Check for cycles
+                assert!(
+                    visited.insert(idom),
+                    "Cycle detected in dominator tree at node {}",
+                    idom
+                );
+
+                // Entry should not have an idom
+                if idom == entry {
+                    // Reached entry, should stop here
+                    assert_eq!(
+                        result.immediate_dominator(entry),
+                        None,
+                        "Entry should have no immediate dominator"
+                    );
+                    break;
+                }
+
+                current = result.immediate_dominator(idom);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_dominators_result_is_send() {
+    // Scenario: DominatorResult should be Send + Sync
+    // Expected: DominatorResult implements required traits
+    fn is_send_sync<T: Send + Sync>() {}
+
+    is_send_sync::<DominatorResult>();
+}

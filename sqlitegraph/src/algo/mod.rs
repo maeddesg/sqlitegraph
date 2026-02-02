@@ -36,6 +36,12 @@
 //! - [`can_reach`] - Point-to-point reachability check
 //! - [`unreachable_from`] - Find unreachable nodes from entry
 //!
+//! ## Control Flow Analysis
+//!
+//! - [`dominators`] - Compute dominators and immediate dominator tree
+//! - [`dominators_with_progress`] - Dominator computation with progress tracking
+//! - [`DominatorResult`] - Dominance sets and immediate dominator tree
+//!
 //! # Algorithm Characteristics
 //!
 //! | Algorithm | Time Complexity | Best For | Limitations |
@@ -51,6 +57,7 @@
 //! | Transitive Reduction | O(V × (V + E)) | Graph simplification | Most meaningful for DAGs |
 //! | Topological Sort | O(V + E) | Linear ordering of DAGs | Requires DAG (returns cycle error) |
 //! | Reachability | O(V + E) | Impact analysis, slicing | None |
+//! | Dominators | O(V²) worst, faster in practice | CFG analysis, SSA construction | Requires single entry |
 //!
 //! Where:
 //! - V = number of vertices
@@ -167,6 +174,7 @@
 //! - [`transitive_reduction_with_progress`]
 //! - [`reachable_from_with_progress`]
 //! - [`reverse_reachable_from_with_progress`]
+//! - [`dominators_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -199,9 +207,13 @@ pub use reachability::{
     unreachable_from,
 };
 
+// Control flow analysis algorithms
+pub use dominators::{dominators, dominators_with_progress, DominatorResult};
+
 // Module declarations
 mod centrality;
 mod community;
+mod dominators;
 mod reachability;
 mod scc;
 mod structure;
