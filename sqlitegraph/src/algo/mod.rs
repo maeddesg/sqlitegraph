@@ -22,6 +22,11 @@
 //! - [`connected_components`] - Find all connected components in the graph
 //! - [`weakly_connected_components`] - Find weakly connected components (undirected connectivity)
 //! - [`strongly_connected_components`] - Find strongly connected components using Tarjan's algorithm
+//! - [`cycle_basis`] - Minimal cycle basis for cycle explanation (Paton's algorithm)
+//! - [`cycle_basis_bounded`] - Cycle basis with bounded enumeration
+//! - [`cycle_basis_with_progress`] - Cycle basis with progress tracking
+//! - [`CycleBasisBounds`] - Configuration for bounds (max_cycles, max_cycle_length, max_per_scc)
+//! - [`CycleBasisResult`] - Result with cycles, SCC decomposition, helpers
 //! - [`find_cycles_limited`] - Enumerate cycles up to a limit
 //! - [`nodes_by_degree`] - Rank nodes by degree (hub detection)
 //! - [`topological_sort`] - Compute topological ordering of nodes in DAGs
@@ -89,6 +94,7 @@
 //! | Connected Components | O(V + E) | Graph connectivity | None |
 //! | Weakly Connected Components | O(V + E) | Undirected connectivity | None |
 //! | Strongly Connected Components | O(V + E) | Cycle detection, loop analysis | None |
+//! | Cycle Basis | O(V + E + C×V) | Cycle explanation, deadlock detection | C = number of cycles |
 //! | Transitive Closure | O(V × (V + E)) | All-pairs reachability | O(V²) space, use bounds for large graphs |
 //! | Transitive Reduction | O(V × (V + E)) | Graph simplification | Most meaningful for DAGs |
 //! | Topological Sort | O(V + E) | Linear ordering of DAGs | Requires DAG (returns cycle error) |
@@ -227,6 +233,7 @@
 //! - [`enumerate_paths_with_progress`]
 //! - [`enumerate_paths_with_dominance_progress`]
 //! - [`critical_path_with_progress`]
+//! - [`cycle_basis_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -240,6 +247,11 @@ pub use centrality::{
 
 // Community detection algorithms
 pub use community::{label_propagation, louvain_communities, louvain_communities_with_progress};
+
+// Cycle analysis algorithms
+pub use cycle_basis::{
+    cycle_basis, cycle_basis_bounded, cycle_basis_with_progress, CycleBasisBounds, CycleBasisResult,
+};
 
 // Structural analysis algorithms
 pub use structure::{connected_components, find_cycles_limited, nodes_by_degree};
@@ -291,6 +303,7 @@ pub use path_enumeration::{
 mod centrality;
 mod community;
 mod control_dependence;
+mod cycle_basis;
 mod critical_path;
 mod dominance_frontiers;
 mod dominators;
