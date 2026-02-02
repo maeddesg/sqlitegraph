@@ -29,6 +29,9 @@ use super::{
     post_dominators::{
         post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
     },
+    control_dependence::{
+        control_dependence_graph, control_dependence_from_exit, ControlDependenceResult,
+    },
 };
 
 #[test]
@@ -56,6 +59,7 @@ fn test_algorithms_are_send() {
         let _ = unreachable_from(&graph, 1);
         let _ = dominators(&graph, 1);
         let _ = post_dominators(&graph, 1);
+        let _ = post_dominators_auto_exit(&graph);
     };
 
     // If this compiles, all the algorithm functions are Send
@@ -1573,5 +1577,269 @@ fn test_post_dominators_result_is_send() {
     fn is_send_sync<T: Send + Sync>() {}
 
     is_send_sync::<PostDominatorResult>();
+}
+
+// Control dependence integration tests
+
+#[test]
+fn test_control_dependence_deterministic() {
+    // Scenario: Control dependence produces deterministic output
+    // Expected: Same graph produces same CDG
+    let graph = create_test_graph();
+    let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let post_result = post_dominators_auto_exit(&graph).expect("Failed to compute post-dominators");
+
+        let cdg1 = control_dependence_graph(&graph, &post_result)
+            .expect("First control dependence failed");
+        let cdg2 = control_dependence_graph(&graph, &post_result)
+            .expect("Second control dependence failed");
+
+        // Check CDG edges match
+        assert_eq!(
+            cdg1.cdg.len(),
+            cdg2.cdg.len(),
+            "Different number of control dependence edges"
+        );
+
+        for (&node, controlled_set) in &cdg1.cdg {
+            assert!(
+                cdg2.cdg.contains_key(&node),
+                "Second result missing node {}",
+                node
+            );
+            assert_eq!(
+                cdg2.cdg.get(&node),
+                Some(controlled_set),
+                "Controlled sets differ for node {}",
+                node
+            );
+        }
+
+        // Check reverse CDG matches
+        assert_eq!(cdg1.reverse_cdg, cdg2.reverse_cdg);
+    }
+}
+
+#[test]
+fn test_control_dependence_integration_with_post_dom() {
+    // Scenario: End-to-end with post-dominators
+    // Expected: Control dependence derived correctly from post-dominators
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create if-then-else CFG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    // Compute post-dominators
+    let post_result = post_dominators(&graph, entity_ids[3]).expect("Failed to compute post-dominators");
+
+    // Compute control dependence
+    let cdg_result = control_dependence_graph(&graph, &post_result)
+        .expect("Failed to compute control dependence");
+
+    // Node 3 (merge) should depend on node 0 (branch)
+    assert!(
+        cdg_result.controls(entity_ids[0], entity_ids[3]),
+        "Node 0 should control node 3"
+    );
+    assert!(
+        cdg_result.depends_on(entity_ids[3], entity_ids[0]),
+        "Node 3 should depend on node 0"
+    );
+}
+
+#[test]
+fn test_control_dependence_reverse_mapping() {
+    // Scenario: Reverse CDG is inverse of CDG
+    // Expected: If X controls Y, then Y depends on X
+    let graph = create_test_graph();
+    let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let post_result = post_dominators_auto_exit(&graph).expect("Failed to compute post-dominators");
+        let cdg_result = control_dependence_graph(&graph, &post_result)
+            .expect("Failed to compute control dependence");
+
+        // For all control dependence edges
+        for (&controller, controlled_set) in &cdg_result.cdg {
+            for &controlled in controlled_set {
+                // Check reverse mapping exists
+                assert!(
+                    cdg_result.depends_on(controlled, controller),
+                    "Reverse mapping missing: {} should depend on {}",
+                    controlled,
+                    controller
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_control_dependence_acyclic_property() {
+    // Scenario: CDG is always acyclic (fundamental property)
+    // Expected: No cycles in control dependence graph
+    let graph = create_test_graph();
+
+    let post_result = post_dominators_auto_exit(&graph).expect("Failed to compute post-dominators");
+    let cdg_result = control_dependence_graph(&graph, &post_result)
+        .expect("Failed to compute control dependence");
+
+    // CDG must be acyclic (fundamental property of control dependence)
+    assert!(
+        cdg_result.is_acyclic(),
+        "CDG must be acyclic (fundamental property)"
+    );
+}
+
+#[test]
+fn test_control_dependence_helper_function() {
+    // Scenario: control_dependence_from_exit works end-to-end
+    // Expected: Computes post-dominators first, then control dependence
+    let graph = create_test_graph();
+
+    let cdg_result = control_dependence_from_exit(&graph)
+        .expect("Failed to compute control dependence from exit");
+
+    // Should produce valid CDG result
+    assert!(cdg_result.is_acyclic(), "CDG from helper should be acyclic");
+}
+
+#[test]
+fn test_control_dependence_result_is_send() {
+    // Scenario: ControlDependenceResult should be Send + Sync
+    // Expected: ControlDependenceResult implements required traits
+    fn is_send_sync<T: Send + Sync>() {}
+
+    is_send_sync::<ControlDependenceResult>();
+}
+
+#[test]
+fn test_control_dependence_empty_graph() {
+    // Scenario: Empty graph
+    // Expected: Returns empty CDG
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    let cdg_result = control_dependence_from_exit(&graph)
+        .expect("Failed to compute control dependence on empty graph");
+
+    assert_eq!(cdg_result.cdg.len(), 0);
+    assert_eq!(cdg_result.reverse_cdg.len(), 0);
+}
+
+#[test]
+fn test_control_dependence_linear_chain() {
+    // Scenario: Linear chain has no control dependence
+    // Expected: Empty CDG (straight-line code has no control flow)
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create linear chain: 0 -> 1 -> 2 -> 3
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create chain
+    for i in 0..entity_ids.len().saturating_sub(1) {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[i],
+            to_id: entity_ids[i + 1],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let cdg_result = control_dependence_from_exit(&graph)
+        .expect("Failed to compute control dependence");
+
+    // Linear chain should have no control dependence
+    assert_eq!(cdg_result.cdg.len(), 0, "Linear chain should have no control dependence");
+    assert_eq!(cdg_result.reverse_cdg.len(), 0);
+}
+
+#[test]
+fn test_control_dependence_diamond_cfg() {
+    // Scenario: Diamond CFG has control dependence at merge
+    // Expected: Merge point depends on branch node
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create diamond: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    let edges = vec![(0, 1), (0, 2), (1, 3), (2, 3)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let cdg_result = control_dependence_from_exit(&graph)
+        .expect("Failed to compute control dependence");
+
+    // Node 3 (merge) should depend on node 0 (branch)
+    assert!(
+        cdg_result.controls(entity_ids[0], entity_ids[3]),
+        "Node 0 should control node 3"
+    );
+    assert!(
+        cdg_result.depends_on(entity_ids[3], entity_ids[0]),
+        "Node 3 should depend on node 0"
+    );
 }
 

@@ -45,6 +45,9 @@
 //! - [`post_dominators_with_progress`] - Post-dominator computation with progress tracking
 //! - [`post_dominators_auto_exit`] - Post-dominators with automatic exit detection
 //! - [`PostDominatorResult`] - Post-dominance sets and immediate post-dominator tree
+//! - [`control_dependence_graph`] - Compute Control Dependence Graph from post-dominators
+//! - [`control_dependence_from_exit`] - Compute CDG with automatic exit detection
+//! - [`ControlDependenceResult`] - Control dependence edges and reverse mapping
 //!
 //! # Algorithm Characteristics
 //!
@@ -63,6 +66,7 @@
 //! | Reachability | O(V + E) | Impact analysis, slicing | None |
 //! | Dominators | O(V²) worst, faster in practice | CFG analysis, SSA construction | Requires single entry |
 //! | Post-Dominators | O(V²) worst, faster in practice | CFG analysis, control dependence | Requires single exit or virtual exit |
+//! | Control Dependence | O(E) after post-dom | Program slicing, impact analysis | Requires post-dominators |
 //!
 //! Where:
 //! - V = number of vertices
@@ -218,10 +222,14 @@ pub use dominators::{dominators, dominators_with_progress, DominatorResult};
 pub use post_dominators::{
     post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
 };
+pub use control_dependence::{
+    control_dependence_graph, control_dependence_from_exit, ControlDependenceResult,
+};
 
 // Module declarations
 mod centrality;
 mod community;
+mod control_dependence;
 mod dominators;
 mod post_dominators;
 mod reachability;
