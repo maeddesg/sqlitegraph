@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 50 of 57 (Dependency & Build Systems) — 2/2 plans
-Status: Phase 50 Plan 02 COMPLETE - Minimal cycle basis using Paton's algorithm
-Last activity: 2026-02-02 — Phase 50-02 complete (cycle basis with SCC decomposition, 2/2 plans)
+Phase: 51 of 57 (Program Analysis & Tooling) — IN PROGRESS
+Status: Phase 51 Plan 01 COMPLETE - Program slicing (backward/forward)
+Last activity: 2026-02-02 — Phase 51 Plan 01 complete (1/2 TBD: program slicing, SCC collapse)
 
-Progress: [████░░░░░░░] 35% of v1.14 (17/193 plans complete, 5/14 phases done, Phase 51 next)
+Progress: [████░░░░░░░] 38% of v1.14 (16/195 plans complete, 6/14 phases done, Phase 51 Plan 02 next)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 192 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02)
+- Total plans completed: 193 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01)
 - Average duration: ~20 min/plan
-- Total execution time: ~79 hours across v1.0-v1.14
+- Total execution time: ~80 hours across v1.0-v1.14
 
 **By Phase:**
 
@@ -34,7 +34,7 @@ Progress: [████░░░░░░░] 35% of v1.14 (17/193 plans complet
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (17/192 complete - Phase 45 done, 46-01 done, 47-01 through 47-03 done, 48-01 through 48-02 done, 49-01 through 49-02 done, 50-01 through 50-02 done) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (16/195 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51-01 done) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -108,5 +108,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 50 Plan 02 (Minimal Cycle Basis). 3/3 tasks complete, cycle basis using Paton's algorithm with SCC decomposition, bounded enumeration with CycleBasisBounds, helper methods for cycle explanation (cyclic_nodes, is_cyclic, cycles_containing, explain_cycle), 20 comprehensive tests covering simple cycles, mutual recursion, DAGs, SCCs, and bounded enumeration. Fixed critical_path.rs blocking issue (fetch_edge_data doesn't exist).
+Stopped at: Completed Phase 51 Plan 01 (Program Slicing). 5/5 tasks complete, backward_slice and forward_slice implemented with control/data node separation, _with_progress variants, 18 comprehensive tests, full module documentation.
 Resume file: None
