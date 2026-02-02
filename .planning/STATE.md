@@ -11,15 +11,15 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
 Phase: 51 of 57 (Program Analysis & Tooling) — IN PROGRESS
-Status: Phase 51 Plan 01 COMPLETE - Program slicing (backward/forward)
-Last activity: 2026-02-02 — Phase 51 Plan 01 complete (1/2 TBD: program slicing, SCC collapse)
+Status: Phase 51 Plan 02 COMPLETE - SCC collapse for call graph analysis
+Last activity: 2026-02-02 — Phase 51 Plan 02 complete (2/2 TBD: program slicing, SCC collapse - both done)
 
-Progress: [████░░░░░░░] 38% of v1.14 (16/195 plans complete, 6/14 phases done, Phase 51 Plan 02 next)
+Progress: [████░░░░░░░] 38% of v1.14 (17/195 plans complete, 6/14 phases done, Phase 52 next)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 193 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01)
+- Total plans completed: 194 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02)
 - Average duration: ~20 min/plan
 - Total execution time: ~80 hours across v1.0-v1.14
 
@@ -34,7 +34,7 @@ Progress: [████░░░░░░░] 38% of v1.14 (16/195 plans complet
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (16/195 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51-01 done) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (17/195 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -91,6 +91,10 @@ Recent decisions affecting current work:
 - **Cycle basis SCC-first decomposition:** Compute SCC decomposition first, then find cycles within each non-trivial SCC - isolates cyclic regions and avoids processing DAG nodes
 - **Cycle canonicalization by rotation:** Rotate cycles so minimum node ID is first element - ensures [A,B,C,A], [B,C,A,B], and [C,A,B,C] all deduplicate to same representation
 - **Bounded cycle enumeration:** max_cycles (global limit), max_cycle_length (filter long cycles), max_per_scc (limit per SCC) - prevents resource exhaustion on dense graphs
+- **SCC supernode ID selection:** Use component index as supernode ID (0, 1, 2, ...) rather than min node ID for deterministic output in condensation graph
+- **Bidirectional SCC mappings:** Provide both node_to_supernode and supernode_members for efficient queries in both directions; enables reversible collapse
+- **Condensation graph edge deduplication:** Use AHashSet during construction, then sort/dedup final Vec for deterministic output; prevents duplicate edges between supernodes
+- **Condensation graph self-loop filtering:** Explicitly check from_supernode != to_supernode when adding edges; condensed graph is always acyclic by definition
 
 ### Pending Todos
 
@@ -108,5 +112,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 51 Plan 01 (Program Slicing). 5/5 tasks complete, backward_slice and forward_slice implemented with control/data node separation, _with_progress variants, 18 comprehensive tests, full module documentation.
+Stopped at: Completed Phase 51 Plan 02 (SCC Collapse for Call Graph Analysis). 4/4 tasks complete, collapse_sccs and collapse_sccs_with_progress implemented with SccCollapseResult type, bidirectional mappings, 16 comprehensive tests, full module documentation, mod.rs wiring complete.
 Resume file: None
