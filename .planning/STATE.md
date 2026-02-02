@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 53 of 57 (Observability & Runtime) — In progress (1/1 plans complete)
-Status: Phase 53-01 COMPLETE - Happens-before analysis with vector clocks (VectorClock, happens_before_analysis, TraceEvent, HappensBeforeResult, 31 unit tests)
-Last activity: 2026-02-02 — Phase 53-01 complete. Vector clock implementation with strict partial order happens-before semantics for concurrent trace event analysis and lightweight race detection.
+Phase: 53 of 57 (Observability & Runtime) — In progress (2/2 plans complete)
+Status: Phase 53-02 COMPLETE - Impact radius computation with bounded weighted BFS for blast zone estimation (impact_radius, impact_radius_with_progress, ImpactRadiusConfig, ImpactRadiusResult, 15 unit tests)
+Last activity: 2026-02-02 — Phase 53-02 complete. Bounded weighted BFS for blast zone computation with configurable distance/hop limits and boundary node detection for failure impact analysis and security blast zone estimation.
 
-Progress: [█████████▉░░] 45% of v1.14 (22/197 plans complete, 8/14 phases done, Phase 53 in progress)
+Progress: [█████████▉░░] 46% of v1.14 (23/197 plans complete, 8/14 phases done, Phase 53 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 201 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01)
+- Total plans completed: 202 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02)
 - Average duration: ~20 min/plan
 - Total execution time: ~80 hours across v1.0-v1.14
 
@@ -34,7 +34,7 @@ Progress: [█████████▉░░] 45% of v1.14 (22/197 plans comp
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (22/197 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete, 52 complete, 53-01 complete) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (23/197 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete, 52 complete, 53 complete) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -46,7 +46,7 @@ Progress: [█████████▉░░] 45% of v1.14 (22/197 plans comp
 - v1.14 phase 50: ~6 min/plan (2 plans complete)
 - v1.14 phase 51: ~7 min/plan (2 plans complete)
 - v1.14 phase 52: ~7 min/plan (2 plans complete)
-- v1.14 phase 53: ~6 min/plan (1 plan complete)
+- v1.14 phase 53: ~7 min/plan (2 plans complete)
 - Trend: Stable
 *Updated after each plan completion*
 
@@ -112,6 +112,10 @@ Recent decisions affecting current work:
 - **Race detection by location grouping:** Group trace events by memory_location and compare vector clocks within each group; concurrent accesses to same location with at least one write = potential data race
 - **Read-only exclusion from race detection:** Concurrent reads to same location are not reported as races (only write-write and read-write conflicts matter for data races)
 - **Vector clock merge semantics:** Element-wise max of both clocks; used after thread synchronization points to capture causal ordering from all threads
+- **Impact radius weight callback reuse:** Re-use WeightCallback and default_weight_fn from critical_path module instead of duplicating in observability; maintains consistency across weighted graph algorithms
+- **Epsilon comparison for boundary detection:** Use epsilon (1e-9) for floating-point boundary comparison when detecting nodes at exactly max_distance; handles precision issues with f64 arithmetic
+- **Early termination in bounded BFS:** Check distance bound before enqueuing neighbors to avoid unnecessary work; nodes beyond max_distance are never added to the queue
+- **Relax on shorter path:** In impact radius BFS, relax edges when new_dist < old_dist OR node not yet in distances; finds shortest weighted path to each node within the blast zone
 
 ### Pending Todos
 
@@ -129,5 +133,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Phase 53-01 complete. Happens-before analysis with vector clocks implemented: VectorClock with happens_before(), is_concurrent(), merge(), increment(); happens_before_analysis() for race detection; TraceEvent and HappensBeforeResult types; 31 unit tests. Phase 53 (Observability & Runtime) in progress.
+Stopped at: Phase 53-02 complete. Impact radius computation with bounded weighted BFS implemented: impact_radius() and impact_radius_with_progress() functions; ImpactRadiusConfig with max_distance, max_hops, weight_fn; ImpactRadiusResult with blast_zone, distances, boundary, size; 15 unit tests. Phase 53 (Observability & Runtime) complete.
 Resume file: None
