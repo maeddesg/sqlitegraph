@@ -115,10 +115,17 @@
 //! ## Observability Algorithms
 //!
 //! - [`happens_before_analysis`] - Event ordering for concurrent trace analysis
+//! - [`impact_radius`] - Blast zone computation using bounded reachability
+//! - [`impact_radius_with_progress`] - Impact radius with progress tracking
 //! - [`VectorClock`] - Partial order data structure for happens-before analysis
 //! - [`HappensBeforeResult`] - Result with concurrent pairs and race statistics
+//! - [`ImpactRadiusConfig`] - Configuration for impact radius (max_distance, max_hops, weight_fn)
+//! - [`ImpactRadiusResult`] - Result with blast_zone, distances, boundary, size
 //! - [`TraceEvent`] - Runtime trace event representation
 //! - [`Operation`] - Memory operation type (Read/Write)
+//!
+//! Note: [`WeightCallback`] and [`default_weight_fn`] are re-exported from the
+//! dependency analysis section for use with impact radius computation.
 //!
 //! # Algorithm Characteristics
 //!
@@ -366,8 +373,10 @@ pub use path_enumeration::{
 
 // Observability algorithms
 pub use observability::{
-    happens_before_analysis, HappensBeforeResult, Operation, TraceEvent, VectorClock,
+    happens_before_analysis, impact_radius, impact_radius_with_progress, HappensBeforeResult,
+    ImpactRadiusConfig, ImpactRadiusResult, Operation, TraceEvent, VectorClock,
 };
+// WeightCallback and default_weight_fn are re-exported from critical_path module
 
 // Module declarations
 mod call_graph_analysis;
