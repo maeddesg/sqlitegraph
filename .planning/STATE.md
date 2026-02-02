@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 52 of 57 (Databases & Distributed Systems) — In Progress (Plan 1 of 2 complete)
-Status: Phase 52-01 COMPLETE - Min cut algorithms using Edmonds-Karp max-flow
-Last activity: 2026-02-02 — Phase 52-01 complete (min_st_cut, min_vertex_cut with vertex splitting)
+Phase: 52 of 57 (Databases & Distributed Systems) — In Progress (Plan 2 of 2 complete)
+Status: Phase 52-02 COMPLETE - Graph partitioning algorithms (BFS-level, greedy, k-way)
+Last activity: 2026-02-02 — Phase 52-02 complete (partition_bfs_level, partition_greedy, partition_kway)
 
-Progress: [█████████░░░] 40% of v1.14 (20/197 plans complete, 7/14 phases done, Phase 52-02 next)
+Progress: [█████████░░░] 41% of v1.14 (21/197 plans complete, 7/14 phases done, Phase 53 next)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 197 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01)
+- Total plans completed: 198 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02)
 - Average duration: ~20 min/plan
 - Total execution time: ~80 hours across v1.0-v1.14
 
@@ -101,6 +101,11 @@ Recent decisions affecting current work:
 - **Unit capacities for unweighted min-cut:** Each edge has capacity 1 for unweighted graph cut computation; weighted min-cut deferred to future phase (requires extracting weights from JSON data field)
 - **Self-loop filtering in flow networks:** Self-loops removed during flow network construction as they don't affect s-t connectivity in directed graphs
 - **Sparse adjacency for flow networks:** Used HashMap-based adjacency instead of dense matrix; sqlitegraph graphs are sparse so dense representation wastes memory
+- **PartitionResult structure:** Includes partitions, cut_edges, and node_to_partition mapping for comprehensive analysis and downstream use
+- **BFS-level tie-breaking:** Use smallest seed ID for deterministic results when multiple seeds reach node at same level during partitioning
+- **Greedy best tracking:** Track best partition seen (not just final state) during greedy improvement to avoid degradation from later moves
+- **K-way size relaxation:** When all partitions at max_size, relax bound by (1 + max_imbalance) factor instead of failing
+- **Progress reporting frequency:** Report every 10 nodes assigned during partitioning to balance feedback granularity with overhead
 
 ### Pending Todos
 
@@ -118,5 +123,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Phase 52-01 complete. Min cut algorithms implemented: min_st_cut, min_st_cut_with_progress, min_vertex_cut, min_vertex_cut_with_progress. Edmonds-Karp max-flow with BFS augmenting paths. Vertex splitting transformation (x_in/x_out encoding). 11 unit tests. Ready to proceed to Phase 52-02 (graph partitioning).
+Stopped at: Phase 52-02 complete. Graph partitioning algorithms implemented: partition_bfs_level, partition_greedy, partition_kway, partition_kway_with_progress. BFS-level multi-source assignment, greedy iterative boundary improvement, size-bounded k-way partitioning with balance constraints. 17 unit tests for partitioning. Phase 52 (Databases & Distributed Systems) complete.
 Resume file: None
