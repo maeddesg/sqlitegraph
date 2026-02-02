@@ -70,6 +70,14 @@
 //! - [`control_dependence_from_exit`] - Compute CDG with automatic exit detection
 //! - [`ControlDependenceResult`] - Control dependence edges and reverse mapping
 //!
+//! ## Program Analysis
+//!
+//! - [`backward_slice`] - Backward program slicing (what affects this node?)
+//! - [`backward_slice_with_progress`] - Backward slicing with progress tracking
+//! - [`forward_slice`] - Forward program slicing (what does this affect?)
+//! - [`forward_slice_with_progress`] - Forward slicing with progress tracking
+//! - [`SliceResult`] - Result with control_nodes, data_nodes, and slice_nodes
+//!
 //! ## Path Analysis
 //!
 //! - [`enumerate_paths`] - Enumerate all execution paths using DFS with bounds
@@ -106,6 +114,7 @@
 //! | Iterated DF | O(V × iterations) | SSA construction, φ-node placement | Fixed-point iteration |
 //! | Natural Loops | O(E × N) worst | Loop optimization, program analysis | Requires dominators |
 //! | Control Dependence | O(E) after post-dom | Program slicing, impact analysis | Requires post-dominators |
+//! | Program Slicing | O(V + E) | Bug isolation, impact analysis | Requires CDG + reachability |
 //! | Path Enumeration | O(P × L) | Test coverage, symbolic execution | Bounds required for cyclic CFGs |
 //! | Path Enumeration (Dominance) | O(P² × L) amortized | Path pruning for complex CFGs | Requires dominators, control dependence, natural loops |
 //!
@@ -234,6 +243,8 @@
 //! - [`enumerate_paths_with_dominance_progress`]
 //! - [`critical_path_with_progress`]
 //! - [`cycle_basis_with_progress`]
+//! - [`backward_slice_with_progress`]
+//! - [`forward_slice_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -291,6 +302,12 @@ pub use control_dependence::{
     control_dependence_graph, control_dependence_from_exit, ControlDependenceResult,
 };
 
+// Program analysis algorithms
+pub use program_slicing::{
+    backward_slice, backward_slice_with_progress, forward_slice, forward_slice_with_progress,
+    SliceResult,
+};
+
 // Path analysis algorithms
 pub use path_enumeration::{
     enumerate_paths, enumerate_paths_with_progress, enumerate_paths_with_dominance,
@@ -310,6 +327,7 @@ mod dominators;
 mod natural_loops;
 mod path_enumeration;
 mod post_dominators;
+mod program_slicing;
 mod reachability;
 mod scc;
 mod structure;
