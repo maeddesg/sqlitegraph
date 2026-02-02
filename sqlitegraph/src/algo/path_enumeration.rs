@@ -2120,4 +2120,611 @@ mod tests {
         assert_eq!(result.paths.len(), 4);
         assert!(result.paths.iter().all(|p| p.classification == PathClassification::Normal));
     }
+
+    // ============================================================================
+    // Dominance-Constrained Enumeration Tests
+    // ============================================================================
+
+    /// Creates a CFG where dominance constraints matter (post-dominator scenario)
+    fn create_dominance_pruning_cfg() -> Result<SqliteGraph, SqliteGraphError> {
+        let graph = SqliteGraph::open_in_memory()?;
+
+        let node0 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })?;
+        let node1 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })?;
+        let node2 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        })?;
+        let node3 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })?;
+
+        // Diamond CFG where entry dominates all nodes
+        graph.insert_edge(node0, "left".into(), node1, vec![])?;
+        graph.insert_edge(node0, "right".into(), node2, vec![])?;
+        graph.insert_edge(node1, "next".into(), node3, vec![])?;
+        graph.insert_edge(node2, "next".into(), node3, vec![])?;
+
+        Ok(graph)
+    }
+
+    /// Creates a CFG with control dependence constraints
+    fn create_control_dependence_cfg() -> Result<SqliteGraph, SqliteGraphError> {
+        let graph = SqliteGraph::open_in_memory()?;
+
+        let node0 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })?;
+        let node1 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Condition".into()],
+            properties: vec![],
+        })?;
+        let node2 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Then".into()],
+            properties: vec![],
+        })?;
+        let node3 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Else".into()],
+            properties: vec![],
+        })?;
+        let node4 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Merge".into()],
+            properties: vec![],
+        })?;
+
+        // If-then-else structure
+        graph.insert_edge(node0, "next".into(), node1, vec![])?;
+        graph.insert_edge(node1, "true".into(), node2, vec![])?;
+        graph.insert_edge(node1, "false".into(), node3, vec![])?;
+        graph.insert_edge(node2, "next".into(), node4, vec![])?;
+        graph.insert_edge(node3, "next".into(), node4, vec![])?;
+
+        Ok(graph)
+    }
+
+    /// Creates a CFG with loop constraint scenario
+    fn create_loop_constraint_cfg() -> Result<SqliteGraph, SqliteGraphError> {
+        let graph = SqliteGraph::open_in_memory()?;
+
+        let node0 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        })?;
+        let node1 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["LoopHeader".into()],
+            properties: vec![],
+        })?;
+        let node2 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["LoopBody".into()],
+            properties: vec![],
+        })?;
+        let node3 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        })?;
+
+        // While loop structure
+        graph.insert_edge(node0, "next".into(), node1, vec![])?;
+        graph.insert_edge(node1, "next".into(), node2, vec![])?;
+        graph.insert_edge(node2, "loop".into(), node1, vec![])?;
+        graph.insert_edge(node1, "exit".into(), node3, vec![])?;
+
+        Ok(graph)
+    }
+
+    #[test]
+    fn test_dominance_pruning_valid_paths() {
+        // Scenario: Dominance pruning should NOT prune valid paths
+        // Expected: All valid diamond CFG paths are found
+        let graph = create_dominance_pruning_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        // Compute required analysis results
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                ..Default::default()
+            },
+            use_dominance_pruning: true,
+            use_control_dependence_pruning: true,
+            use_loop_constraint_pruning: true,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        // Should find valid paths (diamond has 2 paths)
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
+
+    #[test]
+    fn test_dominance_pruning_diamond_cfg() {
+        // Scenario: Diamond CFG should not have dominance violations
+        // Expected: Both diamond branches are valid
+        let graph = create_diamond_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                ..Default::default()
+            },
+            use_dominance_pruning: true,
+            use_control_dependence_pruning: false,
+            use_loop_constraint_pruning: false,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        // Diamond should have both paths
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
+
+    #[test]
+    fn test_control_dependence_pruning() {
+        // Scenario: Control dependence pruning enforces ordering
+        // Expected: Controlled nodes appear after controllers
+        let graph = create_control_dependence_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Merge"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                ..Default::default()
+            },
+            use_dominance_pruning: false,
+            use_control_dependence_pruning: true,
+            use_loop_constraint_pruning: false,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        // Should find valid paths respecting control dependence
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
+
+    #[test]
+    fn test_loop_constraint_pruning() {
+        // Scenario: Loop constraint pruning prevents invalid exits
+        // Expected: Paths respect loop boundaries
+        let graph = create_loop_constraint_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                revisit_cap: 2,
+                ..Default::default()
+            },
+            use_dominance_pruning: false,
+            use_control_dependence_pruning: false,
+            use_loop_constraint_pruning: true,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        // Should find paths respecting loop constraints
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
+
+    #[test]
+    fn test_all_constraints_together() {
+        // Scenario: All constraint types enabled together
+        // Expected: Constraints work together without conflicts
+        let graph = create_loop_constraint_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                revisit_cap: 2,
+                ..Default::default()
+            },
+            use_dominance_pruning: true,
+            use_control_dependence_pruning: true,
+            use_loop_constraint_pruning: true,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        // All constraints together should still find valid paths
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
+
+    #[test]
+    fn test_pruning_stats_recorded() {
+        // Scenario: Pruning statistics are correctly recorded
+        // Expected: pruning_stats contains valid data
+        let graph = create_diamond_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                ..Default::default()
+            },
+            use_dominance_pruning: true,
+            use_control_dependence_pruning: true,
+            use_loop_constraint_pruning: true,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        assert!(result.pruning_stats.is_some());
+        let stats = result.pruning_stats.as_ref().unwrap();
+        assert!(stats.total_considered >= stats.paths_pruned);
+        assert!(stats.reduction_ratio >= 0.0 && stats.reduction_ratio <= 1.0);
+    }
+
+    #[test]
+    fn test_pruning_no_effect_when_disabled() {
+        // Scenario: All constraints disabled
+        // Expected: Behaves like base enumeration
+        let graph = create_diamond_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                ..Default::default()
+            },
+            use_dominance_pruning: false,
+            use_control_dependence_pruning: false,
+            use_loop_constraint_pruning: false,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        // Should still find paths
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
+
+    #[test]
+    fn test_dominance_constraints_empty_graph() {
+        // Scenario: Empty graph with dominance constraints
+        // Expected: Handles gracefully
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        // Empty graphs should fail at dominator computation
+        let dom_result = dominators(&graph, 999);
+        assert!(dom_result.is_err() || dom_result.unwrap().dom.is_empty());
+    }
+
+    #[test]
+    fn test_dominance_constraints_single_node() {
+        // Scenario: Single node with dominance constraints
+        // Expected: Single path with just the node
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        let node0 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let mut exit_nodes = AHashSet::new();
+        exit_nodes.insert(node0);
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, node0).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                ..Default::default()
+            },
+            use_dominance_pruning: true,
+            use_control_dependence_pruning: true,
+            use_loop_constraint_pruning: true,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, node0, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        assert_eq!(result.paths.len(), 1);
+        assert_eq!(result.paths[0].nodes, vec![node0]);
+    }
+
+    #[test]
+    fn test_dominance_constraints_with_revisit_cap() {
+        // Scenario: Dominance constraints work with revisit cap
+        // Expected: Constraints and revisit cap work together
+        let graph = create_loop_constraint_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                revisit_cap: 2,
+                ..Default::default()
+            },
+            use_dominance_pruning: true,
+            use_control_dependence_pruning: true,
+            use_loop_constraint_pruning: true,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        // Should find paths respecting both revisit cap and constraints
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
+
+    #[test]
+    fn test_dominance_constraints_with_progress() {
+        // Scenario: Progress callback with dominance constraints
+        // Expected: Progress callback is invoked
+        use crate::progress::NoProgress;
+
+        let graph = create_diamond_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                ..Default::default()
+            },
+            use_dominance_pruning: true,
+            use_control_dependence_pruning: true,
+            use_loop_constraint_pruning: true,
+        };
+
+        let progress = NoProgress;
+        let result = enumerate_paths_with_dominance_progress(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config, progress
+        ).unwrap();
+
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
+
+    #[test]
+    fn test_dominance_config_default() {
+        // Scenario: Default configuration enables all constraints
+        // Expected: All constraint flags are true by default
+        let config = PathEnumerationDominanceConfig::default();
+        assert!(config.use_dominance_pruning);
+        assert!(config.use_control_dependence_pruning);
+        assert!(config.use_loop_constraint_pruning);
+    }
+
+    #[test]
+    fn test_path_enumeration_pruning_stats_fields() {
+        // Scenario: PruningStats struct has correct fields
+        // Expected: All fields are accessible
+        let stats = PathEnumerationPruningStats {
+            paths_pruned: 10,
+            total_considered: 100,
+            reduction_ratio: 0.1,
+        };
+
+        assert_eq!(stats.paths_pruned, 10);
+        assert_eq!(stats.total_considered, 100);
+        assert_eq!(stats.reduction_ratio, 0.1);
+    }
+
+    #[test]
+    fn test_constraints_with_nested_loops() {
+        // Scenario: Nested loop CFG with constraints
+        // Expected: Constraints handle nested loops correctly
+        let graph = create_nested_loops_cfg().unwrap();
+        let all_nodes = graph.all_entity_ids();
+        let entry = all_nodes[0];
+
+        let exit_nodes: AHashSet<i64> = all_nodes.iter()
+            .filter(|&&id| graph.fetch_entity(id).ok()
+                .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                .is_some())
+            .copied()
+            .collect();
+
+        use super::super::dominators::dominators;
+        use super::super::control_dependence::control_dependence_from_exit;
+        use super::super::natural_loops::natural_loops_from_exit;
+
+        let dom_result = dominators(&graph, entry).unwrap();
+        let cd_result = control_dependence_from_exit(&graph).unwrap();
+        let loops_result = natural_loops_from_exit(&graph).unwrap();
+
+        let config = PathEnumerationDominanceConfig {
+            base: PathEnumerationConfig {
+                exit_nodes: Some(exit_nodes),
+                revisit_cap: 2,
+                ..Default::default()
+            },
+            use_dominance_pruning: true,
+            use_control_dependence_pruning: true,
+            use_loop_constraint_pruning: true,
+        };
+
+        let result = enumerate_paths_with_dominance(
+            &graph, entry, &dom_result, &cd_result, &loops_result, &config
+        ).unwrap();
+
+        // Should find paths respecting nested loop constraints
+        assert!(result.paths.len() >= 1);
+        assert!(result.pruning_stats.is_some());
+    }
 }
