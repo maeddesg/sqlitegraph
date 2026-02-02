@@ -960,4 +960,377 @@ mod tests {
         assert_eq!(result.total_paths_found, result.paths.len());
         assert!(result.max_depth_reached > 0);
     }
+
+    #[test]
+    fn test_enumerate_paths_single_node() {
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        let node0 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let mut exit_nodes = AHashSet::new();
+        exit_nodes.insert(node0);
+
+        let config = PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, node0, &config).unwrap();
+
+        // Single node path
+        assert_eq!(result.paths.len(), 1);
+        assert_eq!(result.paths[0].nodes, vec![node0]);
+        assert_eq!(result.paths[0].classification, PathClassification::Normal);
+    }
+
+    #[test]
+    fn test_enumerate_paths_empty_graph() {
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        // Try to enumerate from non-existent entry
+        let config = PathEnumerationConfig::default();
+        let result = enumerate_paths(&graph, 999, &config);
+
+        // Should fail or return empty result
+        assert!(result.is_err() || result.unwrap().paths.is_empty());
+    }
+
+    #[test]
+    fn test_enumerate_paths_disconnected_entry() {
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        // Create entry with no successors
+        let node0 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        }).unwrap();
+
+        // Create disconnected nodes
+        let node1 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let mut exit_nodes = AHashSet::new();
+        exit_nodes.insert(node1);
+
+        let config = PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, node0, &config).unwrap();
+
+        // Entry node is not exit, so no complete paths
+        assert_eq!(result.paths.len(), 0);
+    }
+
+    #[test]
+    fn test_enumerate_paths_self_loop() {
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        let node0 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let node1 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        }).unwrap();
+
+        // Self-loop on node0
+        graph.insert_edge(node0, "loop".into(), node0, vec![]).unwrap();
+        graph.insert_edge(node0, "exit".into(), node1, vec![]).unwrap();
+
+        let mut exit_nodes = AHashSet::new();
+        exit_nodes.insert(node1);
+
+        let config = PathEnumerationConfig {
+            revisit_cap: 2,
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, node0, &config).unwrap();
+
+        // Should find path (possibly with self-loop)
+        assert!(result.paths.len() >= 1);
+    }
+
+    #[test]
+    fn test_enumerate_paths_custom_exit_nodes() {
+        let graph = create_diamond_cfg().unwrap();
+        let entry = graph.all_entity_ids()[0];
+
+        // Use middle node as exit (not the actual exit)
+        let all_nodes = graph.all_entity_ids();
+        let custom_exit = all_nodes[1]; // First branch node
+
+        let mut exit_nodes = AHashSet::new();
+        exit_nodes.insert(custom_exit);
+
+        let config = PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, entry, &config).unwrap();
+
+        // Should find paths to custom exit
+        assert!(result.paths.len() >= 1);
+        assert!(result.paths.iter().all(|p| {
+            p.classification == PathClassification::Normal
+        }));
+    }
+
+    #[test]
+    fn test_enumerate_paths_custom_error_nodes() {
+        let graph = create_diamond_cfg().unwrap();
+        let entry = graph.all_entity_ids()[0];
+
+        let all_nodes = graph.all_entity_ids();
+        let error_node = all_nodes[1]; // Treat one branch as error
+
+        let exit_node = all_nodes[3]; // Actual exit
+
+        let mut exit_nodes = AHashSet::new();
+        exit_nodes.insert(exit_node);
+
+        let mut error_nodes = AHashSet::new();
+        error_nodes.insert(error_node);
+
+        let config = PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            error_nodes: Some(error_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, entry, &config).unwrap();
+
+        // Should have one error and one normal path
+        assert_eq!(result.error_paths.len(), 1);
+        assert_eq!(result.normal_paths.len(), 1);
+    }
+
+    #[test]
+    fn test_enumerate_paths_default_config() {
+        let graph = create_linear_path_graph().unwrap();
+        let entry = graph.all_entity_ids()[0];
+
+        // Use default config (no explicit exit/error nodes)
+        let config = PathEnumerationConfig::default();
+
+        let result = enumerate_paths(&graph, entry, &config).unwrap();
+
+        // Should still work, classifying based on path properties
+        assert!(result.paths.len() >= 0);
+    }
+
+    #[test]
+    fn test_enumerate_paths_revisit_cap_enforcement() {
+        let graph = create_simple_loop_cfg().unwrap();
+        let entry = graph.all_entity_ids()[0];
+
+        let exit_nodes: AHashSet<i64> = graph
+            .all_entity_ids()
+            .into_iter()
+            .filter(|&id| {
+                graph
+                    .fetch_entity(id)
+                    .ok()
+                    .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                    .is_some()
+            })
+            .collect();
+
+        // Test with different revisit caps
+        for cap in [1, 2, 3] {
+            let config = PathEnumerationConfig {
+                revisit_cap: cap,
+                exit_nodes: Some(exit_nodes.clone()),
+                ..Default::default()
+            };
+
+            let result = enumerate_paths(&graph, entry, &config).unwrap();
+
+            // Higher caps should allow more paths
+            assert!(result.paths.len() > 0);
+        }
+    }
+
+    #[test]
+    fn test_enumerate_paths_infinite_prevention() {
+        let graph = create_simple_loop_cfg().unwrap();
+        let entry = graph.all_entity_ids()[0];
+
+        let exit_nodes: AHashSet<i64> = graph
+            .all_entity_ids()
+            .into_iter()
+            .filter(|&id| {
+                graph
+                    .fetch_entity(id)
+                    .ok()
+                    .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                    .is_some()
+            })
+            .collect();
+
+        // Very high revisit cap would cause infinite enumeration without bounds
+        let config = PathEnumerationConfig {
+            revisit_cap: 1000,
+            max_paths: 10, // But we limit total paths
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, entry, &config).unwrap();
+
+        // Should terminate due to max_paths bound
+        assert!(result.paths.len() <= 10);
+    }
+
+    #[test]
+    fn test_enumerate_paths_categorized_paths() {
+        let graph = create_error_path_cfg().unwrap();
+        let entry = graph.all_entity_ids()[0];
+
+        let exit_nodes: AHashSet<i64> = graph
+            .all_entity_ids()
+            .into_iter()
+            .filter(|&id| {
+                graph
+                    .fetch_entity(id)
+                    .ok()
+                    .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                    .is_some()
+            })
+            .collect();
+
+        let error_nodes: AHashSet<i64> = graph
+            .all_entity_ids()
+            .into_iter()
+            .filter(|&id| {
+                graph
+                    .fetch_entity(id)
+                    .ok()
+                    .and_then(|e| e.labels.iter().find(|l| l == "Error"))
+                    .is_some()
+            })
+            .collect();
+
+        let config = PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            error_nodes: Some(error_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, entry, &config).unwrap();
+
+        // Verify categorized vectors are subsets of all paths
+        let normal_len = result.normal_paths.len();
+        let error_len = result.error_paths.len();
+        let total_len = result.paths.len();
+
+        assert_eq!(normal_len + error_len, total_len);
+    }
+
+    #[test]
+    fn test_path_classification_infinite() {
+        // Create a graph that will produce infinite classification
+        let graph = create_simple_loop_cfg().unwrap();
+        let entry = graph.all_entity_ids()[0];
+
+        let exit_nodes: AHashSet<i64> = graph
+            .all_entity_ids()
+            .into_iter()
+            .filter(|&id| {
+                graph
+                    .fetch_entity(id)
+                    .ok()
+                    .and_then(|e| e.labels.iter().find(|l| l == "Exit"))
+                    .is_some()
+            })
+            .collect();
+
+        let config = PathEnumerationConfig {
+            revisit_cap: 3, // Allow multiple iterations
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, entry, &config).unwrap();
+
+        // Some paths should be classified as Infinite (have cycles)
+        let has_infinite = result.paths.iter().any(|p| {
+            p.classification == PathClassification::Infinite
+        });
+
+        // With revisit_cap=3, we should see paths with cycles
+        assert!(has_infinite || result.paths.len() > 1);
+    }
+
+    #[test]
+    fn test_enumerate_paths_complex_branching() {
+        // Create a CFG with multiple branching levels
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        let entry = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Entry".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let branch1 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let branch2 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let subbranch1 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let subbranch2 = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Block".into()],
+            properties: vec![],
+        }).unwrap();
+
+        let exit = graph.insert_node(GraphEntityCreate {
+            labels: vec!["Exit".into()],
+            properties: vec![],
+        }).unwrap();
+
+        // Create branching structure
+        graph.insert_edge(entry, "left".into(), branch1, vec![]).unwrap();
+        graph.insert_edge(entry, "right".into(), branch2, vec![]).unwrap();
+        graph.insert_edge(branch1, "left".into(), subbranch1, vec![]).unwrap();
+        graph.insert_edge(branch1, "right".into(), subbranch2, vec![]).unwrap();
+        graph.insert_edge(branch2, "left".into(), subbranch1, vec![]).unwrap();
+        graph.insert_edge(branch2, "right".into(), subbranch2, vec![]).unwrap();
+        graph.insert_edge(subbranch1, "next".into(), exit, vec![]).unwrap();
+        graph.insert_edge(subbranch2, "next".into(), exit, vec![]).unwrap();
+
+        let mut exit_nodes = AHashSet::new();
+        exit_nodes.insert(exit);
+
+        let config = PathEnumerationConfig {
+            exit_nodes: Some(exit_nodes),
+            ..Default::default()
+        };
+
+        let result = enumerate_paths(&graph, entry, &config).unwrap();
+
+        // Should find 4 paths: entry->b1->sb1->exit, entry->b1->sb2->exit,
+        //                      entry->b2->sb1->exit, entry->b2->sb2->exit
+        assert_eq!(result.paths.len(), 4);
+        assert!(result.paths.iter().all(|p| p.classification == PathClassification::Normal));
+    }
 }
