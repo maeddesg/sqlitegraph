@@ -26,6 +26,9 @@ use super::{
     transitive_reduction::{transitive_reduction, transitive_reduction_with_progress},
     wcc::{weakly_connected_components, weakly_connected_components_with_progress},
     dominators::{dominators, dominators_with_progress, DominatorResult},
+    post_dominators::{
+        post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
+    },
 };
 
 #[test]
@@ -52,6 +55,7 @@ fn test_algorithms_are_send() {
         let _ = can_reach(&graph, 1, 2);
         let _ = unreachable_from(&graph, 1);
         let _ = dominators(&graph, 1);
+        let _ = post_dominators(&graph, 1);
     };
 
     // If this compiles, all the algorithm functions are Send
@@ -1362,3 +1366,212 @@ fn test_dominators_result_is_send() {
 
     is_send_sync::<DominatorResult>();
 }
+
+// Post-dominator integration tests
+
+#[test]
+fn test_post_dominators_deterministic() {
+    // Scenario: Post-dominators produces deterministic output
+    // Expected: Same graph produces same post-dominance sets
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let exit = entity_ids[entity_ids.len() - 1];
+        let result1 = post_dominators(&graph, exit).expect("First post-dominators failed");
+        let result2 = post_dominators(&graph, exit).expect("Second post-dominators failed");
+
+        // Check post-dominance sets match
+        assert_eq!(
+            result1.post_dom.len(),
+            result2.post_dom.len(),
+            "Different number of nodes"
+        );
+
+        for (&node, post_dom_set) in &result1.post_dom {
+            assert!(
+                result2.post_dom.contains_key(&node),
+                "Second result missing node {}",
+                node
+            );
+            assert_eq!(
+                result2.post_dom.get(&node),
+                Some(post_dom_set),
+                "Post-dominance sets differ for node {}",
+                node
+            );
+        }
+
+        // Check immediate post-dominators match
+        assert_eq!(result1.ipdom, result2.ipdom, "Immediate post-dominators differ");
+    }
+}
+
+#[test]
+fn test_post_dominators_progress_integration() {
+    // Scenario: Progress callback works end-to-end
+    // Expected: Progress variant matches non-progress variant
+    use crate::progress::NoProgress;
+
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if !entity_ids.is_empty() {
+        let exit = entity_ids[entity_ids.len() - 1];
+        let progress = NoProgress;
+
+        let result_with = post_dominators_with_progress(&graph, exit, &progress)
+            .expect("Progress post-dominators failed");
+        let result_without = post_dominators(&graph, exit).expect("Non-progress post-dominators failed");
+
+        // Results should match
+        assert_eq!(result_with.post_dom.len(), result_without.post_dom.len());
+        assert_eq!(result_with.ipdom, result_without.ipdom);
+    }
+}
+
+#[test]
+fn test_post_dominators_virtual_exit_consistency() {
+    // Scenario: Virtual exit produces consistent results
+    // Expected: Auto-exit mode handles multiple exits correctly
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    // Create 4 nodes with multiple exits
+    for i in 0..4 {
+        let entity = GraphEntity {
+            id: 0,
+            kind: "node".to_string(),
+            name: format!("node_{}", i),
+            file_path: Some(format!("node_{}.rs", i)),
+            data: serde_json::json!({"index": i}),
+        };
+        graph.insert_entity(&entity).expect("Failed to insert entity");
+    }
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    // Create multiple exits: 0 -> 1, 0 -> 2 (both exits)
+    let edges = vec![(0, 1), (0, 2)];
+    for (from_idx, to_idx) in edges {
+        let edge = crate::GraphEdge {
+            id: 0,
+            from_id: entity_ids[from_idx],
+            to_id: entity_ids[to_idx],
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        };
+        graph.insert_edge(&edge).ok();
+    }
+
+    let result = post_dominators_auto_exit(&graph).expect("Auto-exit failed");
+
+    // Both exits should have None as ipdom
+    assert_eq!(result.immediate_post_dominator(entity_ids[1]), None);
+    assert_eq!(result.immediate_post_dominator(entity_ids[2]), None);
+
+    // Node 0 should have no single ipdom (diverges)
+    // Actually, since paths diverge, node 0 only post-dominates itself
+    assert_eq!(result.immediate_post_dominator(entity_ids[0]), None);
+}
+
+#[test]
+fn test_post_dominators_exit_only_post_dominates_itself_single_node() {
+    // Scenario: Single node graph
+    // Expected: Exit post-dominates only itself
+    use crate::GraphEntity;
+
+    let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+    let entity = GraphEntity {
+        id: 0,
+        kind: "node".to_string(),
+        name: "single".to_string(),
+        file_path: Some("single.rs".to_string()),
+        data: serde_json::json!({}),
+    };
+    graph.insert_entity(&entity).expect("Failed to insert entity");
+
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+    let exit = entity_ids[0];
+
+    let result = post_dominators(&graph, exit).expect("Post-dominators failed");
+
+    // Exit should post-dominate only itself
+    assert!(result.post_dominates(exit, exit));
+    assert_eq!(result.post_dom.get(&exit).map(|set| set.len()), Some(1));
+}
+
+#[test]
+fn test_post_dominators_exit_post_dominates_all_reachable() {
+    // Scenario: Exit node should post-dominate all nodes that reach it
+    // Expected: For all nodes, exit is in their post-dominance set
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if entity_ids.len() > 1 {
+        let exit = entity_ids[entity_ids.len() - 1];
+        let result = post_dominators(&graph, exit).expect("Post-dominators failed");
+
+        // Exit should post-dominate all nodes in a chain
+        for &node in &entity_ids {
+            assert!(
+                result.post_dominates(exit, node),
+                "Exit should post-dominate node {}",
+                node
+            );
+        }
+    }
+}
+
+#[test]
+fn test_post_dominators_ipdom_tree_consistency() {
+    // Scenario: Immediate post-dominator tree should be acyclic
+    // Expected: Following ipdom links should terminate at exit (no cycles)
+    let graph = create_test_graph();
+    let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
+
+    if entity_ids.len() > 1 {
+        let exit = entity_ids[entity_ids.len() - 1];
+        let result = post_dominators(&graph, exit).expect("Post-dominators failed");
+
+        // For each node, follow ipdom links - should reach exit without cycles
+        for &node in &entity_ids {
+            let mut current = result.immediate_post_dominator(node);
+            let mut visited = std::collections::HashSet::new();
+
+            while let Some(ipdom) = current {
+                // Check for cycles
+                assert!(
+                    visited.insert(ipdom),
+                    "Cycle detected in post-dominator tree at node {}",
+                    ipdom
+                );
+
+                // Exit should not have an ipdom
+                if ipdom == exit {
+                    // Reached exit, should stop here
+                    assert_eq!(
+                        result.immediate_post_dominator(exit),
+                        None,
+                        "Exit should have no immediate post-dominator"
+                    );
+                    break;
+                }
+
+                current = result.immediate_post_dominator(ipdom);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_post_dominators_result_is_send() {
+    // Scenario: PostDominatorResult should be Send + Sync
+    // Expected: PostDominatorResult implements required traits
+    fn is_send_sync<T: Send + Sync>() {}
+
+    is_send_sync::<PostDominatorResult>();
+}
+
