@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 ## Current Position
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 53 of 57 (Observability & Runtime) — Complete
-Status: Phase 53 COMPLETE - Runtime event ordering and impact analysis (VectorClock, happens_before_analysis, impact_radius, impact_radius_with_progress, 43 unit tests)
-Last activity: 2026-02-02 — Phase 53 verified complete. All OBS requirements satisfied.
+Phase: 54 of 57 (ML Inference / Compute Graphs) — 1 of 2 plans complete
+Status: Phase 54-01 COMPLETE - Bounded subgraph isomorphism using VF2 algorithm (find_subgraph_patterns, find_subgraph_patterns_with_progress, SubgraphPatternBounds, SubgraphMatchResult, 24 unit tests)
+Last activity: 2026-02-02 — Phase 54-01 complete with petgraph integration. All pattern matching APIs available.
 
-Progress: [█████████▉░░] 46% of v1.14 (23/197 plans complete, 9/14 phases done, Phase 54 next)
+Progress: [█████████▉░░] 47% of v1.14 (24/197 plans complete, 9/14 phases done, Phase 54-01 complete, 54-02 next)
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: [█████████▉░░] 46% of v1.14 (23/197 plans comp
 - v1.14 phase 51: ~7 min/plan (2 plans complete)
 - v1.14 phase 52: ~7 min/plan (2 plans complete)
 - v1.14 phase 53: ~7 min/plan (2 plans complete)
+- v1.14 phase 54: ~2 hr/plan (1 plan complete - complex petgraph integration)
 - Trend: Stable
 *Updated after each plan completion*
 
@@ -116,6 +117,9 @@ Recent decisions affecting current work:
 - **Epsilon comparison for boundary detection:** Use epsilon (1e-9) for floating-point boundary comparison when detecting nodes at exactly max_distance; handles precision issues with f64 arithmetic
 - **Early termination in bounded BFS:** Check distance bound before enqueuing neighbors to avoid unnecessary work; nodes beyond max_distance are never added to the queue
 - **Relax on shorter path:** In impact radius BFS, relax edges when new_dist < old_dist OR node not yet in distances; finds shortest weighted path to each node within the blast zone
+- **Petgraph dependency location:** Added petgraph to dependencies (not dev-dependencies) because subgraph_isomorphism is part of public API; users may need petgraph types for working with results
+- **Double reference pattern for petgraph VF2:** petgraph's subgraph_isomorphisms_iter requires G0: IntoEdgesDirected where trait is implemented for &Graph not Graph; requires passing &a_ref where a_ref = &graph (double reference pattern)
+- **Subgraph isomorphism default bounds:** max_matches=100, timeout_ms=5000, max_pattern_nodes=10 to prevent exponential blowup on dense graphs with large patterns
 
 ### Pending Todos
 
@@ -133,5 +137,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Phase 53-02 complete. Impact radius computation with bounded weighted BFS implemented: impact_radius() and impact_radius_with_progress() functions; ImpactRadiusConfig with max_distance, max_hops, weight_fn; ImpactRadiusResult with blast_zone, distances, boundary, size; 15 unit tests. Phase 53 (Observability & Runtime) complete.
+Stopped at: Phase 54-01 complete. Bounded subgraph isomorphism using VF2 algorithm implemented via petgraph 0.6: find_subgraph_patterns() and find_subgraph_patterns_with_progress() functions; SubgraphPatternBounds with max_matches, timeout_ms, max_pattern_nodes; SubgraphMatchResult with matches, patterns_found, computation_time_ms, bounded_hit; 24 unit tests (16 internal + 8 integration).
 Resume file: None

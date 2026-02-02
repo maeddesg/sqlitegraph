@@ -133,6 +133,15 @@
 //! - [`find_subgraph_patterns_with_progress`] - Subgraph isomorphism with progress tracking
 //! - [`SubgraphPatternBounds`] - Configuration for bounds (max_matches, timeout_ms, max_pattern_nodes)
 //! - [`SubgraphMatchResult`] - Result with matches, patterns_found, computation_time_ms, bounded_hit
+//! - [`structural_similarity`] - Structural similarity using isomorphism checking and MCS approximation
+//! - [`structural_similarity_with_progress`] - Structural similarity with progress tracking
+//! - [`SimilarityBounds`] - Configuration for bounds (max_matches, timeout_ms, similarity_threshold)
+//! - [`SimilarityResult`] - Result with isomorphic, mcs_similarity, ged_distance, mcs_size
+//! - [`rewrite_graph_patterns`] - DPO-style graph rewriting for pattern transformation
+//! - [`rewrite_graph_patterns_with_progress`] - Graph rewriting with progress tracking
+//! - [`RewriteRule`] - Rule specifying pattern, replacement, and interface
+//! - [`RewriteBounds`] - Configuration for bounds (max_matches, validation)
+//! - [`RewriteResult`] - Result with rewritten_graph, operations_applied, validation_errors
 //!
 //! # Algorithm Characteristics
 //!
@@ -295,6 +304,7 @@
 //! - [`backward_slice_with_progress`]
 //! - [`forward_slice_with_progress`]
 //! - [`find_subgraph_patterns_with_progress`]
+//! - [`structural_similarity_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -392,6 +402,17 @@ pub use subgraph_isomorphism::{
     SubgraphPatternBounds,
 };
 
+// Structural similarity algorithms
+pub use graph_similarity::{
+    structural_similarity, structural_similarity_with_progress, SimilarityBounds, SimilarityResult,
+};
+
+// Graph rewriting algorithms
+pub use graph_rewriting::{
+    rewrite_graph_patterns, rewrite_graph_patterns_with_progress, RewriteBounds, RewriteOperation,
+    RewriteResult, RewriteRule,
+};
+
 // Module declarations
 mod call_graph_analysis;
 mod centrality;
@@ -411,6 +432,8 @@ mod reachability;
 mod scc;
 mod structure;
 mod subgraph_isomorphism;
+mod graph_similarity;
+mod graph_rewriting;
 mod topological_sort;
 mod transitive_closure;
 mod transitive_reduction;
