@@ -64,7 +64,8 @@ See milestone archives for complete history.
   2. User can compute backward reachability to a target node to answer "what affects this?" queries
   3. User can perform point-to-point reachability checks with efficient can_reach(from, to) query
   4. User can find unreachable nodes from entry point for dead code detection
-**Plans**: TBD
+**Plans**: 1 plan in 1 wave
+  - [x] 46-01-PLAN.md — Forward/Backward Reachability, Point-to-Point, Unreachable Nodes (Wave 1)
 
 #### Phase 47: Core CFG Algorithms
 **Goal**: Dominator and post-dominator computation for control flow analysis
@@ -74,7 +75,10 @@ See milestone archives for complete history.
   1. User can compute dominators using Cooper et al. simple_fast algorithm, receiving dominator sets and immediate dominator tree
   2. User can compute post-dominators on reversed graph, receiving post-dominator sets and immediate post-dominator tree
   3. User can compute Control Dependence Graph derived from post-dominators for "this block executes because of that condition" explanations
-**Plans**: TBD
+**Plans**: 3 plans in 1 wave
+  - [ ] 47-01-PLAN.md — Dominators (Cooper et al. simple_fast algorithm) (Wave 1)
+  - [ ] 47-02-PLAN.md — Post-Dominators (reversed graph dominators) (Wave 1, depends on 47-01)
+  - [ ] 47-03-PLAN.md — Control Dependence Graph (from post-dominators) (Wave 1, depends on 47-02)
 
 #### Phase 48: Derived CFG Algorithms
 **Goal**: Dominance frontiers and natural loop detection
@@ -177,10 +181,10 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1-44 | v0.2-v1.13 | 178/178 | Complete | 2026-01-26 |
-| 45. Core Graph Theory | v1.14 | 0/5 | Ready to execute | - |
-| 46. Reachability & Slicing | v1.14 | 0/TBD | Not started | - |
-| 47. Core CFG Algorithms | v1.14 | 0/TBD | Not started | - |
+| 1-44 | v0.2-v1.13 | 182/182 | Complete | 2026-02-02 |
+| 45. Core Graph Theory | v1.14 | 5/5 | Complete | 2026-02-02 |
+| 46. Reachability & Slicing | v1.14 | 1/1 | Complete | 2026-02-02 |
+| 47. Core CFG Algorithms | v1.14 | 0/3 | Not started | - |
 | 48. Derived CFG Algorithms | v1.14 | 0/TBD | Not started | - |
 | 49. Path Analysis | v1.14 | 0/TBD | Not started | - |
 | 50. Dependency & Build Systems | v1.14 | 0/TBD | Not started | - |
@@ -192,4 +196,4 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 | 56. Security & Compliance | v1.14 | 0/TBD | Not started | - |
 | 57. CLI Commands | v1.14 | 0/TBD | Not started | - |
 
-**Overall Progress:** 178/178 plans complete for v0.2-v1.13. v1.14 phase 45 planning complete (5 plans, 2 waves).
+**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). v1.14: 6/186 plans complete (3.2%).
