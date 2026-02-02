@@ -20,8 +20,14 @@
 //! ## Structural Analysis
 //!
 //! - [`connected_components`] - Find all connected components in the graph
+//! - [`weakly_connected_components`] - Find weakly connected components (undirected connectivity)
 //! - [`find_cycles_limited`] - Enumerate cycles up to a limit
 //! - [`nodes_by_degree`] - Rank nodes by degree (hub detection)
+//!
+//! ## Reachability Analysis
+//!
+//! - [`transitive_closure`] - Compute all-pairs reachability (can reach relationships)
+//! - [`TransitiveClosureBounds`] - Bounds for limiting transitive closure computation
 //!
 //! # Algorithm Characteristics
 //!
@@ -32,6 +38,8 @@
 //! | Label Propagation | O(k × E) | Fast clustering | Non-deterministic tiebreaking |
 //! | Louvain | O(k × V × E) | Quality communities | Slower than label propagation |
 //! | Connected Components | O(V + E) | Graph connectivity | None |
+//! | Weakly Connected Components | O(V + E) | Undirected connectivity | None |
+//! | Transitive Closure | O(V × (V + E)) | All-pairs reachability | O(V²) space, use bounds for large graphs |
 //!
 //! Where:
 //! - V = number of vertices
@@ -47,6 +55,7 @@
 //! - **Betweenness**: Handles disconnected components (each component separately)
 //! - **Label propagation**: Works on disconnected graphs (each component independently)
 //! - **Louvain**: Works on disconnected graphs (each component independently)
+//! - **Transitive closure**: Works on disconnected graphs (each component independently)
 //!
 //! ## Edge Directionality
 //!
@@ -138,6 +147,7 @@
 //! - [`pagerank_with_progress`]
 //! - [`betweenness_centrality_with_progress`]
 //! - [`louvain_communities_with_progress`]
+//! - [`transitive_closure_with_progress`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -154,11 +164,17 @@ pub use community::{label_propagation, louvain_communities, louvain_communities_
 
 // Structural analysis algorithms
 pub use structure::{connected_components, find_cycles_limited, nodes_by_degree};
+pub use wcc::{weakly_connected_components, weakly_connected_components_with_progress};
+
+// Reachability analysis algorithms
+pub use transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds};
 
 // Module declarations
 mod centrality;
 mod community;
 mod structure;
+mod transitive_closure;
+mod wcc;
 
 // Test module
 #[cfg(test)]
