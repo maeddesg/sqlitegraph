@@ -1362,4 +1362,99 @@ mod tests {
         assert_eq!(result.immediate_post_dominator(exit), None);
         assert_eq!(result.post_dom.len(), 1, "Should have 1 node in post_dom sets");
     }
+
+    #[test]
+    fn test_post_dominators_is_exit() {
+        // Scenario: Check is_exit method
+        // Expected: Only exit node returns true
+        let graph = create_diamond_cfg();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        let exit = entity_ids[3];
+
+        let result = post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+
+        assert!(result.is_exit(exit), "Exit should be identified as exit");
+        assert!(!result.is_exit(entity_ids[0]), "Non-exit should not be exit");
+        assert!(!result.is_exit(entity_ids[1]), "Non-exit should not be exit");
+        assert!(!result.is_exit(entity_ids[2]), "Non-exit should not be exit");
+    }
+
+    #[test]
+    fn test_post_dominators_with_progress() {
+        // Scenario: Progress variant matches non-progress variant
+        // Expected: Same results, progress callback works
+        use crate::progress::NoProgress;
+
+        let graph = create_diamond_cfg();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        let exit = entity_ids[3];
+
+        let progress = NoProgress;
+        let result_with =
+            post_dominators_with_progress(&graph, exit, &progress).expect("Failed");
+        let result_without = post_dominators(&graph, exit).expect("Failed");
+
+        // Check post-dominance sets match
+        assert_eq!(
+            result_with.post_dom.len(),
+            result_without.post_dom.len(),
+            "Should have same number of nodes"
+        );
+
+        for (&node, post_dom_set) in &result_without.post_dom {
+            assert!(
+                result_with.post_dom.contains_key(&node),
+                "Progress result missing node {}",
+                node
+            );
+            assert_eq!(
+                result_with.post_dom.get(&node),
+                Some(post_dom_set),
+                "Post-dominance sets differ for node {}",
+                node
+            );
+        }
+
+        // Check immediate post-dominators match
+        assert_eq!(result_with.ipdom, result_without.ipdom);
+    }
+
+    #[test]
+    fn test_post_dominators_symmetry_property() {
+        // Scenario: Verify post-dominance symmetry properties
+        // Expected: Post-dominance is reflexive, transitive, antisymmetric
+        let graph = create_linear_chain();
+        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        let exit = entity_ids[3];
+
+        let result = post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+
+        // Reflexive: every node post-dominates itself
+        for &node in &entity_ids {
+            assert!(result.post_dominates(node, node), "Reflexivity failed for {}", node);
+        }
+
+        // Transitive: if a post-dominates b and b post-dominates c, then a post-dominates c
+        // In linear chain: 3 post-dominates 2, 2 post-dominates 1, so 3 should post-dominate 1
+        assert!(result.post_dominates(exit, entity_ids[2]));
+        assert!(result.post_dominates(entity_ids[2], entity_ids[1]));
+        assert!(result.post_dominates(exit, entity_ids[1]), "Transitivity failed");
+
+        // Antisymmetric: if a post-dominates b and b post-dominates a, then a = b
+        // In linear chain with more than 1 node, no two distinct nodes mutually post-dominate
+        for i in 0..entity_ids.len() {
+            for j in (i + 1)..entity_ids.len() {
+                let a = entity_ids[i];
+                let b = entity_ids[j];
+                let a_post_dom_b = result.post_dominates(a, b);
+                let b_post_dom_a = result.post_dominates(b, a);
+                assert!(
+                    !(a_post_dom_b && b_post_dom_a),
+                    "Antisymmetry failed: {} and {} mutually post-dominate",
+                    a,
+                    b
+                );
+            }
+        }
+    }
 }
