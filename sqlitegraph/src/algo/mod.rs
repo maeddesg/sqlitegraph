@@ -143,6 +143,14 @@
 //! - [`RewriteBounds`] - Configuration for bounds (max_matches, validation)
 //! - [`RewriteResult`] - Result with rewritten_graph, operations_applied, validation_errors
 //!
+//! ## Graph Diff
+//!
+//! - [`graph_diff()`] - Structural graph delta between two snapshots
+//! - [`graph_diff_with_progress()`] - Graph diff with progress tracking
+//! - [`GraphDiffResult`] - Result with nodes/edges added/removed and similarity metrics
+//! - [`NodeDelta`] - Node delta (nodes_added, nodes_removed)
+//! - [`EdgeDelta`] - Edge delta (edges_added, edges_removed)
+//!
 //! # Algorithm Characteristics
 //!
 //! | Algorithm | Time Complexity | Best For | Limitations |
@@ -303,8 +311,9 @@
 //! - [`cycle_basis_with_progress`]
 //! - [`backward_slice_with_progress`]
 //! - [`forward_slice_with_progress`]
-//! - [`find_subgraph_patterns_with_progress`]
-//! - [`structural_similarity_with_progress`]
+//! - [`find_subgraph_patterns_with_progress()`]
+//! - [`structural_similarity_with_progress()`]
+//! - [`graph_diff_with_progress()`]
 //!
 //! Use [`NoProgress`] for zero-overhead progress tracking (default).
 
@@ -413,6 +422,11 @@ pub use graph_rewriting::{
     RewriteResult, RewriteRule,
 };
 
+// Graph diff algorithms
+pub use graph_diff::{
+    graph_diff, graph_diff_with_progress, EdgeDelta, GraphDiffResult, NodeDelta,
+};
+
 // Module declarations
 mod call_graph_analysis;
 mod centrality;
@@ -434,6 +448,7 @@ mod structure;
 mod subgraph_isomorphism;
 mod graph_similarity;
 mod graph_rewriting;
+mod graph_diff;
 mod topological_sort;
 mod transitive_closure;
 mod transitive_reduction;
