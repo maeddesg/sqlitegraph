@@ -14,6 +14,7 @@ use crate::backend::{
 };
 use crate::graph::GraphEntity;
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 // V2 WAL integration (always available when native-v2 feature is enabled)
 #[cfg(feature = "native-v2")]
@@ -642,6 +643,91 @@ impl GraphBackend for NativeGraphBackend {
             .get_publisher()
             .unsubscribe(sub_id);
         Ok(removed)
+    }
+
+    // ========== Pub/Sub Enhancement APIs (v1.4.0) ==========
+
+    #[cfg(feature = "native-v2")]
+    fn kv_prefix_scan(
+        &self,
+        snapshot_id: crate::snapshot::SnapshotId,
+        prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, SqliteGraphError>
+    {
+        let store = self.kv_store.read();
+        store
+            .prefix_scan(snapshot_id, prefix)
+            .map_err(|e| SqliteGraphError::connection(e.to_string()))
+    }
+
+    fn query_nodes_by_kind(
+        &self,
+        _snapshot_id: crate::snapshot::SnapshotId,
+        kind: &str,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
+        self.with_graph_file(|graph_file| {
+            // Get the total node count first
+            let header = graph_file.header();
+            let node_count = header.node_count as i64;
+
+            let mut node_store = NodeStore::new(graph_file);
+            let mut results = Vec::new();
+
+            // Scan through all node IDs to find matches
+            // This is O(N) but acceptable for MVP
+            // Future optimization: add kind index
+            for node_id in 1..=node_count {
+                match node_store.read_node(node_id as NativeNodeId) {
+                    Ok(record) => {
+                        if record.kind == kind {
+                            results.push(node_id);
+                        }
+                    }
+                    Err(_) => {
+                        // Skip nodes that can't be read
+                        continue;
+                    }
+                }
+            }
+
+            results.sort_unstable();
+            Ok(results)
+        })
+    }
+
+    fn query_nodes_by_name_pattern(
+        &self,
+        _snapshot_id: crate::snapshot::SnapshotId,
+        pattern: &str,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
+        use crate::backend::native::pattern::glob_matches;
+
+        self.with_graph_file(|graph_file| {
+            // Get the total node count first
+            let header = graph_file.header();
+            let node_count = header.node_count as i64;
+
+            let mut node_store = NodeStore::new(graph_file);
+            let mut results = Vec::new();
+
+            // Scan through all node IDs to find pattern matches
+            for node_id in 1..=node_count {
+                match node_store.read_node(node_id as NativeNodeId) {
+                    Ok(record) => {
+                        if glob_matches(pattern, &record.name) {
+                            results.push(node_id);
+                        }
+                    }
+                    Err(_) => {
+                        // Skip nodes that can't be read
+                        continue;
+                    }
+                }
+            }
+
+            results.sort_unstable();
+            Ok(results)
+        })
     }
 }
 

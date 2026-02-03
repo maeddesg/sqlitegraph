@@ -4,6 +4,9 @@
 //! It implements file-based adjacency storage without SQLite dependency.
 //! NO GraphBackend implementation is provided here - this is storage layer only.
 
+// Glob pattern matching utility for pub/sub enhancements
+pub mod pattern;
+
 // Module organization
 pub mod adjacency;
 pub mod constants;

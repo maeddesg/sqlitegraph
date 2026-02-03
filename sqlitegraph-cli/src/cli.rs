@@ -62,6 +62,9 @@ impl CommandLineConfig {
 Commands:
   status                    Show database status and statistics
   list                      List all entities in the graph
+  kv-scan --prefix PREFIX   Scan KV store by key prefix (native-v2 only)
+  nodes-by-kind --kind KIND Find all nodes with given kind
+  nodes-by-name --pattern PATTERN  Find nodes matching name pattern (*, ? wildcards)
   migrate [--dry-run]       Run pending schema migrations
   dump-graph --output PATH  Dump graph data to file
   load-graph --input PATH   Load graph data from file

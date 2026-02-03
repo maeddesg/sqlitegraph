@@ -588,3 +588,297 @@ mod compatibility_tests {
         assert_eq!(native_result2, Some(KvValue::Integer(2)));
     }
 }
+
+#[cfg(test)]
+mod phase_58_pubsub_enhancement_tests {
+    use super::*;
+    use crate::backend::SqliteGraphBackend;
+
+    #[test]
+    fn test_kv_prefix_scan_empty() {
+        // KV prefix scan returns empty results when no keys match
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .kv_set(b"other_key".to_vec(), KvValue::String("value".to_string()), None)
+            .unwrap();
+
+        let results = backend.kv_prefix_scan(snapshot, b"test").unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_kv_prefix_scan_single_match() {
+        // KV prefix scan returns single matching key
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .kv_set(b"test_key".to_vec(), KvValue::String("value1".to_string()), None)
+            .unwrap();
+        backend
+            .kv_set(b"other_key".to_vec(), KvValue::String("value2".to_string()), None)
+            .unwrap();
+
+        let results = backend.kv_prefix_scan(snapshot, b"test").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, b"test_key".to_vec());
+        assert_eq!(results[0].1, KvValue::String("value1".to_string()));
+    }
+
+    #[test]
+    fn test_kv_prefix_scan_multiple_matches() {
+        // KV prefix scan returns all matching keys
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .kv_set(b"test_key1".to_vec(), KvValue::Integer(1), None)
+            .unwrap();
+        backend
+            .kv_set(b"test_key2".to_vec(), KvValue::Integer(2), None)
+            .unwrap();
+        backend
+            .kv_set(b"test_key3".to_vec(), KvValue::Integer(3), None)
+            .unwrap();
+        backend
+            .kv_set(b"other_key".to_vec(), KvValue::Integer(99), None)
+            .unwrap();
+
+        let results = backend.kv_prefix_scan(snapshot, b"test").unwrap();
+        assert_eq!(results.len(), 3);
+        // Results should be sorted by key
+        assert_eq!(results[0].0, b"test_key1".to_vec());
+        assert_eq!(results[1].0, b"test_key2".to_vec());
+        assert_eq!(results[2].0, b"test_key3".to_vec());
+    }
+
+    #[test]
+    fn test_kv_prefix_scan_sqlite_backend() {
+        // SQLite backend also supports KV prefix scan
+        let backend = SqliteGraphBackend::in_memory().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .kv_set(b"agent:123".to_vec(), KvValue::String("data1".to_string()), None)
+            .unwrap();
+        backend
+            .kv_set(b"agent:456".to_vec(), KvValue::String("data2".to_string()), None)
+            .unwrap();
+        backend
+            .kv_set(b"user:789".to_vec(), KvValue::String("data3".to_string()), None)
+            .unwrap();
+
+        let results = backend.kv_prefix_scan(snapshot, b"agent:").unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0, b"agent:123".to_vec());
+        assert_eq!(results[1].0, b"agent:456".to_vec());
+    }
+
+    #[test]
+    fn test_query_nodes_by_kind_empty() {
+        // Query nodes by kind returns empty when no nodes match
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "test_func".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+
+        let results = backend.query_nodes_by_kind(snapshot, "Class").unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_query_nodes_by_kind_multiple_matches() {
+        // Query nodes by kind returns all matching nodes
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "func1".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "func2".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Class".to_string(),
+                name: "MyClass".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+
+        let results = backend.query_nodes_by_kind(snapshot, "Function").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_query_nodes_by_kind_sqlite_backend() {
+        // SQLite backend also supports query by kind
+        let backend = SqliteGraphBackend::in_memory().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Agent".to_string(),
+                name: "agent1".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Agent".to_string(),
+                name: "agent2".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+
+        let results = backend.query_nodes_by_kind(snapshot, "Agent").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_query_nodes_by_name_pattern_exact() {
+        // Query nodes by name pattern with exact match
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "test_func".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "other_func".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+
+        let results = backend.query_nodes_by_name_pattern(snapshot, "test_func").unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_query_nodes_by_name_pattern_wildcard() {
+        // Query nodes by name pattern with wildcard
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "agent_123".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "agent_456".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "user_789".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+
+        let results = backend.query_nodes_by_name_pattern(snapshot, "agent_*").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_query_nodes_by_name_pattern_single_char() {
+        // Query nodes by name pattern with single char wildcard
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "abc".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Function".to_string(),
+                name: "xyz".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+
+        let results = backend.query_nodes_by_name_pattern(snapshot, "???").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_query_nodes_by_name_pattern_sqlite_backend() {
+        // SQLite backend also supports query by name pattern using GLOB
+        let backend = SqliteGraphBackend::in_memory().unwrap();
+        let snapshot = SnapshotId::current();
+
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Agent".to_string(),
+                name: "agent-alpha".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Agent".to_string(),
+                name: "agent-beta".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+        backend
+            .insert_node(crate::backend::NodeSpec {
+                kind: "Agent".to_string(),
+                name: "user-charlie".to_string(),
+                file_path: None,
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
+
+        let results = backend.query_nodes_by_name_pattern(snapshot, "agent-*").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+}
+

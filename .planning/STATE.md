@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 ## Current Position
 
 Milestone: v1.4.0 Pub/Sub Enhancements (SHIPPED 2026-02-03)
-Phase: 59 - Test Suite Recovery (IN EXECUTION)
-Plan: 59-01 - Fix V2WALConfig Missing Fields (COMPLETE)
-Status: Test suite has 660+ pre-existing compilation errors. Fixed 14 V2WALConfig errors. Remaining errors include GraphEntityCreate imports, natural_loops_from_exit imports, API signature changes.
-Last activity: 2026-02-03 — Phase 59-01 complete. V2WALConfig struct literals fixed.
+Phase: 59 - Test Suite Recovery (IN EXECUTION - Wave 2)
+Plan: 59-03 - Fix natural_loops_from_exit Import Errors (COMPLETE)
+Status: Test suite has 660+ pre-existing compilation errors. Fixed 14 V2WALConfig errors, 8+ natural_loops_from_exit errors. Remaining errors include GraphEntityCreate imports, KvStore/KvValue types, API signature changes.
+Last activity: 2026-02-03 — Phase 59-03 complete. Added natural_loops_from_exit convenience function.
 
-Progress: [█░░░░░░░░░░░░░░] 2% — Test suite recovery started (1/?? plans complete)
+Progress: [██░░░░░░░░░░░░░] 4% — Test suite recovery started (3/?? plans complete)
 
 ## Performance Metrics
 

@@ -248,6 +248,62 @@ pub trait GraphBackend {
     /// * `subscriber_id` - The subscriber ID returned by subscribe()
     #[cfg(feature = "native-v2")]
     fn unsubscribe(&self, subscriber_id: u64) -> Result<bool, SqliteGraphError>;
+
+    // ========== Pub/Sub Enhancement APIs (v1.4.0) ==========
+
+    /// Scan all KV entries with a given prefix
+    ///
+    /// Returns all keys that start with the given prefix, along with their values.
+    /// Results are in lexicographic order by key.
+    ///
+    /// # Arguments
+    /// * `snapshot_id` - Only return data committed at or before this snapshot
+    /// * `prefix` - Prefix to match (empty prefix returns all keys)
+    ///
+    /// # Returns
+    /// Vector of (key, value) pairs for all matching keys
+    #[cfg(feature = "native-v2")]
+    fn kv_prefix_scan(
+        &self,
+        snapshot_id: SnapshotId,
+        prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, SqliteGraphError>;
+
+    /// Query all nodes with a given kind
+    ///
+    /// Returns all node IDs where the node's kind equals the given string.
+    /// Results are sorted by node ID for deterministic output.
+    ///
+    /// # Arguments
+    /// * `snapshot_id` - Only return data committed at or before this snapshot
+    /// * `kind` - Kind string to match (case-sensitive)
+    ///
+    /// # Returns
+    /// Vector of node IDs with matching kind
+    fn query_nodes_by_kind(
+        &self,
+        snapshot_id: SnapshotId,
+        kind: &str,
+    ) -> Result<Vec<i64>, SqliteGraphError>;
+
+    /// Query nodes by name pattern using glob matching
+    ///
+    /// Returns all node IDs where the node's label matches the glob pattern.
+    /// Pattern syntax:
+    /// - `*` matches any sequence of characters
+    /// - `?` matches exactly one character
+    ///
+    /// # Arguments
+    /// * `snapshot_id` - Only return data committed at or before this snapshot
+    /// * `pattern` - Glob pattern to match against node labels
+    ///
+    /// # Returns
+    /// Vector of node IDs with matching labels
+    fn query_nodes_by_name_pattern(
+        &self,
+        snapshot_id: SnapshotId,
+        pattern: &str,
+    ) -> Result<Vec<i64>, SqliteGraphError>;
 }
 
 /// Metadata returned by snapshot export operations
@@ -451,5 +507,30 @@ where
     #[cfg(feature = "native-v2")]
     fn unsubscribe(&self, subscriber_id: u64) -> Result<bool, SqliteGraphError> {
         (*self).unsubscribe(subscriber_id)
+    }
+
+    #[cfg(feature = "native-v2")]
+    fn kv_prefix_scan(
+        &self,
+        snapshot_id: SnapshotId,
+        prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, SqliteGraphError> {
+        (*self).kv_prefix_scan(snapshot_id, prefix)
+    }
+
+    fn query_nodes_by_kind(
+        &self,
+        snapshot_id: SnapshotId,
+        kind: &str,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
+        (*self).query_nodes_by_kind(snapshot_id, kind)
+    }
+
+    fn query_nodes_by_name_pattern(
+        &self,
+        snapshot_id: SnapshotId,
+        pattern: &str,
+    ) -> Result<Vec<i64>, SqliteGraphError> {
+        (*self).query_nodes_by_name_pattern(snapshot_id, pattern)
     }
 }

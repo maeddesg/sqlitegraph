@@ -588,6 +588,83 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
             "Pub/sub is only available on Native V2 backend".to_string(),
         ))
     }
+
+    // ========== Pub/Sub Enhancement APIs (v1.4.0) ==========
+
+    #[cfg(feature = "native-v2")]
+    fn kv_prefix_scan(
+        &self,
+        _snapshot_id: crate::snapshot::SnapshotId,
+        prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, crate::SqliteGraphError>
+    {
+        self.ensure_kv_table()?;
+        let conn = self.graph.connection();
+
+        // Convert prefix to string pattern for LIKE query
+        // Escape special LIKE characters: % and _
+        let prefix_str = String::from_utf8_lossy(prefix);
+        let pattern = prefix_str.replace('%', "\\%").replace('_', "\\_") + "%";
+
+        let mut stmt = conn.prepare_cached(
+            "SELECT key, value_json FROM kv_store WHERE key LIKE ?1 ESCAPE '\\'"
+        ).map_err(|e| SqliteGraphError::query(e.to_string()))?;
+
+        let mut results = Vec::new();
+        let query_result = stmt.query_map([&pattern], |row| {
+            let key: String = row.get(0)?;
+            let value_json: String = row.get(1)?;
+            Ok((key, value_json))
+        });
+
+        for row in query_result.map_err(|e| SqliteGraphError::query(e.to_string()))? {
+            let (key, value_json) = row.map_err(|e| SqliteGraphError::query(e.to_string()))?;
+            let json_value: serde_json::Value = serde_json::from_str(&value_json)
+                .map_err(|e| SqliteGraphError::query(format!("Failed to parse JSON: {}", e)))?;
+            let kv_value = json_to_kv_value(json_value)?;
+            results.push((key.into_bytes(), kv_value));
+        }
+
+        // Sort by key for deterministic output
+        results.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(results)
+    }
+
+    fn query_nodes_by_kind(
+        &self,
+        _snapshot_id: crate::snapshot::SnapshotId,
+        kind: &str,
+    ) -> Result<Vec<i64>, crate::SqliteGraphError> {
+        let conn = self.graph.connection();
+        let mut stmt = conn.prepare_cached("SELECT id FROM entities WHERE kind = ?1")
+            .map_err(|e| SqliteGraphError::query(e.to_string()))?;
+
+        let node_ids: Vec<i64> = stmt
+            .query_map([kind], |row| row.get(0))
+            .map_err(|e| SqliteGraphError::query(e.to_string()))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| SqliteGraphError::query(e.to_string()))?;
+
+        Ok(node_ids)
+    }
+
+    fn query_nodes_by_name_pattern(
+        &self,
+        _snapshot_id: crate::snapshot::SnapshotId,
+        pattern: &str,
+    ) -> Result<Vec<i64>, crate::SqliteGraphError> {
+        let conn = self.graph.connection();
+        let mut stmt = conn.prepare_cached("SELECT id FROM entities WHERE label GLOB ?1")
+            .map_err(|e| SqliteGraphError::query(e.to_string()))?;
+
+        let node_ids: Vec<i64> = stmt
+            .query_map([pattern], |row| row.get(0))
+            .map_err(|e| SqliteGraphError::query(e.to_string()))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| SqliteGraphError::query(e.to_string()))?;
+
+        Ok(node_ids)
+    }
 }
 
 /// Convert KvValue to serde_json::Value for serialization

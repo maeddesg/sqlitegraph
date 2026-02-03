@@ -191,6 +191,55 @@ impl KvStore {
         entries.len()
     }
 
+    /// Scan all entries with a given prefix at a snapshot
+    ///
+    /// Returns all keys that start with the given prefix, along with their values.
+    /// Results are sorted in lexicographic order by key.
+    ///
+    /// # Arguments
+    /// * `snapshot_id` - Only return data committed at or before this snapshot
+    /// * `prefix` - Prefix to match (empty prefix returns all keys)
+    ///
+    /// # Returns
+    /// Vector of (key, value) pairs for all matching keys
+    pub fn prefix_scan(
+        &self,
+        snapshot_id: SnapshotId,
+        prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, KvValue)>, KvStoreError> {
+        let entries = self.entries.read();
+        let snapshot_lsn = snapshot_id.as_lsn();
+
+        let mut results = Vec::new();
+        for (key, versions) in entries.iter() {
+            if !key.starts_with(prefix) {
+                continue;
+            }
+
+            // Find version visible at snapshot
+            let entry = if snapshot_lsn == 0 {
+                // Snapshot at 0 means "see all data" - get latest version
+                versions.last()
+            } else {
+                // Binary search for version <= snapshot_lsn
+                let idx = versions.partition_point(|e| e.metadata.version <= snapshot_lsn);
+                if idx == 0 {
+                    None
+                } else {
+                    Some(&versions[idx - 1])
+                }
+            };
+
+            if let Some(e) = entry {
+                if !ttl::is_expired(e) {
+                    results.push((key.clone(), e.value.clone()));
+                }
+            }
+        }
+        results.sort_by(|a, b| a.0.cmp(&b.0)); // Lexicographic order
+        Ok(results)
+    }
+
     /// Explicit cleanup of all expired entries
     ///
     /// This is a manual cleanup operation - NOT called automatically.
