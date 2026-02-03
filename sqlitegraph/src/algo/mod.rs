@@ -147,9 +147,11 @@
 //!
 //! - [`graph_diff()`] - Structural graph delta between two snapshots
 //! - [`graph_diff_with_progress()`] - Graph diff with progress tracking
+//! - [`validate_refactor()`] - Refactor validation with safety heuristics
 //! - [`GraphDiffResult`] - Result with nodes/edges added/removed and similarity metrics
 //! - [`NodeDelta`] - Node delta (nodes_added, nodes_removed)
 //! - [`EdgeDelta`] - Edge delta (edges_added, edges_removed)
+//! - [`RefactorValidation`] - Validation result with is_safe, breaking_changes, warnings
 //!
 //! # Algorithm Characteristics
 //!
@@ -424,7 +426,8 @@ pub use graph_rewriting::{
 
 // Graph diff algorithms
 pub use graph_diff::{
-    graph_diff, graph_diff_with_progress, EdgeDelta, GraphDiffResult, NodeDelta,
+    graph_diff, graph_diff_with_progress, validate_refactor, EdgeDelta, GraphDiffResult, NodeDelta,
+    RefactorValidation,
 };
 
 // Module declarations

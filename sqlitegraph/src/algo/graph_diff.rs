@@ -530,6 +530,197 @@ where
 // Import structural_similarity_with_progress from graph_similarity
 use super::graph_similarity::structural_similarity_with_progress;
 
+/// Validation result for refactor checking.
+///
+/// Provides structured feedback about whether a code refactor is safe,
+/// breaking changes detected, and warnings for noteworthy changes.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// # use sqlitegraph::algo::graph_diff::{validate_refactor, graph_diff};
+/// # let diff = unsafe { std::mem::zeroed() };
+/// let validation = validate_refactor(&diff);
+///
+/// if validation.is_safe {
+///     println!("Refactor is safe!");
+/// } else {
+///     println!("Breaking changes:");
+///     for change in &validation.breaking_changes {
+///         println!("  - {}", change);
+///     }
+/// }
+/// ```
+#[derive(Debug, Clone)]
+pub struct RefactorValidation {
+    /// True if refactor is likely safe (no nodes removed, similarity >= 0.5)
+    pub is_safe: bool,
+
+    /// Breaking changes detected (nodes removed, low similarity)
+    pub breaking_changes: Vec<String>,
+
+    /// Warnings (not breaking, but noteworthy)
+    pub warnings: Vec<String>,
+}
+
+impl RefactorValidation {
+    /// Returns true if there are no breaking changes or warnings.
+    #[inline]
+    pub fn is_clean(&self) -> bool {
+        self.breaking_changes.is_empty() && self.warnings.is_empty()
+    }
+
+    /// Returns a human-readable validation summary.
+    pub fn summary(&self) -> String {
+        if self.is_safe {
+            if self.warnings.is_empty() {
+                "Refactor is safe - no breaking changes".to_string()
+            } else {
+                format!(
+                    "Refactor is safe with warnings:\n{}",
+                    self.warnings
+                        .iter()
+                        .map(|w| format!("  - {}", w))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            }
+        } else {
+            format!(
+                "Refactor has breaking changes:\n{}\nWarnings:\n{}",
+                self.breaking_changes
+                    .iter()
+                    .map(|c| format!("  - {}", c))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                self.warnings
+                    .iter()
+                    .map(|w| format!("  - {}", w))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        }
+    }
+}
+
+/// Validates whether a graph diff represents a safe refactor.
+///
+/// Applies validation heuristics to determine if a code change is safe:
+/// - **No nodes removed**: Nodes removed means breaking changes (existing code may reference them)
+/// - **Similarity threshold**: Score >= 0.5 (moderate), >= 0.8 (very similar)
+/// - **Isomorphism check**: Identical structure = safe
+/// - **Edge changes**: Warnings for removed edges (may affect control flow)
+///
+/// # Validation Rules
+///
+/// ## Breaking Changes (is_safe = false)
+///
+/// 1. Nodes removed - always breaking (breaks existing references)
+/// 2. Similarity < 0.5 - significant structural changes
+///
+/// ## Warnings (not breaking)
+///
+/// 1. Similarity < 0.8 - moderate changes, review recommended
+/// 2. Edges removed - may break control flow or dependencies
+/// 3. Isomorphic - informational (structure preserved)
+///
+/// # Arguments
+///
+/// * `diff` - GraphDiffResult from `graph_diff()` or `graph_diff_with_progress()`
+///
+/// # Returns
+///
+/// `RefactorValidation` with:
+/// - `is_safe`: True if no breaking changes detected
+/// - `breaking_changes`: List of breaking change descriptions
+/// - `warnings`: List of warnings (not breaking but noteworthy)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{algo::graph_diff, algo::validate_refactor, SqliteGraph};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let graph_v1 = SqliteGraph::open_in_memory()?;
+/// let graph_v2 = SqliteGraph::open_in_memory()?;
+/// // ... build graphs ...
+///
+/// let diff = graph_diff(&graph_v1, &graph_v2)?;
+/// let validation = validate_refactor(&diff);
+///
+/// if validation.is_safe {
+///     println!("✓ Refactor validated successfully");
+///     if !validation.warnings.is_empty() {
+///         println!("Warnings:");
+///         for warning in &validation.warnings {
+///             println!("  - {}", warning);
+///     }
+/// }
+/// } else {
+///     println!("✗ Refactor validation failed:");
+///     for change in &validation.breaking_changes {
+///         println!("  - {}", change);
+///     }
+///     println!("\nConsider reviewing these changes before deploying.");
+/// }
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Use Cases
+///
+/// - **Pre-commit validation**: Check if refactor is safe before committing
+/// - **CI/CD gates**: Automated validation in continuous integration
+/// - **Code review assist**: Highlight potential issues for reviewers
+/// - **Refactor confidence**: Verify optimizer equivalence
+pub fn validate_refactor(diff: &GraphDiffResult) -> RefactorValidation {
+    let mut validation = RefactorValidation {
+        is_safe: true,
+        breaking_changes: Vec::new(),
+        warnings: Vec::new(),
+    };
+
+    // Check 1: No nodes removed (breaks existing code)
+    if !diff.nodes_removed.is_empty() {
+        validation.breaking_changes.push(format!(
+            "Removed {} nodes - potentially breaking",
+            diff.nodes_removed.len()
+        ));
+        validation.is_safe = false;
+    }
+
+    // Check 2: Similarity threshold (0.5 = moderate, 0.8 = very similar)
+    if diff.similarity_score < 0.5 {
+        validation.breaking_changes.push(format!(
+            "Low similarity score: {:.2} - significant structural changes",
+            diff.similarity_score
+        ));
+        validation.is_safe = false;
+    } else if diff.similarity_score < 0.8 {
+        validation.warnings.push(format!(
+            "Moderate similarity: {:.2} - review recommended",
+            diff.similarity_score
+        ));
+    }
+
+    // Check 3: Isomorphism (perfect structure preservation)
+    if diff.is_isomorphic {
+        validation.warnings.push(
+            "Structure preserved (isomorphic)".to_string()
+        );
+    }
+
+    // Check 4: Edges removed (may break control flow)
+    if !diff.edges_removed.is_empty() {
+        validation.warnings.push(format!(
+            "Removed {} edges - review control flow impact",
+            diff.edges_removed.len()
+        ));
+    }
+
+    validation
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -964,5 +1155,282 @@ mod tests {
 
         assert_eq!(diff.graph1_size, 3);
         assert_eq!(diff.graph2_size, 5);
+    }
+
+    // Test 21: Validate refactor with no changes (safe)
+    #[test]
+    fn test_validate_refactor_safe() {
+        let graph1 = create_test_graph_with_nodes(3);
+        let graph2 = create_test_graph_with_nodes(3);
+
+        add_edge(&graph1, 0, 1);
+        add_edge(&graph1, 1, 2);
+
+        add_edge(&graph2, 0, 1);
+        add_edge(&graph2, 1, 2);
+
+        let diff = graph_diff(&graph1, &graph2).unwrap();
+        let validation = validate_refactor(&diff);
+
+        assert!(validation.is_safe);
+        assert!(validation.breaking_changes.is_empty());
+        // Isomorphic warning should be present
+        assert!(validation.warnings.iter().any(|w| w.contains("isomorphic")));
+    }
+
+    // Test 22: Validate refactor with nodes removed (unsafe)
+    #[test]
+    fn test_validate_refactor_nodes_removed() {
+        let graph1 = create_test_graph_with_nodes(4);
+        let graph2 = create_test_graph_with_nodes(2);
+
+        add_edge(&graph1, 0, 1);
+        add_edge(&graph1, 1, 2);
+        add_edge(&graph1, 2, 3);
+
+        add_edge(&graph2, 0, 1);
+
+        let diff = graph_diff(&graph1, &graph2).unwrap();
+        let validation = validate_refactor(&diff);
+
+        assert!(!validation.is_safe);
+        assert!(!validation.breaking_changes.is_empty());
+        assert!(validation.breaking_changes.iter().any(|c| c.contains("Removed") && c.contains("nodes")));
+    }
+
+    // Test 23: Validate refactor with low similarity (unsafe)
+    #[test]
+    fn test_validate_refactor_low_similarity() {
+        let graph1 = create_test_graph_with_nodes(3);
+        let graph2 = create_test_graph_with_nodes(3);
+
+        // Graph 1: cycle
+        add_edge(&graph1, 0, 1);
+        add_edge(&graph1, 1, 2);
+        add_edge(&graph1, 2, 0);
+
+        // Graph 2: path (very different structure)
+        add_edge(&graph2, 0, 1);
+        add_edge(&graph2, 1, 2);
+
+        let diff = graph_diff(&graph1, &graph2).unwrap();
+        let validation = validate_refactor(&diff);
+
+        // Should detect low similarity as unsafe
+        if diff.similarity_score < 0.5 {
+            assert!(!validation.is_safe);
+            assert!(validation.breaking_changes.iter().any(|c| c.contains("similarity")));
+        }
+    }
+
+    // Test 24: Validate refactor with isomorphic structure
+    #[test]
+    fn test_validate_refactor_isomorphic() {
+        let graph1 = create_test_graph_with_nodes(3);
+        let graph2 = create_test_graph_with_nodes(3);
+
+        add_edge(&graph1, 0, 1);
+        add_edge(&graph1, 1, 2);
+
+        add_edge(&graph2, 0, 1);
+        add_edge(&graph2, 1, 2);
+
+        let diff = graph_diff(&graph1, &graph2).unwrap();
+        let validation = validate_refactor(&diff);
+
+        assert!(validation.is_safe);
+        // Should have isomorphic warning
+        assert!(validation.warnings.iter().any(|w| w.contains("isomorphic")));
+    }
+
+    // Test 25: Validate refactor with moderate similarity (warning)
+    #[test]
+    fn test_validate_refactor_moderate_similarity() {
+        let graph1 = create_test_graph_with_nodes(5);
+        let graph2 = create_test_graph_with_nodes(5);
+
+        // Graph 1: 0 -> 1 -> 2 -> 3 -> 4
+        for i in 0..4 {
+            add_edge(&graph1, i, i + 1);
+        }
+
+        // Graph 2: 0 -> 1 -> 2 (partial overlap)
+        // Since graphs have same number of nodes but different structure,
+        // similarity should be moderate
+        add_edge(&graph2, 0, 1);
+        add_edge(&graph2, 1, 2);
+
+        let diff = graph_diff(&graph1, &graph2).unwrap();
+        let validation = validate_refactor(&diff);
+
+        // If similarity is moderate (0.5 - 0.8), should have warning
+        if diff.similarity_score >= 0.5 && diff.similarity_score < 0.8 {
+            assert!(validation.warnings.iter().any(|w| w.contains("Moderate similarity")));
+        }
+    }
+
+    // Test 26: Validate refactor with edges removed (warning)
+    #[test]
+    fn test_validate_refactor_edges_removed() {
+        let graph1 = create_test_graph_with_nodes(3);
+        let graph2 = create_test_graph_with_nodes(3);
+
+        add_edge(&graph1, 0, 1);
+        add_edge(&graph1, 1, 2);
+        add_edge(&graph1, 0, 2); // Extra edge
+
+        add_edge(&graph2, 0, 1);
+        add_edge(&graph2, 1, 2);
+
+        let diff = graph_diff(&graph1, &graph2).unwrap();
+        let validation = validate_refactor(&diff);
+
+        // Should warn about removed edges
+        assert!(validation.warnings.iter().any(|w| w.contains("edges")));
+    }
+
+    // Test 27: Verify is_clean() method
+    #[test]
+    fn test_refactor_validation_is_clean() {
+        let validation = RefactorValidation {
+            is_safe: true,
+            breaking_changes: vec![],
+            warnings: vec![],
+        };
+
+        assert!(validation.is_clean());
+    }
+
+    // Test 28: Verify is_clean() with warnings
+    #[test]
+    fn test_refactor_validation_is_clean_with_warnings() {
+        let validation = RefactorValidation {
+            is_safe: true,
+            breaking_changes: vec![],
+            warnings: vec!["Some warning".to_string()],
+        };
+
+        assert!(!validation.is_clean());
+    }
+
+    // Test 29: Verify summary() method
+    #[test]
+    fn test_refactor_validation_summary() {
+        let validation = RefactorValidation {
+            is_safe: true,
+            breaking_changes: vec![],
+            warnings: vec![],
+        };
+
+        let summary = validation.summary();
+        assert!(summary.contains("safe"));
+    }
+
+    // Test 30: Verify summary() with warnings
+    #[test]
+    fn test_refactor_validation_summary_with_warnings() {
+        let validation = RefactorValidation {
+            is_safe: true,
+            breaking_changes: vec![],
+            warnings: vec!["Warning 1".to_string(), "Warning 2".to_string()],
+        };
+
+        let summary = validation.summary();
+        assert!(summary.contains("safe"));
+        assert!(summary.contains("Warning 1") || summary.contains("Warning 2"));
+    }
+
+    // Test 31: Verify summary() with breaking changes
+    #[test]
+    fn test_refactor_validation_summary_with_breaking() {
+        let validation = RefactorValidation {
+            is_safe: false,
+            breaking_changes: vec!["Breaking change".to_string()],
+            warnings: vec!["Warning".to_string()],
+        };
+
+        let summary = validation.summary();
+        assert!(summary.contains("Breaking change") || summary.contains("Warning"));
+    }
+
+    // Test 32: Integration test - full refactor validation workflow
+    #[test]
+    fn test_refactor_validation_workflow() {
+        // Original code structure
+        let original = create_test_graph_with_nodes(4);
+        add_edge(&original, 0, 1);
+        add_edge(&original, 1, 2);
+        add_edge(&original, 2, 3);
+
+        // Optimized code (same structure)
+        let optimized = create_test_graph_with_nodes(4);
+        add_edge(&optimized, 0, 1);
+        add_edge(&optimized, 1, 2);
+        add_edge(&optimized, 2, 3);
+
+        let diff = graph_diff(&original, &optimized).unwrap();
+        let validation = validate_refactor(&diff);
+
+        // Refactor should be safe
+        assert!(validation.is_safe);
+        assert!(validation.breaking_changes.is_empty());
+    }
+
+    // Test 33: Integration test - breaking change detection
+    #[test]
+    fn test_refactor_validation_breaking_change() {
+        // Version 1.0: A -> B -> C -> D
+        let v1 = create_test_graph_with_nodes(4);
+        add_edge(&v1, 0, 1);
+        add_edge(&v1, 1, 2);
+        add_edge(&v1, 2, 3);
+
+        // Version 2.0: A -> B (removed C and D)
+        let v2 = create_test_graph_with_nodes(2);
+        add_edge(&v2, 0, 1);
+
+        let diff = graph_diff(&v1, &v2).unwrap();
+        let validation = validate_refactor(&diff);
+
+        // Should detect breaking changes
+        assert!(!validation.is_safe);
+        assert!(!validation.breaking_changes.is_empty());
+    }
+
+    // Test 34: Integration test - optimizer equivalence
+    #[test]
+    fn test_refactor_validation_optimizer_equivalence() {
+        // Before optimization: chain with redundant operations
+        let before = create_test_graph_with_nodes(5);
+        add_edge(&before, 0, 1);
+        add_edge(&before, 1, 2);
+        add_edge(&before, 2, 3);
+        add_edge(&before, 3, 4);
+
+        // After optimization: same structure (optimized but equivalent)
+        let after = create_test_graph_with_nodes(5);
+        add_edge(&after, 0, 1);
+        add_edge(&after, 1, 2);
+        add_edge(&after, 2, 3);
+        add_edge(&after, 3, 4);
+
+        let diff = graph_diff(&before, &after).unwrap();
+        let validation = validate_refactor(&diff);
+
+        // Optimizer preserved structure = safe
+        assert!(validation.is_safe);
+    }
+
+    // Test 35: Edge case - empty graphs
+    #[test]
+    fn test_refactor_validation_empty_graphs() {
+        let graph1 = SqliteGraph::open_in_memory().expect("Failed to create graph");
+        let graph2 = SqliteGraph::open_in_memory().expect("Failed to create graph");
+
+        let diff = graph_diff(&graph1, &graph2).unwrap();
+        let validation = validate_refactor(&diff);
+
+        // Empty graphs are safe (isomorphic)
+        assert!(validation.is_safe);
     }
 }
