@@ -12,6 +12,7 @@ This document provides a quick overview of the main API surface.
 - [Native V2 Backend API](#native-v2-backend-api)
 - [Graph Algorithms API](#graph-algorithms-api)
 - [HNSW Vector Search API](#hnsw-vector-search-api)
+- [KV Store API](#kv-store-api)
 - [Introspection API](#introspection-api)
 - [Progress Tracking API](#progress-tracking-api)
 - [Error Types](#error-types)
@@ -116,33 +117,74 @@ pub struct EdgeSpec {
 
 ## Graph Algorithms API
 
-### Available Algorithms
+### Overview
+
+SQLiteGraph v1.3.0 includes a comprehensive graph algorithms library with **35 algorithms** across 13 categories.
+
+### Algorithm Categories
+
+| Category | Algorithms | Example Functions |
+|----------|------------|-------------------|
+| **Core Graph Theory** | WCC, SCC, Transitive Closure, Transitive Reduction, Topological Sort | `algo::scc()`, `algo::topological_sort()` |
+| **Reachability** | Forward, Backward, Can-Reach, Unreachable Nodes | `algo::forward_reachability()`, `algo::can_reach()` |
+| **Core CFG** | Dominators, Post-Dominators, Control Dependence | `algo::dominators()`, `algo::post_dominators()` |
+| **Derived CFG** | Dominance Frontiers, Natural Loops | `algo::dominance_frontiers()`, `algo::natural_loops()` |
+| **Path Analysis** | Enumerate Paths, Constrained Paths | `algo::enumerate_paths()` |
+| **Dependency** | Critical Path, Minimal Cycle Basis | `algo::critical_path()`, `algo::cycle_basis()` |
+| **Program Analysis** | Backward/Forward Slicing, SCC Collapse | `algo::backward_slice()`, `algo::collapse_scc()` |
+| **Distributed Systems** | Min Cut, Min Vertex Cut, Partitioning | `algo::min_cut()`, `algo::partition_graph()` |
+| **Observability** | Happens-Before, Impact Radius | `algo::happens_before()`, `algo::impact_radius()` |
+| **ML/Inference** | Subgraph Isomorphism, Graph Rewrite, Similarity | `algo::subgraph_isomorphism()` |
+| **Graph Diff** | Structural Delta, Refactor Validation | `algo::graph_diff()`, `algo::validate_refactor()` |
+| **Security** | Taint Propagation, Sink Analysis | `algo::taint_forward()`, `algo::sink_analysis()` |
+
+### Usage Examples
 
 ```rust
 use sqlitegraph::algo;
 
-// PageRank - importance ranking
+// Classic algorithms
 let scores: HashMap<u64, f64> = algo::pagerank(&graph, 0.85, 50)?;
 let scores = algo::pagerank_with_progress(&graph, 0.85, 50, progress)?;
-
-// Betweenness Centrality - node importance
-let centrality: HashMap<u64, f64> = algo::betweenness_centrality(&graph)?;
-
-// Label Propagation - fast community detection
 let communities: HashMap<u64, u64> = algo::label_propagation(&graph)?;
 
-// Louvain - modularity-based clustering
-let partition: HashMap<u64, u64> = algo::louvain_communities(&graph, 0.01)?;
+// Graph decomposition
+let sccs: Vec<Vec<u64>> = algo::strongly_connected_components(&graph)?;
+let wccs: Vec<Vec<u64>> = algo::weakly_connected_components(&graph)?;
+
+// Reachability queries
+let reachable: HashSet<u64> = algo::forward_reachability(&graph, start_node)?;
+let can_reach: bool = algo::can_reach(&graph, from_node, to_node)?;
+
+// CFG analysis
+let dominators: HashSet<u64> = algo::dominators(&graph, entry_node)?;
+let frontiers: HashMap<u64, Vec<u64>> = algo::dominance_frontiers(&graph, entry_node)?;
+let loops: Vec<(u64, u64)> = algo::natural_loops(&graph)?;
+
+// Program slicing
+let slice: HashSet<u64> = algo::backward_slice(&graph, target_node)?;
+let slice: HashSet<u64> = algo::forward_slice(&graph, source_node)?;
+
+// Security analysis
+let tainted: HashSet<u64> = algo::taint_forward(&graph, &source_nodes)?;
 ```
 
-### Algorithm Characteristics
+### Key Algorithm Signatures
 
-| Algorithm | Function | Complexity | Returns |
-|-----------|----------|------------|---------|
-| **PageRank** | `pagerank(graph, damping, iterations)` | O(|E| × iter) | `HashMap<u64, f64>` |
-| **Betweenness** | `betweenness_centrality(graph)` | O(|V||E|) | `HashMap<u64, f64>` |
-| **Label Propagation** | `label_propagation(graph)` | O(|E|) | `HashMap<u64, u64>` |
-| **Louvain** | `louvain_communities(graph, tolerance)` | O(|E| log |V|) | `HashMap<u64, u64>` |
+| Function | Parameters | Returns |
+|----------|------------|---------|
+| `pagerank(graph, damping, iter)` | `(&G, f64, usize)` | `HashMap<u64, f64>` |
+| `scc(graph)` | `(&G)` | `Vec<Vec<u64>>` |
+| `topological_sort(graph)` | `(&G)` | `Result<Vec<u64>>` |
+| `forward_reachability(graph, start)` | `(&G, u64)` | `HashSet<u64>` |
+| `dominators(graph, entry)` | `(&G, u64)` | `DominatorResult` |
+| `backward_slice(graph, target)` | `(&G, u64)` | `HashSet<u64>` |
+| `taint_forward(graph, sources)` | `(&G, &[u64])` | `HashSet<u64>` |
+
+### Full Documentation
+
+For complete algorithm reference with all 35 algorithms, see:
+**[docs/GRAPH_ALGORITHMS_GUIDE.md](docs/GRAPH_ALGORITHMS_GUIDE.md)**
 
 ---
 
@@ -185,6 +227,129 @@ let hnsw = HnswIndex::new(config)?;
 | `Euclidean` | General similarity |
 | `DotProduct` | Normalized vectors |
 | `Manhattan` | Sparse vectors |
+
+---
+
+## KV Store API
+
+### Availability
+
+| Backend | KV Store Support |
+|---------|------------------|
+| **Native V2** | Full support |
+| **SQLite** | Not supported |
+
+### Core Types
+
+```rust
+use sqlitegraph::backend::KvValue;
+use serde_json::json;
+
+// Value types supported by the KV store
+pub enum KvValue {
+    Bytes(Vec<u8>),      // Raw binary data
+    String(String),       // Text values
+    Integer(i64),         // 64-bit integers
+    Float(f64),           // Floating point numbers
+    Boolean(bool),        // True/false
+    Json(serde_json::Value),  // JSON objects and arrays
+}
+```
+
+### Main Methods
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `kv_get(snapshot_id, key)` | `(SnapshotId, &[u8])` | `Option<KvValue>` | Get value at snapshot |
+| `kv_set(key, value, ttl)` | `(Vec<u8>, KvValue, Option<u64>)` | `()` | Set value with optional TTL |
+| `kv_delete(key)` | `&[u8]` | `()` | Delete a key |
+
+### Usage Examples
+
+```rust
+use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::backend::KvValue;
+
+let config = GraphConfig::native();
+let graph = open_graph("graph.db", &config)?;
+
+// Set values
+graph.kv_set(
+    b"counter".to_vec(),
+    KvValue::Integer(42),
+    None,  // No TTL
+)?;
+
+graph.kv_set(
+    b"config".to_vec(),
+    KvValue::Json(json!({"theme": "dark"})),
+    None,
+)?;
+
+// Get value (requires snapshot_id)
+let snapshot = graph.snapshot()?;
+if let Some(KvValue::Integer(count)) = graph.kv_get(snapshot.id, b"counter")? {
+    println!("Counter: {}", count);
+}
+
+// Delete value
+graph.kv_delete(b"counter")?;
+
+// Set with TTL (expires in 60 seconds)
+graph.kv_set(
+    b"temp_session".to_vec(),
+    KvValue::String("active".to_string()),
+    Some(60),  // TTL in seconds
+)?;
+```
+
+### TTL Support
+
+Keys can have an optional time-to-live in seconds. After expiration, `kv_get` returns `None`:
+
+```rust
+// Expire in 5 minutes (300 seconds)
+graph.kv_set(b"cache:data".to_vec(), value, Some(300))?;
+
+// Expire in 1 hour (3600 seconds)
+graph.kv_set(b"session:xyz".to_vec(), value, Some(3600))?;
+
+// No expiration (None)
+graph.kv_set(b"permanent".to_vec(), value, None)?;
+```
+
+### Transactional Behavior
+
+KV operations participate in transactions with graph operations:
+
+```rust
+// Atomic: node + metadata stored together
+let node_id = graph.insert_node(spec)?;
+graph.kv_set(
+    format!("metadata:{}", node_id).into_bytes(),
+    KvValue::Json(json!({"created": "2026-02-03"})),
+    None,
+)?;
+// Both commit or roll back together
+```
+
+### Pub/Sub Integration
+
+KV changes emit `KVChanged` events when transactions commit:
+
+```rust
+use sqlitegraph::backend::{SubscriptionFilter, PubSubEvent};
+
+let filter = SubscriptionFilter::all();
+let (sub_id, rx) = graph.subscribe(filter)?;
+
+// Receive KV change events
+while let Ok(event) = rx.recv() {
+    if let PubSubEvent::KVChanged { key_hash, snapshot_id } = event {
+        println!("KV entry changed: hash={}, snapshot={}", key_hash, snapshot_id);
+    }
+}
+```
 
 ---
 
@@ -281,13 +446,13 @@ match HnswConfig::builder().build() {
 ```toml
 [dependencies]
 # SQLite backend only
-sqlitegraph = "1.1"
+sqlitegraph = "1.3"
 
 # Native V2 backend
-sqlitegraph = { version = "1.0", features = ["native-v2"] }
+sqlitegraph = { version = "1.3", features = ["native-v2"] }
 
 # V2 I/O tracing (development)
-sqlitegraph = { version = "1.0", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.3", features = ["trace_v2_io"] }
 ```
 
 ---

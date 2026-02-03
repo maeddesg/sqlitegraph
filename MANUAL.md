@@ -10,10 +10,10 @@ Comprehensive usage guide for SQLiteGraph with dual backend architecture (SQLite
 
 ```toml
 [dependencies]
-sqlitegraph = "1.2"
+sqlitegraph = "1.3"
 
 # For Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.2", features = ["native-v2"] }
+sqlitegraph = { version = "1.3", features = ["native-v2"] }
 ```
 
 ### Basic Usage
@@ -133,44 +133,68 @@ let edge_id = graph.insert_edge(edge_spec)?;
 
 ## 4. Graph Algorithms
 
-### PageRank
+### Overview
+
+SQLiteGraph v1.3.0 includes a comprehensive graph algorithms library with **35 algorithms** across 13 categories:
+
+| Category | Algorithms |
+|----------|------------|
+| **Core Graph Theory** | WCC, SCC, Transitive Closure, Transitive Reduction, Topological Sort |
+| **Reachability** | Forward, Backward, Can-Reach, Unreachable Nodes |
+| **Core CFG** | Dominators, Post-Dominators, Control Dependence |
+| **Derived CFG** | Dominance Frontiers, Natural Loops |
+| **Path Analysis** | Enumerate Paths, Enumerate Paths Constrained |
+| **Dependency** | Critical Path, Minimal Cycle Basis |
+| **Program Analysis** | Backward Slice, Forward Slice, SCC Collapse |
+| **Distributed Systems** | Min Cut, Min Vertex Cut, Graph Partitioning |
+| **Observability** | Happens-Before, Impact Radius |
+| **ML/Inference** | Subgraph Isomorphism, Graph Rewrite, Structural Similarity |
+| **Graph Diff** | Graph Diff, Validate Refactor |
+| **Security** | Taint Forward, Taint Backward, Sink Analysis, Discover Sources/Sinks |
+
+### Usage Examples
 
 ```rust
 use sqlitegraph::algo;
 
-// Basic PageRank
-let scores = algo::pagerank(&graph, 0.85, 50)?;
+// Core graph theory
+let sccs = algo::strongly_connected_components(&graph)?;
+let sorted = algo::topological_sort(&graph)?;
 
-// With progress tracking
+// Reachability
+let reachable = algo::forward_reachability(&graph, start_node)?;
+
+// CFG analysis
+let dominators = algo::dominators(&graph, entry_node)?;
+let loops = algo::natural_loops(&graph)?;
+
+// Program slicing
+let slice = algo::backward_slice(&graph, target_node)?;
+
+// Security analysis
+let tainted = algo::taint_forward(&graph, source_nodes)?;
+
+// With progress tracking (for supported algorithms)
 use sqlitegraph::progress::ConsoleProgress;
 let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new())?;
 ```
 
-### Betweenness Centrality
+### Full Documentation
 
-```rust
-// Node importance via shortest paths
-let centrality = algo::betweenness_centrality(&graph)?;
-```
+For complete algorithm reference with examples, complexity analysis, and CLI commands, see:
 
-### Community Detection
+**[docs/GRAPH_ALGORITHMS_GUIDE.md](docs/GRAPH_ALGORITHMS_GUIDE.md)**
 
-```rust
-// Label Propagation (fast)
-let communities = algo::label_propagation(&graph)?;
+### Quick Reference
 
-// Louvain (higher quality)
-let partition = algo::louvain_communities(&graph, 0.01)?;
-```
-
-### Algorithm Characteristics
-
-| Algorithm | Complexity | Best For |
-|-----------|------------|----------|
-| **PageRank** | O(|E| × iterations) | Importance ranking |
-| **Betweenness** | O(|V||E|) | Critical nodes |
-| **Label Propagation** | O(|E|) | Fast communities |
-| **Louvain** | O(|E| log |V|) | Quality clustering |
+| Category | Module | Example Use |
+|----------|--------|-------------|
+| **Core** | `algo::wcc`, `algo::scc` | Graph decomposition |
+| **Reachability** | `algo::forward_reachability` | "What can this node reach?" |
+| **CFG** | `algo::dominators`, `algo::natural_loops` | Control flow analysis |
+| **Slicing** | `algo::backward_slice` | Program debugging |
+| **Security** | `algo::taint_forward` | Security analysis |
+| **ML** | `algo::subgraph_isomorphism` | Pattern matching |
 
 ---
 
@@ -192,15 +216,15 @@ cargo test '*wal*'
 
 ### Test Coverage
 
-**v1.2 Test Results:**
+**v1.3.0 Test Results:**
+- 180+ graph algorithm tests passing (35 algorithms across 13 categories)
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
-- 27 algorithm tests passing (PageRank, Betweenness, Louvain, Label Propagation)
 - 134 HNSW tests passing
 - 65 MVCC lifecycle tests passing
 
-**Total**: 380+ tests passing
+**Total**: 530+ tests passing
 
 ---
 
@@ -321,7 +345,212 @@ sqlitegraph --backend sqlite --db mygraph.db hnsw-list
 
 ---
 
-## 9. Developer Tools (Phase 9)
+## 9. KV Store (Key-Value Storage)
+
+### Overview
+
+The Native V2 backend includes a transactional key-value store for storing arbitrary data alongside your graph. The KV store participates in transactions and emits events through the pub/sub system.
+
+### Availability
+
+| Backend | KV Store Support |
+|---------|------------------|
+| **Native V2** | Full support |
+| **SQLite** | Not supported |
+
+### Basic Usage
+
+```rust
+use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::backend::KvValue;
+
+let config = GraphConfig::native();
+let graph = open_graph("graph.db", &config)?;
+
+// Set a value
+graph.kv_set(
+    b"user:123:name".to_vec(),
+    KvValue::String("Alice".to_string()),
+    None,  // No TTL
+)?;
+
+// Get a value (requires snapshot_id)
+let snapshot = graph.snapshot()?;
+if let Some(KvValue::String(name)) = graph.kv_get(snapshot.id, b"user:123:name")? {
+    println!("User name: {}", name);
+}
+
+// Delete a value
+graph.kv_delete(b"user:123:name")?;
+```
+
+### Value Types
+
+The `KvValue` enum supports multiple data types:
+
+| Type | Rust Value | Example |
+|------|------------|---------|
+| `Bytes` | `Vec<u8>` | Raw binary data |
+| `String` | `String` | Text values |
+| `Integer` | `i64` | 64-bit integers |
+| `Float` | `Float` | Floating point numbers |
+| `Boolean` | `bool` | True/false |
+| `Json` | `serde_json::Value` | JSON objects, arrays |
+
+```rust
+use sqlitegraph::backend::KvValue;
+use serde_json::json;
+
+// Different value types
+graph.kv_set(b"counter".to_vec(), KvValue::Integer(42), None)?;
+graph.kv_set(b"price".to_vec(), KvValue::Float(19.99), None)?;
+graph.kv_set(b"active".to_vec(), KvValue::Boolean(true), None)?;
+graph.kv_set(b"config".to_vec(), KvValue::Json(json!({
+    "theme": "dark",
+    "notifications": true
+})), None)?;
+graph.kv_set(b"binary".to_vec(), KvValue::Bytes(vec![0x00, 0xFF, 0xAA]), None)?;
+```
+
+### TTL (Time-To-Live)
+
+Keys can be set with an optional TTL in seconds. After expiration, the key returns `None`.
+
+```rust
+// Set a key that expires in 60 seconds
+graph.kv_set(
+    b"temp_session".to_vec(),
+    KvValue::String("active".to_string()),
+    Some(60),  // Expires in 60 seconds
+)?;
+
+// Set a key that expires in 1 hour
+graph.kv_set(
+    b"cache:data".to_vec(),
+    KvValue::Bytes(cached_data),
+    Some(3600),  // 1 hour
+)?;
+```
+
+### Transactional Behavior
+
+KV operations are **atomic** with graph operations within the same transaction:
+
+```rust
+// Create a node and store metadata atomically
+let node_id = graph.insert_node(NodeSpec {
+    kind: "User".to_string(),
+    name: "alice".to_string(),
+    file_path: None,
+    data: json!({"age": 30}),
+})?;
+
+// Store metadata in KV - commits with the transaction
+graph.kv_set(
+    format!("user_metadata:{}", node_id).into_bytes(),
+    KvValue::Json(json!({
+        "created_at": "2026-02-03",
+        "verified": true
+    })),
+    None,
+)?;
+
+// If commit fails, both node and KV data are rolled back
+```
+
+### Use Cases
+
+#### 1. Secondary Indexes
+
+```rust
+// Index users by email for fast lookup
+let node_id = graph.insert_node(user_spec)?;
+graph.kv_set(
+    format!("index:email:{}", user_email).into_bytes(),
+    KvValue::Integer(node_id),
+    None,
+)?;
+
+// Later, find user by email
+if let Some(KvValue::Integer(node_id)) = graph.kv_get(snapshot.id, b"index:email:alice@example.com")? {
+    let user = graph.get_node(snapshot.id, node_id)?;
+}
+```
+
+#### 2. Caching
+
+```rust
+// Cache expensive computation results
+graph.kv_set(
+    b"cache:expensive_result".to_vec(),
+    KvValue::Json(json!(result)),
+    Some(300),  // Cache for 5 minutes
+)?;
+```
+
+#### 3. Counters and Aggregates
+
+```rust
+// Track counts (read-modify-write pattern)
+let count = match graph.kv_get(snapshot.id, b"counter:requests")? {
+    Some(KvValue::Integer(n)) => n + 1,
+    _ => 1,
+};
+graph.kv_set(b"counter:requests".to_vec(), KvValue::Integer(count), None)?;
+```
+
+#### 4. Configuration
+
+```rust
+// Store application configuration
+graph.kv_set(
+    b"config:max_connections".to_vec(),
+    KvValue::Integer(100),
+    None,
+);
+graph.kv_set(
+    b"config:debug_mode".to_vec(),
+    KvValue::Boolean(false),
+    None,
+);
+```
+
+### Pub/Sub Integration
+
+KV changes emit `KVChanged` events for subscribers:
+
+```rust
+use sqlitegraph::backend::{SubscriptionFilter, PubSubEvent};
+
+let filter = SubscriptionFilter::all();
+let (sub_id, rx) = graph.subscribe(filter)?;
+
+// In a separate thread
+while let Ok(event) = rx.recv() {
+    if let PubSubEvent::KVChanged { key_hash, snapshot_id } = event {
+        println!("KV changed: hash={}, snapshot={}", key_hash, snapshot_id);
+    }
+}
+```
+
+### Metadata
+
+Each KV entry has internal metadata (not directly exposed):
+- `created_at` - Unix timestamp when key was created
+- `updated_at` - Unix timestamp of last update
+- `ttl_seconds` - TTL if set
+- `version` - Monotonically increasing version number
+
+### Limitations
+
+- **Native V2 only**: SQLite backend does not support KV operations
+- **Byte keys**: Keys are `Vec<u8>` - use string encoding for text keys
+- **No iteration**: No API to enumerate all keys (design limitation)
+- **No snapshots**: Can't query historical KV values, only current snapshot
+
+---
+
+## 10. Developer Tools (Phase 9)
 
 ### Introspection API
 
@@ -361,7 +590,7 @@ sqlitegraph --backend sqlite --db mygraph.db debug-trace
 
 ---
 
-## 10. Safety & Integrity
+## 11. Safety & Integrity
 
 ### Safety Checks
 
@@ -385,7 +614,7 @@ The Native V2 backend includes WAL recovery with:
 
 ---
 
-## 11. CLI Usage
+## 12. CLI Usage
 
 ### Available Commands
 
@@ -403,15 +632,29 @@ sqlitegraph --command load-graph --input backup.json --database mygraph.db
 # Safety check
 sqlitegraph --command safety-check --database mygraph.db
 
-# Graph algorithms
+# Graph algorithms (35+ algorithms available)
 sqlitegraph --backend sqlite --db mygraph.db pagerank --progress
 sqlitegraph --backend sqlite --db mygraph.db betweenness --progress
 sqlitegraph --backend sqlite --db mygraph.db louvain --progress
+
+# CFG analysis
+sqlitegraph --backend sqlite --db mygraph.db dominators --entry 1
+sqlitegraph --backend sqlite --db mygraph.db natural-loops --entry 1
+
+# Program slicing
+sqlitegraph --backend sqlite --db mygraph.db backward-slice --target 42
+sqlitegraph --backend sqlite --db mygraph.db forward-slice --source 1
+
+# Reachability
+sqlitegraph --backend sqlite --db mygraph.db forward-reach --start 1
+sqlitegraph --backend sqlite --db mygraph.db can-reach --from 1 --to 100
+
+# For complete CLI reference, see docs/GRAPH_ALGORITHMS_GUIDE.md
 ```
 
 ---
 
-## 12. Migration
+## 13. Migration
 
 ### SQLite to Native V2
 
@@ -438,7 +681,7 @@ let id = graph.insert_node(node_spec)?;
 
 ---
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 ### Common Issues
 
@@ -469,7 +712,7 @@ cargo check --features native-v2
 
 ---
 
-## 14. Pub/Sub Events (Phase 44)
+## 15. Pub/Sub Events (Phase 44)
 
 ### Overview
 
@@ -659,13 +902,28 @@ graph.kv_set(
 
 ### Test Coverage
 
-**v1.2 Test Results:**
+**v1.3.0 Test Results:**
 - 59 pubsub tests passing (integration + module tests)
 - Tests cover: event emission, filtering, multiple subscribers, unsubscribe
 
 ---
 
 ## Architecture Status
+
+**v1.3.0 Features:**
+- Graph Algorithms Library: 35 production algorithms across 13 categories
+  - Core Graph Theory: WCC, SCC, Transitive Closure, Transitive Reduction, Topological Sort
+  - Reachability: Forward, Backward, Can-Reach, Unreachable Nodes
+  - CFG Analysis: Dominators, Post-Dominators, Control Dependence, Dominance Frontiers, Natural Loops
+  - Path Analysis: Enumerate Paths, Dominance-Constrained Path Enumeration
+  - Dependency Systems: Critical Path, Minimal Cycle Basis
+  - Program Analysis: Backward/Forward Slicing, SCC Collapse for Call Graphs
+  - Distributed Systems: Min Cut, Min Vertex Cut, Graph Partitioning
+  - Observability: Happens-Before Analysis, Impact Radius
+  - ML/Inference: Subgraph Isomorphism, Graph Rewriting, Structural Similarity
+  - Graph Diff: Structural Delta, Refactor Validation
+  - Security: Taint Propagation (Forward/Backward), Sink Analysis, Source/Sink Discovery
+  - CLI commands for all 35 algorithms with progress tracking
 
 **v1.2 Features:**
 - Pub/Sub Events: In-process event notification for graph changes
@@ -692,4 +950,4 @@ graph.kv_set(
 - MVCC Snapshots: Read isolation
 - Developer Tools: Introspection, progress tracking, CLI
 
-**Test Coverage:** 185 tests passing (v1.2, including 59 pubsub tests)
+**Test Coverage:** 530+ tests passing (v1.3.0, including 180+ algorithm tests and 59 pubsub tests)

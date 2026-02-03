@@ -1,7 +1,7 @@
 # SQLiteGraph Architecture
 
-**Last Updated:** 2026-01-26
-**Version:** v1.2.0
+**Last Updated:** 2026-02-03
+**Version:** v1.3.0
 
 This document describes the architecture of SQLiteGraph from a developer's perspective. For user-facing documentation, see [README.md](../README.md) and [MANUAL.md](../MANUAL.md).
 

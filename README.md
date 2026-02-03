@@ -3,15 +3,24 @@
 [![crates.io](https://img.shields.io/crates/v/sqlitegraph.svg)](https://crates.io/crates/sqlitegraph)
 [![Documentation](https://docs.rs/sqlitegraph/badge.svg)](https://docs.rs/sqlitegraph)
 
-**Embedded Graph Database with Native V2 Backend**
+**Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.2.7
+## What's New in v1.3.0
 
-**Pub/Sub Event System** - In-process event notification for graph changes
-- Four event types: `NodeChanged`, `EdgeChanged`, `KVChanged`, `SnapshotCommitted`
-- ID-only design for decoupled event schemas
-- Channel-based delivery with filtering by event type and entity IDs
-- Native V2 backend only
+**Graph Algorithms Library** - Comprehensive algorithm collection for CFG analysis, program slicing, and security
+- 35 algorithms across 13 categories:
+  - Core Graph Theory: WCC, SCC, transitive closure, transitive reduction, topological sort
+  - Reachability: forward/backward reachability, can-reach, unreachable-nodes
+  - CFG Analysis: dominators, post-dominators, control dependence, dominance frontiers, natural loops
+  - Path Analysis: path enumeration with constraints, critical path, cycle basis
+  - Program Analysis: backward/forward slicing, SCC collapse
+  - Distributed Systems: min cut, min vertex cut, graph partitioning
+  - Observability: happens-before analysis, impact radius
+  - ML/Inference: subgraph isomorphism, graph rewriting, structural similarity
+  - Graph Diff: structural delta, refactor validation
+  - Security: taint propagation, sink analysis, source/sink discovery
+- CLI commands for all 35 algorithms with progress tracking
+- Foundation for compiler optimization, security analysis, and program understanding
 
 **Full ACID Transactions** - Complete transaction correctness
 - Atomicity with full rollback support
@@ -25,7 +34,7 @@
 - [Debugging Guide](docs/DEBUGGING.md) - Profiling and troubleshooting
 - [Contributing](docs/CONTRIBUTING.md) - Development workflow
 
-**Test Coverage**: 380+ tests passing (59 pubsub + 42 WAL + 53 MVCC + 27 algorithms + 134 HNSW + 65 others)
+**Test Coverage**: 530+ tests passing (59 pubsub + 42 WAL + 53 MVCC + 180 algorithms + 134 HNSW + 65 others)
 
 ---
 
@@ -64,11 +73,18 @@ SQLiteGraph provides two backend options:
 - **Pattern Matching**: Graph pattern queries
 - **Traversal Algorithms**: BFS, shortest path, connected components
 
-### Graph Algorithms (Phase 8)
-- **PageRank**: Importance ranking (O(|E|) iterations)
-- **Betweenness Centrality**: Node importance via shortest paths (O(|V||E|))
-- **Label Propagation**: Fast community detection (O(|E|))
-- **Louvain Method**: Modularity-based clustering (O(|E| log |V|))
+### Graph Algorithms Library
+- **35 algorithms across 13 categories**: Comprehensive collection for CFG analysis, program slicing, security
+  - Core Graph Theory: WCC, SCC, transitive closure, transitive reduction, topological sort
+  - Reachability: forward/backward reachability, can-reach, unreachable-nodes
+  - CFG Analysis: dominators, post-dominators, control dependence, dominance frontiers, natural loops
+  - Path Analysis: path enumeration with constraints, critical path, cycle basis
+  - Program Analysis: backward/forward slicing, SCC collapse
+  - Distributed Systems: min cut, min vertex cut, graph partitioning
+  - Observability: happens-before analysis, impact radius
+  - ML/Inference: subgraph isomorphism, graph rewriting, structural similarity
+  - Graph Diff: structural delta, refactor validation
+  - Security: taint propagation, sink analysis, source/sink discovery
 
 ### Performance & Reliability
 - **MVCC Snapshots**: Read isolation with snapshot views
@@ -138,7 +154,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.2.7"
+sqlitegraph = "1.3.0"
 ```
 
 ### SQLite Backend (Default)
@@ -168,7 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.2.7", features = ["native-v2"] }
+sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
 ```
 
 ```rust
@@ -198,7 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.2.7", features = ["native-v2"] }
+sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
 ```
 
 ```rust
@@ -239,13 +255,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.2.7"
+sqlitegraph = "1.3.0"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.2.7", features = ["native-v2"] }
+sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.2.7", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.3.0", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
@@ -296,11 +312,11 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (v1.2.7):**
+**Test Coverage (v1.3.0):**
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
-- 27 algorithm tests passing (PageRank, Betweenness, Louvain, Label Propagation)
+- 180+ algorithm tests passing (35 algorithms across 13 categories)
 - 134 HNSW tests passing
 - 65 MVCC lifecycle tests passing
 
@@ -362,7 +378,7 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 
 ## Compiler Warnings
 
-SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.2.7:
+SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.3.0:
 
 | Category | Count | Description |
 |----------|-------|-------------|

@@ -1,5 +1,89 @@
 # SQLiteGraph Changelog
 
+## [1.3.0] - 2026-02-03
+
+### Graph Algorithms Library Release
+**Phases 45-57 completion: 35 algorithms across 13 categories for CFG analysis, program slicing, and security**
+
+### Core Graph Theory (Phase 45)
+- **Weakly Connected Components (WCC)**: O(|V| + |E|) using Union-Find
+- **Strongly Connected Components (SCC)**: Tarjan's algorithm O(|V| + |E|)
+- **Transitive Closure**: Reachability matrix computation
+- **Transitive Reduction**: Minimal equivalent graph
+- **Topological Sort**: Kahn's algorithm with cycle detection
+
+### Reachability (Phase 46)
+- **Forward Reachability**: All nodes reachable from source
+- **Backward Reachability**: All nodes that can reach target
+- **Can-Reach Check**: Point-to-point reachability query
+- **Unreachable Nodes**: Nodes not reachable from entry point
+
+### Core CFG Analysis (Phase 47)
+- **Dominators**: Cooper et al. simple_fast algorithm for CFG domination
+- **Post-Dominators**: Reverse graph domination with virtual exit
+- **Control Dependence Graph**: Cytron et al. edge-based definition
+
+### Derived CFG Analysis (Phase 48)
+- **Dominance Frontiers**: Cytron et al. walk-up algorithm
+- **Natural Loops**: Back-edge detection with loop body computation
+- **Nesting Analysis**: is_nested_in(), nesting_tree(), nesting_depth()
+
+### Path Analysis (Phase 49)
+- **Path Enumeration**: DFS with bounds (max_depth, max_paths, revisit_cap)
+- **Constrained Path Enumeration**: Dominance, control dependence, and loop constraints
+
+### Dependency Analysis (Phase 50)
+- **Critical Path**: Longest path in DAG for dependency graphs
+- **Cycle Basis**: Paton's O(V+E+C*V) algorithm for fundamental cycles
+
+### Program Analysis (Phase 51)
+- **Backward Program Slicing**: Static slicing from target point
+- **Forward Program Slicing**: Impact analysis from source point
+- **SCC Collapse**: Condensation graph construction for call graphs
+
+### Distributed Systems (Phase 52)
+- **Minimum s-t Cut**: Edmonds-Karp max-flow based min cut
+- **Minimum Vertex Cut**: Vertex splitting for node cuts
+- **Graph Partitioning**: BFS-level, greedy improvement, k-way strategies
+
+### Observability (Phase 53)
+- **Happens-Before Analysis**: Vector clocks for event ordering
+- **Race Detection**: Concurrent access detection by location
+- **Impact Radius**: Bounded weighted BFS for blast zone analysis
+
+### ML/Inference (Phase 54)
+- **Subgraph Isomorphism**: VF2 algorithm for pattern matching
+- **Graph Rewriting**: DPO-style pattern replacement
+- **Structural Similarity**: MCS-based similarity with GED approximation
+
+### Graph Diff (Phase 55)
+- **Structural Delta**: Node/edge difference between snapshots
+- **Refactor Validation**: Breaking change and similarity analysis
+
+### Security (Phase 56)
+- **Taint Propagation**: Forward/backward annotated reachability
+- **Sink Analysis**: Find all sinks reachable from tainted sources
+- **Source/Sink Discovery**: Metadata-based detection with callbacks
+- **Vulnerability Detection**: Source-to-sink path enumeration
+
+### CLI Commands (Phase 57)
+- **35 algorithm commands** with ConsoleProgress tracking
+- JSON output format for all commands
+- Progress bars for long-running operations
+- Configurable bounds and parameters
+
+### Test Coverage
+- **180+ algorithm tests** across all 35 algorithms
+- **35 CLI commands** with integration tests
+- Cross-validated against petgraph reference implementation
+
+### Summary
+- **13 Phases Complete**: Core theory, reachability, CFG, paths, dependencies, program analysis, distributed systems, observability, ML/Inference, graph diff, security, CLI
+- **35 Algorithms Delivered**: Comprehensive library for compiler optimization, security analysis, and program understanding
+- **~35,331 LOC** in algorithm module
+
+---
+
 ## [1.2.0] - 2026-01-26
 
 ### v1.2 Pub/Sub Event System Release

@@ -9,20 +9,20 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 
 ## Current Position
 
-Milestone: v1.14 Graph Algorithms Library (SHIPPED 2026-02-03)
+Milestone: v1.3.0 Graph Algorithms Library (SHIPPED 2026-02-03)
 Phase: None — Ready for next milestone
 Plan: None — Ready for next milestone
-Status: v1.14 COMPLETE - 35 graph algorithms delivered across 13 phases. Comprehensive library for CFG analysis, program slicing, security analysis, and general graph reasoning.
-Last activity: 2026-02-03 — v1.14 milestone archived
+Status: v1.3.0 COMPLETE - 35 graph algorithms delivered across 13 phases. Comprehensive library for CFG analysis, program slicing, security analysis, and general graph reasoning.
+Last activity: 2026-02-03 — v1.3.0 milestone archived
 
-Progress: [████████████] 100% — v1.14 complete (254/254 plans complete across all milestones)
+Progress: [████████████] 100% — v1.3.0 complete (254/254 plans complete across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
 - Total plans completed: 213 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02, plus 54-01 through 54-03, plus 55-01 through 55-02, plus 56-01, plus 57-01, plus 57-03)
 - Average duration: ~20 min/plan
-- Total execution time: ~80 hours across v1.0-v1.14
+- Total execution time: ~80 hours across v1.0-v1.3.0
 
 **By Phase:**
 
@@ -35,24 +35,24 @@ Progress: [████████████] 100% — v1.14 complete (254/25
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | 36 | Graph Algorithms (COMPLETE - 5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
+| v1.3.0 | 45-57 | 36 | Graph Algorithms (COMPLETE - 5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
-- v1.14 phase 45: ~8 min/plan (5 plans complete)
-- v1.14 phase 46: ~7 min/plan (1 plan complete)
-- v1.14 phase 47: ~10 min/plan (3 plans complete)
-- v1.14 phase 48: ~7 min/plan (2 plans complete)
-- v1.14 phase 49: ~9 min/plan (2 plans complete)
-- v1.14 phase 50: ~6 min/plan (2 plans complete)
-- v1.14 phase 51: ~7 min/plan (2 plans complete)
-- v1.14 phase 52: ~7 min/plan (2 plans complete)
-- v1.14 phase 53: ~7 min/plan (2 plans complete)
-- v1.14 phase 54: ~40 min/plan (3 plans complete - subgraph isomorphism, graph rewriting, structural similarity)
-- v1.14 phase 55: ~7 min/plan (2 plans complete - graph diff module, refactor validation)
-- v1.14 phase 56: ~15 min/plan (1 plan complete - taint propagation)
-- v1.14 phase 57: ~12 min/plan (7 plans complete - all CLI commands for 35 graph algorithms)
-- v1.14 COMPLETE: 36 plans total, ~13 min/plan average
+- v1.3.0 phase 45: ~8 min/plan (5 plans complete)
+- v1.3.0 phase 46: ~7 min/plan (1 plan complete)
+- v1.3.0 phase 47: ~10 min/plan (3 plans complete)
+- v1.3.0 phase 48: ~7 min/plan (2 plans complete)
+- v1.3.0 phase 49: ~9 min/plan (2 plans complete)
+- v1.3.0 phase 50: ~6 min/plan (2 plans complete)
+- v1.3.0 phase 51: ~7 min/plan (2 plans complete)
+- v1.3.0 phase 52: ~7 min/plan (2 plans complete)
+- v1.3.0 phase 53: ~7 min/plan (2 plans complete)
+- v1.3.0 phase 54: ~40 min/plan (3 plans complete - subgraph isomorphism, graph rewriting, structural similarity)
+- v1.3.0 phase 55: ~7 min/plan (2 plans complete - graph diff module, refactor validation)
+- v1.3.0 phase 56: ~15 min/plan (1 plan complete - taint propagation)
+- v1.3.0 phase 57: ~12 min/plan (7 plans complete - all CLI commands for 35 graph algorithms)
+- v1.3.0 COMPLETE: 36 plans total, ~13 min/plan average
 - Trend: Stable
 *Updated after each plan completion*
 
@@ -63,7 +63,7 @@ Progress: [████████████] 100% — v1.14 complete (254/25
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- **v1.14 Organization:** Graph algorithms library organized by category (Core Theory, Reachability, CFG, Path Analysis, etc.)
+- **v1.3.0 Organization:** Graph algorithms library organized by category (Core Theory, Reachability, CFG, Path Analysis, etc.)
 - **Cross-Cutting CC-01:** All algorithms must work on both SQLite and Native V2 backends
 - **Cross-Cutting CC-02:** All algorithms support ProgressCallback for long-running operations
 - **Cross-Cutting CC-04:** Results cross-validated against petgraph reference implementation

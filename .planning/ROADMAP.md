@@ -2,7 +2,7 @@
 
 ## Overview
 
-SQLiteGraph roadmap. Phases 1-57 completed across milestones v0.2-v1.14.
+SQLiteGraph roadmap. Phases 1-57 completed across milestones v0.2-v1.3.0.
 
 ## Milestones
 
@@ -13,7 +13,7 @@ SQLiteGraph roadmap. Phases 1-57 completed across milestones v0.2-v1.14.
 - ✅ **v1.4 Sequential I/O Optimization** - Phases 30-32 (shipped 2026-01-21)
 - ✅ **v1.6 Chain Locality** - Phases 33-36 (shipped 2026-01-21)
 - ✅ **v1.13 Pub/Sub** - Phases 37-44 (shipped 2026-01-26)
-- ✅ **v1.14 Graph Algorithms Library** - Phases 45-57 (shipped 2026-02-03) — *35 algorithms for CFG analysis, program slicing, security*
+- ✅ **v1.3.0 Graph Algorithms Library** - Phases 45-57 (shipped 2026-02-03) — *35 algorithms for CFG analysis, program slicing, security*
 
 ## Next Milestone
 
@@ -27,4 +27,4 @@ To start the next milestone, run `/gsd:new-milestone` to define goals, requireme
 
 See [milestones/](.planning/milestones/) directory for complete phase details:
 - [v0.2-v1.13 Archive](.planning/milestones/)
-- [v1.14 Graph Algorithms Library](.planning/milestones/v1.14-ROADMAP.md) — 35 algorithms, 13 phases, 36 plans
+- [v1.3.0 Graph Algorithms Library](.planning/milestones/v1.3.0-ROADMAP.md) — 35 algorithms, 13 phases, 36 plans
