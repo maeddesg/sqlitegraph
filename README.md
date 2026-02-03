@@ -5,9 +5,17 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.4.1
+## What's New in v1.4.2
 
-**Code Quality** - Zero compiler warnings with proper test module organization
+**Developer Documentation** - Complete internal architecture guides (5 new guides)
+- HNSW Vector Store Internals: layers, search/insert algorithms
+- KV Store Architecture: MVCC, TTL, WAL integration
+- Native V2 Binary Format: file structure, clusters, recovery
+- Pub/Sub Implementation: event types, filtering, WAL integration
+- Query API Enhancements: prefix scan, pattern matching, subscriptions
+- Updated crate README.md with comprehensive feature overview
+
+**v1.4.2 Code Quality** - Zero compiler warnings with proper test module organization
 - All test modules now properly gated with `#[cfg(test)]`
 - Unused imports cleaned up across taint_analysis and HNSW modules
 - Clean compilation output for better developer experience
@@ -164,7 +172,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.4.1"
+sqlitegraph = "1.4.2"
 ```
 
 ### SQLite Backend (Default)
@@ -194,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.4.1", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.2", features = ["native-v2"] }
 ```
 
 ```rust
@@ -224,7 +232,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.4.1", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.2", features = ["native-v2"] }
 ```
 
 ```rust
@@ -265,13 +273,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.4.1"
+sqlitegraph = "1.4.2"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.4.1", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.2", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.4.1", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.4.2", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
@@ -322,7 +330,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (v1.4.1):**
+**Test Coverage (v1.4.2):**
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
@@ -388,7 +396,7 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 
 ## Compiler Warnings
 
-SQLiteGraph compiles with **zero warnings** as of v1.4.1:
+SQLiteGraph compiles with **zero warnings** as of v1.4.2:
 - All test modules properly gated with `#[cfg(test)]`
 - Unused imports cleaned up
 - Clean compilation output for better developer experience

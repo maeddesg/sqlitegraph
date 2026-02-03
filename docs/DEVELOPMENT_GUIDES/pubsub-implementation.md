@@ -1,7 +1,7 @@
 # Pub/Sub Implementation Guide
 
 **Last Updated:** 2026-02-03
-**Version:** v1.4.1
+**Version:** v1.4.2
 
 This guide explains how SQLiteGraph's pub/sub system works internally and how to extend it.
 

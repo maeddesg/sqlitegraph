@@ -1,7 +1,7 @@
 # Query API Enhancements Guide
 
 **Last Updated:** 2026-02-03
-**Version:** v1.4.1
+**Version:** v1.4.2
 
 This guide explains the query API enhancements introduced in v1.4.0 for efficient data retrieval and pattern-based subscriptions.
 
@@ -689,4 +689,4 @@ let (sub_id, rx) = graph.subscribe(filter)?;
 | Version | Changes |
 |---------|---------|
 | v1.4.0 | Initial release of query API enhancements |
-| v1.4.1 | Documentation updates, zero compiler warnings |
+| v1.4.2 | Documentation updates, zero compiler warnings |

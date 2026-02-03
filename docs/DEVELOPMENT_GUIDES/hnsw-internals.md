@@ -1,7 +1,7 @@
 # HNSW Vector Store Internals
 
 **Last Updated:** 2026-02-03
-**Version:** v1.4.1
+**Version:** v1.4.2
 
 This guide explains the internal architecture of SQLiteGraph's HNSW (Hierarchical Navigable Small World) vector search implementation.
 

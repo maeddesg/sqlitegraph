@@ -1,7 +1,7 @@
 # Adding a CLI Command
 
 **Last Updated:** 2026-02-03
-**Version:** v1.4.1
+**Version:** v1.4.2
 
 This guide explains how to add a new command to the SQLiteGraph CLI.
 

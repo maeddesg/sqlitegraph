@@ -1,5 +1,26 @@
 # SQLiteGraph Changelog
 
+## [1.4.2] - 2026-02-03
+
+### Documentation Update Release
+**Phase 59-02: Complete developer documentation suite**
+
+### Developer Documentation
+- **5 new architecture guides** (80+ pages):
+  - HNSW Vector Store Internals: layers, greedy search, insertion algorithm
+  - KV Store Architecture: HashMap storage, MVCC, lazy TTL, WAL integration
+  - Native V2 Binary Format: file structure, clusters, WAL format, recovery
+  - Pub/Sub Implementation: event types, filtering, WAL integration
+  - Query API Enhancements: prefix scan, pattern matching, subscriptions
+- **Updated crate README.md**: Now reflects v1.4.1 features and zero warnings
+- **INDEX.md enhanced**: Added "Component Architecture (Internals)" section
+
+### Version Updates
+- sqlitegraph: 1.4.1 → 1.4.2
+- sqlitegraph-cli: 1.4.1 → 1.4.2
+
+---
+
 ## [1.4.1] - 2026-02-03
 
 ### Code Quality Improvements Release

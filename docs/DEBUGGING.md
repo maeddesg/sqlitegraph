@@ -1,7 +1,7 @@
 # Debugging Guide
 
 **Last Updated:** 2026-01-26
-**Version:** v1.4.1
+**Version:** v1.4.2
 
 This guide covers debugging and profiling techniques for SQLiteGraph development.
 

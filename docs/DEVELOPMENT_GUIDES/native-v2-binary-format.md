@@ -1,7 +1,7 @@
 # Native V2 Binary Format Guide
 
 **Last Updated:** 2026-02-03
-**Version:** v1.4.1
+**Version:** v1.4.2
 
 This guide explains the Native V2 binary file format, including cluster layout, node/edge storage, WAL format, and recovery procedures.
 

@@ -1,7 +1,7 @@
 # SQLiteGraph Documentation Index
 
 **Last Updated:** 2026-02-03
-**Version:** v1.4.1
+**Version:** v1.4.2
 
 This index provides navigation for all SQLiteGraph documentation.
 
@@ -277,7 +277,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed version history.
 
 | Version | Date | Major Changes |
 |---------|------|---------------|
-| v1.4.1 | 2026-02-03 | Code quality - zero compiler warnings |
+| v1.4.2 | 2026-02-03 | Code quality - zero compiler warnings |
 | v1.4.0 | 2026-02-03 | Pub/Sub query enhancements (pattern filters, KV scan) |
 | v1.3.0 | 2026-02-03 | Graph Algorithms Library (35 algorithms) |
 | v1.2.0 | 2026-01-26 | Pub/Sub event system |

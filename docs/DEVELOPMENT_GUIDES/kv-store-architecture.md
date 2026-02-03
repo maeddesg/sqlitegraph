@@ -1,7 +1,7 @@
 # KV Store Architecture
 
 **Last Updated:** 2026-02-03
-**Version:** v1.4.1
+**Version:** v1.4.2
 
 This guide explains the internal architecture of SQLiteGraph's transactional Key-Value store for Native V2 backend.
 

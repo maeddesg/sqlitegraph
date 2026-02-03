@@ -5,10 +5,30 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.3.0
+## What's New in v1.4.2
 
-**Graph Algorithms Library** - Comprehensive algorithm collection for CFG analysis, program slicing, and security
-- 35 algorithms across 13 categories:
+**Developer Documentation** - Comprehensive internal architecture guides
+- 5 new developer guides (80+ pages of technical content)
+  * HNSW Vector Store Internals - layers, search/insert algorithms
+  * KV Store Architecture - MVCC, TTL, WAL integration
+  * Native V2 Binary Format - file structure, clusters, recovery
+  * Pub/Sub Implementation - event types, filtering, WAL integration
+  * Query API Enhancements - prefix scan, pattern matching, subscriptions
+- Zero compiler warnings (v1.4.1 cleanup)
+- Updated docs/INDEX.md with component architecture section
+
+**v1.4.1 - Code Quality**
+- Reduced compiler warnings from 8 to 0
+- Added #[cfg(test)] to test-only modules
+- Removed unused imports
+
+**v1.4.0 - Pub/Sub Query Enhancements**
+- Pattern-based subscriptions (kind_patterns, name_patterns)
+- KV prefix scanning for efficient queries
+- Node query by kind and name pattern
+
+**v1.3.0 - Graph Algorithms Library**
+- 35 algorithms across 13 categories
   - Core Graph Theory: WCC, SCC, transitive closure, transitive reduction, topological sort
   - Reachability: forward/backward reachability, can-reach, unreachable-nodes
   - CFG Analysis: dominators, post-dominators, control dependence, dominance frontiers, natural loops
@@ -154,7 +174,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.3.0"
+sqlitegraph = "1.4.2"
 ```
 
 ### SQLite Backend (Default)
@@ -184,7 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.2", features = ["native-v2"] }
 ```
 
 ```rust
@@ -214,7 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.2", features = ["native-v2"] }
 ```
 
 ```rust
@@ -255,13 +275,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.3.0"
+sqlitegraph = "1.4.2"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.2", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.3.0", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.4.2", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
@@ -312,7 +332,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (v1.3.0):**
+**Test Coverage (v1.4.2):**
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
@@ -378,14 +398,10 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 
 ## Compiler Warnings
 
-SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.3.0:
-
-| Category | Count | Description |
-|----------|-------|-------------|
-| SIMD unsafe blocks | 18 | Rust 2024 edition requires explicit `unsafe` blocks within `unsafe fn` for SIMD intrinsics (AVX2). These are low-overhead and necessary for performance. |
-| Dead code (API completeness) | ~55 | Intentionally unused methods/fields preserved for: public API stability, future features, test-only functionality, and serialized format compatibility. |
-
-**These warnings are documented and acceptable** - they represent intentional design choices, not technical debt. The codebase compiles cleanly with `cargo check --lib` and all tests pass.
+SQLiteGraph compiles with **zero warnings** as of v1.4.1:
+- All test modules properly gated with `#[cfg(test)]`
+- Unused imports cleaned up
+- Clean compilation output for better developer experience
 
 ### Grounded Development Workflow
 
