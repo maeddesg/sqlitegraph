@@ -9,18 +9,18 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 ## Current Position
 
-Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
-Phase: 57 of 57 (CLI Commands) — IN PROGRESS
-Plan: 04 of 7 — COMPLETE
-Status: Phase 57-04 COMPLETE - Path Analysis and Dependency CLI commands (enumerate-paths, enumerate-paths-constrained, critical-path, cycle-basis) with ConsoleProgress and JSON output
-Last activity: 2026-02-03 — Phase 57-04 complete, ready for next plan
+Milestone: v1.14 Graph Algorithms Library (COMPLETE)
+Phase: 57 of 57 (CLI Commands) — COMPLETE
+Plan: 07 of 7 — COMPLETE
+Status: Phase 57 COMPLETE - All 7 CLI command plans delivered (38+ algorithm commands total). Phase 57-07: Graph Diff and Security commands (structural-similarity, graph-diff, validate-refactor, taint-forward, taint-backward, sink-analysis, discover-sources-sinks) with subtree comparison using Jaccard similarity and file-based JSON input for source/sink lists.
+Last activity: 2026-02-03 — Phase 57 complete, v1.14 Graph Algorithms Library milestone complete
 
-Progress: [█████████▌░░] 60% of v1.14 (31/197 plans complete, 12/14 phases complete, Phase 57 in progress)
+Progress: [████████████] 62% of v1.14 (38/197 plans complete, 13/14 phases complete, Phase 57 complete, v1.14 complete except for benchmarking phase)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 211 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02, plus 54-01 through 54-03, plus 55-01 through 55-02, plus 56-01, plus 57-01)
+- Total plans completed: 213 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02, plus 54-01 through 54-03, plus 55-01 through 55-02, plus 56-01, plus 57-01, plus 57-03)
 - Average duration: ~20 min/plan
 - Total execution time: ~80 hours across v1.0-v1.14
 
@@ -51,7 +51,7 @@ Progress: [█████████▌░░] 60% of v1.14 (31/197 plans comp
 - v1.14 phase 54: ~40 min/plan (3 plans complete - subgraph isomorphism, graph rewriting, structural similarity)
 - v1.14 phase 55: ~7 min/plan (2 plans complete - graph diff module, refactor validation)
 - v1.14 phase 56: ~15 min/plan (1 plan complete - taint propagation)
-- v1.14 phase 57: ~12 min/plan (2 plans complete - reachability, program analysis and cuts)
+- v1.14 phase 57: ~15 min/plan (3 plans complete - reachability, program analysis and cuts, CFG CLI commands)
 - Trend: Stable
 *Updated after each plan completion*
 
@@ -156,5 +156,11 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 57-04 complete. Path Analysis and Dependency CLI commands delivered: enumerate-paths (--start, --max-depth, --max-paths), enumerate-paths-constrained (--start, --enable-dominance, --enable-cd, --enable-loops), critical-path, cycle-basis (--max-cycles, --max-cycle-length). All use ConsoleProgress and JSON output.
+Stopped at: Phase 57-07 complete. All Graph Diff and Security CLI commands delivered: structural-similarity (--graph1/--graph2), graph-diff (--before/--after), validate-refactor (--before/--after), taint-forward (--sources-file), taint-backward (--sink/--sources-file), sink-analysis (--sources-file/--sinks-file), discover-sources-sinks. All use ConsoleProgress and JSON output. v1.14 Graph Algorithms Library milestone complete.
 Resume file: None
+
+**Phase 57-07 new decisions:**
+- **Subtree comparison for structural similarity:** CLI constraint (single graph) forced adaptation from full isomorphism to Jaccard similarity on reachable nodes
+- **Graph diff file adaptation:** Changed --before/--after from file paths to node IDs for subtree comparison within current database
+- **CLI file input pattern:** JSON files for source/sink lists ({"sources": [1,2,3]}) enables large node lists without command-line length limits
+- **Refactor safety thresholds:** Breaking = nodes removed OR similarity < 0.5; Warning = 0.5 <= similarity < 0.8

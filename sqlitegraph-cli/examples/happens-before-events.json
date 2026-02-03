@@ -1,0 +1,30 @@
+[
+  {
+    "event_id": 1,
+    "thread_id": 1,
+    "operation": "write",
+    "memory_location": 100,
+    "vector_clock": {"1": 1}
+  },
+  {
+    "event_id": 2,
+    "thread_id": 2,
+    "operation": "read",
+    "memory_location": 100,
+    "vector_clock": {"2": 1}
+  },
+  {
+    "event_id": 3,
+    "thread_id": 1,
+    "operation": "write",
+    "memory_location": 200,
+    "vector_clock": {"1": 2}
+  },
+  {
+    "event_id": 4,
+    "thread_id": 2,
+    "operation": "write",
+    "memory_location": 100,
+    "vector_clock": {"2": 2}
+  }
+]
