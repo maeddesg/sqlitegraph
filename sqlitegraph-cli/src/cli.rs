@@ -73,6 +73,10 @@ Commands:
   neighbors --id ID [--direction incoming|outgoing]  Direct neighbor query
   pattern-match --edge-type TYPE [--start-label LABEL] [--end-label LABEL] [--direction incoming|outgoing] [--start-prop KEY:VAL] [--end-prop KEY:VAL]  Match triple patterns
   pattern-match-fast --edge-type TYPE [--start-label LABEL] [--end-label LABEL] [--direction incoming|outgoing] [--start-prop KEY:VAL] [--end-prop KEY:VAL]  Fast-path pattern match
+  forward-reachability --start ID    Find all nodes reachable from start node
+  backward-reachability --target ID  Find all nodes that can reach target node
+  can-reach --from ID --to ID        Check if from node can reach to node
+  unreachable-nodes --entry ID       Find nodes unreachable from entry point
   hnsw-create --dimension N --m M --ef-construction N --distance-metric TYPE [--index-name NAME]  Create HNSW index
   hnsw-insert --input FILE [--name NAME]  Insert vectors into HNSW index
   hnsw-search --input FILE --k N [--name NAME]  Search HNSW index
@@ -98,9 +102,11 @@ Traversal Options:
   --max-depth                Maximum depth for BFS (default: 3)
   --depth                    Hop depth for k-hop (default: 2)
   --direction               Traversal direction: incoming|outgoing (default: outgoing)
-  --from                     Source node ID for shortest path
-  --to                       Target node ID for shortest path
+  --from                     Source node ID for shortest path or can-reach
+  --to                       Target node ID for shortest path or can-reach
   --id                       Node ID for neighbors query
+  --target                   Target node ID for backward reachability
+  --entry                    Entry node ID for unreachable nodes
 
 Pattern Options:
   --edge-type                Edge type to match (required)
@@ -125,6 +131,10 @@ Examples:
   sqlitegraph k-hop --start 123 --depth 2 --direction outgoing
   sqlitegraph shortest-path --from 123 --to 456
   sqlitegraph neighbors --id 123 --direction incoming
+  sqlitegraph forward-reachability --start 123
+  sqlitegraph backward-reachability --target 456
+  sqlitegraph can-reach --from 123 --to 456
+  sqlitegraph unreachable-nodes --entry 1
   sqlitegraph bulk-insert-entities --input entities.json
   sqlitegraph pattern-match --edge-type DEPENDS_ON --start-label "Function" --end-label "Module"
   sqlitegraph pattern-match-fast --edge-type CALLS --direction outgoing

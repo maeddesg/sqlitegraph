@@ -3,8 +3,26 @@ use std::{env, fs, path::PathBuf, process};
 use serde_json::json;
 use sqlitegraph::{
     algo::{
-        betweenness_centrality_with_progress, louvain_communities_with_progress,
-        pagerank_with_progress,
+        backward_slice_with_progress, betweenness_centrality_with_progress,
+        can_reach, collapse_sccs_with_progress, control_dependence_from_exit,
+        control_dependence_graph, critical_path_with_progress, cycle_basis_with_progress,
+        default_weight_fn, discover_sources_and_sinks_default,
+        dominance_frontiers_with_progress, dominators_with_progress,
+        enumerate_paths_with_dominance_progress, enumerate_paths_with_progress,
+        forward_slice_with_progress, louvain_communities_with_progress, min_st_cut_with_progress,
+        min_vertex_cut_with_progress, natural_loops_with_progress, pagerank_with_progress,
+        post_dominators_auto_exit, post_dominators_with_progress,
+        propagate_taint_backward_with_progress, propagate_taint_forward_with_progress,
+        reachable_from_with_progress, reverse_reachable_from_with_progress,
+        sink_reachability_analysis_with_progress, strongly_connected_components,
+        structural_similarity_with_progress, topological_sort,
+        transitive_closure_with_progress, TransitiveClosureBounds,
+        transitive_reduction_with_progress, validate_refactor, weakly_connected_components_with_progress,
+        SimilarityBounds, TopoError,
+        ControlDependenceResult, CriticalPathError, DominanceFrontierResult, DominatorResult,
+        NaturalLoopsResult, PathClassification, PathEnumerationConfig,
+        PathEnumerationDominanceConfig, PathEnumerationResult, PostDominatorResult, SliceResult,
+        unreachable_from,
     },
     backend::{BackendDirection, SqliteGraphBackend},
     bfs::{bfs_neighbors, shortest_path},
@@ -162,6 +180,32 @@ fn run_command(
         "pagerank" => run_pagerank(client, args),
         "betweenness" => run_betweenness(client, args),
         "louvain" => run_louvain(client, args),
+        // Graph diff and refactor validation commands
+        "structural-similarity" => run_structural_similarity(client, args),
+        "graph-diff" => run_graph_diff(client, args),
+        "validate-refactor" => run_validate_refactor(client, args),
+        // Security and taint analysis commands
+        "taint-forward" => run_taint_forward(client, args),
+        "taint-backward" => run_taint_backward(client, args),
+        "sink-analysis" => run_sink_analysis(client, args),
+        "discover-sources-sinks" => run_discover_sources_sinks(client, args),
+        // Reachability commands
+        "forward-reachability" => run_forward_reachability(client, args),
+        "backward-reachability" => run_backward_reachability(client, args),
+        "can-reach" => run_can_reach(client, args),
+        "unreachable-nodes" => run_unreachable_nodes(client, args),
+        // CFG analysis commands
+        "dominators" => run_dominators(client, args),
+        "post-dominators" => run_post_dominators(client, args),
+        "control-dependence" => run_control_dependence(client, args),
+        "dominance-frontiers" => run_dominance_frontiers(client, args),
+        "natural-loops" => run_natural_loops(client, args),
+        // Core graph theory commands
+        "wcc" => run_wcc(client, args),
+        "scc" => run_scc(client, args),
+        "transitive-closure" => run_transitive_closure(client, args),
+        "transitive-reduction" => run_transitive_reduction(client, args),
+        "topological-sort" => run_topological_sort(client, args),
         // Reindex commands removed - not available in v0.2.5
         // "reindex-all" => run_reindex_all(client, args),
         // "reindex-syncore" => run_reindex_syncore(client, args),
@@ -1758,6 +1802,845 @@ fn run_louvain(client: &BackendClient, args: &[String]) -> Result<(), SqliteGrap
         "communities": communities.iter().take(10).map(|members| json!({
             "members": members
         })).collect::<Vec<_>>()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_backward_slice(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("backward-slice command requires SQLite backend")
+    })?;
+
+    let target = required_flag_value(args, "--target").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid target node: {e}")))
+    })?;
+
+    // Compute control dependence graph first (required for slicing)
+    let cdg = sqlitegraph::algo::control_dependence_from_exit(graph)?;
+
+    let progress = ConsoleProgress::new();
+    let result = backward_slice_with_progress(graph, &cdg, target, &progress)?;
+
+    let payload = json!({
+        "command": "backward-slice",
+        "target": target,
+        "control_nodes": result.control_nodes.len(),
+        "data_nodes": result.data_nodes.len(),
+        "slice_nodes": result.sorted_nodes()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_forward_slice(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("forward-slice command requires SQLite backend")
+    })?;
+
+    let source = required_flag_value(args, "--source").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid source node: {e}")))
+    })?;
+
+    // Compute control dependence graph first (required for slicing)
+    let cdg = sqlitegraph::algo::control_dependence_from_exit(graph)?;
+
+    let progress = ConsoleProgress::new();
+    let result = forward_slice_with_progress(graph, &cdg, source, &progress)?;
+
+    let payload = json!({
+        "command": "forward-slice",
+        "source": source,
+        "control_nodes": result.control_nodes.len(),
+        "data_nodes": result.data_nodes.len(),
+        "slice_nodes": result.sorted_nodes()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_dominators(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("dominators command requires SQLite backend")
+    })?;
+
+    let entry = required_flag_value(args, "--entry").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid entry node: {e}")))
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let result = dominators_with_progress(graph, entry, &progress)?;
+
+    let payload = json!({
+        "command": "dominators",
+        "entry": entry,
+        "immediate_dominator": result.immediate_dominator,
+        "dominator_sets": result.dominators
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_post_dominators(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("post-dominators command requires SQLite backend")
+    })?;
+
+    let exit = optional_flag_value(args, "--exit")
+        .map(|s| {
+            s.parse::<i64>().map_err(|e| {
+                SqliteGraphError::invalid_input(format!("invalid exit node: {e}"))
+            })
+        })
+        .transpose()?;
+
+    let progress = ConsoleProgress::new();
+    let result = if let Some(exit_node) = exit {
+        post_dominators_with_progress(graph, exit_node, &progress)?
+    } else {
+        post_dominators_auto_exit(graph)?
+    };
+
+    let payload = json!({
+        "command": "post-dominators",
+        "exit": exit,
+        "immediate_post_dominator": result.immediate_post_dominator,
+        "post_dominator_sets": result.post_dominators
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_control_dependence(
+    client: &BackendClient,
+    args: &[String],
+) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("control-dependence command requires SQLite backend")
+    })?;
+
+    let exit = optional_flag_value(args, "--exit")
+        .map(|s| {
+            s.parse::<i64>().map_err(|e| {
+                SqliteGraphError::invalid_input(format!("invalid exit node: {e}"))
+            })
+        })
+        .transpose()?;
+
+    let result = if let Some(exit_node) = exit {
+        control_dependence_graph(graph, exit_node)?
+    } else {
+        control_dependence_from_exit(graph)?
+    };
+
+    let payload = json!({
+        "command": "control-dependence",
+        "exit": exit,
+        "edge_count": result.edges.len(),
+        "edges": result.edges
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_dominance_frontiers(
+    client: &BackendClient,
+    args: &[String],
+) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("dominance-frontiers command requires SQLite backend")
+    })?;
+
+    let entry = required_flag_value(args, "--entry").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid entry node: {e}")))
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let frontiers = dominance_frontiers_with_progress(graph, entry, &progress)?;
+
+    let payload = json!({
+        "command": "dominance-frontiers",
+        "entry": entry,
+        "frontier_sets": frontiers
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_natural_loops(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("natural-loops command requires SQLite backend")
+    })?;
+
+    let entry = required_flag_value(args, "--entry").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid entry node: {e}")))
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let dom_result = dominators_with_progress(graph, entry, &progress)?;
+    let result = natural_loops_with_progress(graph, &dom_result, &progress)?;
+
+    let payload = json!({
+        "command": "natural-loops",
+        "entry": entry,
+        "loop_count": result.loops.len(),
+        "loops": result.loops.iter().map(|(header, loop_)| json!({
+            "header": header,
+            "back_edges": loop_.back_edges,
+            "body_size": loop_.body.len()
+        })).collect::<Vec<_>>()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_forward_reachability(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("forward-reachability command requires SQLite backend")
+    })?;
+
+    let start = required_flag_value(args, "--start").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid start node: {e}")))
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let reachable = reachable_from_with_progress(graph, start, &progress)?;
+
+    // Convert HashSet to Vec for JSON serialization
+    let reachable_vec: Vec<i64> = reachable.into_iter().collect();
+
+    let payload = json!({
+        "command": "forward-reachability",
+        "start": start,
+        "reachable_count": reachable_vec.len(),
+        "reachable_nodes": reachable_vec
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_backward_reachability(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("backward-reachability command requires SQLite backend")
+    })?;
+
+    let target = required_flag_value(args, "--target").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid target node: {e}")))
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let reachable = reverse_reachable_from_with_progress(graph, target, &progress)?;
+
+    // Convert HashSet to Vec for JSON serialization
+    let reachable_vec: Vec<i64> = reachable.into_iter().collect();
+
+    let payload = json!({
+        "command": "backward-reachability",
+        "target": target,
+        "reachable_count": reachable_vec.len(),
+        "reachable_nodes": reachable_vec
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_can_reach(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("can-reach command requires SQLite backend")
+    })?;
+
+    let from = required_flag_value(args, "--from").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid from node: {e}")))
+    })?;
+
+    let to = required_flag_value(args, "--to").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid to node: {e}")))
+    })?;
+
+    let can_reach_result = can_reach(graph, from, to)?;
+
+    let payload = json!({
+        "command": "can-reach",
+        "from": from,
+        "to": to,
+        "can_reach": can_reach_result
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_unreachable_nodes(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("unreachable-nodes command requires SQLite backend")
+    })?;
+
+    let entry = required_flag_value(args, "--entry").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid entry node: {e}")))
+    })?;
+
+    let unreachable = unreachable_from(graph, entry)?;
+
+    // Convert HashSet to Vec for JSON serialization
+    let unreachable_vec: Vec<i64> = unreachable.into_iter().collect();
+
+    let payload = json!({
+        "command": "unreachable-nodes",
+        "entry": entry,
+        "unreachable_count": unreachable_vec.len(),
+        "unreachable_nodes": unreachable_vec
+    });
+    println!("{payload}");
+    Ok(())
+}
+fn run_enumerate_paths(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("enumerate-paths command requires SQLite backend")
+    })?;
+
+    let start = required_flag_value(args, "--start").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid start node: {e}")))
+    })?;
+
+    let max_depth = optional_flag_value(args, "--max-depth")
+        .map(|s| {
+            s.parse::<usize>()
+                .map_err(|e| SqliteGraphError::invalid_input(format!("invalid max-depth: {e}")))
+        })
+        .transpose()?
+        .unwrap_or(100);
+
+    let max_paths = optional_flag_value(args, "--max-paths")
+        .map(|s| {
+            s.parse::<usize>()
+                .map_err(|e| SqliteGraphError::invalid_input(format!("invalid max-paths: {e}")))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let progress = ConsoleProgress::new();
+    let config = PathEnumerationConfig {
+        max_depth,
+        max_paths,
+        revisit_cap: 100,
+    };
+    let result = enumerate_paths_with_progress(graph, start, config, &progress)?;
+
+    let payload = json!({
+        "command": "enumerate-paths",
+        "start": start,
+        "max_depth": max_depth,
+        "max_paths": max_paths,
+        "path_count": result.paths.len(),
+        "normal_count": result.statistics.normal_paths,
+        "error_count": result.statistics.error_paths,
+        "paths": result.paths.iter().take(100).map(|p| json!({
+            "nodes": p.nodes,
+            "classification": format!("{:?}", p.classification)
+        })).collect::<Vec<_>>()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_enumerate_paths_constrained(
+    client: &BackendClient,
+    args: &[String],
+) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("enumerate-paths-constrained command requires SQLite backend")
+    })?;
+
+    let start = required_flag_value(args, "--start").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid start node: {e}")))
+    })?;
+
+    let enable_dominance = args.iter().any(|a| a == "--enable-dominance");
+    let enable_cd = args.iter().any(|a| a == "--enable-cd");
+    let enable_loops = args.iter().any(|a| a == "--enable-loops");
+
+    let progress = ConsoleProgress::new();
+    let config = PathEnumerationDominanceConfig {
+        enable_dominance_pruning: enable_dominance,
+        enable_cd_pruning: enable_cd,
+        enable_loop_pruning: enable_loops,
+        max_depth: 100,
+        max_paths: 1000,
+        revisit_cap: 100,
+    };
+    let result = enumerate_paths_with_dominance_progress(graph, start, config, &progress)?;
+
+    let payload = json!({
+        "command": "enumerate-paths-constrained",
+        "start": start,
+        "enable_dominance": enable_dominance,
+        "enable_cd": enable_cd,
+        "enable_loops": enable_loops,
+        "path_count": result.paths.len(),
+        "pruning_stats": result.pruning_stats
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_critical_path(client: &BackendClient, _args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("critical-path command requires SQLite backend")
+    })?;
+
+    let progress = ConsoleProgress::new();
+    match critical_path_with_progress(graph, &default_weight_fn, &progress) {
+        Ok(result) => {
+            let payload = json!({
+                "command": "critical-path",
+                "status": "success",
+                "path_length": result.path.len(),
+                "total_distance": result.total_distance,
+                "path": result.path,
+                "bottlenecks": result.bottlenecks
+            });
+            println!("{payload}");
+            Ok(())
+        }
+        Err(e) => {
+            let payload = json!({
+                "command": "critical-path",
+                "status": "error",
+                "error": e.to_string()
+            });
+            println!("{payload}");
+            Err(SqliteGraphError::invalid_input(format!("critical-path failed: {}", e)))
+        }
+    }
+}
+
+fn run_cycle_basis(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("cycle-basis command requires SQLite backend")
+    })?;
+
+    let max_cycles = optional_flag_value(args, "--max-cycles")
+        .map(|s| {
+            s.parse::<usize>()
+                .map_err(|e| SqliteGraphError::invalid_input(format!("invalid max-cycles: {e}")))
+        })
+        .transpose()?
+        .unwrap_or(100);
+
+    let max_cycle_length = optional_flag_value(args, "--max-cycle-length")
+        .map(|s| {
+            s.parse::<usize>()
+                .map_err(|e| SqliteGraphError::invalid_input(format!("invalid max-cycle-length: {e}")))
+        })
+        .transpose()?
+        .unwrap_or(20);
+
+    let progress = ConsoleProgress::new();
+    let result = cycle_basis_with_progress(graph, max_cycles, max_cycle_length, &progress)?;
+
+    let payload = json!({
+        "command": "cycle-basis",
+        "max_cycles": max_cycles,
+        "max_cycle_length": max_cycle_length,
+        "cycle_count": result.cycles.len(),
+        "cycles": result.cycles
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+// ============================================================================
+// Graph Diff and Refactor Validation Commands (Phase 55-56)
+// ============================================================================
+
+fn run_structural_similarity(
+    client: &BackendClient,
+    args: &[String],
+) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("structural-similarity command requires SQLite backend")
+    })?;
+
+    let graph1 = required_flag_value(args, "--graph1").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid graph1 node: {e}")))
+    })?;
+
+    let graph2 = required_flag_value(args, "--graph2").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid graph2 node: {e}")))
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let bounds = SimilarityBounds {
+        max_matches: Some(100),
+        timeout_ms: Some(30000),
+        similarity_threshold: None,
+    };
+
+    let result = structural_similarity_with_progress(graph, graph1, graph2, bounds, &progress)?;
+
+    let payload = json!({
+        "command": "structural-similarity",
+        "graph1": graph1,
+        "graph2": graph2,
+        "isomorphic": result.isomorphic,
+        "mcs_similarity": result.mcs_similarity,
+        "ged_distance": result.ged_distance,
+        "mcs_size": result.mcs_size,
+        "similarity_class": result.similarity_class()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_graph_diff(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("graph-diff command requires SQLite backend")
+    })?;
+
+    let before = required_flag_value(args, "--before")?;
+    let after = required_flag_value(args, "--after")?;
+
+    // For CLI, --before and --after refer to node IDs representing graph roots
+    // This is a simplified implementation that compares subtrees
+    let progress = ConsoleProgress::new();
+
+    // Get all nodes in each "graph" (subtree rooted at the given node)
+    let before_nodes = reachable_from_with_progress(graph, before, &progress)?;
+    let after_nodes = reachable_from_with_progress(graph, after, &progress)?;
+
+    let before_set: std::collections::HashSet<i64> = before_nodes.iter().copied().collect();
+    let after_set: std::collections::HashSet<i64> = after_nodes.iter().copied().collect();
+
+    let nodes_added: Vec<i64> = after_set.difference(&before_set).copied().collect();
+    let nodes_removed: Vec<i64> = before_set.difference(&after_set).copied().collect();
+    let nodes_common: Vec<i64> = before_set.intersection(&after_set).copied().collect();
+
+    // Compute similarity on common structure
+    let similarity_score = if before_set.is_empty() && after_set.is_empty() {
+        1.0
+    } else if before_set.is_empty() || after_set.is_empty() {
+        0.0
+    } else {
+        let common_count = nodes_common.len() as f64;
+        let max_size = before_set.len().max(after_set.len()) as f64;
+        common_count / max_size
+    };
+
+    let payload = json!({
+        "command": "graph-diff",
+        "before": before,
+        "after": after,
+        "nodes_added": nodes_added,
+        "nodes_removed": nodes_removed,
+        "nodes_common": nodes_common,
+        "similarity_score": similarity_score,
+        "note": "Subtree comparison based on reachable nodes from given roots"
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_validate_refactor(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("validate-refactor command requires SQLite backend")
+    })?;
+
+    let before = required_flag_value(args, "--before")?;
+    let after = required_flag_value(args, "--after")?;
+
+    // Perform graph diff between before/after nodes
+    let progress = ConsoleProgress::new();
+
+    let before_nodes = reachable_from_with_progress(graph, before, &progress)?;
+    let after_nodes = reachable_from_with_progress(graph, after, &progress)?;
+
+    let before_set: std::collections::HashSet<i64> = before_nodes.iter().copied().collect();
+    let after_set: std::collections::HashSet<i64> = after_nodes.iter().copied().collect();
+
+    let nodes_removed: Vec<i64> = before_set.difference(&after_set).copied().collect();
+    let edges_removed = nodes_removed.len(); // Simplified: treat removed nodes as removed edges
+
+    let common_count = before_set.intersection(&after_set).count();
+    let max_size = before_set.len().max(after_set.len());
+    let similarity_score = if max_size == 0 {
+        1.0
+    } else {
+        common_count as f64 / max_size as f64
+    };
+
+    // Build a mock GraphDiffResult for validation
+    let diff_result = json!({
+        "nodes_added": after_set.difference(&before_set).copied().collect::<Vec<_>>(),
+        "nodes_removed": nodes_removed,
+        "edges_added": 0,  // Not tracking edges in subtree comparison
+        "edges_removed": edges_removed,
+        "similarity_score": similarity_score,
+        "is_isomorphic": similarity_score == 1.0,
+        "graph_edit_distance": 1.0 - similarity_score,
+        "graph1_size": before_set.len(),
+        "graph2_size": after_set.len()
+    });
+
+    // Apply validation heuristics
+    let is_safe = nodes_removed.is_empty() && similarity_score >= 0.5;
+    let has_breaking = !nodes_removed.is_empty() || similarity_score < 0.5;
+
+    let mut breaking_changes = Vec::new();
+    let mut warnings = Vec::new();
+
+    if !nodes_removed.is_empty() {
+        breaking_changes.push(format!(
+            "Removed {} nodes - potentially breaking",
+            nodes_removed.len()
+        ));
+    }
+
+    if similarity_score < 0.5 {
+        breaking_changes.push(format!(
+            "Low similarity score: {:.2} - significant structural changes",
+            similarity_score
+        ));
+    } else if similarity_score < 0.8 {
+        warnings.push(format!(
+            "Moderate similarity: {:.2} - review recommended",
+            similarity_score
+        ));
+    }
+
+    if similarity_score == 1.0 {
+        warnings.push("Structure preserved (isomorphic)".to_string());
+    }
+
+    if !nodes_removed.is_empty() {
+        warnings.push(format!(
+            "Removed {} nodes/edges - review control flow impact",
+            nodes_removed.len()
+        ));
+    }
+
+    let payload = json!({
+        "command": "validate-refactor",
+        "before": before,
+        "after": after,
+        "is_safe": is_safe,
+        "has_breaking_changes": has_breaking,
+        "breaking_changes": breaking_changes,
+        "warnings": warnings,
+        "diff_result": diff_result
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+// ============================================================================
+// Security and Taint Analysis Commands (Phase 56)
+// ============================================================================
+
+fn run_taint_forward(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("taint-forward command requires SQLite backend")
+    })?;
+
+    let sources_file = required_flag_value(args, "--sources-file")?;
+
+    // Read sources JSON file
+    let json_content = fs::read_to_string(&sources_file).map_err(|e| {
+        SqliteGraphError::invalid_input(format!("failed to read sources file: {e}"))
+    })?;
+
+    let sources_json: serde_json::Value = serde_json::from_str(&json_content).map_err(|e| {
+        SqliteGraphError::invalid_input(format!("failed to parse sources file: {e}"))
+    })?;
+
+    let sources: Vec<i64> = sources_json["sources"]
+        .as_array()
+        .ok_or_else(|| {
+            SqliteGraphError::invalid_input("sources file must contain 'sources' array")
+        })?
+        .iter()
+        .map(|v| {
+            v.as_i64()
+                .ok_or_else(|| SqliteGraphError::invalid_input("source must be a number"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Discover sinks automatically
+    let (_auto_sources, sinks) = discover_sources_and_sinks_default(graph)?;
+    let sinks_vec = sinks;
+
+    let progress = ConsoleProgress::new();
+    let result =
+        propagate_taint_forward_with_progress(graph, &sources, &sinks_vec, &progress)?;
+
+    let payload = json!({
+        "command": "taint-forward",
+        "sources_file": sources_file,
+        "sources": sources,
+        "sinks_analyzed": sinks_vec.len(),
+        "tainted_nodes": result.sorted_tainted_nodes(),
+        "tainted_count": result.tainted_nodes.len(),
+        "sinks_reached": result.sinks_reached.iter().copied().collect::<Vec<_>>(),
+        "sinks_reached_count": result.sinks_reached.len(),
+        "vulnerabilities": result.sorted_vulnerabilities(),
+        "vulnerability_count": result.source_sink_paths.len(),
+        "has_vulnerability": result.has_vulnerability()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_taint_backward(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("taint-backward command requires SQLite backend")
+    })?;
+
+    let sink = required_flag_value(args, "--sink").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid sink node: {e}")))
+    })?;
+
+    let sources_file = required_flag_value(args, "--sources-file")?;
+
+    // Read sources JSON file (optional for backward propagation)
+    let sources: Vec<i64> = if let Ok(json_content) = fs::read_to_string(&sources_file) {
+        let sources_json: serde_json::Value =
+            serde_json::from_str(&json_content).unwrap_or_default();
+        sources_json["sources"]
+            .as_array()
+            .map(|arr| arr.iter().filter_map(|v| v.as_i64()).collect())
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    let progress = ConsoleProgress::new();
+    let result = propagate_taint_backward_with_progress(graph, sink, &sources, &progress)?;
+
+    let payload = json!({
+        "command": "taint-backward",
+        "sink": sink,
+        "sources_file": sources_file,
+        "sources_provided": sources,
+        "sources_reached": result.sources.iter().copied().collect::<Vec<_>>(),
+        "sources_count": result.sources.len(),
+        "tainted_nodes": result.sorted_tainted_nodes(),
+        "tainted_count": result.tainted_nodes.len(),
+        "has_vulnerability": result.has_vulnerability()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_sink_analysis(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("sink-analysis command requires SQLite backend")
+    })?;
+
+    let sources_file = required_flag_value(args, "--sources-file")?;
+    let sinks_file = required_flag_value(args, "--sinks-file")?;
+
+    // Read sources JSON file
+    let sources_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(&sources_file).map_err(|e| {
+            SqliteGraphError::invalid_input(format!("failed to read sources file: {e}"))
+        })?,
+    )
+    .map_err(|e| {
+        SqliteGraphError::invalid_input(format!("failed to parse sources file: {e}"))
+    })?;
+
+    let sources: Vec<i64> = sources_json["sources"]
+        .as_array()
+        .ok_or_else(|| {
+            SqliteGraphError::invalid_input("sources file must contain 'sources' array")
+        })?
+        .iter()
+        .map(|v| {
+            v.as_i64()
+                .ok_or_else(|| SqliteGraphError::invalid_input("source must be a number"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Read sinks JSON file
+    let sinks_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(&sinks_file).map_err(|e| {
+            SqliteGraphError::invalid_input(format!("failed to read sinks file: {e}"))
+        })?,
+    )
+    .map_err(|e| {
+        SqliteGraphError::invalid_input(format!("failed to parse sinks file: {e}"))
+    })?;
+
+    let sinks: Vec<i64> = sinks_json["sinks"]
+        .as_array()
+        .ok_or_else(|| {
+            SqliteGraphError::invalid_input("sinks file must contain 'sinks' array")
+        })?
+        .iter()
+        .map(|v| {
+            v.as_i64()
+                .ok_or_else(|| SqliteGraphError::invalid_input("sink must be a number"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let progress = ConsoleProgress::new();
+    let vulnerabilities =
+        sink_reachability_analysis_with_progress(graph, &sources, &sinks, &progress)?;
+
+    // Convert to more structured output
+    let vuln_list: Vec<serde_json::Value> = vulnerabilities
+        .iter()
+        .map(|(sink, affecting_sources)| {
+            json!({
+                "sink": sink,
+                "affecting_sources": affecting_sources,
+                "source_count": affecting_sources.len()
+            })
+        })
+        .collect();
+
+    let payload = json!({
+        "command": "sink-analysis",
+        "sources_file": sources_file,
+        "sinks_file": sinks_file,
+        "sources_count": sources.len(),
+        "sinks_count": sinks.len(),
+        "vulnerable_sinks_count": vulnerabilities.len(),
+        "vulnerabilities": vuln_list
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_discover_sources_sinks(
+    client: &BackendClient,
+    _args: &[String],
+) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("discover-sources-sinks command requires SQLite backend")
+    })?;
+
+    let result = discover_sources_and_sinks_default(graph)?;
+
+    let payload = json!({
+        "command": "discover-sources-sinks",
+        "sources_count": result.0.len(),
+        "sources": result.0,
+        "sinks_count": result.1.len(),
+        "sinks": result.1
     });
     println!("{payload}");
     Ok(())

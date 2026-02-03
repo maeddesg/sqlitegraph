@@ -186,16 +186,24 @@ See milestone archives for complete history.
 **Success Criteria** (what must be TRUE):
   1. User can propagate taint on graph from sources, performing sink reachability analysis for security and compliance tooling
 **Plans**: 1 plan in 1 wave
-  - [ ] 56-01-PLAN.md — Taint Propagation Module (Wave 1)
+  - [x] 56-01-PLAN.md — Taint Propagation Module (Wave 1)
+**Status**: Complete (2026-02-03)
 
 #### Phase 57: CLI Commands
 **Goal**: Command-line interface for all graph algorithms
 **Depends on**: Phases 45-56 (all algorithm phases)
 **Requirements**: CLI-01, CLI-02
 **Success Criteria** (what must be TRUE):
-  1. User can invoke all 26 graph algorithms via CLI with consistent interface and backend selection support
+  1. User can invoke all 35 graph algorithms via CLI with consistent interface and backend selection support
   2. CLI commands show progress tracking for long-running algorithms consistent with existing progress infrastructure
-**Plans**: TBD
+**Plans**: 7 plans in 1 wave
+  - [ ] 57-01-PLAN.md — Core Graph Theory CLI (wcc, scc, transitive-closure, transitive-reduction, topological-sort) (Wave 1)
+  - [ ] 57-02-PLAN.md — Reachability CLI (forward-reachability, backward-reachability, can-reach, unreachable-nodes) (Wave 1)
+  - [ ] 57-03-PLAN.md — CFG Algorithms CLI (dominators, post-dominators, control-dependence, dominance-frontiers, natural-loops) (Wave 1)
+  - [ ] 57-04-PLAN.md — Path & Dependency CLI (enumerate-paths, enumerate-paths-constrained, critical-path, cycle-basis) (Wave 1)
+  - [ ] 57-05-PLAN.md — Program Analysis & Cut CLI (backward-slice, forward-slice, collapse-scc, min-cut, min-vertex-cut) (Wave 1)
+  - [ ] 57-06-PLAN.md — Observability & ML CLI (happens-before, impact-radius, partition, subgraph-isomorphism, graph-rewrite) (Wave 1)
+  - [ ] 57-07-PLAN.md — Graph Diff & Security CLI (structural-similarity, graph-diff, validate-refactor, taint-forward, taint-backward, sink-analysis, discover-sources-sinks) (Wave 1)
 
 ---
 
@@ -218,7 +226,7 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 | 53. Observability & Runtime | v1.14 | 2/2 | Complete | 2026-02-02 |
 | 54. ML / Inference / Compute Graphs | v1.14 | 3/3 | Complete | 2026-02-03 |
 | 55. Graph Diff | v1.14 | 2/2 | Complete | 2026-02-03 |
-| 56. Security & Compliance | v1.14 | 0/TBD | Not started | - |
-| 57. CLI Commands | v1.14 | 0/TBD | Not started | - |
+| 56. Security & Compliance | v1.14 | 1/1 | Complete | 2026-02-03 |
+| 57. CLI Commands | v1.14 | 0/7 | Not started | - |
 
-**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). Phase 48 complete (2/2 plans). Phase 49 complete (2/2 plans). Phase 50 complete (2/2 plans). Phase 51 complete (2/2 plans). Phase 52 complete (2/2 plans). Phase 53 complete (2/2 plans). Phase 54 complete (3/3 plans). Phase 55 complete (2/2 plans). v1.14: 28/197 plans complete (14.2%).
+**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). Phase 48 complete (2/2 plans). Phase 49 complete (2/2 plans). Phase 50 complete (2/2 plans). Phase 51 complete (2/2 plans). Phase 52 complete (2/2 plans). Phase 53 complete (2/2 plans). Phase 54 complete (3/3 plans). Phase 55 complete (2/2 plans). Phase 56 complete (1/1 plan). Phase 57: 7/7 plans ready. v1.14: 29/197 plans complete (14.7%).
