@@ -599,6 +599,64 @@ The pub/sub system is **minimal and best-effort**:
 - Each subscriber gets their own channel
 - `Publisher` uses `Arc<Mutex<>>` for internal synchronization
 
+### Query API Limitations
+
+**Important**: The GraphBackend API does not provide methods to query nodes by name and kind directly.
+
+```rust
+// What you CAN do:
+fn insert_node(NodeSpec) -> Result<i64>  // Creates node, returns ID
+fn get_node(snapshot_id, node_id) -> Result<GraphEntity>  // Requires ID
+
+// What you CANNOT do (no such API):
+// fn get_nodes_by_name_kind(name, kind) -> Result<Vec<Node>>
+// fn find_node(name, kind) -> Result<Option<Node>>
+```
+
+**Workarounds**:
+
+1. **Track node IDs yourself**: When creating a node, store its ID in your own tracking structure or in the KV store:
+
+```rust
+// Create node and track the ID
+let node_id = graph.insert_node(NodeSpec {
+    kind: "message_index".to_string(),
+    name: "msg_index:agent-123".to_string(),
+    file_path: None,
+    data: serde_json::json!({}),
+})?;
+
+// Store ID in KV for later lookup
+graph.kv_set(
+    b"msg_index_id:agent-123",
+    KvValue::Integer(node_id),
+    None,
+)?;
+```
+
+2. **Use KV as an index**: For message queues, user sessions, or other dynamic entities, maintain an index in KV:
+
+```rust
+// Index pattern: store entity IDs in KV
+// Key: "index:{entity_type}:{entity_name}" -> node_id
+// Data: "index_data:{entity_type}:{entity_name}" -> JSON with actual state
+
+graph.kv_set(
+    b"index:messages:agent-123",
+    KvValue::Integer(node_id),
+    None,
+)?;
+```
+
+3. **Use SubscriptionFilter.nodes()**: When subscribing to events for specific nodes, you need their IDs. Plan your node creation to return IDs to interested parties.
+
+**Why this design?**
+
+- **Simplicity**: Avoids complex query engine implementation
+- **Performance**: Direct ID lookup is O(1)
+- **Explicit tracking**: Users control their own index strategies
+- **Extensibility**: KV store provides flexible indexing options
+
 ### Test Coverage
 
 **v1.2 Test Results:**
