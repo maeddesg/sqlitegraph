@@ -104,6 +104,12 @@ This index provides navigation for all SQLiteGraph documentation.
 | **Profiling** | DEBUGGING.md | Profiling |
 | **Logging** | DEBUGGING.md | Logging |
 
+### Strategic Analysis
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURAL_ANALYSIS.md](ARCHITECTURAL_ANALYSIS.md) | Strengths, concerns, scalability challenges, and options for V3 |
+
 ### Development Guides (How-To)
 
 | Guide | Description |
