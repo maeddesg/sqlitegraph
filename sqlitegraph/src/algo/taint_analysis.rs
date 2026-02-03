@@ -402,6 +402,194 @@ impl SinkCallback for MetadataSinkDetector {
     }
 }
 
+/// Propagates taint forward from sources to find reachable sinks.
+///
+/// Computes all nodes reachable from taint sources and identifies which
+/// security-sensitive sinks are reachable (vulnerabilities).
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `sources` - Source node IDs where taint originates
+/// * `sinks` - Sink node IDs to check for taint reachability
+///
+/// # Returns
+/// TaintResult containing:
+/// - All nodes tainted by sources (forward reachable)
+/// - Which sinks are reachable (vulnerabilities)
+/// - Source-sink paths that represent vulnerabilities
+///
+/// # Complexity
+/// - **Time**: O(S × (V + E) + S × Sinks × (V + E)) where S = sources count
+///   - O(V + E) per source for forward reachability
+///   - O(V + E) per source-sink pair for path validation
+/// - **Space**: O(V) for tainted nodes set
+///
+/// # Algorithm
+/// 1. Initialize tainted_nodes = empty set
+/// 2. For each source:
+///    - Compute forward reachability using reachable_from()
+///    - Extend tainted_nodes with reachable nodes
+/// 3. Compute sinks_reached = sinks ∩ tainted_nodes
+/// 4. Build source_sink_paths:
+///    - For each source and sink pair, check can_reach(source, sink)
+///    - If true, add (source, sink) to paths
+/// 5. Return TaintResult with size = tainted_nodes.len()
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::propagate_taint_forward};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph with sources and sinks ...
+///
+/// let sources = vec![1, 2];   // User input nodes
+/// let sinks = vec![10, 20];   // SQL query nodes
+///
+/// let result = propagate_taint_forward(&graph, &sources, &sinks)?;
+///
+/// if result.has_vulnerability() {
+///     println!("Found {} vulnerabilities", result.source_sink_paths.len());
+///     for (source, sink) in result.sorted_vulnerabilities() {
+///         println!("  Source {} can reach sink {}", source, sink);
+///     }
+/// }
+/// ```
+pub fn propagate_taint_forward(
+    graph: &SqliteGraph,
+    sources: &[i64],
+    sinks: &[i64],
+) -> Result<TaintResult, SqliteGraphError> {
+    let mut tainted_nodes: AHashSet<i64> = AHashSet::new();
+    let sources_set: AHashSet<i64> = sources.iter().copied().collect();
+    let sinks_set: AHashSet<i64> = sinks.iter().copied().collect();
+
+    // Step 1: Propagate taint from each source
+    for &source in sources {
+        let reachable = reachable_from(graph, source)?;
+        tainted_nodes.extend(reachable);
+    }
+
+    // Step 2: Find which sinks are reachable (vulnerabilities)
+    let sinks_reached: AHashSet<i64> = sinks_set
+        .intersection(&tainted_nodes)
+        .copied()
+        .collect();
+
+    // Step 3: Build source-sink paths
+    let mut source_sink_paths = Vec::new();
+    for &source in sources {
+        for &sink in &sinks_reached {
+            if can_reach(graph, source, sink)? {
+                source_sink_paths.push((source, sink));
+            }
+        }
+    }
+
+    Ok(TaintResult {
+        sources: sources_set,
+        sinks_reached,
+        tainted_nodes,
+        source_sink_paths,
+        size: tainted_nodes.len(),
+    })
+}
+
+/// Propagates taint forward with progress tracking.
+///
+/// Same algorithm as [`propagate_taint_forward`] but reports progress
+/// during execution. Useful for long-running operations on large graphs.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `sources` - Source node IDs where taint originates
+/// * `sinks` - Sink node IDs to check for taint reachability
+/// * `progress` - Progress callback for reporting execution status
+///
+/// # Returns
+/// TaintResult with tainted nodes and vulnerability paths.
+///
+/// # Progress Reporting
+///
+/// The callback receives:
+/// - `current`: Current number of sources processed
+/// - `total`: Total number of sources (Some(total))
+/// - `message`: "Taint propagation: {current}/{total} sources processed, {tainted} tainted nodes"
+///
+/// Progress is reported for each source processed.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{
+///     algo::propagate_taint_forward_with_progress,
+///     progress::ConsoleProgress
+/// };
+///
+/// let progress = ConsoleProgress::new();
+/// let result = propagate_taint_forward_with_progress(&graph, &sources, &sinks, &progress)?;
+/// // Output: Taint propagation: 1/5 sources processed, 10 tainted nodes
+/// ```
+pub fn propagate_taint_forward_with_progress<F>(
+    graph: &SqliteGraph,
+    sources: &[i64],
+    sinks: &[i64],
+    progress: &F,
+) -> Result<TaintResult, SqliteGraphError>
+where
+    F: ProgressCallback,
+{
+    let mut tainted_nodes: AHashSet<i64> = AHashSet::new();
+    let sources_set: AHashSet<i64> = sources.iter().copied().collect();
+    let sinks_set: AHashSet<i64> = sinks.iter().copied().collect();
+    let total = sources.len();
+
+    // Step 1: Propagate taint from each source with progress
+    for (idx, &source) in sources.iter().enumerate() {
+        let reachable = reachable_from(graph, source)?;
+        tainted_nodes.extend(reachable);
+
+        // Report progress
+        progress.on_progress(
+            idx + 1,
+            Some(total),
+            &format!(
+                "Taint propagation: {}/{} sources processed, {} tainted nodes",
+                idx + 1,
+                total,
+                tainted_nodes.len()
+            ),
+        );
+    }
+
+    // Step 2: Find which sinks are reachable (vulnerabilities)
+    let sinks_reached: AHashSet<i64> = sinks_set
+        .intersection(&tainted_nodes)
+        .copied()
+        .collect();
+
+    // Step 3: Build source-sink paths
+    let mut source_sink_paths = Vec::new();
+    for &source in sources {
+        for &sink in &sinks_reached {
+            if can_reach(graph, source, sink)? {
+                source_sink_paths.push((source, sink));
+            }
+        }
+    }
+
+    // Report completion
+    progress.on_complete();
+
+    Ok(TaintResult {
+        sources: sources_set,
+        sinks_reached,
+        tainted_nodes,
+        source_sink_paths,
+        size: tainted_nodes.len(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
