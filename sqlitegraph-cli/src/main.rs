@@ -2109,10 +2109,11 @@ fn run_dominance_frontiers(
     })?;
 
     let progress = ConsoleProgress::new();
-    let frontiers = dominance_frontiers_with_progress(graph, entry, &progress)?;
+    let dom_result = dominators_with_progress(graph, entry, &progress)?;
+    let frontiers = dominance_frontiers_with_progress(graph, &dom_result, &progress)?;
 
     // Convert AHashMap to HashMap for JSON serialization
-    let frontier_sets: std::collections::HashMap<i64, Vec<i64>> = frontiers.into_iter()
+    let frontier_sets: std::collections::HashMap<i64, Vec<i64>> = frontiers.frontiers.into_iter()
         .map(|(k, v)| (k, v.into_iter().collect()))
         .collect();
 
@@ -3018,15 +3019,48 @@ fn run_topological_sort(client: &BackendClient, _args: &[String]) -> Result<(), 
 // ============================================================================
 
 /// happens-before: Event ordering analysis for concurrent traces
-fn run_happens_before(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+fn run_happens_before(_client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
     let events_file = required_flag_value(args, "--events-file")?;
 
-    // Read events JSON file
+    // Read events JSON file - each event: {event_id, thread_id, operation, memory_location, vector_clock}
     let json_content = fs::read_to_string(&events_file)
         .map_err(|e| SqliteGraphError::invalid_input(format!("failed to read events file: {e}")))?;
 
-    let events: Vec<sqlitegraph::algo::TraceEvent> = serde_json::from_str(&json_content)
+    let events_json: Vec<serde_json::Value> = serde_json::from_str(&json_content)
         .map_err(|e| SqliteGraphError::invalid_input(format!("failed to parse events: {e}")))?;
+
+    use sqlitegraph::algo::{Operation, TraceEvent, VectorClock};
+
+    let mut events = Vec::new();
+    for event_json in events_json {
+        let event_id = event_json["event_id"].as_i64()
+            .ok_or_else(|| SqliteGraphError::invalid_input("event missing event_id"))?;
+        let thread_id = event_json["thread_id"].as_i64()
+            .ok_or_else(|| SqliteGraphError::invalid_input("event missing thread_id"))?;
+        let operation_str = event_json["operation"].as_str()
+            .ok_or_else(|| SqliteGraphError::invalid_input("event missing operation"))?;
+        let operation = match operation_str {
+            "read" => Operation::Read,
+            "write" => Operation::Write,
+            _ => return Err(SqliteGraphError::invalid_input(format!("invalid operation: {}", operation_str))),
+        };
+        let memory_location = event_json["memory_location"].as_i64()
+            .ok_or_else(|| SqliteGraphError::invalid_input("event missing memory_location"))?;
+
+        // Build vector clock from JSON by incrementing for each entry
+        let mut vector_clock = VectorClock::new();
+        if let Some(vc_obj) = event_json["vector_clock"].as_object() {
+            for (tid_str, ts_val) in vc_obj {
+                if let (Some(tid), Some(ts)) = (tid_str.parse::<i64>().ok(), ts_val.as_u64()) {
+                    for _ in 0..ts {
+                        vector_clock.increment(tid);
+                    }
+                }
+            }
+        }
+
+        events.push(TraceEvent::new(event_id, thread_id, operation, memory_location, vector_clock));
+    }
 
     let result = sqlitegraph::algo::happens_before_analysis(&events)?;
 
@@ -3035,7 +3069,7 @@ fn run_happens_before(client: &BackendClient, args: &[String]) -> Result<(), Sql
         "events_file": events_file,
         "event_count": events.len(),
         "concurrent_pairs": result.concurrent_pairs.len(),
-        "race_count": result.race_count
+        "conflicts_detected": result.conflicts_detected
     });
     println!("{payload}");
     Ok(())
@@ -3062,20 +3096,26 @@ fn run_impact_radius(client: &BackendClient, args: &[String]) -> Result<(), Sqli
     let progress = ConsoleProgress::new();
     let config = sqlitegraph::algo::ImpactRadiusConfig {
         max_distance,
-        max_hops: max_distance as u32,
+        max_hops: (max_distance as u32).max(100),
         weight_fn: sqlitegraph::algo::default_weight_fn,
     };
     let result = sqlitegraph::algo::impact_radius_with_progress(graph, start, &config, &progress)?;
 
-    // Convert distances to sorted Vec for JSON serialization
-    let mut distances_vec: Vec<(i64, f64)> = result.distances.iter().map(|(k, v)| (*k, *v)).collect();
+    // Convert distances to sorted Vec for JSON serialization (filter out None values)
+    let mut distances_vec: Vec<(i64, f64)> = result.distances.iter()
+        .filter_map(|(k, v)| v.map(|val| (*k, val)))
+        .collect();
     distances_vec.sort_by_key(|(k, _)| *k);
+
+    // Convert blast_zone AHashSet to Vec for JSON
+    let blast_zone_vec: Vec<i64> = result.blast_zone.iter().copied().collect();
 
     let payload = json!({
         "command": "impact-radius",
         "start": start,
         "max_distance": max_distance,
-        "blast_zone_size": result.blast_zone.len(),
+        "blast_zone_size": blast_zone_vec.len(),
+        "blast_zone": blast_zone_vec,
         "distances": distances_vec
     });
     println!("{payload}");
@@ -3097,23 +3137,36 @@ fn run_partition(client: &BackendClient, args: &[String]) -> Result<(), SqliteGr
         .map(|s| s.parse::<usize>().map_err(|e| {
             SqliteGraphError::invalid_input(format!("invalid max-size: {e}"))
         }))
-        .transpose()?;
+        .transpose()?
+        .unwrap_or(usize::MAX);
 
     let progress = ConsoleProgress::new();
     let config = sqlitegraph::algo::PartitionConfig {
         k,
-        max_partition_size: max_size.unwrap_or(usize::MAX),
-        max_iterations: 100,
+        max_size,
+        max_imbalance: 0.1,
+        seeds: None,
     };
     let result = sqlitegraph::algo::partition_kway_with_progress(graph, &config, &progress)?;
+
+    // Convert partitions AHashSet to Vec for JSON
+    let partitions_vec: Vec<Vec<i64>> = result.partitions.iter()
+        .map(|p| p.iter().copied().collect())
+        .collect();
+
+    // Convert node_to_partition AHashMap to sorted Vec for JSON
+    let mut node_to_partition_vec: Vec<(i64, usize)> = result.node_to_partition.iter()
+        .map(|(k, v)| (*k, *v))
+        .collect();
+    node_to_partition_vec.sort_by_key(|(k, _)| *k);
 
     let payload = json!({
         "command": "partition",
         "k": k,
         "max_size": max_size,
-        "partition_count": result.partitions.len(),
-        "partitions": result.partitions,
-        "node_to_partition": result.node_to_partition
+        "partition_count": partitions_vec.len(),
+        "partitions": partitions_vec,
+        "node_to_partition": node_to_partition_vec
     });
     println!("{payload}");
     Ok(())
@@ -3134,14 +3187,12 @@ fn run_subgraph_isomorphism(client: &BackendClient, args: &[String]) -> Result<(
     let pattern_value: serde_json::Value = serde_json::from_str(&pattern_json)
         .map_err(|e| SqliteGraphError::invalid_input(format!("failed to parse pattern file: {e}")))?;
 
-    // For now, use a simple pattern: a single node ID as pattern center
-    // In production, this would load a full graph structure
-    let pattern_center = pattern_value["center"]
+    // For simplified usage: use a node ID from the graph as pattern "center"
+    // The algorithm will find isomorphic subgraphs (pattern matching)
+    let _pattern_center = pattern_value["center"]
         .as_i64()
         .ok_or_else(|| SqliteGraphError::invalid_input("pattern file must contain 'center' field"))?;
 
-    // Create a minimal pattern graph with just the center node
-    // The algorithm will find neighborhoods similar to this node
     let progress = ConsoleProgress::new();
     let bounds = sqlitegraph::algo::SubgraphPatternBounds {
         max_matches: 100,
@@ -3149,11 +3200,11 @@ fn run_subgraph_isomorphism(client: &BackendClient, args: &[String]) -> Result<(
         max_pattern_nodes: 10,
     };
 
-    // Use the center node to find similar structures
-    // In this simplified version, we find nodes with similar connectivity patterns
+    // For now, use the graph itself as both pattern and target
+    // This will find automorphisms (self-matches) as a demonstration
     let result = sqlitegraph::algo::find_subgraph_patterns_with_progress(
         graph,
-        graph,  // Using same graph for pattern (simplified)
+        graph,
         bounds,
         &progress,
     )?;
@@ -3161,8 +3212,8 @@ fn run_subgraph_isomorphism(client: &BackendClient, args: &[String]) -> Result<(
     let payload = json!({
         "command": "subgraph-isomorphism",
         "pattern_file": pattern_file,
-        "pattern_center": pattern_center,
         "matches_found": result.matches.len(),
+        "patterns_found": result.patterns_found,
         "bounded_hit": result.bounded_hit
     });
     println!("{payload}");

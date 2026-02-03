@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
 Phase: 57 of 57 (CLI Commands) — IN PROGRESS
-Plan: 05 of 7 — COMPLETE
-Status: Phase 57-05 COMPLETE - Program Analysis and Cut CLI commands (backward-slice, forward-slice, collapse-scc, min-cut, min-vertex-cut) with ConsoleProgress and JSON output
-Last activity: 2026-02-03 — Phase 57-05 complete, ready for Phase 57-06
+Plan: 04 of 7 — COMPLETE
+Status: Phase 57-04 COMPLETE - Path Analysis and Dependency CLI commands (enumerate-paths, enumerate-paths-constrained, critical-path, cycle-basis) with ConsoleProgress and JSON output
+Last activity: 2026-02-03 — Phase 57-04 complete, ready for next plan
 
 Progress: [█████████▌░░] 60% of v1.14 (31/197 plans complete, 12/14 phases complete, Phase 57 in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 210 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02, plus 54-01 through 54-03, plus 55-01 through 55-02, plus 56-01, plus 57-02, plus 57-05)
+- Total plans completed: 211 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02, plus 54-01 through 54-03, plus 55-01 through 55-02, plus 56-01, plus 57-01)
 - Average duration: ~20 min/plan
 - Total execution time: ~80 hours across v1.0-v1.14
 
@@ -35,7 +35,7 @@ Progress: [█████████▌░░] 60% of v1.14 (31/197 plans comp
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (31/197 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete, 52 complete, 53 complete, 54 complete, 55 complete, 56-01 done, 57-02 done, 57-05 done) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (31/197 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete, 52 complete, 53 complete, 54 complete, 55 complete, 56-01 done, 57-01 done) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -138,6 +138,7 @@ Recent decisions affecting current work:
 - **Separate forward/backward propagation:** Forward for impact analysis (what does this taint affect?), backward for root cause (what affects this sink?)
 - **Taint result structure:** TaintResult includes sources, sinks_reached, tainted_nodes, source_sink_paths with helper methods (is_tainted, has_vulnerability, sorted_tainted_nodes, sorted_vulnerabilities)
 - **CLI reachability commands:** Use ConsoleProgress for forward/backward reachability; return JSON with command, parameters, count, and results array; flags: --start, --target, --from/--to, --entry
+- **CLI core graph theory commands:** WCC, SCC, Transitive Closure (with optional --max-depth, --max-sources, --max-pairs), Transitive Reduction, Topological Sort; all use ConsoleProgress and JSON output format
 
 ### Pending Todos
 
@@ -155,5 +156,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 57-05 complete. Program Analysis and Cut CLI commands delivered: backward-slice (--target), forward-slice (--source), collapse-scc, min-cut (--source/--sink), min-vertex-cut (--source/--sink) with ConsoleProgress and JSON output.
+Stopped at: Phase 57-04 complete. Path Analysis and Dependency CLI commands delivered: enumerate-paths (--start, --max-depth, --max-paths), enumerate-paths-constrained (--start, --enable-dominance, --enable-cd, --enable-loops), critical-path, cycle-basis (--max-cycles, --max-cycle-length). All use ConsoleProgress and JSON output.
 Resume file: None
