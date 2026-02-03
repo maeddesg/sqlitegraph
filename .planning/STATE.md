@@ -5,24 +5,24 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** Planning next milestone
+**Current focus:** Test Suite Recovery - Phase 59
 
 ## Current Position
 
 Milestone: v1.4.0 Pub/Sub Enhancements (SHIPPED 2026-02-03)
-Phase: 58 - Pub/Sub Enhancements (COMPLETE)
-Plan: 58-05 - Integration and Documentation (COMPLETE)
-Status: v1.4.0 COMPLETE - Query API enhancements for pub/sub use cases. KV prefix scanning, query by kind, query by name pattern, pattern subscription filters, and CLI commands.
-Last activity: 2026-02-03 — Phase 58 complete, v1.4.0 released
+Phase: 59 - Test Suite Recovery (IN EXECUTION)
+Plan: 59-01 - Fix V2WALConfig Missing Fields (COMPLETE)
+Status: Test suite has 660+ pre-existing compilation errors. Fixed 14 V2WALConfig errors. Remaining errors include GraphEntityCreate imports, natural_loops_from_exit imports, API signature changes.
+Last activity: 2026-02-03 — Phase 59-01 complete. V2WALConfig struct literals fixed.
 
-Progress: [████████████] 100% — v1.4.0 complete (258/258 plans complete across all milestones)
+Progress: [█░░░░░░░░░░░░░░] 2% — Test suite recovery started (1/?? plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 258 (phases 1-57, plus 58-01 through 58-05)
+- Total plans completed: 259 (phases 1-57, plus 58-01 through 58-05, plus 59-01)
 - Average duration: ~20 min/plan
-- Total execution time: ~86 hours across v1.0-v1.4.0
+- Total execution time: ~86.5 hours across v1.0-v1.4.0 + Phase 59
 
 **By Phase:**
 
@@ -37,6 +37,7 @@ Progress: [████████████] 100% — v1.4.0 complete (258/2
 | v1.13 | 37-44 | 24 | Pub/Sub |
 | v1.3.0 | 45-57 | 36 | Graph Algorithms (5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
 | v1.4.0 | 58 | 5 | Pub/Sub Enhancements (COMPLETE - 5 plans: KV scan, query by kind, query by name, pattern filters, docs) |
+| v1.5.0 | 59 | 1+ | Test Suite Recovery (1 plan complete: V2WALConfig missing fields fix) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -55,6 +56,7 @@ Progress: [████████████] 100% — v1.4.0 complete (258/2
 - v1.3.0 phase 57: ~12 min/plan (7 plans complete - all CLI commands for 35 graph algorithms)
 - v1.3.0 COMPLETE: 36 plans total, ~13 min/plan average
 - v1.4.0 phase 58: ~7 min/plan (5 plans complete - KV scan, query by kind, query by name, pattern filters, docs)
+- v1.5.0 phase 59: ~14 min/plan (1 plan complete - V2WALConfig missing fields fix)
 - Trend: Stable
 *Updated after each plan completion*
 
@@ -142,6 +144,7 @@ Recent decisions affecting current work:
 - **Taint result structure:** TaintResult includes sources, sinks_reached, tainted_nodes, source_sink_paths with helper methods (is_tainted, has_vulnerability, sorted_tainted_nodes, sorted_vulnerabilities)
 - **CLI reachability commands:** Use ConsoleProgress for forward/backward reachability; return JSON with command, parameters, count, and results array; flags: --start, --target, --from/--to, --entry
 - **CLI core graph theory commands:** WCC, SCC, Transitive Closure (with optional --max-depth, --max-sources, --max-pairs), Transitive Reduction, Topological Sort; all use ConsoleProgress and JSON output format
+- **V2WALConfig explicit field specification:** Test code should explicitly specify all required fields in V2WALConfig struct literals rather than using `..Default::default()`. This makes test configuration obvious and prevents silent behavior changes if Default impl changes. (Phase 59-01)
 
 ### Pending Todos
 
@@ -150,16 +153,22 @@ None yet.
 ### Blockers/Concerns
 
 **Pre-existing test compilation errors:**
-- Test suite has 226 compilation errors unrelated to transitive reduction work
-- Errors are in other modules (topological_sort, integration_tests, etc.)
+- Test suite has 660+ pre-existing compilation errors
+- V2WALConfig errors: FIXED (14 errors resolved in Phase 59-01)
+- Remaining errors:
+  - GraphEntityCreate import errors (use crate::graph::GraphEntityCreate should use crate::GraphEntityCreate)
+  - natural_loops_from_exit import errors (function doesn't exist in algo::natural_loops)
+  - API signature changes (get_node requires SnapshotId parameter)
+  - KvStore/KvValue type errors in Phase 58 tests
+  - TraversalContext missing fields in prefetch_tuning_tests
 - Library compiles successfully (`cargo check --lib` passes)
 - Documentation builds successfully
-- Does not block algorithm implementation or usage
+- Does not block library usage, only test suite
 
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 58-05 complete. v1.4.0 Pub/Sub Enhancements released with KV prefix scanning, query by kind, query by name pattern, pattern subscription filters, CLI commands, and comprehensive documentation.
+Stopped at: Phase 59-01 complete. V2WALConfig struct literal missing fields fixed in test suite.
 Resume file: None
 
 **Phase 58 new decisions:**
