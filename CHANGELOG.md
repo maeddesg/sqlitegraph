@@ -1,5 +1,33 @@
 # SQLiteGraph Changelog
 
+## [1.4.1] - 2026-02-03
+
+### Code Quality Improvements Release
+**Phase 59-01: Warning cleanup and test module organization**
+
+### Compiler Warnings Cleanup
+- **Zero compiler warnings**: Reduced from 8 to 0 warnings
+- **Test module organization**: Added `#[cfg(test)]` to test-only modules
+  - `kv_store/integration_tests.rs`: Now only compiled during test runs
+  - `kv_store/snapshot_tests.rs`: Now only compiled during test runs
+  - `kv_store/tests.rs`: Now only compiled during test runs
+- **Unused import cleanup**:
+  - `taint_analysis.rs`: Removed unused `GraphEdge` import
+  - `hnsw/index.rs`: Removed unused `hnsw_config` and `HnswIndexError` imports
+
+### Benefits
+- **Cleaner compilation output**: No noise from unused imports in test modules
+- **Better IDE experience**: Warnings cleared for better development workflow
+- **Proper test gating**: Test modules only included when running tests
+- **All tests passing**: 530+ tests continue to pass
+
+### Summary
+- **8 warnings eliminated**: 6 from test module gating + 2 from unused imports
+- **0 compilation errors**: Clean build maintained
+- **3 files updated**: mod.rs (test gating), taint_analysis.rs, hnsw/index.rs
+
+---
+
 ## [1.4.0] - 2026-02-03
 
 ### Pub/Sub Enhancements Release

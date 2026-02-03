@@ -3,7 +3,7 @@
 //! Micro regression test to verify cluster size contract is correct
 
 use sqlitegraph::{
-    BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, SqliteGraphError,
+    BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, SnapshotId, SqliteGraphError,
     config::GraphConfig, open_graph,
 };
 use tempfile::TempDir;
@@ -48,6 +48,7 @@ fn test_cluster_size_contract_explicit() -> Result<(), SqliteGraphError> {
 
     // 3) Verify neighbors count
     let neighbors = graph.neighbors(
+        SnapshotId::current(),
         node1_id,
         NeighborQuery {
             direction: BackendDirection::Outgoing,

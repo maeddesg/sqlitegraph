@@ -33,9 +33,14 @@
 //! - [`ttl`]: TTL helpers and lazy cleanup utilities
 //! - [`integration_tests`]: Comprehensive integration test suite
 
+#[cfg(test)]
 pub mod integration_tests;
+
+#[cfg(test)]
 pub mod snapshot_tests;
+
 pub mod store;
+#[cfg(test)]
 pub mod tests;
 pub mod ttl;
 pub mod types;

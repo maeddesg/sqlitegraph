@@ -120,7 +120,7 @@ pub struct EdgeSpec {
 
 ### Overview
 
-SQLiteGraph v1.3.0 includes a comprehensive graph algorithms library with **35 algorithms** across 13 categories.
+SQLiteGraph v1.4.1 includes a comprehensive graph algorithms library with **35 algorithms** across 13 categories.
 
 ### Algorithm Categories
 

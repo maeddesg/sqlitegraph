@@ -5,9 +5,19 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.3.0
+## What's New in v1.4.1
 
-**Graph Algorithms Library** - Comprehensive algorithm collection for CFG analysis, program slicing, and security
+**Code Quality** - Zero compiler warnings with proper test module organization
+- All test modules now properly gated with `#[cfg(test)]`
+- Unused imports cleaned up across taint_analysis and HNSW modules
+- Clean compilation output for better developer experience
+
+**v1.4.0 Features** - Pub/Sub query enhancements for agent messaging and topic-based subscriptions
+- KV prefix scanning, node query by kind/name pattern
+- Pattern-based subscriptions for flexible event filtering
+- CLI commands for efficient KV and node queries
+
+**v1.3.0 Graph Algorithms Library** - Comprehensive algorithm collection for CFG analysis, program slicing, and security
 - 35 algorithms across 13 categories:
   - Core Graph Theory: WCC, SCC, transitive closure, transitive reduction, topological sort
   - Reachability: forward/backward reachability, can-reach, unreachable-nodes
@@ -154,7 +164,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.3.0"
+sqlitegraph = "1.4.1"
 ```
 
 ### SQLite Backend (Default)
@@ -184,7 +194,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.1", features = ["native-v2"] }
 ```
 
 ```rust
@@ -214,7 +224,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.1", features = ["native-v2"] }
 ```
 
 ```rust
@@ -255,13 +265,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.3.0"
+sqlitegraph = "1.4.1"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.3.0", features = ["native-v2"] }
+sqlitegraph = { version = "1.4.1", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.3.0", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.4.1", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
@@ -312,7 +322,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (v1.3.0):**
+**Test Coverage (v1.4.1):**
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
@@ -378,14 +388,10 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 
 ## Compiler Warnings
 
-SQLiteGraph is actively developed with **73 intentional compiler warnings** as of v1.3.0:
-
-| Category | Count | Description |
-|----------|-------|-------------|
-| SIMD unsafe blocks | 18 | Rust 2024 edition requires explicit `unsafe` blocks within `unsafe fn` for SIMD intrinsics (AVX2). These are low-overhead and necessary for performance. |
-| Dead code (API completeness) | ~55 | Intentionally unused methods/fields preserved for: public API stability, future features, test-only functionality, and serialized format compatibility. |
-
-**These warnings are documented and acceptable** - they represent intentional design choices, not technical debt. The codebase compiles cleanly with `cargo check --lib` and all tests pass.
+SQLiteGraph compiles with **zero warnings** as of v1.4.1:
+- All test modules properly gated with `#[cfg(test)]`
+- Unused imports cleaned up
+- Clean compilation output for better developer experience
 
 ### Grounded Development Workflow
 

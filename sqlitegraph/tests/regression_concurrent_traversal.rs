@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 
 /// Test BFS traversals from different start nodes sequentially
 ///
@@ -62,7 +62,7 @@ fn test_sequential_bfs_no_contention() {
         let start_time = Instant::now();
 
         // Run BFS traversal
-        let result = graph.bfs(start_node, chain_size as u32);
+        let result = graph.bfs(SnapshotId::current(), start_node, chain_size as u32);
 
         let elapsed = start_time.elapsed();
 
@@ -157,7 +157,7 @@ fn test_write_read_mix() {
 
         // Run BFS
         let start_time = Instant::now();
-        let result = graph.bfs(node_ids[iteration % chain_size], 50);
+        let result = graph.bfs(SnapshotId::current(), node_ids[iteration % chain_size], 50);
 
         let elapsed = start_time.elapsed();
 
@@ -233,7 +233,7 @@ fn test_multiple_traversal_isolation() {
             let start_index = (traversal_id + iteration) % 50;
             let start_node = node_ids[start_index];
 
-            let result = graph.bfs(start_node, 50);
+            let result = graph.bfs(SnapshotId::current(), start_node, 50);
 
             assert!(
                 result.is_ok(),
@@ -310,7 +310,7 @@ fn test_no_deadlock_multiple_traversals() {
             let start_index = (traversal_id * 5 + i) % 50;
             let start_node = node_ids[start_index];
 
-            let result = graph.bfs(start_node, 100);
+            let result = graph.bfs(SnapshotId::current(), start_node, 100);
 
             if result.is_ok() && !result.unwrap().is_empty() {
                 // Success for this traversal

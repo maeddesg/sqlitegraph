@@ -42,7 +42,7 @@ fn test_recovery_clean_shutdown_no_replay() -> NativeResult<()> {
 
     // Write and commit a transaction cleanly
     let tx_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
     )?;
     manager.write_transaction_record(
         tx_id,
@@ -96,7 +96,7 @@ fn test_recovery_dirty_wal_replay() -> NativeResult<()> {
 
     // Write transaction but DO NOT commit (simulates crash)
     let tx_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
     )?;
     manager.write_transaction_record(
         tx_id,
@@ -150,7 +150,7 @@ fn test_recovery_partial_checkpoint_resume() -> NativeResult<()> {
 
     // Write and commit transactions
     let tx1_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
     )?;
     manager.write_transaction_record(
         tx1_id,
@@ -164,7 +164,7 @@ fn test_recovery_partial_checkpoint_resume() -> NativeResult<()> {
 
     // Write second transaction but don't checkpoint
     let tx2_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
     )?;
     manager.write_transaction_record(
         tx2_id,
@@ -223,7 +223,7 @@ fn test_recovery_uncommitted_transaction_rollback() -> NativeResult<()> {
 
     // Begin transaction and write records but ROLLBACK
     let tx_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
     )?;
     manager.write_transaction_record(
         tx_id,
@@ -316,7 +316,7 @@ fn test_recovery_authority_resolution() -> NativeResult<()> {
         };
         let manager = V2WALManager::create(config)?;
         let tx_id = manager.begin_transaction(
-            sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+            sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
         )?;
         manager.write_transaction_record(
             tx_id,
@@ -344,7 +344,7 @@ fn test_recovery_authority_resolution() -> NativeResult<()> {
         };
         let manager = V2WALManager::create(config)?;
         let tx_id = manager.begin_transaction(
-            sqlitegraph::backend::native::v2::wal::TransactionIsolation::ReadCommitted,
+            sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
         )?;
         manager.write_transaction_record(
             tx_id,

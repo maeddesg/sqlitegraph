@@ -1,6 +1,7 @@
 # Adding a Distance Metric to HNSW
 
-**Last Updated:** 2026-01-26
+**Last Updated:** 2026-02-03
+**Version:** v1.4.1
 
 This guide explains how to add a new distance metric for HNSW vector search.
 

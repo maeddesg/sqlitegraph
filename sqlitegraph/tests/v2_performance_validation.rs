@@ -1,5 +1,5 @@
 use sqlitegraph::backend::{EdgeSpec, NodeSpec};
-use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::{GraphConfig, SnapshotId, open_graph};
 use std::time::Instant;
 use tempfile::TempDir;
 
@@ -71,7 +71,7 @@ fn test_v2_performance_validation() -> Result<(), Box<dyn std::error::Error>> {
 
     // Simple read performance test
     for &node_id in node_ids.iter().take(100) {
-        let node = graph.get_node(node_id).expect("Failed to get node");
+        let node = graph.get_node(SnapshotId::current(), node_id).expect("Failed to get node");
         assert_eq!(node.id, node_id);
     }
 
@@ -87,7 +87,7 @@ fn test_v2_performance_validation() -> Result<(), Box<dyn std::error::Error>> {
     println!("Phase 4: Corruption verification...");
     let sample_node_id = node_ids[500];
     let node = graph
-        .get_node(sample_node_id)
+        .get_node(SnapshotId::current(), sample_node_id)
         .expect("Failed to retrieve node");
 
     assert_eq!(node.id, sample_node_id);

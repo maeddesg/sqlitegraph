@@ -1,5 +1,5 @@
 use sqlitegraph::backend::{EdgeSpec, NodeSpec};
-use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::{GraphConfig, SnapshotId, open_graph};
 use std::fs;
 use tempfile::TempDir;
 
@@ -54,7 +54,7 @@ fn test_v2_stress_reopen_validation() -> Result<(), Box<dyn std::error::Error>> 
         // Verify sample nodes exist with correct data
         for test_id in [1, 100, 250, 500] {
             let node = graph
-                .get_node(test_id)
+                .get_node(SnapshotId::current(), test_id)
                 .expect("Failed to retrieve node after reopen");
 
             assert_eq!(node.id, test_id);
@@ -116,7 +116,7 @@ fn test_v2_stress_reopen_validation() -> Result<(), Box<dyn std::error::Error>> 
 
         // Verify nodes are still intact after multiple reopens
         let test_node = graph
-            .get_node(300)
+            .get_node(SnapshotId::current(), 300)
             .expect("Failed to retrieve node after multiple reopens");
         assert_eq!(test_node.id, 300);
         assert_eq!(test_node.kind, "Function");

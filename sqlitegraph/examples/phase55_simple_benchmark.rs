@@ -3,6 +3,7 @@
 //! Evidence-only measurement without debug output
 
 use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
+use sqlitegraph::SnapshotId;
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -82,6 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let low_start = Instant::now();
     let _low_neighbors = graph.neighbors(
+        SnapshotId::current(),
         node_ids[0],
         NeighborQuery {
             direction: BackendDirection::Outgoing,
@@ -93,6 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let high_start = Instant::now();
     let _high_neighbors = graph.neighbors(
+        SnapshotId::current(),
         node_ids[node_count / 2],
         NeighborQuery {
             direction: BackendDirection::Outgoing,

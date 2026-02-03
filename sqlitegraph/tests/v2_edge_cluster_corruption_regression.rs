@@ -5,7 +5,7 @@
 //! then verifies that cluster corruption occurs during neighbor queries.
 
 use sqlitegraph::backend::{BackendDirection, EdgeSpec, NeighborQuery, NodeSpec};
-use sqlitegraph::{BackendKind, GraphBackend, config::GraphConfig, open_graph};
+use sqlitegraph::{BackendKind, GraphBackend, SnapshotId, config::GraphConfig, open_graph};
 use tempfile::TempDir;
 
 /// Test that reproduces V2 edge cluster corruption deterministically
@@ -57,7 +57,7 @@ fn test_v2_edge_cluster_corruption_regression() {
     println!("Inserted node_c with ID: {}", node_c);
 
     // Verify nodes can be retrieved
-    let entity_a = graph.get_node(node_a).expect("Failed to get node_a");
+    let entity_a = graph.get_node(SnapshotId::current(), node_a).expect("Failed to get node_a");
     assert_eq!(entity_a.name, "node_a");
     println!("Verified node_a retrieval");
 
@@ -112,6 +112,7 @@ fn test_v2_edge_cluster_corruption_regression() {
     // Test outgoing neighbors from node_a
     println!("Querying outgoing neighbors from node_a...");
     let neighbors_a_out = match graph.neighbors(
+        SnapshotId::current(),
         node_a,
         NeighborQuery {
             direction: BackendDirection::Outgoing,
@@ -131,6 +132,7 @@ fn test_v2_edge_cluster_corruption_regression() {
     // Test incoming neighbors to node_a
     println!("Querying incoming neighbors to node_a...");
     let neighbors_a_in = match graph.neighbors(
+        SnapshotId::current(),
         node_a,
         NeighborQuery {
             direction: BackendDirection::Incoming,
@@ -170,6 +172,7 @@ fn test_v2_edge_cluster_corruption_regression() {
     ] {
         let outgoing = graph
             .neighbors(
+                SnapshotId::current(),
                 node_id,
                 NeighborQuery {
                     direction: BackendDirection::Outgoing,
@@ -179,6 +182,7 @@ fn test_v2_edge_cluster_corruption_regression() {
             .expect("Failed to get outgoing neighbors");
         let incoming = graph
             .neighbors(
+                SnapshotId::current(),
                 node_id,
                 NeighborQuery {
                     direction: BackendDirection::Incoming,
@@ -202,7 +206,7 @@ fn test_v2_edge_cluster_corruption_regression() {
     println!("=== PHASE 8: Test k-hop operations ===");
     // Test k-hop to ensure cluster corruption doesn't manifest here either
     let k2_from_a = graph
-        .k_hop(node_a, 2, BackendDirection::Outgoing)
+        .k_hop(SnapshotId::current(), node_a, 2, BackendDirection::Outgoing)
         .expect("Failed to get k=2 hop from node_a");
     // node_a -> node_b -> node_c, so should reach node_c
     assert!(

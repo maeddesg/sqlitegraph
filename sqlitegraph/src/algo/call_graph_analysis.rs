@@ -1112,11 +1112,11 @@ mod tests {
 
             if let Some(neighbors) = adj.get(&node) {
                 for &neighbor in neighbors {
-                    if !visited.contains(neighbor) {
+                    if !visited.contains(&neighbor) {
                         if has_cycle(neighbor, adj, visited, rec_stack) {
                             return true;
                         }
-                    } else if rec_stack.contains(neighbor) {
+                    } else if rec_stack.contains(&neighbor) {
                         return true;
                     }
                 }

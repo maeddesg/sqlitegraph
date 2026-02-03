@@ -3,7 +3,7 @@
 //! Tests that verify the high-level query cache is correct, MVCC-safe, and beneficial.
 
 use sqlitegraph::{
-    EdgeSpec, NodeSpec,
+    EdgeSpec, NodeSpec, SnapshotId,
     backend::{BackendDirection, GraphBackend, SqliteGraphBackend},
 };
 
@@ -41,8 +41,8 @@ fn test_query_cache_bfs_hit_correctness() -> Result<(), Box<dyn std::error::Erro
     let backend = create_test_graph()?;
 
     // Run BFS query twice with identical parameters
-    let result1 = backend.bfs(1, 3)?;
-    let result2 = backend.bfs(1, 3)?;
+    let result1 = backend.bfs(SnapshotId::current(), 1, 3)?;
+    let result2 = backend.bfs(SnapshotId::current(), 1, 3)?;
 
     // Results should be identical
     assert_eq!(result1, result2, "Cached BFS result should match original");
@@ -63,8 +63,8 @@ fn test_query_cache_k_hop_hit_correctness() -> Result<(), Box<dyn std::error::Er
     let backend = create_test_graph()?;
 
     // Run k-hop query twice with identical parameters
-    let result1 = backend.k_hop(1, 2, BackendDirection::Outgoing)?;
-    let result2 = backend.k_hop(1, 2, BackendDirection::Outgoing)?;
+    let result1 = backend.k_hop(SnapshotId::current(), 1, 2, BackendDirection::Outgoing)?;
+    let result2 = backend.k_hop(SnapshotId::current(), 1, 2, BackendDirection::Outgoing)?;
 
     // Results should be identical
     assert_eq!(
@@ -93,7 +93,7 @@ fn test_query_cache_mvcc_invalidation() -> Result<(), Box<dyn std::error::Error>
     let backend = create_test_graph()?;
 
     // Run BFS query and record result
-    let initial_result = backend.bfs(1, 3)?;
+    let initial_result = backend.bfs(SnapshotId::current(), 1, 3)?;
     let initial_count = initial_result.len();
 
     // Add a new edge that creates an alternative path
@@ -105,7 +105,7 @@ fn test_query_cache_mvcc_invalidation() -> Result<(), Box<dyn std::error::Error>
     })?;
 
     // Run same BFS query again - should see different result due to cache invalidation
-    let modified_result = backend.bfs(1, 3)?;
+    let modified_result = backend.bfs(SnapshotId::current(), 1, 3)?;
 
     // Results should be different (should still be the same nodes but in potentially different order)
     // The key test is that the cache was invalidated and recomputed
@@ -138,9 +138,9 @@ fn test_query_cache_different_parameters() -> Result<(), Box<dyn std::error::Err
     let backend = create_test_graph()?;
 
     // Run BFS queries with different parameters
-    let result_depth_2 = backend.bfs(1, 2)?;
-    let result_depth_3 = backend.bfs(1, 3)?;
-    let result_start_2 = backend.bfs(2, 2)?;
+    let result_depth_2 = backend.bfs(SnapshotId::current(), 1, 2)?;
+    let result_depth_3 = backend.bfs(SnapshotId::current(), 1, 3)?;
+    let result_start_2 = backend.bfs(SnapshotId::current(), 2, 2)?;
 
     // Results should be different due to different parameters
     assert_ne!(
@@ -171,8 +171,8 @@ fn test_query_cache_shortest_path() -> Result<(), Box<dyn std::error::Error>> {
     let backend = create_test_graph()?;
 
     // Run shortest path query twice
-    let result1 = backend.shortest_path(1, 4)?;
-    let result2 = backend.shortest_path(1, 4)?;
+    let result1 = backend.shortest_path(SnapshotId::current(), 1, 4)?;
+    let result2 = backend.shortest_path(SnapshotId::current(), 1, 4)?;
 
     // Results should be identical
     assert_eq!(
@@ -195,8 +195,8 @@ fn test_query_cache_filtered_k_hop() -> Result<(), Box<dyn std::error::Error>> {
     let backend = create_test_graph()?;
 
     // Run filtered k-hop query twice with same filter
-    let result1 = backend.k_hop_filtered(1, 2, BackendDirection::Outgoing, &["chain"])?;
-    let result2 = backend.k_hop_filtered(1, 2, BackendDirection::Outgoing, &["chain"])?;
+    let result1 = backend.k_hop_filtered(SnapshotId::current(), 1, 2, BackendDirection::Outgoing, &["chain"])?;
+    let result2 = backend.k_hop_filtered(SnapshotId::current(), 1, 2, BackendDirection::Outgoing, &["chain"])?;
 
     // Results should be identical
     assert_eq!(
@@ -224,14 +224,14 @@ fn test_query_cache_after_edge_removal() -> Result<(), Box<dyn std::error::Error
     let backend = create_test_graph()?;
 
     // Get initial BFS result
-    let initial_result = backend.bfs(1, 3)?;
+    let initial_result = backend.bfs(SnapshotId::current(), 1, 3)?;
 
     // Note: This test demonstrates cache invalidation behavior
     // In a real implementation, edge removal would invalidate the cache
     // For now, we test that the cache system handles graph mutations correctly
 
     // The key point is that subsequent queries after mutations should not return stale data
-    let after_mutation_result = backend.bfs(1, 3)?;
+    let after_mutation_result = backend.bfs(SnapshotId::current(), 1, 3)?;
 
     // Results should be consistent with current graph state
     assert!(
@@ -254,8 +254,8 @@ fn test_query_cache_concurrent_safety() -> Result<(), Box<dyn std::error::Error>
 
     // Run multiple queries sequentially to establish baseline
     for _ in 0..5 {
-        let _ = backend.bfs(1, 2)?;
-        let _ = backend.k_hop(1, 1, BackendDirection::Outgoing)?;
+        let _ = backend.bfs(SnapshotId::current(), 1, 2)?;
+        let _ = backend.k_hop(SnapshotId::current(), 1, 1, BackendDirection::Outgoing)?;
     }
 
     // If we reach here, basic functionality works

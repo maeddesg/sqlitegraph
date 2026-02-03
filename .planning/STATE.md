@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Feature parity, performance, and reliability equally. Native V2 must match or exceed SQLite backend capabilities while maintaining rock-solid MVCC correctness and achieving best-in-class embedded graph database performance.
-**Current focus:** Test Suite Recovery - Phase 59
+**Current focus:** Test Suite Final Cleanup - Phase 60
 
 ## Current Position
 
 Milestone: v1.4.0 Pub/Sub Enhancements (SHIPPED 2026-02-03)
-Phase: 59 - Test Suite Recovery (IN EXECUTION - Wave 4)
-Plan: 59-05 - Final Verification (COMPLETE)
-Status: Test suite has 660+ pre-existing compilation errors. Fixed 625+ errors (95% reduction) across 16 test files. Library compiles successfully. 35 errors remain in 12 test files.
-Last activity: 2026-02-03 — Phase 59-05 complete. Fixed SnapshotId and IsolationLevel API signature mismatches.
+Phase: 60 - Test Suite Final Cleanup (PLANNING)
+Plan: 60-01 - Fix Remaining SnapshotId Errors (PENDING)
+Status: Test suite has 660+ pre-existing compilation errors. Fixed 625+ errors (95% reduction) across 16 test files in Phase 59. Library compiles successfully. 34 E0061 errors remain (missing SnapshotId parameter in get_node, neighbors, bfs, k_hop calls).
+Last activity: 2026-02-03 — Phase 60 planning started. Fix pattern established from Phase 59-05.
 
-Progress: [███░░░░░░░░░░░░░] 6% — Test suite recovery started (5/?? plans complete)
+Progress: [███░░░░░░░░░░░░░] 6% — Test suite recovery (5/263 plans complete)
 
 ## Performance Metrics
 
@@ -37,7 +37,8 @@ Progress: [███░░░░░░░░░░░░░] 6% — Test suite r
 | v1.13 | 37-44 | 24 | Pub/Sub |
 | v1.3.0 | 45-57 | 36 | Graph Algorithms (5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
 | v1.4.0 | 58 | 5 | Pub/Sub Enhancements (COMPLETE - 5 plans: KV scan, query by kind, query by name, pattern filters, docs) |
-| v1.5.0 | 59 | 4+ | Test Suite Recovery (4 plans complete: V2WALConfig fix, GraphEntityCreate imports, natural_loops_from_exit, KvStore/KvValue imports) |
+| v1.5.0 | 59 | 5 | Test Suite Recovery (5 plans complete: V2WALConfig fix, GraphEntityCreate imports, natural_loops_from_exit, KvStore/KvValue imports, SnapshotId fixes) |
+| v1.5.0 | 60 | 0+ | Test Suite Final Cleanup (PLANNING - 34 E0061 errors to fix) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -154,7 +155,7 @@ None yet.
 
 **Test compilation errors (95% resolved):**
 - Original: 660+ pre-existing compilation errors
-- Fixed: 625+ errors (95% reduction) across 16 test files
+- Fixed: 625+ errors (95% reduction) across 16 test files in Phase 59
 - V2WALConfig errors: FIXED (14 errors in Phase 59-01)
 - GraphEntityCreate import errors: FIXED (39+ errors in Phase 59-02)
 - natural_loops_from_exit errors: FIXED (Phase 59-03)
@@ -162,29 +163,40 @@ None yet.
 - API signature errors (get_node, neighbors, bfs): 95% FIXED (Phase 59-05)
 - TransactionIsolation import errors: FIXED (Phase 59-05)
 - TraversalContext construction errors: FIXED (Phase 59-05)
-- Remaining: 35 errors in 12 test files (same pattern, fix established)
+- Remaining: 34 E0061 errors (missing SnapshotId parameter) + other errors
 - Library compiles successfully (`cargo check --lib` passes with 0 errors)
 - Phase 58 tests can execute (KV store module compiles)
 
-**Remaining test files with errors:**
-- phase31_v2_default_takeover_tests_clean
-- phase32_cluster_pipeline_reconstruction_tests_clean (partial)
-- phase66_v2_cluster_metadata_corruption_regression
-- phase70_v2_atomic_cluster_commit_tests
-- query_cache_tests
-- v2_edge_cluster_corruption_regression
-- v2_graph_ops_smoke
-- v2_node_257_boundary_regression
-- v2_node_slot_persistence_regression
-- v2_performance_validation
-- v2_stress_integrity
-- benchmark_isolation_test
+**Remaining test files with E0061 errors:**
+- benchmark_isolation_test.rs (2 errors)
+- v2_edge_cluster_corruption_regression.rs (6 errors)
+- helpers/v2_fixture_builders.rs (2 errors)
+- phase35_v2_adjacency_router_rewrite_tests.rs (4 errors)
+- phase31_v2_default_takeover_tests_clean.rs (11 errors)
+- v2_stress_integrity.rs (2 errors)
+- phase70_v2_atomic_cluster_commit_tests.rs (3 errors)
+- phase44_2_cluster_size_contract_tests.rs (1 error)
+- v2_graph_ops_smoke.rs (16 errors)
+- v2_node_slot_persistence_regression.rs (7 errors)
+- query_cache_tests.rs (17 errors)
+- phase65_cluster_size_corruption_regression.rs (3 errors)
+- phase69_cluster_payload_integrity_tests.rs (3 errors)
+- regression_concurrent_traversal.rs (4 errors)
+- v2_incoming_cluster_corruption_regression.rs (6 errors)
+- multi_node_corruption_regression.rs (N errors)
 
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 59-05 complete. Fixed 625+ test compilation errors (95% reduction).
+Stopped at: Phase 60 planning complete. Plan 60-01 ready for execution.
 Resume file: None
+
+**Phase 60 planning:**
+- **Goal:** Fix remaining 34 E0061 errors (missing SnapshotId parameter) to achieve zero test compilation errors
+- **Fix pattern established:** Add SnapshotId to imports, add SnapshotId::current() as first parameter to get_node(), neighbors(), bfs(), k_hop() calls
+- **Single autonomous plan:** All fixes follow same pattern, can be done in one plan with 5 tasks
+- **Files affected:** 17 test files
+- **Expected outcome:** Zero E0061 errors, full test suite can compile and execute
 
 **Phase 59-05 new decisions:**
 - **SnapshotId API requirement:** get_node(), neighbors(), and bfs() methods now require SnapshotId::current() as first parameter for MVCC correctness. This is intentional API evolution, not a bug.

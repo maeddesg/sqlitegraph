@@ -9,7 +9,7 @@
 #[cfg(test)]
 mod tests {
     use sqlitegraph::backend::native::{EdgeStore, GraphFile, NodeStore};
-    use sqlitegraph::{BackendDirection, GraphConfig, NeighborQuery, open_graph};
+    use sqlitegraph::{BackendDirection, GraphConfig, NeighborQuery, SnapshotId, open_graph};
     use std::collections::HashMap;
     use std::env;
     use std::fs;
@@ -328,7 +328,7 @@ mod tests {
 
             // Test outgoing neighbors
             let outgoing = graph
-                .neighbors(
+                .neighbors(SnapshotId::current(), 
                     node_id,
                     NeighborQuery {
                         direction: BackendDirection::Outgoing,
@@ -354,7 +354,7 @@ mod tests {
 
             // Test incoming neighbors
             let incoming = graph
-                .neighbors(
+                .neighbors(SnapshotId::current(), 
                     node_id,
                     NeighborQuery {
                         direction: BackendDirection::Incoming,

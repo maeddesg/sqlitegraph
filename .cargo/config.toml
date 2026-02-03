@@ -1,8 +1,3 @@
-# Miri configuration for undefined behavior detection
-[env]
-MIRIFLAGS = "-Zmiri-disable-isolation -Zmiri-ignore-leaks -Zmiri-symbolic-alignment-check"
+[build]
+target-dir = "target"
 
-# Profile for Miri testing
-[profile.miri]
-inherits = "dev"
-opt-level = "z"  # Faster Miri execution with optimizations

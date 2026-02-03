@@ -3,7 +3,7 @@
 //! Clean tests using Phase 34 pipeline to verify V2 is the default format.
 //! All tests use real sqlitegraph APIs with zero manual cluster manipulation.
 
-use sqlitegraph::{BackendDirection, NeighborQuery, config::GraphConfig, open_graph};
+use sqlitegraph::{BackendDirection, NeighborQuery, SnapshotId, config::GraphConfig, open_graph};
 mod helpers;
 use helpers::v2_fixture_builders::*;
 
@@ -31,12 +31,13 @@ fn default_writer_is_v2_format() {
     );
 
     // Read the node back and verify it's correct
-    let node = graph.get_node(node_id).unwrap();
+    let node = graph.get_node(SnapshotId::current(), node_id).unwrap();
     assert_eq!(node.name, "test_node");
 
     // Verify V2 clustering is used by default - should have 1 outgoing neighbor (self)
     let neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             node_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -58,6 +59,7 @@ fn default_writer_is_v2_format() {
     // Verify incoming neighbors also work
     let incoming_neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             node_id,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -110,14 +112,15 @@ fn default_reader_is_v2_format() {
     let graph = flush_and_reopen(graph, &temp_dir);
 
     // Verify nodes read correctly
-    let source_node = graph.get_node(source_id).unwrap();
-    let target_node = graph.get_node(target_id).unwrap();
+    let source_node = graph.get_node(SnapshotId::current(), source_id).unwrap();
+    let target_node = graph.get_node(SnapshotId::current(), target_id).unwrap();
     assert_eq!(source_node.name, "source");
     assert_eq!(target_node.name, "target");
 
     // Verify adjacency works through V2 clustered data
     let outgoing = graph
         .neighbors(
+            SnapshotId::current(),
             source_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -131,6 +134,7 @@ fn default_reader_is_v2_format() {
 
     let incoming = graph
         .neighbors(
+            SnapshotId::current(),
             target_id,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -183,6 +187,7 @@ fn edge_insertion_updates_v2_clusters() {
     // Verify center node has correct outgoing neighbors
     let center_outgoing = graph
         .neighbors(
+            SnapshotId::current(),
             center_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -211,6 +216,7 @@ fn edge_insertion_updates_v2_clusters() {
     for target_id in &target_ids {
         let target_incoming = graph
             .neighbors(
+                SnapshotId::current(),
                 *target_id,
                 NeighborQuery {
                     direction: BackendDirection::Incoming,
@@ -255,7 +261,7 @@ fn bfs_uses_v2_clustered_iteration() {
     }
 
     // Perform BFS from first node
-    let bfs_result = graph.bfs(node_ids[0], 3).unwrap();
+    let bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 3).unwrap();
 
     assert_eq!(bfs_result.len(), 4, "BFS should reach all 4 nodes");
 
@@ -308,6 +314,7 @@ fn adjacency_uses_clustered_metadata_by_default() {
     // Verify adjacency works through V2 clustered metadata
     let producer_outgoing = graph
         .neighbors(
+            SnapshotId::current(),
             producer_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -329,6 +336,7 @@ fn adjacency_uses_clustered_metadata_by_default() {
     // Verify filtered adjacency works
     let filtered_outgoing = graph
         .neighbors(
+            SnapshotId::current(),
             producer_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -345,6 +353,7 @@ fn adjacency_uses_clustered_metadata_by_default() {
 
     let wrong_filter = graph
         .neighbors(
+            SnapshotId::current(),
             producer_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,

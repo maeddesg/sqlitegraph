@@ -1,5 +1,5 @@
 use sqlitegraph::backend::NodeSpec;
-use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::{GraphConfig, SnapshotId, open_graph};
 use tempfile::TempDir;
 
 #[test]
@@ -51,9 +51,9 @@ fn test_multi_node_write_corruption() -> Result<(), Box<dyn std::error::Error>> 
 
     // CRITICAL: Read all nodes back IMMEDIATELY after all writes
     println!("Reading all nodes back immediately...");
-    let read_node1 = graph.get_node(node_id1).expect("Failed to read node 1");
-    let read_node2 = graph.get_node(node_id2).expect("Failed to read node 2");
-    let read_node3 = graph.get_node(node_id3).expect("Failed to read node 3");
+    let read_node1 = graph.get_node(SnapshotId::current(), node_id1).expect("Failed to read node 1");
+    let read_node2 = graph.get_node(SnapshotId::current(), node_id2).expect("Failed to read node 2");
+    let read_node3 = graph.get_node(SnapshotId::current(), node_id3).expect("Failed to read node 3");
 
     // Verify node data integrity
     assert_eq!(read_node1.kind, "Function");
@@ -76,13 +76,13 @@ fn test_multi_node_write_corruption() -> Result<(), Box<dyn std::error::Error>> 
 
     println!("Reading nodes after reopen...");
     let reopened_node1 = graph_reopened
-        .get_node(node_id1)
+        .get_node(SnapshotId::current(), node_id1)
         .expect("Failed to read node 1 after reopen");
     let reopened_node2 = graph_reopened
-        .get_node(node_id2)
+        .get_node(SnapshotId::current(), node_id2)
         .expect("Failed to read node 2 after reopen");
     let reopened_node3 = graph_reopened
-        .get_node(node_id3)
+        .get_node(SnapshotId::current(), node_id3)
         .expect("Failed to read node 3 after reopen");
 
     // Verify persistence

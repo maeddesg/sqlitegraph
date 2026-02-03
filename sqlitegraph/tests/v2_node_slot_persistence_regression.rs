@@ -1,5 +1,5 @@
 use sqlitegraph::backend::NodeSpec;
-use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::{GraphConfig, SnapshotId, open_graph};
 use tempfile::TempDir;
 
 #[test]
@@ -58,9 +58,9 @@ fn test_v2_node_slot_persistence_reopen() -> Result<(), Box<dyn std::error::Erro
 
     // Read all 3 nodes back directly
     println!("Reading nodes before close...");
-    let read_node1 = graph.get_node(node_id1).expect("Failed to read node 1");
-    let read_node2 = graph.get_node(node_id2).expect("Failed to read node 2");
-    let read_node3 = graph.get_node(node_id3).expect("Failed to read node 3");
+    let read_node1 = graph.get_node(SnapshotId::current(), node_id1).expect("Failed to read node 1");
+    let read_node2 = graph.get_node(SnapshotId::current(), node_id2).expect("Failed to read node 2");
+    let read_node3 = graph.get_node(SnapshotId::current(), node_id3).expect("Failed to read node 3");
 
     // Verify node data integrity
     assert_eq!(read_node1.kind, "Function");
@@ -84,13 +84,13 @@ fn test_v2_node_slot_persistence_reopen() -> Result<(), Box<dyn std::error::Erro
     // Read nodes again after reopen
     println!("Reading nodes after reopen...");
     let reopened_node1 = graph_reopened
-        .get_node(node_id1)
+        .get_node(SnapshotId::current(), node_id1)
         .expect("Failed to read node 1 after reopen");
     let reopened_node2 = graph_reopened
-        .get_node(node_id2)
+        .get_node(SnapshotId::current(), node_id2)
         .expect("Failed to read node 2 after reopen");
     let reopened_node3 = graph_reopened
-        .get_node(node_id3)
+        .get_node(SnapshotId::current(), node_id3)
         .expect("Failed to read node 3 after reopen");
 
     // Verify node data integrity after reopen
@@ -103,9 +103,7 @@ fn test_v2_node_slot_persistence_reopen() -> Result<(), Box<dyn std::error::Erro
 
     // Verify edge persistence
     let neighbors = graph_reopened
-        .neighbors(
-            node_id1,
-            sqlitegraph::backend::NeighborQuery {
+        .neighbors(SnapshotId::current(), node_id1, sqlitegraph::backend::NeighborQuery {
                 direction: sqlitegraph::backend::BackendDirection::Outgoing,
                 edge_type: Some("imports".to_string()),
             },

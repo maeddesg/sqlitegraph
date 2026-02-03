@@ -4,7 +4,7 @@
 //! for repeated expensive graph traversal operations.
 
 use sqlitegraph::{
-    EdgeSpec, NodeSpec,
+    EdgeSpec, NodeSpec, SnapshotId,
     backend::{BackendDirection, GraphBackend, SqliteGraphBackend},
 };
 use std::time::Instant;
@@ -50,12 +50,12 @@ fn test_query_cache_performance_benefit() -> Result<(), Box<dyn std::error::Erro
 
     // First query - should be cache miss and populate cache
     let start_time = Instant::now();
-    let _result1 = backend.bfs(start_node, depth)?;
+    let _result1 = backend.bfs(SnapshotId::current(), start_node, depth)?;
     let first_query_time = start_time.elapsed();
 
     // Second identical query - should be cache hit
     let start_time = Instant::now();
-    let _result2 = backend.bfs(start_node, depth)?;
+    let _result2 = backend.bfs(SnapshotId::current(), start_node, depth)?;
     let second_query_time = start_time.elapsed();
 
     println!("First BFS query: {:?}", first_query_time);
@@ -78,11 +78,11 @@ fn test_query_cache_multiple_operations() -> Result<(), Box<dyn std::error::Erro
     // Test BFS
     {
         let start_time = Instant::now();
-        let result1 = backend.bfs(1, 4)?;
+        let result1 = backend.bfs(SnapshotId::current(), 1, 4)?;
         let first_time = start_time.elapsed();
 
         let start_time = Instant::now();
-        let result2 = backend.bfs(1, 4)?;
+        let result2 = backend.bfs(SnapshotId::current(), 1, 4)?;
         let second_time = start_time.elapsed();
 
         println!("BFS - First: {:?}, Second: {:?}", first_time, second_time);
@@ -92,11 +92,11 @@ fn test_query_cache_multiple_operations() -> Result<(), Box<dyn std::error::Erro
     // Test K-Hop Outgoing
     {
         let start_time = Instant::now();
-        let result1 = backend.k_hop(1, 3, BackendDirection::Outgoing)?;
+        let result1 = backend.k_hop(SnapshotId::current(), 1, 3, BackendDirection::Outgoing)?;
         let first_time = start_time.elapsed();
 
         let start_time = Instant::now();
-        let result2 = backend.k_hop(1, 3, BackendDirection::Outgoing)?;
+        let result2 = backend.k_hop(SnapshotId::current(), 1, 3, BackendDirection::Outgoing)?;
         let second_time = start_time.elapsed();
 
         println!(
@@ -112,11 +112,11 @@ fn test_query_cache_multiple_operations() -> Result<(), Box<dyn std::error::Erro
     // Test K-Hop Incoming
     {
         let start_time = Instant::now();
-        let result1 = backend.k_hop(50, 2, BackendDirection::Incoming)?;
+        let result1 = backend.k_hop(SnapshotId::current(), 50, 2, BackendDirection::Incoming)?;
         let first_time = start_time.elapsed();
 
         let start_time = Instant::now();
-        let result2 = backend.k_hop(50, 2, BackendDirection::Incoming)?;
+        let result2 = backend.k_hop(SnapshotId::current(), 50, 2, BackendDirection::Incoming)?;
         let second_time = start_time.elapsed();
 
         println!(
@@ -132,11 +132,11 @@ fn test_query_cache_multiple_operations() -> Result<(), Box<dyn std::error::Erro
     // Test Filtered K-Hop
     {
         let start_time = Instant::now();
-        let result1 = backend.k_hop_filtered(1, 2, BackendDirection::Outgoing, &["mesh"])?;
+        let result1 = backend.k_hop_filtered(SnapshotId::current(), 1, 2, BackendDirection::Outgoing, &["mesh"])?;
         let first_time = start_time.elapsed();
 
         let start_time = Instant::now();
-        let result2 = backend.k_hop_filtered(1, 2, BackendDirection::Outgoing, &["mesh"])?;
+        let result2 = backend.k_hop_filtered(SnapshotId::current(), 1, 2, BackendDirection::Outgoing, &["mesh"])?;
         let second_time = start_time.elapsed();
 
         println!(
@@ -152,11 +152,11 @@ fn test_query_cache_multiple_operations() -> Result<(), Box<dyn std::error::Erro
     // Test Shortest Path
     {
         let start_time = Instant::now();
-        let result1 = backend.shortest_path(1, 50)?;
+        let result1 = backend.shortest_path(SnapshotId::current(), 1, 50)?;
         let first_time = start_time.elapsed();
 
         let start_time = Instant::now();
-        let result2 = backend.shortest_path(1, 50)?;
+        let result2 = backend.shortest_path(SnapshotId::current(), 1, 50)?;
         let second_time = start_time.elapsed();
 
         println!(
@@ -177,8 +177,8 @@ fn test_cache_invalidation_performance() -> Result<(), Box<dyn std::error::Error
     let backend = create_performance_test_graph()?;
 
     // Warm up the cache
-    let _result1 = backend.bfs(1, 3)?;
-    let _result2 = backend.k_hop(1, 2, BackendDirection::Outgoing)?;
+    let _result1 = backend.bfs(SnapshotId::current(), 1, 3)?;
+    let _result2 = backend.k_hop(SnapshotId::current(), 1, 2, BackendDirection::Outgoing)?;
 
     // Modify the graph (should invalidate cache)
     backend.insert_edge(EdgeSpec {
@@ -189,7 +189,7 @@ fn test_cache_invalidation_performance() -> Result<(), Box<dyn std::error::Error
     })?;
 
     // Query again - should compute fresh result due to cache invalidation
-    let _result3 = backend.bfs(1, 3)?;
+    let _result3 = backend.bfs(SnapshotId::current(), 1, 3)?;
 
     // This primarily tests that cache invalidation works without breaking functionality
     // Performance characteristics after invalidation should be similar to first queries

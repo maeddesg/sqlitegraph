@@ -3,7 +3,7 @@
 //! Tests whether benchmark iterations have proper isolation or if there's
 //! state contamination between runs that could cause node slot corruption.
 
-use sqlitegraph::{GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{GraphConfig, NodeSpec, SnapshotId, open_graph};
 use tempfile::TempDir;
 
 #[test]
@@ -46,7 +46,7 @@ fn test_benchmark_iteration_isolation() {
 
         // Verify critical boundary nodes are accessible through the existing graph instance
         for &node_id in &[255, 256, 257, 258, 259, 260] {
-            match graph.get_node(node_id) {
+            match graph.get_node(SnapshotId::current(), node_id) {
                 Ok(node) => println!("Node {} accessible: {}", node_id, node.name),
                 Err(e) => panic!("Failed to read node {}: {}", node_id, e),
             }
@@ -92,7 +92,7 @@ fn test_direct_corruption_reproduction() {
     }
 
     // Verify node 257 is accessible through the existing graph instance
-    match graph.get_node(257) {
+    match graph.get_node(SnapshotId::current(), 257) {
         Ok(node) => {
             println!("Node 257 accessible after node creation: {}", node.name);
             assert_eq!(node.name, "node_257");

@@ -3,7 +3,7 @@
 //! Tests for atomic commit protocol for V2 clustered adjacency.
 //! These tests must fail on current head to prove partial-commit corruption.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
+use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
 
 /// Test A: reopen after many edges (stress)
 /// This test verifies that after inserting edges and reopening the graph,
@@ -76,9 +76,7 @@ fn test_phase70_reopen_after_many_edges_stress() -> Result<(), Box<dyn std::erro
     println!("STEP 3: Verifying adjacency before close...");
     let mut adjacency_mismatches_before = Vec::new();
     for &node_id in &node_ids {
-        let neighbors = graph.neighbors(
-            node_id,
-            NeighborQuery {
+        let neighbors = graph.neighbors(SnapshotId::current(), node_id, NeighborQuery {
                 direction: BackendDirection::Outgoing,
                 edge_type: None,
             },
@@ -117,9 +115,7 @@ fn test_phase70_reopen_after_many_edges_stress() -> Result<(), Box<dyn std::erro
     println!("STEP 6: Verifying adjacency after reopen...");
     let mut adjacency_mismatches_after = Vec::new();
     for &node_id in &node_ids {
-        let neighbors = reopened_graph.neighbors(
-            node_id,
-            NeighborQuery {
+        let neighbors = reopened_graph.neighbors(SnapshotId::current(), node_id, NeighborQuery {
                 direction: BackendDirection::Outgoing,
                 edge_type: None,
             },
@@ -266,6 +262,7 @@ fn test_phase70_simulated_torn_commit() -> Result<(), Box<dyn std::error::Error>
 
     println!("STEP 6: Verify torn commit was recovered correctly");
     let neighbors = reopened_graph.neighbors(
+        SnapshotId::current(),
         node1_id,
         NeighborQuery {
             direction: BackendDirection::Outgoing,

@@ -1,6 +1,6 @@
 //! Temporary test to capture the exact BufferTooSmall error details
 
-use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 
 fn test_capture_buffer_too_small_error() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Capturing BufferTooSmall Error Details ===");
@@ -58,7 +58,7 @@ fn test_capture_buffer_too_small_error() -> Result<(), Box<dyn std::error::Error
     // Step 5: Try neighbor queries to trigger error
     println!("STEP 5: Testing neighbor queries...");
     for (i, &node_id) in node_ids.iter().enumerate() {
-        match graph_reopened.neighbors(node_id, Default::default()) {
+        match graph_reopened.neighbors(SnapshotId::current(), node_id, Default::default()) {
             Ok(neighbors) => {
                 println!("✅ Node {}: {} neighbors", node_id, neighbors.len());
             }

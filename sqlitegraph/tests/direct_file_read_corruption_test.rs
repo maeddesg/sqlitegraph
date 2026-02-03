@@ -1,5 +1,5 @@
 use sqlitegraph::backend::NodeSpec;
-use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::{GraphConfig, SnapshotId, open_graph};
 use std::fs::File;
 use std::io::{Read, Seek};
 use tempfile::TempDir;
@@ -63,7 +63,7 @@ fn test_direct_file_read_corruption() -> Result<(), Box<dyn std::error::Error>> 
     // CRITICAL: Try to read node 1 through the API BEFORE edge insertion
     println!("Reading node 1 through API before edge insertion...");
     let api_read_node1 = graph_reopened
-        .get_node(node_id1)
+        .get_node(SnapshotId::current(), node_id1)
         .expect("Failed to read node 1 through API");
 
     println!(

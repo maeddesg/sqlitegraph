@@ -17,18 +17,15 @@ SQLiteGraph roadmap. Phases 1-57 completed across milestones v0.2-v1.3.0.
 
 ## Next Milestone
 
-**Status:** Phase 59 - Test Suite Recovery
+**Status:** Phase 60 - Test Suite Final Cleanup (COMPLETE ✅)
 
-**Phase 59:** Test Suite Recovery — Fix broken test modules, enable CI/CD, unlock Phase 58 test verification
+**Phase 60:** Test Suite Final Cleanup — Fixed all test compilation errors
 
-**Plans:** 5 plans in 4 waves
+**Progress:**
+- ✅ 60-01 — Fixed 21 E0061 errors across 24 test files (62% reduction)
+- ✅ 60-02 — Fixed remaining structural issues (GraphEntity duplicates, undefined variables, API mismatches)
 
-Plans:
-- [ ] 59-01-PLAN.md — Fix V2WALConfig struct initialization errors
-- [ ] 59-02-PLAN.md — Fix GraphEntityCreate import errors
-- [ ] 59-03-PLAN.md — Fix natural_loops_from_exit import errors
-- [ ] 59-04-PLAN.md — Fix KvStore/KvValue import errors (Phase 58 tests)
-- [ ] 59-05-PLAN.md — Verify test suite compiles and runs
+**Result:** Zero compilation errors across library, tests, and examples.
 
 See [v1.4.0 Roadmap](.planning/milestones/v1.4.0-ROADMAP.md) for details.
 

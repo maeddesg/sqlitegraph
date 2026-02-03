@@ -1,5 +1,7 @@
 //! Unit tests for KV store operations
 
+use super::{KvStore, KvValue, KvStoreError};
+
 #[test]
 fn test_new_store() {
     let store = KvStore::new();

@@ -257,6 +257,7 @@ pub fn restore(backup_dir: &Path, target_path: &Path) -> NativeResult<RestoreRes
 mod tests {
     use super::*;
     use crate::backend::native::v2::export::snapshot::{SnapshotExportConfig, SnapshotExporter};
+    use crate::backend::native::v2::export::manifest::ExportManifest;
     use tempfile::TempDir;
 
     /// Create a test snapshot for restore testing

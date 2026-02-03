@@ -5,7 +5,7 @@
 //!
 //! This is a MEASUREMENT phase. NOT optimization. NOT marketing.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
+use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
 use std::time::Instant;
 
 /// Dataset specification for performance characterization
@@ -185,6 +185,7 @@ fn measure_dataset(spec: &DatasetSpec) -> Result<PerformanceResult, Box<dyn std:
     let low_degree_node = node_ids[0];
     let low_start = Instant::now();
     let low_neighbors = graph.neighbors(
+        SnapshotId::current(),
         low_degree_node,
         NeighborQuery {
             direction: BackendDirection::Outgoing,
@@ -203,6 +204,7 @@ fn measure_dataset(spec: &DatasetSpec) -> Result<PerformanceResult, Box<dyn std:
     let high_degree_node = node_ids[spec.node_count / 2];
     let high_start = Instant::now();
     let high_neighbors = graph.neighbors(
+        SnapshotId::current(),
         high_degree_node,
         NeighborQuery {
             direction: BackendDirection::Outgoing,
@@ -221,7 +223,7 @@ fn measure_dataset(spec: &DatasetSpec) -> Result<PerformanceResult, Box<dyn std:
     let bfs_elapsed = if spec.node_count <= 10_000 {
         println!("Running BFS traversal...");
         let bfs_start = Instant::now();
-        let bfs_result = graph.bfs(node_ids[0], 2);
+        let bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 2);
         match bfs_result {
             Ok(visited) => {
                 let elapsed = bfs_start.elapsed().as_millis();

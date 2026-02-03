@@ -2,7 +2,7 @@
 //!
 //! Focused test to capture node_count corruption at exact checkpoints
 
-use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 
 #[test]
 fn test_phase73_node_count_corruption_capture() -> Result<(), Box<dyn std::error::Error>> {
@@ -100,7 +100,7 @@ fn test_phase73_node_count_corruption_capture() -> Result<(), Box<dyn std::error
     // Verify nodes are still readable
     let mut readable_nodes = 0;
     for &node_id in &node_ids {
-        match reopened_graph.get_node(node_id) {
+        match reopened_graph.get_node(SnapshotId::current(), node_id) {
             Ok(_) => readable_nodes += 1,
             Err(_) => println!("Node {} not readable", node_id),
         }

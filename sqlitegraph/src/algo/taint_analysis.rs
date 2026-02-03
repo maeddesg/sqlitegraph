@@ -1021,7 +1021,7 @@ pub fn discover_sources_and_sinks(
 /// let graph = SqliteGraph::open_in_memory()?;
 ///
 /// // Add source with metadata
-/// graph.add_entity(GraphEntity {
+/// graph.insert_entity(&GraphEntity {
 ///     id: 1,
 ///     kind: "variable".to_string(),
 ///     name: "user_input".to_string(),
@@ -1030,7 +1030,7 @@ pub fn discover_sources_and_sinks(
 /// })?;
 ///
 /// // Add sink with metadata
-/// graph.add_entity(GraphEntity {
+/// graph.insert_entity(&GraphEntity {
 ///     id: 2,
 ///     kind: "operation".to_string(),
 ///     name: "sql_execute".to_string(),
@@ -1247,7 +1247,7 @@ mod tests {
 
         // Add entities
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 1,
                 kind: "variable".to_string(),
                 name: "source".to_string(),
@@ -1258,7 +1258,7 @@ mod tests {
 
         for i in 2..=4 {
             graph
-                .add_entity(GraphEntity {
+                .insert_entity(&GraphEntity {
                     id: i,
                     kind: "variable".to_string(),
                     name: format!("node_{}", i),
@@ -1269,7 +1269,7 @@ mod tests {
         }
 
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 5,
                 kind: "operation".to_string(),
                 name: "sink".to_string(),
@@ -1280,7 +1280,7 @@ mod tests {
 
         // Add edges: 1 -> 2 -> 3 -> 4 -> 5
         for i in 1..5 {
-            graph.add_edge(i, i + 1, "data_flow", json!({})).unwrap();
+            graph.insert_edge(&GraphEdge { id: 0, from_id: i, to_id: i + 1, edge_type: "data_flow".to_string(), data: json!({}) }).unwrap();
         }
 
         graph
@@ -1291,7 +1291,7 @@ mod tests {
         let graph = SqliteGraph::open_in_memory().unwrap();
 
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 1,
                 kind: "variable".to_string(),
                 name: "user_input".to_string(),
@@ -1301,7 +1301,7 @@ mod tests {
             .unwrap();
 
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 2,
                 kind: "variable".to_string(),
                 name: "intermediate".to_string(),
@@ -1311,7 +1311,7 @@ mod tests {
             .unwrap();
 
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 3,
                 kind: "operation".to_string(),
                 name: "sql_execute".to_string(),
@@ -1322,10 +1322,10 @@ mod tests {
 
         // Add edges: 1 -> 2 -> 3
         graph
-            .add_edge(1, 2, "data_flow", json!({}))
+            .insert_edge(&GraphEdge { id: 0, from_id: 1, to_id: 2, edge_type: "data_flow".to_string(), data: json!({}) })
             .unwrap();
         graph
-            .add_edge(2, 3, "data_flow", json!({}))
+            .insert_edge(&GraphEdge { id: 0, from_id: 2, to_id: 3, edge_type: "data_flow".to_string(), data: json!({}) })
             .unwrap();
 
         graph
@@ -1336,7 +1336,7 @@ mod tests {
         let graph = SqliteGraph::open_in_memory().unwrap();
 
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 1,
                 kind: "variable".to_string(),
                 name: "user_input".to_string(),
@@ -1346,7 +1346,7 @@ mod tests {
             .unwrap();
 
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 2,
                 kind: "operation".to_string(),
                 name: "sanitize".to_string(),
@@ -1356,7 +1356,7 @@ mod tests {
             .unwrap();
 
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 3,
                 kind: "operation".to_string(),
                 name: "sql_execute".to_string(),
@@ -1367,7 +1367,7 @@ mod tests {
 
         // Add edges: 1 -> 2 (sanitize), but 2 doesn't reach 3
         graph
-            .add_edge(1, 2, "data_flow", json!({}))
+            .insert_edge(&GraphEdge { id: 0, from_id: 1, to_id: 2, edge_type: "data_flow".to_string(), data: json!({}) })
             .unwrap();
 
         graph
@@ -1381,7 +1381,7 @@ mod tests {
 
         // Two sources
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 1,
                 kind: "variable".to_string(),
                 name: "source1".to_string(),
@@ -1391,7 +1391,7 @@ mod tests {
             .unwrap();
 
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 2,
                 kind: "variable".to_string(),
                 name: "source2".to_string(),
@@ -1402,7 +1402,7 @@ mod tests {
 
         // Intermediate node
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 3,
                 kind: "variable".to_string(),
                 name: "intermediate".to_string(),
@@ -1413,7 +1413,7 @@ mod tests {
 
         // Sink
         graph
-            .add_entity(GraphEntity {
+            .insert_entity(&GraphEntity {
                 id: 4,
                 kind: "operation".to_string(),
                 name: "sink".to_string(),
@@ -1424,13 +1424,13 @@ mod tests {
 
         // Edges: both sources reach intermediate, intermediate reaches sink
         graph
-            .add_edge(1, 3, "data_flow", json!({}))
+            .insert_edge(&GraphEdge { id: 0, from_id: 1, to_id: 3, edge_type: "data_flow".to_string(), data: json!({}) })
             .unwrap();
         graph
-            .add_edge(2, 3, "data_flow", json!({}))
+            .insert_edge(&GraphEdge { id: 0, from_id: 2, to_id: 3, edge_type: "data_flow".to_string(), data: json!({}) })
             .unwrap();
         graph
-            .add_edge(3, 4, "data_flow", json!({}))
+            .insert_edge(&GraphEdge { id: 0, from_id: 3, to_id: 4, edge_type: "data_flow".to_string(), data: json!({}) })
             .unwrap();
 
         graph
@@ -1753,7 +1753,7 @@ mod tests {
         assert_eq!(base_result.len(), progress_result.len());
         for (sink, sources) in base_result {
             assert!(progress_result.contains_key(&sink));
-            assert_eq!(sources, progress_result.get(&sink).unwrap());
+            assert_eq!(sources, *progress_result.get(&sink).unwrap());
         }
     }
 }

@@ -135,7 +135,7 @@ let edge_id = graph.insert_edge(edge_spec)?;
 
 ### Overview
 
-SQLiteGraph v1.3.0 includes a comprehensive graph algorithms library with **35 algorithms** across 13 categories:
+SQLiteGraph v1.4.1 includes a comprehensive graph algorithms library with **35 algorithms** across 13 categories:
 
 | Category | Algorithms |
 |----------|------------|
@@ -216,7 +216,7 @@ cargo test '*wal*'
 
 ### Test Coverage
 
-**v1.3.0 Test Results:**
+**v1.4.1 Test Results:**
 - 180+ graph algorithm tests passing (35 algorithms across 13 categories)
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
@@ -1143,7 +1143,7 @@ graph.kv_set(
 
 ### Test Coverage
 
-**v1.3.0 Test Results:**
+**v1.4.1 Test Results:**
 - 59 pubsub tests passing (integration + module tests)
 - Tests cover: event emission, filtering, multiple subscribers, unsubscribe
 
@@ -1151,7 +1151,7 @@ graph.kv_set(
 
 ## Architecture Status
 
-**v1.3.0 Features:**
+**v1.4.1 Features:**
 - Graph Algorithms Library: 35 production algorithms across 13 categories
   - Core Graph Theory: WCC, SCC, Transitive Closure, Transitive Reduction, Topological Sort
   - Reachability: Forward, Backward, Can-Reach, Unreachable Nodes
@@ -1191,4 +1191,4 @@ graph.kv_set(
 - MVCC Snapshots: Read isolation
 - Developer Tools: Introspection, progress tracking, CLI
 
-**Test Coverage:** 530+ tests passing (v1.3.0, including 180+ algorithm tests and 59 pubsub tests)
+**Test Coverage:** 530+ tests passing (v1.4.1, including 180+ algorithm tests and 59 pubsub tests)

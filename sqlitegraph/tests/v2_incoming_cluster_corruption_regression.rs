@@ -1,5 +1,5 @@
 use sqlitegraph::backend::NodeSpec;
-use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::{GraphConfig, SnapshotId, open_graph};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use tempfile::TempDir;
@@ -137,7 +137,7 @@ fn test_incoming_cluster_write_does_not_corrupt_node_slots()
 
     // Verify node can still be read through API
     let api_node = graph_reopened
-        .get_node(node_id1)
+        .get_node(SnapshotId::current(), node_id1)
         .expect("Should be able to read node1 through API after fix");
     assert_eq!(api_node.kind, "Function");
     assert_eq!(api_node.name, "main");

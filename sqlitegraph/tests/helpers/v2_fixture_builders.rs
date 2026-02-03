@@ -4,7 +4,7 @@
 //! All functions use real sqlitegraph APIs and Phase 34 pipeline.
 
 use sqlitegraph::{
-    BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, SqliteGraphError,
+    BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, SnapshotId, SqliteGraphError,
     config::GraphConfig, open_graph,
 };
 pub type NodeId = i64;
@@ -110,17 +110,13 @@ pub fn verify_v2_cluster_metadata(
 ) -> Result<(), SqliteGraphError> {
     // Verify by checking that neighbors work correctly
     // If V2 cluster metadata exists and is valid, neighbors will work
-    let outgoing = graph.neighbors(
-        node_id,
-        NeighborQuery {
+    let outgoing = graph.neighbors(SnapshotId::current(), node_id, NeighborQuery {
             direction: BackendDirection::Outgoing,
             edge_type: None,
         },
     )?;
 
-    let incoming = graph.neighbors(
-        node_id,
-        NeighborQuery {
+    let incoming = graph.neighbors(SnapshotId::current(), node_id, NeighborQuery {
             direction: BackendDirection::Incoming,
             edge_type: None,
         },

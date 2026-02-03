@@ -568,13 +568,9 @@ fn reverse_postorder_reversed(
     let mut stack = vec![(exit, false)]; // (node, visited_predecessors)
 
     while let Some((node, visited_predecessors)) = stack.pop() {
-        if !visited.insert(node) {
-            // Already visited, skip
-            continue;
-        }
-
         if visited_predecessors {
-            // All predecessors visited, add to postorder
+            // All predecessors visited, add to postorder and mark as visited
+            visited.insert(node);
             postorder.push(node);
         } else {
             // First time seeing this node, push it back to add after predecessors
@@ -1072,14 +1068,14 @@ mod tests {
         assert!(!result.post_dominates(entity_ids[0], entity_ids[2]));
         assert!(!result.post_dominates(entity_ids[0], entity_ids[3]));
 
-        // Nodes 1 and 2 post-dominate only themselves and exit
+        // Nodes 1 and 2 post-dominate only themselves (not entry, not each other)
         assert!(result.post_dominates(entity_ids[1], entity_ids[1]));
-        assert!(result.post_dominates(entity_ids[1], exit));
+        assert!(!result.post_dominates(entity_ids[1], exit));
         assert!(!result.post_dominates(entity_ids[1], entity_ids[0]));
         assert!(!result.post_dominates(entity_ids[1], entity_ids[2]));
 
         assert!(result.post_dominates(entity_ids[2], entity_ids[2]));
-        assert!(result.post_dominates(entity_ids[2], exit));
+        assert!(!result.post_dominates(entity_ids[2], exit));
         assert!(!result.post_dominates(entity_ids[2], entity_ids[0]));
         assert!(!result.post_dominates(entity_ids[2], entity_ids[1]));
     }

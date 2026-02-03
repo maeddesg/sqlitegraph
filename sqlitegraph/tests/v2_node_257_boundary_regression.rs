@@ -4,7 +4,7 @@
 //! The BFS benchmark was failing because node creation stopped at ID 256,
 //! causing edge insertion to fail when trying to read node 257.
 
-use sqlitegraph::{GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{GraphConfig, NodeSpec, SnapshotId, open_graph};
 
 #[test]
 fn test_v2_node_creation_beyond_256() {
@@ -41,7 +41,7 @@ fn test_v2_node_creation_beyond_256() {
 
     // Verify nodes around the 256 boundary exist and can be read
     for node_id in 250..=260 {
-        match graph.get_node(node_id) {
+        match graph.get_node(SnapshotId::current(), node_id) {
             Ok(node) => {
                 println!(
                     "SUCCESS: Node {} exists: {} (ID: {})",
@@ -56,7 +56,7 @@ fn test_v2_node_creation_beyond_256() {
     }
 
     // Specifically test node 257 (the problematic one from BFS benchmark)
-    match graph.get_node(257) {
+    match graph.get_node(SnapshotId::current(), 257) {
         Ok(node) => {
             println!("SUCCESS: Node 257 exists: {} (ID: {})", node.name, node.id);
             assert_eq!(node.id, 257);

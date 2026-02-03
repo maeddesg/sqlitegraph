@@ -135,6 +135,7 @@ include!("index_persist.rs");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::SqliteGraph;
     use crate::hnsw::{DistanceMetric, HnswConfigBuilder};
 
     #[test]

@@ -1,7 +1,7 @@
 # SQLiteGraph Documentation Index
 
 **Last Updated:** 2026-02-03
-**Version:** v1.3.0
+**Version:** v1.4.1
 
 This index provides navigation for all SQLiteGraph documentation.
 
@@ -103,6 +103,24 @@ This index provides navigation for all SQLiteGraph documentation.
 | **Debug Builds** | DEBUGGING.md | Debug Builds |
 | **Profiling** | DEBUGGING.md | Profiling |
 | **Logging** | DEBUGGING.md | Logging |
+
+### Development Guides (How-To)
+
+| Guide | Description |
+|-------|-------------|
+| [Adding a Graph Algorithm](DEVELOPMENT_GUIDES/adding-a-graph-algorithm.md) | Implement new graph algorithms |
+| [Adding a CLI Command](DEVELOPMENT_GUIDES/adding-a-cli-command.md) | Add CLI commands |
+| [Adding a Distance Metric](DEVELOPMENT_GUIDES/adding-a-distance-metric.md) | Add HNSW distance metrics |
+| [Pub/Sub Implementation](DEVELOPMENT_GUIDES/pubsub-implementation.md) | Understand and extend pub/sub |
+| [Query API Enhancements](DEVELOPMENT_GUIDES/query-api-enhancements.md) | Use and extend query APIs |
+
+### Component Architecture (Internals)
+
+| Guide | Description |
+|-------|-------------|
+| [HNSW Vector Store Internals](DEVELOPMENT_GUIDES/hnsw-internals.md) | HNSW algorithm, layers, search/insert |
+| [KV Store Architecture](DEVELOPMENT_GUIDES/kv-store-architecture.md) | KV design, TTL, MVCC, WAL integration |
+| [Native V2 Binary Format](DEVELOPMENT_GUIDES/native-v2-binary-format.md) | File format, clusters, WAL, recovery |
 
 ---
 
@@ -259,7 +277,9 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed version history.
 
 | Version | Date | Major Changes |
 |---------|------|---------------|
+| v1.4.1 | 2026-02-03 | Code quality - zero compiler warnings |
+| v1.4.0 | 2026-02-03 | Pub/Sub query enhancements (pattern filters, KV scan) |
 | v1.3.0 | 2026-02-03 | Graph Algorithms Library (35 algorithms) |
-| v1.13 | 2026-01-26 | Pub/Sub event system |
+| v1.2.0 | 2026-01-26 | Pub/Sub event system |
 | v1.1 | 2026-01-20 | ACID transaction correctness |
 | v1.0 | 2026-01-17 | Native V2 backend, initial release |
