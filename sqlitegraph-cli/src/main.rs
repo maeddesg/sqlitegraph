@@ -2343,7 +2343,9 @@ fn run_enumerate_paths_constrained(
     };
 
     let loops_result = if enable_loops {
-        Some(sqlitegraph::algo::natural_loops(graph)?)
+        // natural_loops requires dominators - reuse start as entry node
+        let dom_for_loops = sqlitegraph::algo::dominators_with_progress(graph, start, &progress)?;
+        Some(sqlitegraph::algo::natural_loops(graph, &dom_for_loops)?)
     } else {
         None
     };
@@ -3115,8 +3117,8 @@ fn run_impact_radius(client: &BackendClient, args: &[String]) -> Result<(), Sqli
     let progress = ConsoleProgress::new();
     let config = sqlitegraph::algo::ImpactRadiusConfig {
         max_distance,
-        max_hops: (max_distance as u32).max(100),
-        weight_fn: sqlitegraph::algo::default_weight_fn,
+        max_hops: Some((max_distance as usize).max(100)),
+        weight_fn: &sqlitegraph::algo::default_weight_fn,
     };
     let result = sqlitegraph::algo::impact_radius_with_progress(graph, start, &config, &progress)?;
 
@@ -3214,9 +3216,9 @@ fn run_subgraph_isomorphism(client: &BackendClient, args: &[String]) -> Result<(
 
     let progress = ConsoleProgress::new();
     let bounds = sqlitegraph::algo::SubgraphPatternBounds {
-        max_matches: 100,
-        timeout_ms: 30000,
-        max_pattern_nodes: 10,
+        max_matches: Some(100),
+        timeout_ms: Some(30000),
+        max_pattern_nodes: Some(10),
     };
 
     // For now, use the graph itself as both pattern and target
