@@ -1240,4 +1240,521 @@ mod tests {
         let sorted = result.sorted_vulnerabilities();
         assert_eq!(sorted, vec![(1, 3), (1, 10), (3, 5), (5, 10)]);
     }
+
+    // Test helpers for creating graphs with taint flow
+    fn create_linear_flow_graph() -> SqliteGraph {
+        // Create: source -> 2 -> 3 -> 4 -> sink
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        // Add entities
+        graph
+            .add_entity(GraphEntity {
+                id: 1,
+                kind: "variable".to_string(),
+                name: "source".to_string(),
+                file_path: None,
+                data: json!({"kind": "source"}),
+            })
+            .unwrap();
+
+        for i in 2..=4 {
+            graph
+                .add_entity(GraphEntity {
+                    id: i,
+                    kind: "variable".to_string(),
+                    name: format!("node_{}", i),
+                    file_path: None,
+                    data: json!({}),
+                })
+                .unwrap();
+        }
+
+        graph
+            .add_entity(GraphEntity {
+                id: 5,
+                kind: "operation".to_string(),
+                name: "sink".to_string(),
+                file_path: None,
+                data: json!({"kind": "sink"}),
+            })
+            .unwrap();
+
+        // Add edges: 1 -> 2 -> 3 -> 4 -> 5
+        for i in 1..5 {
+            graph.add_edge(i, i + 1, "data_flow", json!({})).unwrap();
+        }
+
+        graph
+    }
+
+    fn create_vulnerable_flow_graph() -> SqliteGraph {
+        // Source -> intermediate -> sink (vulnerability exists)
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        graph
+            .add_entity(GraphEntity {
+                id: 1,
+                kind: "variable".to_string(),
+                name: "user_input".to_string(),
+                file_path: None,
+                data: json!({"kind": "source"}),
+            })
+            .unwrap();
+
+        graph
+            .add_entity(GraphEntity {
+                id: 2,
+                kind: "variable".to_string(),
+                name: "intermediate".to_string(),
+                file_path: None,
+                data: json!({}),
+            })
+            .unwrap();
+
+        graph
+            .add_entity(GraphEntity {
+                id: 3,
+                kind: "operation".to_string(),
+                name: "sql_execute".to_string(),
+                file_path: None,
+                data: json!({"kind": "sql_query", "operation": "execute"}),
+            })
+            .unwrap();
+
+        // Add edges: 1 -> 2 -> 3
+        graph
+            .add_edge(1, 2, "data_flow", json!({}))
+            .unwrap();
+        graph
+            .add_edge(2, 3, "data_flow", json!({}))
+            .unwrap();
+
+        graph
+    }
+
+    fn create_safe_flow_graph() -> SqliteGraph {
+        // Source -> sanitize (not a sink), separate sink (no vulnerability)
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        graph
+            .add_entity(GraphEntity {
+                id: 1,
+                kind: "variable".to_string(),
+                name: "user_input".to_string(),
+                file_path: None,
+                data: json!({"kind": "source"}),
+            })
+            .unwrap();
+
+        graph
+            .add_entity(GraphEntity {
+                id: 2,
+                kind: "operation".to_string(),
+                name: "sanitize".to_string(),
+                file_path: None,
+                data: json!({"operation": "sanitize"}), // Not a sink
+            })
+            .unwrap();
+
+        graph
+            .add_entity(GraphEntity {
+                id: 3,
+                kind: "operation".to_string(),
+                name: "sql_execute".to_string(),
+                file_path: None,
+                data: json!({"kind": "sql_query"}),
+            })
+            .unwrap();
+
+        // Add edges: 1 -> 2 (sanitize), but 2 doesn't reach 3
+        graph
+            .add_edge(1, 2, "data_flow", json!({}))
+            .unwrap();
+
+        graph
+    }
+
+    fn create_multi_source_sink_graph() -> SqliteGraph {
+        // source1 -> \
+        //              -> intermediate -> sink
+        // source2 -> /
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        // Two sources
+        graph
+            .add_entity(GraphEntity {
+                id: 1,
+                kind: "variable".to_string(),
+                name: "source1".to_string(),
+                file_path: None,
+                data: json!({"kind": "source"}),
+            })
+            .unwrap();
+
+        graph
+            .add_entity(GraphEntity {
+                id: 2,
+                kind: "variable".to_string(),
+                name: "source2".to_string(),
+                file_path: None,
+                data: json!({"kind": "untrusted"}),
+            })
+            .unwrap();
+
+        // Intermediate node
+        graph
+            .add_entity(GraphEntity {
+                id: 3,
+                kind: "variable".to_string(),
+                name: "intermediate".to_string(),
+                file_path: None,
+                data: json!({}),
+            })
+            .unwrap();
+
+        // Sink
+        graph
+            .add_entity(GraphEntity {
+                id: 4,
+                kind: "operation".to_string(),
+                name: "sink".to_string(),
+                file_path: None,
+                data: json!({"kind": "sink"}),
+            })
+            .unwrap();
+
+        // Edges: both sources reach intermediate, intermediate reaches sink
+        graph
+            .add_edge(1, 3, "data_flow", json!({}))
+            .unwrap();
+        graph
+            .add_edge(2, 3, "data_flow", json!({}))
+            .unwrap();
+        graph
+            .add_edge(3, 4, "data_flow", json!({}))
+            .unwrap();
+
+        graph
+    }
+
+    // Tests for forward propagation
+
+    #[test]
+    fn test_propagate_taint_forward_vulnerable() {
+        let graph = create_vulnerable_flow_graph();
+        let sources = vec![1];
+        let sinks = vec![3];
+
+        let result = propagate_taint_forward(&graph, &sources, &sinks).unwrap();
+
+        // Source 1 reaches sink 3 - vulnerability!
+        assert!(result.has_vulnerability());
+        assert_eq!(result.sinks_reached.len(), 1);
+        assert!(result.sinks_reached.contains(&3));
+        assert_eq!(result.source_sink_paths.len(), 1);
+        assert_eq!(result.source_sink_paths[0], (1, 3));
+        assert!(result.is_tainted(1));
+        assert!(result.is_tainted(2));
+        assert!(result.is_tainted(3));
+    }
+
+    #[test]
+    fn test_propagate_taint_forward_safe() {
+        let graph = create_safe_flow_graph();
+        let sources = vec![1];
+        let sinks = vec![3];
+
+        let result = propagate_taint_forward(&graph, &sources, &sinks).unwrap();
+
+        // Source 1 does NOT reach sink 3 - no vulnerability
+        assert!(!result.has_vulnerability());
+        assert_eq!(result.sinks_reached.len(), 0);
+        assert_eq!(result.source_sink_paths.len(), 0);
+        assert!(result.is_tainted(1));
+        assert!(result.is_tainted(2));
+        assert!(!result.is_tainted(3)); // Sink not tainted
+    }
+
+    #[test]
+    fn test_propagate_taint_forward_multi_source() {
+        let graph = create_multi_source_sink_graph();
+        let sources = vec![1, 2];
+        let sinks = vec![4];
+
+        let result = propagate_taint_forward(&graph, &sources, &sinks).unwrap();
+
+        // Both sources reach sink
+        assert!(result.has_vulnerability());
+        assert_eq!(result.sinks_reached.len(), 1);
+        assert!(result.sinks_reached.contains(&4));
+        assert_eq!(result.source_sink_paths.len(), 2);
+        // Paths should be sorted
+        assert_eq!(result.source_sink_paths, vec![(1, 4), (2, 4)]);
+    }
+
+    #[test]
+    fn test_propagate_taint_forward_multi_sink() {
+        let graph = create_linear_flow_graph();
+        let sources = vec![1];
+        let sinks = vec![3, 5]; // Two potential sinks
+
+        let result = propagate_taint_forward(&graph, &sources, &sinks).unwrap();
+
+        // Source reaches both sinks
+        assert!(result.has_vulnerability());
+        assert_eq!(result.sinks_reached.len(), 2);
+        assert_eq!(result.source_sink_paths.len(), 2);
+        assert_eq!(result.source_sink_paths, vec![(1, 3), (1, 5)]);
+    }
+
+    #[test]
+    fn test_propagate_taint_forward_empty_sources() {
+        let graph = create_vulnerable_flow_graph();
+        let sources = vec![];
+        let sinks = vec![3];
+
+        let result = propagate_taint_forward(&graph, &sources, &sinks).unwrap();
+
+        assert!(!result.has_vulnerability());
+        assert_eq!(result.tainted_nodes.len(), 0);
+        assert_eq!(result.size, 0);
+    }
+
+    #[test]
+    fn test_propagate_taint_forward_empty_sinks() {
+        let graph = create_vulnerable_flow_graph();
+        let sources = vec![1];
+        let sinks = vec![];
+
+        let result = propagate_taint_forward(&graph, &sources, &sinks).unwrap();
+
+        // No sinks to check, so no vulnerabilities reported
+        assert!(!result.has_vulnerability());
+        assert!(result.is_tainted(1)); // But taint still propagates
+        assert!(result.is_tainted(2));
+        assert!(result.is_tainted(3));
+    }
+
+    // Tests for backward propagation
+
+    #[test]
+    fn test_propagate_taint_backward_vulnerable() {
+        let graph = create_vulnerable_flow_graph();
+        let sources = vec![1];
+        let sink = 3;
+
+        let result = propagate_taint_backward(&graph, sink, &sources).unwrap();
+
+        // Sink 3 is reachable from source 1
+        assert_eq!(result.sources.len(), 1);
+        assert!(result.sources.contains(&1));
+        assert!(result.sinks_reached.contains(&3));
+        assert_eq!(result.source_sink_paths.len(), 1);
+        assert_eq!(result.source_sink_paths[0], (1, 3));
+        assert!(result.is_tainted(1));
+        assert!(result.is_tainted(2));
+        assert!(result.is_tainted(3));
+    }
+
+    #[test]
+    fn test_propagate_taint_backward_safe() {
+        let graph = create_safe_flow_graph();
+        let sources = vec![1];
+        let sink = 3;
+
+        let result = propagate_taint_backward(&graph, sink, &sources).unwrap();
+
+        // Sink 3 is NOT reachable from source 1
+        assert_eq!(result.sources.len(), 0);
+        assert!(!result.has_vulnerability());
+    }
+
+    #[test]
+    fn test_propagate_taint_backward_multi_source() {
+        let graph = create_multi_source_sink_graph();
+        let sources = vec![1, 2];
+        let sink = 4;
+
+        let result = propagate_taint_backward(&graph, sink, &sources).unwrap();
+
+        // Both sources can reach the sink
+        assert_eq!(result.sources.len(), 2);
+        assert!(result.sources.contains(&1));
+        assert!(result.sources.contains(&2));
+        assert_eq!(result.source_sink_paths.len(), 2);
+    }
+
+    #[test]
+    fn test_propagate_taint_backward_self() {
+        let graph = create_vulnerable_flow_graph();
+        let sources = vec![1];
+        let sink = 1; // Source is also the sink
+
+        let result = propagate_taint_backward(&graph, sink, &sources).unwrap();
+
+        // Node can reach itself
+        assert_eq!(result.sources.len(), 1);
+        assert!(result.sources.contains(&1));
+    }
+
+    // Tests for sink reachability analysis
+
+    #[test]
+    fn test_sink_reachability_vulnerability_found() {
+        let graph = create_vulnerable_flow_graph();
+        let sources = vec![1];
+        let sinks = vec![3];
+
+        let vulnerabilities = sink_reachability_analysis(&graph, &sources, &sinks).unwrap();
+
+        assert_eq!(vulnerabilities.len(), 1);
+        assert!(vulnerabilities.contains_key(&3));
+        let affecting_sources = vulnerabilities.get(&3).unwrap();
+        assert_eq!(affecting_sources.len(), 1);
+        assert!(affecting_sources.contains(&1));
+    }
+
+    #[test]
+    fn test_sink_reachability_no_vulnerability() {
+        let graph = create_safe_flow_graph();
+        let sources = vec![1];
+        let sinks = vec![3];
+
+        let vulnerabilities = sink_reachability_analysis(&graph, &sources, &sinks).unwrap();
+
+        assert_eq!(vulnerabilities.len(), 0);
+    }
+
+    #[test]
+    fn test_sink_reachability_multi_vulnerabilities() {
+        let graph = create_multi_source_sink_graph();
+        let sources = vec![1, 2];
+        let sinks = vec![4];
+
+        let vulnerabilities = sink_reachability_analysis(&graph, &sources, &sinks).unwrap();
+
+        assert_eq!(vulnerabilities.len(), 1);
+        let affecting_sources = vulnerabilities.get(&4).unwrap();
+        assert_eq!(affecting_sources.len(), 2);
+        assert!(affecting_sources.contains(&1));
+        assert!(affecting_sources.contains(&2));
+    }
+
+    // Tests for source/sink discovery
+
+    #[test]
+    fn test_discover_sources_and_sinks_metadata() {
+        let graph = create_vulnerable_flow_graph();
+
+        let (sources, sinks) = discover_sources_and_sinks_default(&graph).unwrap();
+
+        assert_eq!(sources, vec![1]); // user_input
+        assert_eq!(sinks, vec![3]); // sql_execute
+    }
+
+    #[test]
+    fn test_discover_sources_and_sinks_custom() {
+        // Custom detectors: even nodes are sources, odd nodes are sinks
+        struct EvenSourceDetector;
+        struct OddSinkDetector;
+
+        impl SourceCallback for EvenSourceDetector {
+            fn is_source(&self, node: i64, _entity: &GraphEntity) -> bool {
+                node % 2 == 0
+            }
+        }
+
+        impl SinkCallback for OddSinkDetector {
+            fn is_sink(&self, node: i64, _entity: &GraphEntity) -> bool {
+                node % 2 == 1
+            }
+        }
+
+        let graph = create_linear_flow_graph();
+
+        let (sources, sinks) =
+            discover_sources_and_sinks(&graph, &EvenSourceDetector, &OddSinkDetector).unwrap();
+
+        // Nodes 2, 4 are even (sources)
+        assert_eq!(sources.len(), 2);
+        assert!(sources.contains(&2));
+        assert!(sources.contains(&4));
+
+        // Nodes 1, 3, 5 are odd (sinks)
+        assert_eq!(sinks.len(), 3);
+        assert!(sinks.contains(&1));
+        assert!(sinks.contains(&3));
+        assert!(sinks.contains(&5));
+    }
+
+    #[test]
+    fn test_discover_empty_graph() {
+        let graph = SqliteGraph::open_in_memory().unwrap();
+
+        let (sources, sinks) = discover_sources_and_sinks_default(&graph).unwrap();
+
+        assert_eq!(sources.len(), 0);
+        assert_eq!(sinks.len(), 0);
+    }
+
+    // Tests for progress variants (validate they match base functions)
+
+    #[test]
+    fn test_propagate_taint_forward_with_progress_matches() {
+        use crate::progress::NoProgress;
+
+        let graph = create_vulnerable_flow_graph();
+        let sources = vec![1];
+        let sinks = vec![3];
+
+        let base_result = propagate_taint_forward(&graph, &sources, &sinks).unwrap();
+        let progress_result =
+            propagate_taint_forward_with_progress(&graph, &sources, &sinks, &NoProgress)
+                .unwrap();
+
+        assert_eq!(base_result.sources, progress_result.sources);
+        assert_eq!(base_result.sinks_reached, progress_result.sinks_reached);
+        assert_eq!(base_result.tainted_nodes, progress_result.tainted_nodes);
+        assert_eq!(base_result.source_sink_paths, progress_result.source_sink_paths);
+        assert_eq!(base_result.size, progress_result.size);
+    }
+
+    #[test]
+    fn test_propagate_taint_backward_with_progress_matches() {
+        use crate::progress::NoProgress;
+
+        let graph = create_vulnerable_flow_graph();
+        let sources = vec![1];
+        let sink = 3;
+
+        let base_result = propagate_taint_backward(&graph, sink, &sources).unwrap();
+        let progress_result =
+            propagate_taint_backward_with_progress(&graph, sink, &sources, &NoProgress).unwrap();
+
+        assert_eq!(base_result.sources, progress_result.sources);
+        assert_eq!(base_result.sinks_reached, progress_result.sinks_reached);
+        assert_eq!(base_result.tainted_nodes, progress_result.tainted_nodes);
+        assert_eq!(base_result.source_sink_paths, progress_result.source_sink_paths);
+        assert_eq!(base_result.size, progress_result.size);
+    }
+
+    #[test]
+    fn test_sink_reachability_with_progress_matches() {
+        use crate::progress::NoProgress;
+
+        let graph = create_multi_source_sink_graph();
+        let sources = vec![1, 2];
+        let sinks = vec![4];
+
+        let base_result = sink_reachability_analysis(&graph, &sources, &sinks).unwrap();
+        let progress_result =
+            sink_reachability_analysis_with_progress(&graph, &sources, &sinks, &NoProgress)
+                .unwrap();
+
+        assert_eq!(base_result.len(), progress_result.len());
+        for (sink, sources) in base_result {
+            assert!(progress_result.contains_key(&sink));
+            assert_eq!(sources, progress_result.get(&sink).unwrap());
+        }
+    }
 }
