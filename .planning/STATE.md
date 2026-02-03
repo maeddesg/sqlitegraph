@@ -10,19 +10,19 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 ## Current Position
 
 Milestone: v1.4.0 Pub/Sub Enhancements (SHIPPED 2026-02-03)
-Phase: 59 - Test Suite Recovery (IN EXECUTION - Wave 2)
-Plan: 59-02 - Fix GraphEntityCreate Import Errors (COMPLETE)
-Status: Test suite has 660+ pre-existing compilation errors. Fixed 14 V2WALConfig errors, 39+ GraphEntityCreate errors in algorithm tests. Remaining errors include KvStore/KvValue types, API signature changes, TraversalContext fields.
-Last activity: 2026-02-03 — Phase 59-02 complete. Migrated algorithm tests from GraphEntityCreate to GraphEntity/GraphEdge APIs.
+Phase: 59 - Test Suite Recovery (IN EXECUTION - Wave 3)
+Plan: 59-04 - Fix KvStore/KvValue Import Errors (COMPLETE)
+Status: Test suite has 660+ pre-existing compilation errors. Fixed 14 V2WALConfig errors, 39+ GraphEntityCreate errors, KvStore/KvValue import errors. Remaining errors include API signature changes, TraversalContext fields.
+Last activity: 2026-02-03 — Phase 59-04 complete. Fixed KvStore/KvValue import errors in KV store test modules.
 
-Progress: [██░░░░░░░░░░░░░] 3% — Test suite recovery started (2/?? plans complete)
+Progress: [███░░░░░░░░░░░░░] 5% — Test suite recovery started (4/?? plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 260 (phases 1-57, plus 58-01 through 58-05, plus 59-01, 59-02)
+- Total plans completed: 262 (phases 1-57, plus 58-01 through 58-05, plus 59-01, 59-02, 59-03, 59-04)
 - Average duration: ~20 min/plan
-- Total execution time: ~86.5 hours across v1.0-v1.4.0 + Phase 59
+- Total execution time: ~86.6 hours across v1.0-v1.4.0 + Phase 59
 
 **By Phase:**
 
@@ -37,7 +37,7 @@ Progress: [██░░░░░░░░░░░░░] 3% — Test suite reco
 | v1.13 | 37-44 | 24 | Pub/Sub |
 | v1.3.0 | 45-57 | 36 | Graph Algorithms (5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
 | v1.4.0 | 58 | 5 | Pub/Sub Enhancements (COMPLETE - 5 plans: KV scan, query by kind, query by name, pattern filters, docs) |
-| v1.5.0 | 59 | 2+ | Test Suite Recovery (2 plans complete: V2WALConfig fix, GraphEntityCreate imports) |
+| v1.5.0 | 59 | 4+ | Test Suite Recovery (4 plans complete: V2WALConfig fix, GraphEntityCreate imports, natural_loops_from_exit, KvStore/KvValue imports) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -156,8 +156,8 @@ None yet.
 - Test suite has 660+ pre-existing compilation errors
 - V2WALConfig errors: FIXED (14 errors resolved in Phase 59-01)
 - GraphEntityCreate import errors: FIXED (39+ errors resolved in Phase 59-02)
+- KvStore/KvValue import errors: FIXED (Phase 59-04)
 - Remaining errors:
-  - KvStore/KvValue type errors in Phase 58 tests
   - API signature changes (get_node requires SnapshotId parameter)
   - TraversalContext missing fields in prefetch_tuning_tests
 - Library compiles successfully (`cargo check --lib` passes)
@@ -167,8 +167,14 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 59-02 complete. Fixed GraphEntityCreate import errors in algorithm tests.
+Stopped at: Phase 59-04 complete. Fixed KvStore/KvValue import errors in KV store test modules.
 Resume file: None
+
+**Phase 59-04 new decisions:**
+- **Module re-exports for test imports:** KV store module re-exports public API at mod.rs level (`pub use store::KvStore; pub use types::{...}`), enabling clean `use super::*` imports in test modules.
+- **Super import pattern for test modules:** Use `use super::*` to import sibling module types instead of absolute crate paths (cleaner, more maintainable).
+- **Backend type imports:** NativeGraphBackend imported from `crate::backend::native`, SnapshotId from `crate::snapshot` for consistency with rest of codebase.
+- **Phase 58 test preservation:** snapshot_tests.rs contains Phase 58 KV enhancement tests (kv_prefix_scan, query_by_kind, query_by_name_pattern) - these tests must be preserved, not deleted.
 
 **Phase 59-02 new decisions:**
 - **GraphEntity location and usage:** GraphEntityCreate struct exists in graph_opt.rs but tests should use GraphEntity from types.rs. The correct import path is `crate::{GraphEntity, GraphEdge}` (re-exported at crate level).
