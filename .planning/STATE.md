@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 
 Milestone: v1.4.0 Pub/Sub Enhancements (SHIPPED 2026-02-03)
 Phase: 59 - Test Suite Recovery (IN EXECUTION - Wave 2)
-Plan: 59-03 - Fix natural_loops_from_exit Import Errors (COMPLETE)
-Status: Test suite has 660+ pre-existing compilation errors. Fixed 14 V2WALConfig errors, 8+ natural_loops_from_exit errors. Remaining errors include GraphEntityCreate imports, KvStore/KvValue types, API signature changes.
-Last activity: 2026-02-03 — Phase 59-03 complete. Added natural_loops_from_exit convenience function.
+Plan: 59-02 - Fix GraphEntityCreate Import Errors (COMPLETE)
+Status: Test suite has 660+ pre-existing compilation errors. Fixed 14 V2WALConfig errors, 39+ GraphEntityCreate errors in algorithm tests. Remaining errors include KvStore/KvValue types, API signature changes, TraversalContext fields.
+Last activity: 2026-02-03 — Phase 59-02 complete. Migrated algorithm tests from GraphEntityCreate to GraphEntity/GraphEdge APIs.
 
-Progress: [██░░░░░░░░░░░░░] 4% — Test suite recovery started (3/?? plans complete)
+Progress: [██░░░░░░░░░░░░░] 3% — Test suite recovery started (2/?? plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 261 (phases 1-57, plus 58-01 through 58-05, plus 59-01, 59-02, 59-03)
+- Total plans completed: 260 (phases 1-57, plus 58-01 through 58-05, plus 59-01, 59-02)
 - Average duration: ~20 min/plan
-- Total execution time: ~86.6 hours across v1.0-v1.4.0 + Phase 59
+- Total execution time: ~86.5 hours across v1.0-v1.4.0 + Phase 59
 
 **By Phase:**
 
@@ -37,7 +37,7 @@ Progress: [██░░░░░░░░░░░░░] 4% — Test suite reco
 | v1.13 | 37-44 | 24 | Pub/Sub |
 | v1.3.0 | 45-57 | 36 | Graph Algorithms (5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
 | v1.4.0 | 58 | 5 | Pub/Sub Enhancements (COMPLETE - 5 plans: KV scan, query by kind, query by name, pattern filters, docs) |
-| v1.5.0 | 59 | 1+ | Test Suite Recovery (3 plans complete: V2WALConfig fix, GraphEntityCreate imports, natural_loops_from_exit function) |
+| v1.5.0 | 59 | 2+ | Test Suite Recovery (2 plans complete: V2WALConfig fix, GraphEntityCreate imports) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -56,7 +56,7 @@ Progress: [██░░░░░░░░░░░░░] 4% — Test suite reco
 - v1.3.0 phase 57: ~12 min/plan (7 plans complete - all CLI commands for 35 graph algorithms)
 - v1.3.0 COMPLETE: 36 plans total, ~13 min/plan average
 - v1.4.0 phase 58: ~7 min/plan (5 plans complete - KV scan, query by kind, query by name, pattern filters, docs)
-- v1.5.0 phase 59: ~14 min/plan (1 plan complete - V2WALConfig missing fields fix)
+- v1.5.0 phase 59: ~14 min/plan (2 plans complete - V2WALConfig fix, GraphEntityCreate imports)
 - Trend: Stable
 *Updated after each plan completion*
 
@@ -155,8 +155,7 @@ None yet.
 **Pre-existing test compilation errors:**
 - Test suite has 660+ pre-existing compilation errors
 - V2WALConfig errors: FIXED (14 errors resolved in Phase 59-01)
-- GraphEntityCreate import errors: FIXED (Phase 59-02)
-- natural_loops_from_exit import errors: FIXED (8+ errors resolved in Phase 59-03)
+- GraphEntityCreate import errors: FIXED (39+ errors resolved in Phase 59-02)
 - Remaining errors:
   - KvStore/KvValue type errors in Phase 58 tests
   - API signature changes (get_node requires SnapshotId parameter)
@@ -168,13 +167,14 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 59-03 complete. Added natural_loops_from_exit convenience function for CFG analysis.
+Stopped at: Phase 59-02 complete. Fixed GraphEntityCreate import errors in algorithm tests.
 Resume file: None
 
-**Phase 59-03 new decisions:**
-- **natural_loops_from_exit naming convention:** Despite _from_exit suffix, function detects entry nodes (not exit) because natural loops use dominators (need entry point) not post-dominators (need exit points). Naming follows control_dependence_from_exit pattern for API consistency.
-- **Entry node auto-detection:** Finds node with no incoming edges, returns error if 0 or >1 entry nodes found (ensures well-formed CFG for dominator computation).
-- **Convenience function pattern:** Auto-detection + core algorithm call encapsulation for simplified API usage (matches post_dominators_auto_exit and control_dependence_from_exit patterns).
+**Phase 59-02 new decisions:**
+- **GraphEntity location and usage:** GraphEntityCreate struct exists in graph_opt.rs but tests should use GraphEntity from types.rs. The correct import path is `crate::{GraphEntity, GraphEdge}` (re-exported at crate level).
+- **API method migration:** Test code migrated from `insert_node(GraphEntityCreate)` to `insert_entity(&GraphEntity)` - note reference required.
+- **Struct field mapping:** Old `labels` field maps to `kind`, `properties` maps to `data`. Added missing fields: `id`, `name`, `file_path`.
+- **Edge creation pattern:** 4-argument API `insert_edge(from, "type", to, vec![])` migrated to `insert_edge(&GraphEdge { id, from_id, to_id, edge_type, data })`.
 
 **Phase 58 new decisions:**
 - **Pattern syntax for queries:** Glob patterns with `*` (any sequence) and `?` (single character), escape with `\*` and `\?` for literal matches
