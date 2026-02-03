@@ -5,12 +5,13 @@
 //! cluster-aware reading, recovery operations, and V2 graph data validation.
 
 use sqlitegraph::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
+use sqlitegraph::backend::native::v2::storage::JsonLimits;
 use sqlitegraph::backend::native::v2::wal::reader::WALReadFilter;
 use sqlitegraph::backend::native::v2::wal::{
     V2WALConfig, V2WALReader, V2WALRecord, V2WALRecordType, V2WALWriter,
 };
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
-use std::path::Path;
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 /// Test WAL reader creation and basic read operations for V2 graph file
@@ -21,6 +22,7 @@ fn test_v2_wal_reader_creation_and_basic_reads() -> NativeResult<()> {
 
     // First, create a WAL file with V2 graph data
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: wal_path.clone(),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 16 * 1024 * 1024,
@@ -30,6 +32,10 @@ fn test_v2_wal_reader_creation_and_basic_reads() -> NativeResult<()> {
         max_group_commit_size: 8,
         enable_compression: false,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -106,6 +112,7 @@ fn test_v2_wal_reader_creation_and_basic_reads() -> NativeResult<()> {
 fn test_cluster_aware_filtering_v2_operations() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("cluster_filter_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 32 * 1024 * 1024,
@@ -115,6 +122,10 @@ fn test_cluster_aware_filtering_v2_operations() -> NativeResult<()> {
         enable_compression: false,
         max_group_commit_size: 4,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -236,6 +247,7 @@ fn test_cluster_aware_filtering_v2_operations() -> NativeResult<()> {
 fn test_record_type_filtering_v2_operations() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("type_filter_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 16 * 1024 * 1024,
@@ -245,6 +257,10 @@ fn test_record_type_filtering_v2_operations() -> NativeResult<()> {
         enable_compression: false,
         max_group_commit_size: 4,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -346,6 +362,7 @@ fn test_record_type_filtering_v2_operations() -> NativeResult<()> {
 fn test_lsn_based_reading_v2_operations() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("lsn_reading_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 16 * 1024 * 1024,
@@ -355,6 +372,10 @@ fn test_lsn_based_reading_v2_operations() -> NativeResult<()> {
         enable_compression: false,
         max_group_commit_size: 4,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -449,6 +470,7 @@ fn test_lsn_based_reading_v2_operations() -> NativeResult<()> {
 fn test_wal_statistics_v2_operations() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("stats_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 16 * 1024 * 1024,
@@ -458,6 +480,10 @@ fn test_wal_statistics_v2_operations() -> NativeResult<()> {
         enable_compression: false,
         max_group_commit_size: 4,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -583,6 +609,7 @@ fn test_wal_statistics_v2_operations() -> NativeResult<()> {
 fn test_wal_iterator_v2_operations() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("iterator_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 16 * 1024 * 1024,
@@ -592,6 +619,10 @@ fn test_wal_iterator_v2_operations() -> NativeResult<()> {
         enable_compression: false,
         max_group_commit_size: 4,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -683,6 +714,7 @@ fn test_wal_reader_error_handling() -> NativeResult<()> {
 
     // Create a valid WAL first
     let valid_config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("valid.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 8 * 1024 * 1024,
@@ -692,6 +724,10 @@ fn test_wal_reader_error_handling() -> NativeResult<()> {
         enable_compression: false,
         max_group_commit_size: 4,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(valid_config)?;

@@ -5,11 +5,12 @@
 //! logging, sequential write patterns, and V2 graph data integrity.
 
 use sqlitegraph::backend::native::v2::edge_cluster::{CompactEdgeRecord, Direction};
+use sqlitegraph::backend::native::v2::storage::JsonLimits;
 use sqlitegraph::backend::native::v2::wal::{
     V2WALConfig, V2WALRecord, V2WALRecordType, V2WALWriter,
 };
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
-use std::path::Path;
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 /// Test WAL writer creation and basic write operations for V2 graph file
@@ -19,6 +20,7 @@ fn test_v2_wal_writer_creation_and_basic_writes() -> NativeResult<()> {
     let wal_path = temp_dir.path().join("v2_graph_wal.wal");
 
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: wal_path.clone(),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 32 * 1024 * 1024, // 32MB
@@ -28,6 +30,10 @@ fn test_v2_wal_writer_creation_and_basic_writes() -> NativeResult<()> {
         max_group_commit_size: 8, // 8 records in group commit batch
         enable_compression: false,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -84,6 +90,7 @@ fn test_v2_wal_writer_creation_and_basic_writes() -> NativeResult<()> {
 fn test_cluster_affinity_grouping_v2_operations() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("cluster_affinity_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 16 * 1024 * 1024,
@@ -93,6 +100,10 @@ fn test_cluster_affinity_grouping_v2_operations() -> NativeResult<()> {
         max_group_commit_size: 4,
         enable_compression: false,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -183,6 +194,7 @@ fn test_cluster_affinity_grouping_v2_operations() -> NativeResult<()> {
 fn test_v2_graph_batch_write_operations() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("v2_batch_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 64 * 1024 * 1024,
@@ -192,6 +204,10 @@ fn test_v2_graph_batch_write_operations() -> NativeResult<()> {
         max_group_commit_size: 50, // Batch up to 50 records
         enable_compression: true,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -295,6 +311,7 @@ fn test_v2_graph_batch_write_operations() -> NativeResult<()> {
 fn test_v2_free_space_and_string_table_operations() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("v2_metadata_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 32 * 1024 * 1024,
@@ -304,6 +321,10 @@ fn test_v2_free_space_and_string_table_operations() -> NativeResult<()> {
         max_group_commit_size: 8,
         enable_compression: false,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -369,6 +390,7 @@ fn test_v2_free_space_and_string_table_operations() -> NativeResult<()> {
 fn test_v2_wal_write_performance() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("perf_v2_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 256 * 1024 * 1024, // 256MB
@@ -378,6 +400,10 @@ fn test_v2_wal_write_performance() -> NativeResult<()> {
         max_group_commit_size: 100,    // Large batch size
         enable_compression: true,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -448,6 +474,7 @@ fn test_v2_wal_write_performance() -> NativeResult<()> {
 fn test_v2_wal_write_buffer_management() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("buffer_test_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 32 * 1024 * 1024,
@@ -457,6 +484,10 @@ fn test_v2_wal_write_buffer_management() -> NativeResult<()> {
         max_group_commit_size: 4,
         enable_compression: false,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;
@@ -506,6 +537,7 @@ fn test_v2_wal_write_buffer_management() -> NativeResult<()> {
 fn test_v2_wal_write_error_handling() -> NativeResult<()> {
     let temp_dir = tempdir()?;
     let config = V2WALConfig {
+        graph_path: PathBuf::from("v2_graph.db"),
         wal_path: temp_dir.path().join("error_test_wal.wal"),
         checkpoint_path: temp_dir.path().join("checkpoint.tracker"),
         max_wal_size: 1024 * 1024, // Very small WAL to test size limits
@@ -515,6 +547,10 @@ fn test_v2_wal_write_error_handling() -> NativeResult<()> {
         max_group_commit_size: 2,
         enable_compression: false,
         compression_level: 3,
+        auto_checkpoint: false,
+        background_checkpoint_thread: false,
+        background_checkpoint_interval_secs: 60,
+        json_limits: JsonLimits::default(),
     };
 
     let writer = V2WALWriter::create(config)?;

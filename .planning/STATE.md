@@ -9,20 +9,20 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 
 ## Current Position
 
-Milestone: v1.3.0 Graph Algorithms Library (SHIPPED 2026-02-03)
-Phase: None — Ready for next milestone
-Plan: None — Ready for next milestone
-Status: v1.3.0 COMPLETE - 35 graph algorithms delivered across 13 phases. Comprehensive library for CFG analysis, program slicing, security analysis, and general graph reasoning.
-Last activity: 2026-02-03 — v1.3.0 milestone archived
+Milestone: v1.4.0 Pub/Sub Enhancements (SHIPPED 2026-02-03)
+Phase: 58 - Pub/Sub Enhancements (COMPLETE)
+Plan: 58-05 - Integration and Documentation (COMPLETE)
+Status: v1.4.0 COMPLETE - Query API enhancements for pub/sub use cases. KV prefix scanning, query by kind, query by name pattern, pattern subscription filters, and CLI commands.
+Last activity: 2026-02-03 — Phase 58 complete, v1.4.0 released
 
-Progress: [████████████] 100% — v1.3.0 complete (254/254 plans complete across all milestones)
+Progress: [████████████] 100% — v1.4.0 complete (258/258 plans complete across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 213 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02, plus 54-01 through 54-03, plus 55-01 through 55-02, plus 56-01, plus 57-01, plus 57-03)
+- Total plans completed: 258 (phases 1-57, plus 58-01 through 58-05)
 - Average duration: ~20 min/plan
-- Total execution time: ~80 hours across v1.0-v1.3.0
+- Total execution time: ~86 hours across v1.0-v1.4.0
 
 **By Phase:**
 
@@ -35,7 +35,8 @@ Progress: [████████████] 100% — v1.3.0 complete (254/2
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.3.0 | 45-57 | 36 | Graph Algorithms (COMPLETE - 5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
+| v1.3.0 | 45-57 | 36 | Graph Algorithms (5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
+| v1.4.0 | 58 | 5 | Pub/Sub Enhancements (COMPLETE - 5 plans: KV scan, query by kind, query by name, pattern filters, docs) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -53,6 +54,7 @@ Progress: [████████████] 100% — v1.3.0 complete (254/2
 - v1.3.0 phase 56: ~15 min/plan (1 plan complete - taint propagation)
 - v1.3.0 phase 57: ~12 min/plan (7 plans complete - all CLI commands for 35 graph algorithms)
 - v1.3.0 COMPLETE: 36 plans total, ~13 min/plan average
+- v1.4.0 phase 58: ~7 min/plan (5 plans complete - KV scan, query by kind, query by name, pattern filters, docs)
 - Trend: Stable
 *Updated after each plan completion*
 
@@ -157,8 +159,16 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 57-06 complete. Observability, Partitioning, and ML algorithms CLI commands delivered: happens-before (--events-file), impact-radius (--start/--max-distance), partition (--k/--max-size), subgraph-isomorphism (--pattern-file), graph-rewrite (--rules-file stub). All use ConsoleProgress and JSON output.
+Stopped at: Phase 58-05 complete. v1.4.0 Pub/Sub Enhancements released with KV prefix scanning, query by kind, query by name pattern, pattern subscription filters, CLI commands, and comprehensive documentation.
 Resume file: None
+
+**Phase 58 new decisions:**
+- **Pattern syntax for queries:** Glob patterns with `*` (any sequence) and `?` (single character), escape with `\*` and `\?` for literal matches
+- **KV prefix scanning:** HashMap iteration for Native V2, LIKE query for SQLite; returns lexicographically sorted results
+- **Query by kind performance:** O(N) full scan required for both backends; no native index support (future optimization)
+- **Pattern matching cost:** O(P) per event where P = number of patterns; cheap enough for pub/sub filtering
+- **SnapshotId API naming:** Fixed CLI bug - `latest()` doesn't exist, use `current()` for latest snapshot
+- **KvValue variants:** Bytes, String, Integer, Float, Boolean, Json (no Null, List, Binary variants)
 
 **Phase 57-07 new decisions:**
 - **Subtree comparison for structural similarity:** CLI constraint (single graph) forced adaptation from full isomorphism to Jaccard similarity on reachable nodes
