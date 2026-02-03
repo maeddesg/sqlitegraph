@@ -5,6 +5,10 @@
 
 #![cfg(feature = "native-v2")]
 
+use super::{KvStore, KvEntry, KvMetadata, KvStoreError, KvValue};
+use crate::backend::native::NativeGraphBackend;
+use crate::snapshot::SnapshotId;
+
 #[cfg(test)]
 mod basic_visibility_tests {
     use super::*;
