@@ -284,7 +284,7 @@ match graph.insert_entity(&entity) {
 
 ```toml
 # Enable V2 I/O tracing
-sqlitegraph = { version = "1.0", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.3", features = ["trace_v2_io"] }
 ```
 
 ```bash

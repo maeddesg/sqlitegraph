@@ -1,7 +1,7 @@
 # Contributing to SQLiteGraph
 
 **Last Updated:** 2026-01-26
-**Version:** v1.2.0
+**Version:** v1.3.0
 
 This document provides guidelines for contributing to SQLiteGraph.
 

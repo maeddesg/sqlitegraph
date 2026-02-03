@@ -1,7 +1,7 @@
 # SQLiteGraph Documentation Index
 
-**Last Updated:** 2026-01-26
-**Version:** v1.2.0
+**Last Updated:** 2026-02-03
+**Version:** v1.3.0
 
 This index provides navigation for all SQLiteGraph documentation.
 
@@ -259,6 +259,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed version history.
 
 | Version | Date | Major Changes |
 |---------|------|---------------|
-| v1.2.0 | 2026-01-26 | Pub/Sub event system |
-| v1.1.0 | 2025-XX-XX | ACID transaction correctness |
-| v1.0.0 | 2025-XX-XX | Native V2 backend, initial release |
+| v1.3.0 | 2026-02-03 | Graph Algorithms Library (35 algorithms) |
+| v1.13 | 2026-01-26 | Pub/Sub event system |
+| v1.1 | 2026-01-20 | ACID transaction correctness |
+| v1.0 | 2026-01-17 | Native V2 backend, initial release |
