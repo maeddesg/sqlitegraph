@@ -140,6 +140,7 @@ See milestone archives for complete history.
   - [x] 52-01-PLAN.md — Minimum s-t Edge Cut and Vertex Cut (Edmonds-Karp max-flow) (Wave 1)
   - [x] 52-02-PLAN.md — Graph Partitioning (BFS-level, greedy, k-way) (Wave 2)
 **Status**: Complete (2026-02-02)
+
 #### Phase 53: Observability & Runtime
 **Goal**: Runtime event ordering and impact analysis
 **Depends on**: Phase 46
@@ -161,9 +162,10 @@ See milestone archives for complete history.
   2. User can rewrite patterns with graph rewriting support for compiler and ML framework optimization
   3. User can compute structural similarity using practical isomorphism check for regression detection and refactor verification
 **Plans**: 3 plans in 2 waves
-  - [ ] 54-01-PLAN.md — Bounded Subgraph Isomorphism (VF2 for pattern matching) (Wave 1)
-  - [ ] 54-02-PLAN.md — Graph Rewriting (DPO-style transformations) (Wave 2, depends on 54-01)
-  - [ ] 54-03-PLAN.md — Structural Similarity (Isomorphism + MCS) (Wave 2, depends on 54-01)
+  - [x] 54-01-PLAN.md — Bounded Subgraph Isomorphism (VF2 for pattern matching) (Wave 1)
+  - [x] 54-02-PLAN.md — Graph Rewriting (DPO-style transformations) (Wave 2, depends on 54-01)
+  - [x] 54-03-PLAN.md — Structural Similarity (Isomorphism + MCS) (Wave 2, depends on 54-01)
+**Status**: Complete (2026-02-03)
 
 #### Phase 55: Graph Diff
 **Goal**: Structural and semantic graph comparison
@@ -172,7 +174,9 @@ See milestone archives for complete history.
 **Success Criteria** (what must be TRUE):
   1. User can compute structural graph delta comparing two snapshots, receiving nodes/edges added/removed and structural similarity score
   2. User can validate refactors with graph diff to answer "did I break anything structural?" and verify optimizer equivalence
-**Plans**: TBD
+**Plans**: 2 plans in 1 wave
+  - [ ] 55-01-PLAN.md — Graph Diff Module (Wave 1)
+  - [ ] 55-02-PLAN.md — Refactor Validation + Tests (Wave 1)
 
 #### Phase 56: Security & Compliance
 **Goal**: Taint propagation for security analysis
@@ -210,9 +214,9 @@ Phases execute in numeric order: 45 → 46 → 47 → ... → 57
 | 51. Program Analysis & Tooling | v1.14 | 2/2 | Complete | 2026-02-02 |
 | 52. Databases & Distributed Systems | v1.14 | 2/2 | Complete | 2026-02-02 |
 | 53. Observability & Runtime | v1.14 | 2/2 | Complete | 2026-02-02 |
-| 54. ML / Inference / Compute Graphs | v1.14 | 0/3 | Not started | - |
+| 54. ML / Inference / Compute Graphs | v1.14 | 3/3 | Complete | 2026-02-03 |
 | 55. Graph Diff | v1.14 | 0/TBD | Not started | - |
 | 56. Security & Compliance | v1.14 | 0/TBD | Not started | - |
 | 57. CLI Commands | v1.14 | 0/TBD | Not started | - |
 
-**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). Phase 48 complete (2/2 plans). Phase 49 complete (2/2 plans). Phase 50 complete (2/2 plans). Phase 51 complete (2/2 plans). Phase 52 complete (2/2 plans). Phase 53 complete (2/2 plans). v1.14: 23/197 plans complete (11.7%).
+**Overall Progress:** 182/182 plans complete for v0.2-v1.13. Phase 45 complete (5/5 plans). Phase 46 complete (1/1 plan). Phase 47 complete (3/3 plans). Phase 48 complete (2/2 plans). Phase 49 complete (2/2 plans). Phase 50 complete (2/2 plans). Phase 51 complete (2/2 plans). Phase 52 complete (2/2 plans). Phase 53 complete (2/2 plans). Phase 54 complete (3/3 plans). v1.14: 26/197 plans complete (13.2%).
