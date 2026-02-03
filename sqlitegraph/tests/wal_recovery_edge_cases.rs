@@ -7,7 +7,7 @@
 
 use sqlitegraph::backend::native::GraphFile;
 use sqlitegraph::backend::native::v2::wal::{
-    V2WALConfig, V2WALHeader, V2WALManager, V2WALRecord, manager::TransactionIsolation,
+    V2WALConfig, V2WALHeader, V2WALManager, V2WALRecord, transaction_coordinator::IsolationLevel,
 };
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
 use std::path::PathBuf;
@@ -91,7 +91,7 @@ fn test_recovery_from_truncated_wal() -> NativeResult<()> {
     let manager = V2WALManager::create(config.clone())?;
 
     // Write a complete transaction
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -169,7 +169,7 @@ fn test_recovery_with_corrupted_payload() -> NativeResult<()> {
     let config = setup.config();
     let manager = V2WALManager::create(config.clone())?;
 
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -229,7 +229,7 @@ fn test_recovery_with_corrupted_checksum() -> NativeResult<()> {
     let config = setup.config();
     let manager = V2WALManager::create(config.clone())?;
 
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -290,7 +290,7 @@ fn test_recovery_with_incomplete_transaction() -> NativeResult<()> {
     let manager = V2WALManager::create(config.clone())?;
 
     // Transaction 1: Complete
-    let tx_id1 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id1 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id1,
         V2WALRecord::NodeInsert {
@@ -302,7 +302,7 @@ fn test_recovery_with_incomplete_transaction() -> NativeResult<()> {
     manager.commit_transaction(tx_id1)?;
 
     // Transaction 2: Incomplete (no commit) - simulate crash
-    let tx_id2 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id2 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id2,
         V2WALRecord::NodeInsert {
@@ -340,7 +340,7 @@ fn test_recovery_rollback_after_partial_writes() -> NativeResult<()> {
     let manager = V2WALManager::create(config.clone())?;
 
     // Begin transaction and write some records
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -369,7 +369,7 @@ fn test_recovery_rollback_after_partial_writes() -> NativeResult<()> {
     );
 
     // Commit a new transaction to verify WAL is still functional
-    let tx_id2 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id2 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id2,
         V2WALRecord::NodeInsert {
@@ -398,7 +398,7 @@ fn test_recovery_mixed_commit_rollback_transactions() -> NativeResult<()> {
     let manager = V2WALManager::create(config.clone())?;
 
     // Transaction 1: Commit
-    let tx1 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx1 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx1,
         V2WALRecord::NodeInsert {
@@ -410,7 +410,7 @@ fn test_recovery_mixed_commit_rollback_transactions() -> NativeResult<()> {
     manager.commit_transaction(tx1)?;
 
     // Transaction 2: Rollback
-    let tx2 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx2 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx2,
         V2WALRecord::NodeInsert {
@@ -422,7 +422,7 @@ fn test_recovery_mixed_commit_rollback_transactions() -> NativeResult<()> {
     manager.rollback_transaction(tx2)?;
 
     // Transaction 3: Commit
-    let tx3 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx3 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx3,
         V2WALRecord::NodeInsert {
@@ -456,7 +456,7 @@ fn test_recovery_transaction_with_multiple_records() -> NativeResult<()> {
     let manager = V2WALManager::create(config.clone())?;
 
     // Single transaction with many records
-    let tx_id = manager.begin_transaction(TransactionIsolation::Serializable)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::Serializable)?;
 
     for i in 1..=10 {
         manager.write_transaction_record(
@@ -496,7 +496,7 @@ fn test_recovery_incomplete_checkpoint() -> NativeResult<()> {
 
     // Write some transactions
     for i in 1..=5 {
-        let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
         manager.write_transaction_record(
             tx_id,
             V2WALRecord::NodeInsert {
@@ -532,7 +532,7 @@ fn test_checkpoint_after_rollback() -> NativeResult<()> {
     let manager = V2WALManager::create(config.clone())?;
 
     // Commit one transaction
-    let tx1 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx1 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx1,
         V2WALRecord::NodeInsert {
@@ -544,7 +544,7 @@ fn test_checkpoint_after_rollback() -> NativeResult<()> {
     manager.commit_transaction(tx1)?;
 
     // Rollback another transaction
-    let tx2 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx2 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx2,
         V2WALRecord::NodeInsert {
@@ -577,7 +577,7 @@ fn test_multiple_checkpoints() -> NativeResult<()> {
     for checkpoint_round in 1..=3 {
         // Write 2 transactions per round
         for i in 1..=2 {
-            let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+            let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
             manager.write_transaction_record(
                 tx_id,
                 V2WALRecord::NodeInsert {
@@ -668,7 +668,7 @@ fn test_recovery_with_only_committed_transactions() -> NativeResult<()> {
 
     // Write and commit multiple transactions
     for i in 1..=5 {
-        let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
         manager.write_transaction_record(
             tx_id,
             V2WALRecord::NodeInsert {
@@ -704,7 +704,7 @@ fn test_recovery_with_only_committed_transactions() -> NativeResult<()> {
     );
 
     // Verify we can write new transactions after restart
-    let tx_id = new_manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = new_manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     new_manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -728,7 +728,7 @@ fn test_recovery_with_mixed_committed_rolled_back() -> NativeResult<()> {
 
     // Commit some transactions
     for i in 1..=3 {
-        let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
         manager.write_transaction_record(
             tx_id,
             V2WALRecord::NodeInsert {
@@ -742,7 +742,7 @@ fn test_recovery_with_mixed_committed_rolled_back() -> NativeResult<()> {
 
     // Rollback some transactions
     for i in 4..=6 {
-        let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
         manager.write_transaction_record(
             tx_id,
             V2WALRecord::NodeInsert {
@@ -767,7 +767,7 @@ fn test_recovery_with_mixed_committed_rolled_back() -> NativeResult<()> {
 
     // New manager should be functional
     // Verify we can write new transactions
-    let tx_id = new_manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = new_manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     new_manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -793,7 +793,7 @@ fn test_recovery_after_manager_drop() -> NativeResult<()> {
         let manager = V2WALManager::create(config.clone())?;
 
         for i in 1..=3 {
-            let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+            let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
             manager.write_transaction_record(
                 tx_id,
                 V2WALRecord::NodeInsert {
@@ -817,7 +817,7 @@ fn test_recovery_after_manager_drop() -> NativeResult<()> {
     assert!(setup.wal_exists(), "WAL should persist after manager drop");
 
     // New manager should be functional and able to write transactions
-    let tx_id = new_manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = new_manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     new_manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -851,8 +851,8 @@ fn test_recovery_concurrent_transactions() -> NativeResult<()> {
     let manager = V2WALManager::create(config.clone())?;
 
     // Begin multiple concurrent transactions
-    let tx1 = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
-    let tx2 = manager.begin_transaction(TransactionIsolation::Serializable)?;
+    let tx1 = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
+    let tx2 = manager.begin_transaction(IsolationLevel::Serializable)?;
 
     // Write records in both transactions
     manager.write_transaction_record(
@@ -892,7 +892,7 @@ fn test_recovery_large_transaction() -> NativeResult<()> {
     let manager = V2WALManager::create(config.clone())?;
 
     // Single transaction with many records
-    let tx_id = manager.begin_transaction(TransactionIsolation::Serializable)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::Serializable)?;
 
     for i in 1..=100 {
         manager.write_transaction_record(
@@ -923,7 +923,7 @@ fn test_recovery_rapid_commits() -> NativeResult<()> {
 
     // Rapidly commit many small transactions
     for i in 1..=20 {
-        let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
         manager.write_transaction_record(
             tx_id,
             V2WALRecord::NodeInsert {
@@ -950,7 +950,7 @@ fn test_wal_recreation_after_deletion() -> NativeResult<()> {
 
     {
         let manager = V2WALManager::create(config.clone())?;
-        let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
         manager.write_transaction_record(
             tx_id,
             V2WALRecord::NodeInsert {
@@ -974,7 +974,7 @@ fn test_wal_recreation_after_deletion() -> NativeResult<()> {
     assert!(setup.wal_exists(), "WAL should be recreated");
 
     // Should be able to write new transactions
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {

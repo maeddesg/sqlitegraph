@@ -3,7 +3,7 @@
 //! Clean tests using Phase 34 pipeline to verify cluster reconstruction works correctly.
 //! All tests use real sqlitegraph APIs with zero manual cluster manipulation.
 
-use sqlitegraph::{BackendDirection, NeighborQuery, config::GraphConfig, open_graph};
+use sqlitegraph::{BackendDirection, NeighborQuery, SnapshotId, config::GraphConfig, open_graph};
 use tempfile::TempDir;
 
 /// Create a simple V2 graph with one edge for testing
@@ -163,6 +163,7 @@ fn test_single_edge_cluster_clean_creation() {
     // Verify neighbors work through public API (Phase 35 routing)
     let neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             source_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -175,8 +176,8 @@ fn test_single_edge_cluster_clean_creation() {
     assert_eq!(neighbors[0], target_id as i64, "Neighbor should be target");
 
     // Verify node data integrity through GraphBackend API
-    let source_node_data = graph.get_node(source_id as i64).unwrap();
-    let target_node_data = graph.get_node(target_id as i64).unwrap();
+    let source_node_data = graph.get_node(SnapshotId::current(), source_id as i64).unwrap();
+    let target_node_data = graph.get_node(SnapshotId::current(), target_id as i64).unwrap();
 
     assert_eq!(
         source_node_data.name, "source",

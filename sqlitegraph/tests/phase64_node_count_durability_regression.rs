@@ -3,7 +3,7 @@
 //! This test validates that node_count is properly persisted across file close/reopen
 //! without requiring edge operations to trigger header writes.
 
-use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 
 /// Regression test for node count durability
 #[test]
@@ -48,7 +48,7 @@ fn test_phase64_node_count_durability_regression() -> Result<(), Box<dyn std::er
     println!("STEP 4: Verifying node accessibility after reopen...");
     for (i, &expected_id) in node_ids.iter().enumerate() {
         // Try to access each node - this would fail with InvalidNodeId if node_count = 0
-        let neighbors = graph_reopened.neighbors(expected_id, Default::default())?;
+        let neighbors = graph_reopened.neighbors(SnapshotId::current(), expected_id, Default::default())?;
         println!(
             "✅ Node {} (ID {}) accessible - has {} neighbors",
             i + 1,
@@ -107,8 +107,8 @@ fn test_phase64_node_count_durability_with_edges() -> Result<(), Box<dyn std::er
     println!("✅ Reopened database");
 
     // Verify nodes are accessible
-    let neighbors1 = graph_reopened.neighbors(node1, Default::default())?;
-    let neighbors2 = graph_reopened.neighbors(node2, Default::default())?;
+    let neighbors1 = graph_reopened.neighbors(SnapshotId::current(), node1, Default::default())?;
+    let neighbors2 = graph_reopened.neighbors(SnapshotId::current(), node2, Default::default())?;
     println!(
         "✅ Nodes accessible after reopen - node1: {} neighbors, node2: {} neighbors",
         neighbors1.len(),
