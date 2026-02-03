@@ -10,10 +10,10 @@ Comprehensive usage guide for SQLiteGraph with dual backend architecture (SQLite
 
 ```toml
 [dependencies]
-sqlitegraph = "1.3"
+sqlitegraph = "1.4"
 
 # For Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.3", features = ["native-v2"] }
+sqlitegraph = { version = "1.4", features = ["native-v2"] }
 ```
 
 ### Basic Usage
@@ -545,12 +545,253 @@ Each KV entry has internal metadata (not directly exposed):
 
 - **Native V2 only**: SQLite backend does not support KV operations
 - **Byte keys**: Keys are `Vec<u8>` - use string encoding for text keys
-- **No iteration**: No API to enumerate all keys (design limitation)
 - **No snapshots**: Can't query historical KV values, only current snapshot
+- **Full enumeration**: No API to enumerate all keys without prefix (use `kv_prefix_scan(b"")` for all keys)
+
+### KV Prefix Scanning
+
+The `kv_prefix_scan()` method enables efficient retrieval of all KV entries with a given prefix:
+
+```rust
+use sqlitegraph::{GraphConfig, open_graph};
+
+let config = GraphConfig::native();
+let graph = open_graph("graph.db", &config)?;
+
+// Get all keys with prefix "user:"
+let snapshot = graph.snapshot()?;
+let results = graph.kv_prefix_scan(snapshot.id, b"user:")?;
+
+for (key, value) in results {
+    println!("{:?} = {:?}", String::from_utf8_lossy(&key), value);
+}
+
+// Get all KV entries (empty prefix)
+let all_entries = graph.kv_prefix_scan(snapshot.id, b"")?;
+```
+
+**Features:**
+- Prefix matching for hierarchical key organization
+- Results returned in lexicographic order
+- MVCC snapshot isolation respected
+- TTL filtering for expired entries
+
+**Use Cases:**
+- Secondary index enumeration (e.g., `index:user:*` → all user IDs)
+- Hierarchical data retrieval (e.g., `cache:region:*` → all regional caches)
+- Namespace-based key management
+
+**CLI:**
+```bash
+# Scan all keys with prefix "user:"
+sqlitegraph --backend native-v2 --db mygraph.db kv-scan --prefix "user:"
+
+# Scan all KV entries
+sqlitegraph --backend native-v2 --db mygraph.db kv-scan --prefix ""
+```
 
 ---
 
-## 10. Developer Tools (Phase 9)
+## 10. Query API Enhancements (Phase 58)
+
+### Overview
+
+Phase 58 introduces query API enhancements that make it easier to work with graph data without maintaining external ID tracking. These features are particularly useful for pub/sub use cases like agent messaging and topic-based subscriptions.
+
+### Query Nodes by Kind
+
+Find all nodes with a specific kind:
+
+```rust
+use sqlitegraph::{GraphConfig, open_graph};
+
+let config = GraphConfig::native();
+let graph = open_graph("graph.db", &config)?;
+
+// Find all agent nodes
+let snapshot = graph.snapshot()?;
+let agent_ids = graph.query_nodes_by_kind(snapshot.id, "agent")?;
+
+println!("Found {} agents", agent_ids.len());
+for node_id in agent_ids {
+    let node = graph.get_node(snapshot.id, node_id)?;
+    println!("  - {}: {:?}", node.name, node.data);
+}
+```
+
+**Features:**
+- Direct kind filtering without full graph scan
+- Works on both SQLite and Native V2 backends
+- Returns sorted node IDs for consistent output
+- MVCC snapshot isolation respected
+
+**CLI:**
+```bash
+# Find all nodes with kind "agent"
+sqlitegraph mygraph.db nodes-by-kind --kind "agent"
+
+# Find all message nodes
+sqlitegraph mygraph.db nodes-by-kind --kind "message"
+```
+
+### Query Nodes by Name Pattern
+
+Find nodes using glob patterns (`*` matches any sequence, `?` matches single character):
+
+```rust
+// Find all nodes with name matching "msg_index:*"
+let msg_ids = graph.query_nodes_by_name_pattern(snapshot.id, "msg_index:*")?;
+
+// Find nodes with pattern "agent-?" (single digit)
+let agent_ids = graph.query_nodes_by_name_pattern(snapshot.id, "agent-?")?;
+
+// Escape wildcards for literal matching
+let literal = graph.query_nodes_by_name_pattern(snapshot.id, "file\\*.txt")?;
+```
+
+**Pattern Syntax:**
+| Pattern | Matches | Does Not Match |
+|---------|---------|----------------|
+| `msg_index:*` | `msg_index:agent-1`, `msg_index:agent-2` | `Message_Index:agent-1` |
+| `agent-?` | `agent-1`, `agent-A` | `agent-12`, `agent-` |
+| `\*test\?` | `*test?` | `test`, `123testX` |
+
+**CLI:**
+```bash
+# Find nodes matching "msg_index:*"
+sqlitegraph mygraph.db nodes-by-name --pattern "msg_index:*"
+
+# Find nodes with single-character suffix
+sqlitegraph mygraph.db nodes-by-name --pattern "agent-?"
+```
+
+### Pub/Sub Pattern Filters
+
+Subscribe to events matching glob patterns on node kind or name:
+
+```rust
+use sqlitegraph::backend::SubscriptionFilter;
+
+// Subscribe to all agent events (kind pattern)
+let filter = SubscriptionFilter::kind_patterns(vec!["agent:*".to_string()]);
+let (sub_id, rx) = graph.subscribe(filter)?;
+
+// Subscribe to message index events (name pattern)
+let filter = SubscriptionFilter::name_patterns(vec!["msg_index:*".to_string()]);
+let (sub_id, rx) = graph.subscribe(filter)?;
+
+// Multiple patterns
+let filter = SubscriptionFilter::kind_patterns(vec![
+    "agent:*".to_string(),
+    "message:*".to_string(),
+    "system:*".to_string(),
+]);
+let (sub_id, rx) = graph.subscribe(filter)?;
+```
+
+**How Pattern Matching Works:**
+1. When a node event occurs (creation/modification), the node's kind/name is checked
+2. Patterns are evaluated in order; if any pattern matches, the event is delivered
+3. Matching is case-sensitive
+4. Supports `*` (any sequence, including empty) and `?` (exactly one character)
+5. Escape with `\*` and `\?` for literal asterisk/question mark
+
+**Use Cases:**
+- **Agent Messaging**: Subscribe to `agent:*` to receive all agent events
+- **Topic-Based Pub/Sub**: Subscribe to `msg_index:agent-*` for specific agent messages
+- **Hierarchical Organization**: Subscribe to `cache:region-*` for regional cache events
+- **Dynamic Discovery**: Find nodes by pattern without maintaining ID registries
+
+### Query API Use Cases
+
+#### 1. Agent Messaging System
+
+```rust
+// Create message queue node
+let msg_node_id = graph.insert_node(NodeSpec {
+    kind: "message_queue".to_string(),
+    name: "msg_index:agent-123".to_string(),
+    file_path: None,
+    data: json!({"owner": "agent-123"}),
+})?;
+
+// Subscribe to this agent's messages
+let filter = SubscriptionFilter::name_patterns(vec!["msg_index:agent-123".to_string()]);
+let (sub_id, rx) = graph.subscribe(filter)?;
+
+// Or subscribe to all agents' messages
+let filter = SubscriptionFilter::name_patterns(vec!["msg_index:*".to_string()]);
+let (sub_id, rx) = graph.subscribe(filter)?;
+```
+
+#### 2. Dynamic Entity Discovery
+
+```rust
+// Find all agents without maintaining ID registry
+let agent_ids = graph.query_nodes_by_kind(snapshot.id, "agent")?;
+
+for agent_id in agent_ids {
+    let agent = graph.get_node(snapshot.id, agent_id)?;
+    println!("Active agent: {}", agent.name);
+}
+```
+
+#### 3. Hierarchical KV Indexing
+
+```rust
+// Index users by email
+graph.kv_set(
+    format!("index:email:{}", email).into_bytes(),
+    KvValue::Integer(user_id),
+    None,
+)?;
+
+// Later, enumerate all users in the index
+let all_users = graph.kv_prefix_scan(snapshot.id, b"index:email:")?;
+for (key, value) in all_users {
+    let email = String::from_utf8_lossy(&key).replace("index:email:", "");
+    println!("User: {} -> ID: {:?}", email, value);
+}
+```
+
+#### 4. Topic-Based Subscriptions
+
+```rust
+// Subscribe to all cache events
+let cache_filter = SubscriptionFilter::kind_patterns(vec!["cache:*".to_string()]);
+let (sub_id, rx) = graph.subscribe(cache_filter)?;
+
+// Subscribe to specific cache region
+let region_filter = SubscriptionFilter::name_patterns(vec!["cache:region-us-west".to_string()]);
+let (sub_id, rx) = graph.subscribe(region_filter)?;
+```
+
+### Backend Support
+
+| Feature | Native V2 | SQLite |
+|---------|-----------|--------|
+| `kv_prefix_scan()` | Full support | Full support |
+| `query_nodes_by_kind()` | Full support | Full support |
+| `query_nodes_by_name_pattern()` | Full support | Full support |
+| Pattern subscription filters | Full support | Full support |
+
+### Performance Characteristics
+
+| Operation | Complexity | Notes |
+|-----------|------------|-------|
+| `kv_prefix_scan()` | O(K) where K = keys scanned | Faster with specific prefixes |
+| `query_nodes_by_kind()` | O(N) where N = total nodes | Full scan required |
+| `query_nodes_by_name_pattern()` | O(N) where N = total nodes | Full scan + pattern match |
+| Pattern matching | O(P) where P = patterns | Per-event, cheap |
+
+**Optimization Tips:**
+- Use specific prefixes for `kv_prefix_scan()` to avoid scanning all keys
+- Consider maintaining a separate index if querying by kind/name frequently
+- Use kind-based filtering before name patterns for hierarchical filtering
+
+---
+
+## 11. Developer Tools (Phase 9)
 
 ### Introspection API
 
@@ -590,7 +831,7 @@ sqlitegraph --backend sqlite --db mygraph.db debug-trace
 
 ---
 
-## 11. Safety & Integrity
+## 12. Safety & Integrity
 
 ### Safety Checks
 
@@ -614,7 +855,7 @@ The Native V2 backend includes WAL recovery with:
 
 ---
 
-## 12. CLI Usage
+## 13. CLI Usage
 
 ### Available Commands
 
@@ -654,7 +895,7 @@ sqlitegraph --backend sqlite --db mygraph.db can-reach --from 1 --to 100
 
 ---
 
-## 13. Migration
+## 14. Migration
 
 ### SQLite to Native V2
 
@@ -681,7 +922,7 @@ let id = graph.insert_node(node_spec)?;
 
 ---
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 ### Common Issues
 
@@ -712,7 +953,7 @@ cargo check --features native-v2
 
 ---
 
-## 15. Pub/Sub Events (Phase 44)
+## 16. Pub/Sub Events (Phase 44)
 
 ### Overview
 
