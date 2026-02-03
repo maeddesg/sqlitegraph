@@ -13,6 +13,7 @@ This document provides a quick overview of the main API surface.
 - [Graph Algorithms API](#graph-algorithms-api)
 - [HNSW Vector Search API](#hnsw-vector-search-api)
 - [KV Store API](#kv-store-api)
+- [Query API Enhancements](#query-api-enhancements)
 - [Introspection API](#introspection-api)
 - [Progress Tracking API](#progress-tracking-api)
 - [Error Types](#error-types)
@@ -353,6 +354,192 @@ while let Ok(event) = rx.recv() {
 
 ---
 
+## Query API Enhancements
+
+### Overview
+
+Phase 58 introduces query API enhancements that make it easier to work with graph data without maintaining external ID tracking. These features are particularly useful for pub/sub use cases like agent messaging and topic-based subscriptions.
+
+### KV Prefix Scanning
+
+```rust
+fn kv_prefix_scan(
+    &self,
+    snapshot_id: SnapshotId,
+    prefix: &[u8]
+) -> Result<Vec<(Vec<u8>, KvValue)>, SqliteGraphError>
+```
+
+**Description**: Retrieve all KV entries with keys starting with the given prefix.
+
+**Parameters**:
+- `snapshot_id` - MVCC snapshot ID for consistent reads
+- `prefix` - Byte slice to match key prefixes (empty string = all keys)
+
+**Returns**: Vector of `(key, value)` tuples in lexicographic order
+
+**Example**:
+```rust
+use sqlitegraph::{GraphConfig, open_graph};
+
+let config = GraphConfig::native();
+let graph = open_graph("graph.db", &config)?;
+let snapshot = graph.snapshot()?;
+
+// Get all keys with prefix "user:"
+let results = graph.kv_prefix_scan(snapshot.id, b"user:")?;
+
+for (key, value) in results {
+    println!("{:?} = {:?}", String::from_utf8_lossy(&key), value);
+}
+```
+
+**Backend Support**:
+| Backend | Support |
+|---------|---------|
+| **Native V2** | Full support (HashMap iteration) |
+| **SQLite** | Full support (LIKE query) |
+
+---
+
+### Query Nodes by Kind
+
+```rust
+fn query_nodes_by_kind(
+    &self,
+    snapshot_id: SnapshotId,
+    kind: &str
+) -> Result<Vec<i64>, SqliteGraphError>
+```
+
+**Description**: Get all node IDs where the node's kind equals the given string.
+
+**Parameters**:
+- `snapshot_id` - MVCC snapshot ID for consistent reads
+- `kind` - Exact kind string to match (case-sensitive)
+
+**Returns**: Sorted vector of node IDs
+
+**Example**:
+```rust
+// Find all agent nodes
+let agent_ids = graph.query_nodes_by_kind(snapshot.id, "agent")?;
+
+println!("Found {} agents", agent_ids.len());
+for node_id in agent_ids {
+    let node = graph.get_node(snapshot.id, node_id)?;
+    println!("  - {}: {:?}", node.name, node.data);
+}
+```
+
+**Backend Support**:
+| Backend | Implementation |
+|---------|----------------|
+| **Native V2** | NodeStore iteration with kind filtering |
+| **SQLite** | `WHERE kind = ?` query |
+
+---
+
+### Query Nodes by Name Pattern
+
+```rust
+fn query_nodes_by_name_pattern(
+    &self,
+    snapshot_id: SnapshotId,
+    pattern: &str
+) -> Result<Vec<i64>, SqliteGraphError>
+```
+
+**Description**: Get all node IDs where the node's name matches a glob pattern.
+
+**Parameters**:
+- `snapshot_id` - MVCC snapshot ID for consistent reads
+- `pattern` - Glob pattern string (case-sensitive)
+
+**Returns**: Sorted vector of node IDs
+
+**Pattern Syntax**:
+| Wildcard | Matches | Example |
+|----------|---------|---------|
+| `*` | Any sequence (including empty) | `msg_index:*` matches `msg_index:agent-1`, `msg_index:agent-2` |
+| `?` | Exactly one character | `agent-?` matches `agent-1`, `agent-A` (not `agent-12`) |
+| `\*`, `\?` | Literal asterisk/question mark | `file\\*.txt` matches `file*.txt` |
+
+**Example**:
+```rust
+// Find all nodes with name matching "msg_index:*"
+let msg_ids = graph.query_nodes_by_name_pattern(snapshot.id, "msg_index:*")?;
+
+// Find nodes with single-character suffix
+let agent_ids = graph.query_nodes_by_name_pattern(snapshot.id, "agent-?")?;
+
+// Escape wildcards for literal matching
+let literal = graph.query_nodes_by_name_pattern(snapshot.id, "file\\*.txt")?;
+```
+
+**Backend Support**: Full support on both SQLite and Native V2 backends
+
+---
+
+### SubscriptionFilter Pattern Constructors
+
+```rust
+impl SubscriptionFilter {
+    pub fn kind_patterns(patterns: Vec<String>) -> Self
+    pub fn name_patterns(patterns: Vec<String>) -> Self
+}
+```
+
+**Description**: Create subscription filters that match glob patterns on node kind or name.
+
+**Methods**:
+| Method | Description |
+|--------|-------------|
+| `kind_patterns(patterns)` | Match events where node kind matches any pattern |
+| `name_patterns(patterns)` | Match events where node name matches any pattern |
+
+**Example**:
+```rust
+use sqlitegraph::backend::SubscriptionFilter;
+
+// Subscribe to all agent events (kind pattern)
+let filter = SubscriptionFilter::kind_patterns(vec!["agent:*".to_string()]);
+let (sub_id, rx) = graph.subscribe(filter)?;
+
+// Subscribe to message index events (name pattern)
+let filter = SubscriptionFilter::name_patterns(vec!["msg_index:*".to_string()]);
+let (sub_id, rx) = graph.subscribe(filter)?;
+
+// Multiple patterns (any match triggers event)
+let filter = SubscriptionFilter::kind_patterns(vec![
+    "agent:*".to_string(),
+    "message:*".to_string(),
+    "system:*".to_string(),
+]);
+let (sub_id, rx) = graph.subscribe(filter)?;
+```
+
+**How Pattern Matching Works**:
+1. When a node event occurs (creation/modification), the node's kind/name is checked
+2. Patterns are evaluated in order; if any pattern matches, the event is delivered
+3. Matching is case-sensitive
+4. Supports `*` (any sequence including empty) and `?` (exactly one character)
+5. Escape with `\*` and `\?` for literal asterisk/question mark
+
+**Backend Support**: Full support on both SQLite and Native V2 backends
+
+---
+
+### CLI Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `kv-scan --prefix PREFIX` | Scan KV store by key prefix | `sqlitegraph graph.db kv-scan --prefix "user:"` |
+| `nodes-by-kind --kind KIND` | Find all nodes with given kind | `sqlitegraph graph.db nodes-by-kind --kind "agent"` |
+| `nodes-by-name --pattern PATTERN` | Find nodes matching name pattern | `sqlitegraph graph.db nodes-by-name --pattern "msg_index:*"` |
+
+---
+
 ## Introspection API
 
 ### GraphIntrospection
@@ -446,13 +633,13 @@ match HnswConfig::builder().build() {
 ```toml
 [dependencies]
 # SQLite backend only
-sqlitegraph = "1.3"
+sqlitegraph = "1.4"
 
 # Native V2 backend
-sqlitegraph = { version = "1.3", features = ["native-v2"] }
+sqlitegraph = { version = "1.4", features = ["native-v2"] }
 
 # V2 I/O tracing (development)
-sqlitegraph = { version = "1.3", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.4", features = ["trace_v2_io"] }
 ```
 
 ---
