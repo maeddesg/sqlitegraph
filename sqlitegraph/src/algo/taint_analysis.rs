@@ -590,6 +590,323 @@ where
     })
 }
 
+/// Propagates taint backward from a sink to find affecting sources.
+///
+/// Computes all nodes that can reach the sink (ancestors) and identifies
+/// which taint sources can influence the sink.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `sink` - The sink node ID to trace back from
+/// * `sources` - Source node IDs to check for influence
+///
+/// # Returns
+/// TaintResult containing:
+/// - sources: Sources that can reach the sink (affecting sources)
+/// - sinks_reached: Contains only the input sink
+/// - tainted_nodes: All ancestors that can reach the sink
+/// - source_sink_paths: (affecting_source, sink) pairs
+///
+/// # Complexity
+/// - **Time**: O(V + E) for backward reachability + O(S) for source intersection
+///   where S = sources count
+/// - **Space**: O(V) for ancestors set
+///
+/// # Algorithm
+/// 1. Call reverse_reachable_from(graph, sink) to get ancestors
+/// 2. Find affecting_sources = sources ∩ ancestors
+/// 3. Build source_sink_paths: (source, sink) for each affecting source
+/// 4. Return TaintResult with:
+///    - sources = affecting_sources
+///    - sinks_reached = {sink}
+///    - tainted_nodes = ancestors
+///    - source_sink_paths = (affecting_source, sink) for each
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::propagate_taint_backward};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph with sources and sinks ...
+///
+/// let sources = vec![1, 2, 3];   // User input nodes
+/// let sink = 10;                 // SQL query node
+///
+/// let result = propagate_taint_backward(&graph, sink, &sources)?;
+///
+/// println!("Sink {} is affected by {} sources",
+///          sink, result.sources.len());
+/// for &source in &result.sources {
+///     println!("  Source {} can reach sink {}", source, sink);
+/// }
+/// ```
+pub fn propagate_taint_backward(
+    graph: &SqliteGraph,
+    sink: i64,
+    sources: &[i64],
+) -> Result<TaintResult, SqliteGraphError> {
+    let sources_set: AHashSet<i64> = sources.iter().copied().collect();
+
+    // Step 1: Find all ancestors that can reach the sink
+    let ancestors = reverse_reachable_from(graph, sink)?;
+
+    // Step 2: Find which sources can reach the sink
+    let affecting_sources: AHashSet<i64> = sources_set
+        .intersection(&ancestors)
+        .copied()
+        .collect();
+
+    // Step 3: Build source-sink paths
+    let source_sink_paths: Vec<(i64, i64)> = affecting_sources
+        .iter()
+        .map(|&source| (source, sink))
+        .collect();
+
+    // Step 4: Build result
+    let mut sinks_reached = AHashSet::new();
+    sinks_reached.insert(sink);
+
+    Ok(TaintResult {
+        sources: affecting_sources,
+        sinks_reached,
+        tainted_nodes: ancestors,
+        source_sink_paths,
+        size: ancestors.len(),
+    })
+}
+
+/// Propagates taint backward with progress tracking.
+///
+/// Same algorithm as [`propagate_taint_backward`] but reports progress
+/// during execution.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `sink` - The sink node ID to trace back from
+/// * `sources` - Source node IDs to check for influence
+/// * `progress` - Progress callback for reporting execution status
+///
+/// # Returns
+/// TaintResult with affecting sources and ancestors.
+///
+/// # Progress Reporting
+///
+/// The callback receives:
+/// - `current`: Always 1 (single operation)
+/// - `total`: Always 1
+/// - `message`: "Backward taint propagation: from sink {sink}, {affecting} sources found"
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{
+///     algo::propagate_taint_backward_with_progress,
+///     progress::ConsoleProgress
+/// };
+///
+/// let progress = ConsoleProgress::new();
+/// let result = propagate_taint_backward_with_progress(&graph, sink, &sources, &progress)?;
+/// // Output: Backward taint propagation: from sink 10, 2 sources found
+/// ```
+pub fn propagate_taint_backward_with_progress<F>(
+    graph: &SqliteGraph,
+    sink: i64,
+    sources: &[i64],
+    progress: &F,
+) -> Result<TaintResult, SqliteGraphError>
+where
+    F: ProgressCallback,
+{
+    let sources_set: AHashSet<i64> = sources.iter().copied().collect();
+
+    // Step 1: Find all ancestors that can reach the sink
+    let ancestors = reverse_reachable_from(graph, sink)?;
+
+    // Step 2: Find which sources can reach the sink
+    let affecting_sources: AHashSet<i64> = sources_set
+        .intersection(&ancestors)
+        .copied()
+        .collect();
+
+    // Report progress
+    progress.on_progress(
+        1,
+        Some(1),
+        &format!(
+            "Backward taint propagation: from sink {}, {} sources found",
+            sink,
+            affecting_sources.len()
+        ),
+    );
+
+    // Step 3: Build source-sink paths
+    let source_sink_paths: Vec<(i64, i64)> = affecting_sources
+        .iter()
+        .map(|&source| (source, sink))
+        .collect();
+
+    // Step 4: Build result
+    let mut sinks_reached = AHashSet::new();
+    sinks_reached.insert(sink);
+
+    // Report completion
+    progress.on_complete();
+
+    Ok(TaintResult {
+        sources: affecting_sources,
+        sinks_reached,
+        tainted_nodes: ancestors,
+        source_sink_paths,
+        size: ancestors.len(),
+    })
+}
+
+/// Performs sink reachability analysis for all sinks.
+///
+/// Analyzes each sink to determine which taint sources can reach it.
+/// Returns a mapping of vulnerable sinks to their affecting sources.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `sources` - Source node IDs where taint originates
+/// * `sinks` - Sink node IDs to analyze
+///
+/// # Returns
+/// HashMap mapping vulnerable sink -> Vec<affecting_sources>
+/// Only includes sinks that have at least one affecting source.
+///
+/// # Complexity
+/// - **Time**: O(Sinks × (V + E)) - one backward BFS per sink
+/// - **Space**: O(V) for ancestors set (per sink)
+///
+/// # Algorithm
+/// 1. Initialize result = empty HashMap
+/// 2. For each sink:
+///    - Call propagate_taint_backward(graph, sink, sources)
+///    - If result.sources is non-empty (vulnerable):
+///      - Add entry: sink -> Vec<affecting_sources>
+/// 3. Return result mapping
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::sink_reachability_analysis};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph with sources and sinks ...
+///
+/// let sources = vec![1, 2, 3];   // User input nodes
+/// let sinks = vec![10, 20, 30];  // SQL query nodes
+///
+/// let vulnerabilities = sink_reachability_analysis(&graph, &sources, &sinks)?;
+///
+/// if vulnerabilities.is_empty() {
+///     println!("No vulnerabilities found!");
+/// } else {
+///     println!("Found {} vulnerable sinks:", vulnerabilities.len());
+///     for (sink, affecting_sources) in vulnerabilities {
+///         println!("  Sink {} is reachable from sources: {:?}", sink, affecting_sources);
+///     }
+/// }
+/// ```
+pub fn sink_reachability_analysis(
+    graph: &SqliteGraph,
+    sources: &[i64],
+    sinks: &[i64],
+) -> Result<AHashMap<i64, Vec<i64>>, SqliteGraphError> {
+    let mut result: AHashMap<i64, Vec<i64>> = AHashMap::new();
+
+    for &sink in sinks {
+        let taint_result = propagate_taint_backward(graph, sink, sources)?;
+
+        // Only include sinks that have affecting sources (vulnerabilities)
+        if !taint_result.sources.is_empty() {
+            let affecting_sources: Vec<i64> = taint_result.sources.iter().copied().collect();
+            result.insert(sink, affecting_sources);
+        }
+    }
+
+    Ok(result)
+}
+
+/// Performs sink reachability analysis with progress tracking.
+///
+/// Same algorithm as [`sink_reachability_analysis`] but reports progress
+/// during execution. Useful for analyzing many sinks.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `sources` - Source node IDs where taint originates
+/// * `sinks` - Sink node IDs to analyze
+/// * `progress` - Progress callback for reporting execution status
+///
+/// # Returns
+/// HashMap mapping vulnerable sink -> Vec<affecting_sources>
+///
+/// # Progress Reporting
+///
+/// The callback receives:
+/// - `current`: Current sink being analyzed
+/// - `total`: Total number of sinks (Some(total))
+/// - `message`: "Sink reachability: {current}/{total} sinks analyzed, {vulns} vulnerabilities found"
+///
+/// Progress is reported for each sink analyzed.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{
+///     algo::sink_reachability_analysis_with_progress,
+///     progress::ConsoleProgress
+/// };
+///
+/// let progress = ConsoleProgress::new();
+/// let vulnerabilities = sink_reachability_analysis_with_progress(
+///     &graph, &sources, &sinks, &progress
+/// )?;
+/// // Output: Sink reachability: 1/10 sinks analyzed, 1 vulnerabilities found
+/// ```
+pub fn sink_reachability_analysis_with_progress<F>(
+    graph: &SqliteGraph,
+    sources: &[i64],
+    sinks: &[i64],
+    progress: &F,
+) -> Result<AHashMap<i64, Vec<i64>>, SqliteGraphError>
+where
+    F: ProgressCallback,
+{
+    let mut result: AHashMap<i64, Vec<i64>> = AHashMap::new();
+    let total = sinks.len();
+
+    for (idx, &sink) in sinks.iter().enumerate() {
+        let taint_result = propagate_taint_backward(graph, sink, sources)?;
+
+        // Only include sinks that have affecting sources (vulnerabilities)
+        if !taint_result.sources.is_empty() {
+            let affecting_sources: Vec<i64> = taint_result.sources.iter().copied().collect();
+            result.insert(sink, affecting_sources);
+        }
+
+        // Report progress
+        progress.on_progress(
+            idx + 1,
+            Some(total),
+            &format!(
+                "Sink reachability: {}/{} sinks analyzed, {} vulnerabilities found",
+                idx + 1,
+                total,
+                result.len()
+            ),
+        );
+    }
+
+    // Report completion
+    progress.on_complete();
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
