@@ -18,8 +18,8 @@ use crate::debug::debug_log;
 /// reference counting.
 pub fn rollback_string_insert(
     system: &RollbackSystem,
-    string_id: u64,
-    string_value: &str,
+    _string_id: u64,
+    _string_value: &str,
 ) -> Result<(), RecoveryError> {
     debug_log!(
         "Rolling back string insert: id={}, value='{}'",
@@ -36,7 +36,7 @@ pub fn rollback_string_insert(
     // 2. Note that the string remains in the table for consistency
     // 3. Future implementation could use reference counting
 
-    let current_string_count = {
+    let _current_string_count = {
         let string_table_guard = system.string_table().lock().map_err(|e| {
             RecoveryError::replay_failure(format!("Failed to lock string table: {}", e))
         })?;

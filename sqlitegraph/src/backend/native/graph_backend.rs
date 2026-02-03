@@ -14,7 +14,6 @@ use crate::backend::{
 };
 use crate::graph::GraphEntity;
 use parking_lot::RwLock;
-use std::sync::Arc;
 
 // V2 WAL integration (always available when native-v2 feature is enabled)
 #[cfg(feature = "native-v2")]

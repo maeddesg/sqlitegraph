@@ -99,7 +99,6 @@
 //!
 //! [`reachability`]: crate::algo::reachability
 
-use std::collections::VecDeque;
 
 use ahash::{AHashMap, AHashSet};
 

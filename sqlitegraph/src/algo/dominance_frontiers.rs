@@ -111,7 +111,6 @@
 //!   dominance algorithm." Software Practice & Experience, 2001.
 
 use ahash::{AHashMap, AHashSet};
-use std::collections::HashSet;
 
 use crate::errors::SqliteGraphError;
 use crate::graph::SqliteGraph;

@@ -1,5 +1,22 @@
 # SQLiteGraph Changelog
 
+## [1.3.1] - 2026-02-03
+
+### Code Quality Improvements
+- **Zero compiler warnings**: Reduced from 129 to 0 warnings
+- **Unused imports**: Removed all unused imports via cargo fix
+- **Unused variables**: Fixed all unused variable warnings
+- **Dead code**: Added `#[allow(dead_code)]` for reserved API surface
+- **SIMD safety**: Added `#[allow(unused_unsafe)]` for required intrinsics
+- **Counter cleanup**: Added proper `let _ =` for tracking variables
+
+### Build Improvements
+- Cleaner compilation output
+- Better IDE experience without warning noise
+- Maintained all 530+ tests passing
+
+---
+
 ## [1.3.0] - 2026-02-03
 
 ### Graph Algorithms Library Release

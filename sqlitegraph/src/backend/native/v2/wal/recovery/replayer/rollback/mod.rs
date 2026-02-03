@@ -99,7 +99,7 @@ impl RollbackSystem {
         );
 
         // Apply rollback operations in reverse order (LIFO)
-        for (index, operation) in self.operations.iter().rev().enumerate() {
+        for (_index, operation) in self.operations.iter().rev().enumerate() {
             debug_log!(
                 "Applying rollback operation {}/{}: {}",
                 index + 1,

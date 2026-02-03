@@ -295,7 +295,7 @@ impl V2GraphFileReplayer {
             }
         }
 
-        let duration = start_time.elapsed();
+        let _duration = start_time.elapsed();
         debug_log!(
             "Transaction TX {} replayed in {:?}: {} success, {} failed",
             transaction.tx_id,
@@ -606,7 +606,7 @@ impl V2GraphFileReplayer {
 
     /// Report replay progress
     fn report_progress(&self, completed: usize, total: usize) {
-        let percentage = (completed as f64 / total as f64) * 100.0;
+        let _percentage = (completed as f64 / total as f64) * 100.0;
         info_log!(
             "Replay progress: {}/{} transactions ({:.1}%)",
             completed,

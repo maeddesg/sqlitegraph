@@ -101,7 +101,6 @@
 //!   and the control dependence graph." ACM TOPLAS, 1991.
 
 use ahash::{AHashMap, AHashSet};
-use std::collections::VecDeque;
 
 use crate::errors::SqliteGraphError;
 use crate::graph::SqliteGraph;
@@ -562,7 +561,7 @@ fn initialize_post_dominators(all_nodes: &[i64], exit: i64) -> AHashMap<i64, AHa
 fn reverse_postorder_reversed(
     preds: &AHashMap<i64, Vec<i64>>,
     exit: i64,
-    all_nodes: &[i64],
+    _all_nodes: &[i64],
 ) -> Result<Vec<i64>, SqliteGraphError> {
     let mut visited = AHashSet::new();
     let mut postorder = Vec::new();

@@ -272,7 +272,7 @@ impl NaturalLoopsResult {
     pub fn nesting_tree(&self) -> AHashMap<i64, Vec<i64>> {
         let mut tree: AHashMap<i64, Vec<i64>> = AHashMap::new();
 
-        for (&header, loop_) in &self.loops {
+        for (&header, _loop_) in &self.loops {
             for (&potential_parent, parent_loop) in &self.loops {
                 if header == potential_parent {
                     continue;

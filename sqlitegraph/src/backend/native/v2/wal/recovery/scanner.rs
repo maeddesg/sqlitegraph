@@ -143,7 +143,7 @@ impl WALScanner {
         // Perform the scan
         let result = scanner.scan().await?;
 
-        let duration = start_time.elapsed();
+        let _duration = start_time.elapsed();
 
         info_log!(
             "WAL scan completed: {} transactions, {} records in {:?}",
@@ -560,8 +560,8 @@ impl TransactionScanner {
     }
 
     /// Report scanning progress
-    fn report_progress(&self, record_count: usize, current_lsn: u64, total_lsn: u64) {
-        let percentage = if total_lsn > 0 {
+    fn report_progress(&self, _record_count: usize, current_lsn: u64, total_lsn: u64) {
+        let _percentage = if total_lsn > 0 {
             (current_lsn as f64 / total_lsn as f64) * 100.0
         } else {
             0.0

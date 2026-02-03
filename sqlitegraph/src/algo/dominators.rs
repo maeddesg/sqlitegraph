@@ -91,7 +91,6 @@
 //!   and the control dependence graph." ACM TOPLAS, 1991.
 
 use ahash::{AHashMap, AHashSet};
-use std::collections::VecDeque;
 
 use crate::errors::SqliteGraphError;
 use crate::graph::SqliteGraph;
@@ -604,7 +603,7 @@ fn extract_immediate_dominators(
         let mut immediate_dominator = None;
 
         for &candidate in &strict_dominators {
-            let is_closest = strict_dominators
+            let _is_closest = strict_dominators
                 .iter()
                 .all(|&other| candidate == other || !dom_set.contains(&other) || {
                     // Check if 'other' dominates 'candidate'

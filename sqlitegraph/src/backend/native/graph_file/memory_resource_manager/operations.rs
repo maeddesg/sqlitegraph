@@ -10,7 +10,7 @@ use super::types::MemoryIOMode;
 use crate::backend::native::{
     graph_file::buffers::ReadBuffer,
     graph_file::file_ops::FileOperations,
-    types::{NativeBackendError, NativeResult},
+    types::NativeResult,
 };
 use std::io::{Read, Seek, SeekFrom};
 

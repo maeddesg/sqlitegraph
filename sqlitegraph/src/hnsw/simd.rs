@@ -1,4 +1,5 @@
 //! SIMD-Accelerated Distance Functions
+#![allow(unused_unsafe)]
 //!
 //! This module provides SIMD-optimized implementations of vector distance
 //! calculations using CPU intrinsics (AVX2 on x86_64). Functions automatically

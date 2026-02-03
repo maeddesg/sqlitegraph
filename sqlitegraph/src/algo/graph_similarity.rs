@@ -431,6 +431,7 @@ fn maximum_common_subgraph(
         }
     }
 
+    let _ = matches_checked; // Counter for debugging/analysis
     max_size
 }
 

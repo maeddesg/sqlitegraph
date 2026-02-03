@@ -534,7 +534,7 @@ fn augment_flow(network: &mut FlowNetwork, path: &[i64], amount: usize) {
 ///
 /// Creates a flow network where each edge has capacity 1 (unweighted graph).
 /// Self-loops are filtered out as they don't affect s-t connectivity.
-fn build_flow_network(graph: &SqliteGraph, source: i64, sink: i64) -> FlowNetwork {
+fn build_flow_network(graph: &SqliteGraph, source: i64, _sink: i64) -> FlowNetwork {
     let mut network = FlowNetwork::new();
 
     // Collect all nodes that might be in paths
@@ -1925,6 +1925,7 @@ where
     }
 
     // Report completion
+    let _ = assigned_count; // All nodes assigned, counter used for progress only
     progress.on_complete();
 
     // Pad partitions to exactly k if needed

@@ -153,7 +153,6 @@
 //! - Symbolic Execution in Practice: A Survey of Applications (arXiv:2508.06643)
 
 use ahash::{AHashMap, AHashSet};
-use std::collections::VecDeque;
 
 use crate::errors::SqliteGraphError;
 use crate::graph::SqliteGraph;
@@ -162,7 +161,7 @@ use crate::progress::ProgressCallback;
 // Import dominance-related modules for constraint-based pruning
 use super::dominators::DominatorResult;
 use super::control_dependence::ControlDependenceResult;
-use super::natural_loops::{NaturalLoopsResult, NaturalLoop};
+use super::natural_loops::NaturalLoopsResult;
 
 /// Path classification based on termination properties.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -512,7 +511,7 @@ fn dfs_enumerate(
 
         // Backtrack
         current_path.pop();
-        *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+        let _ = *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
         return Ok(());
     }
 
@@ -549,7 +548,7 @@ fn dfs_enumerate(
 
     // Backtrack
     current_path.pop();
-    *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+    let _ = *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
 
     Ok(())
 }
@@ -622,7 +621,7 @@ fn dfs_enumerate_with_progress<P: ProgressCallback>(
 
         // Backtrack
         current_path.pop();
-        *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+        let _ = *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
         return Ok(());
     }
 
@@ -660,7 +659,7 @@ fn dfs_enumerate_with_progress<P: ProgressCallback>(
 
     // Backtrack
     current_path.pop();
-    *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+    let _ = *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
 
     Ok(())
 }
@@ -1103,7 +1102,7 @@ fn dfs_with_constraints(
 
         // Backtrack
         current_path.pop();
-        *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+        let _ = *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
         if is_loop_header {
             loop_stack.pop();
         }
@@ -1170,7 +1169,7 @@ fn dfs_with_constraints(
 
     // Backtrack
     current_path.pop();
-    *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+    let _ = *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
     if is_loop_header {
         loop_stack.pop();
     }
@@ -1257,7 +1256,7 @@ fn dfs_with_constraints_progress<P: ProgressCallback>(
 
         // Backtrack
         current_path.pop();
-        *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+        let _ = *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
         if is_loop_header {
             loop_stack.pop();
         }
@@ -1325,7 +1324,7 @@ fn dfs_with_constraints_progress<P: ProgressCallback>(
 
     // Backtrack
     current_path.pop();
-    *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
+    let _ = *visited.entry(node).and_modify(|v| *v -= 1).or_insert(0);
     if is_loop_header {
         loop_stack.pop();
     }

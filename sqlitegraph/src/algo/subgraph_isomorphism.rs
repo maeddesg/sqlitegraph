@@ -365,7 +365,7 @@ pub fn find_subgraph_patterns(
 
     // Collect target node IDs in index order
     let target_node_ids: Vec<i64> = target_pg.node_indices().map(|ni| target_pg[ni]).collect();
-    let pattern_node_ids: Vec<i64> = pattern_pg.node_indices().map(|ni| pattern_pg[ni]).collect();
+    let _pattern_node_ids: Vec<i64> = pattern_pg.node_indices().map(|ni| pattern_pg[ni]).collect();
 
     // Use petgraph's subgraph_isomorphisms_iter
     let mut matches = Vec::new();

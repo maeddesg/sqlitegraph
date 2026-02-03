@@ -31,7 +31,7 @@
 //!   *SIAM Journal on Computing*, 1972.
 //! - https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 
 use ahash::{AHashMap, AHashSet};
 
@@ -249,7 +249,7 @@ fn strongconnect(
 fn build_condensed_dag(
     graph: &SqliteGraph,
     node_to_component: &AHashMap<i64, usize>,
-    components: &[HashSet<i64>],
+    _components: &[HashSet<i64>],
 ) -> Result<Vec<(usize, usize)>, SqliteGraphError> {
     let mut edge_set: AHashSet<(usize, usize)> = AHashSet::new();
 
