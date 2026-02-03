@@ -227,6 +227,9 @@ fn run_command(
         "partition" => run_partition(client, args),
         "subgraph-isomorphism" => run_subgraph_isomorphism(client, args),
         "graph-rewrite" => run_graph_rewrite(client, args),
+        "kv-scan" => run_kv_scan(client, args),
+        "nodes-by-kind" => run_nodes_by_kind(client, args),
+        "nodes-by-name" => run_nodes_by_name(client, args),
         "list" => {
             let graph = client.graph().ok_or_else(|| {
                 SqliteGraphError::invalid_input("list command requires SQLite backend")
@@ -2494,7 +2497,7 @@ fn run_structural_similarity(
     })?;
 
     let progress = ConsoleProgress::new();
-    let bounds = SimilarityBounds {
+    let _bounds = SimilarityBounds {
         max_matches: Some(100),
         timeout_ms: Some(30000),
         similarity_threshold: None,
@@ -2933,7 +2936,7 @@ fn run_scc(client: &BackendClient, _args: &[String]) -> Result<(), SqliteGraphEr
         SqliteGraphError::invalid_input("scc command requires SQLite backend")
     })?;
 
-    let progress = ConsoleProgress::new();
+    let _progress = ConsoleProgress::new();
     let scc_result = strongly_connected_components(graph)?;
 
     let payload = json!({
@@ -3269,6 +3272,83 @@ fn run_graph_rewrite(client: &BackendClient, args: &[String]) -> Result<(), Sqli
         "note": "Graph rewriting requires creating SqliteGraph pattern/replacement objects. Use the algo::rewrite_graph_patterns_with_progress API directly with RewriteRule.",
         "operations_applied": 0,
         "validation_errors": []
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+/// Scan KV store by key prefix (Phase 58: pub/sub enhancements)
+fn run_kv_scan(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    #[cfg(feature = "native-v2")]
+    {
+        use sqlitegraph::snapshot::SnapshotId;
+        use sqlitegraph::backend::native::v2::kv_store::types::KvValue;
+
+        let prefix_str = required_flag_value(args, "--prefix")?;
+        let prefix = prefix_str.as_bytes();
+
+        let backend = client.backend();
+        let results = backend.kv_prefix_scan(SnapshotId::current(), prefix)?;
+
+        let payload = json!({
+            "command": "kv-scan",
+            "prefix": prefix_str,
+            "count": results.len(),
+            "entries": results.iter().map(|(k, v)| {
+                let key_str = String::from_utf8_lossy(k);
+                match v {
+                    KvValue::String(s) => json!({"key": key_str, "value": s}),
+                    KvValue::Integer(n) => json!({"key": key_str, "value": n}),
+                    KvValue::Float(f) => json!({"key": key_str, "value": f}),
+                    KvValue::Boolean(b) => json!({"key": key_str, "value": b}),
+                    KvValue::Json(j) => json!({"key": key_str, "value": j}),
+                    KvValue::Bytes(bytes) => json!({"key": key_str, "value": format!("[binary {} bytes]", bytes.len())}),
+                }
+            }).collect::<Vec<_>>()
+        });
+        println!("{payload}");
+        Ok(())
+    }
+    #[cfg(not(feature = "native-v2"))]
+    {
+        let _ = (client, args);
+        Err(SqliteGraphError::invalid_input("kv-scan requires native-v2 feature"))
+    }
+}
+
+/// Find all nodes with given kind (Phase 58: pub/sub enhancements)
+fn run_nodes_by_kind(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    use sqlitegraph::snapshot::SnapshotId;
+
+    let kind = required_flag_value(args, "--kind")?;
+
+    let backend = client.backend();
+    let node_ids = backend.query_nodes_by_kind(SnapshotId::current(), &kind)?;
+
+    let payload = json!({
+        "command": "nodes-by-kind",
+        "kind": kind,
+        "count": node_ids.len(),
+        "node_ids": node_ids
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+/// Find nodes matching name pattern with * and ? wildcards (Phase 58: pub/sub enhancements)
+fn run_nodes_by_name(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    use sqlitegraph::snapshot::SnapshotId;
+
+    let pattern = required_flag_value(args, "--pattern")?;
+
+    let backend = client.backend();
+    let node_ids = backend.query_nodes_by_name_pattern(SnapshotId::current(), &pattern)?;
+
+    let payload = json!({
+        "command": "nodes-by-name",
+        "pattern": pattern,
+        "count": node_ids.len(),
+        "node_ids": node_ids
     });
     println!("{payload}");
     Ok(())
