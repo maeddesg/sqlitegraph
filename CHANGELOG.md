@@ -1,5 +1,55 @@
 # SQLiteGraph Changelog
 
+## [1.4.0] - 2026-02-03
+
+### Pub/Sub Enhancements Release
+**Phase 58 completion: Query API enhancements for pub/sub use cases**
+
+### KV Store Query Enhancements
+- **KV Prefix Scanning**: `kv_prefix_scan()` for efficient key enumeration by prefix
+  - Native V2: HashMap iteration with prefix filtering
+  - SQLite: LIKE query for prefix matching
+  - Returns results in lexicographic order
+  - MVCC snapshot isolation respected
+  - TTL filtering for expired entries
+
+### Node Query Enhancements
+- **Query by Kind**: `query_nodes_by_kind()` for finding all nodes with a given kind
+  - Native V2: NodeStore iteration with kind filtering
+  - SQLite: WHERE kind = ? query
+  - Returns sorted node IDs for consistent output
+- **Query by Name Pattern**: `query_nodes_by_name_pattern()` for glob-based pattern matching
+  - Supports `*` (any sequence) and `?` (single character) wildcards
+  - Escaping with `\*` and `\?` for literal matches
+  - Pattern matching performed at snapshot isolation level
+
+### Pub/Sub Pattern Filters
+- **Kind Pattern Subscriptions**: `SubscriptionFilter::kind_patterns(vec!["agent:*".to_string()])`
+  - Subscribe to events from nodes with matching kind patterns
+  - Supports glob patterns for flexible filtering
+- **Name Pattern Subscriptions**: `SubscriptionFilter::name_patterns(vec!["msg_index:*".to_string()])`
+  - Subscribe to events from nodes with matching name patterns
+  - Enables topic-based pub/sub without full graph scan
+
+### CLI Commands
+- **`kv-scan --prefix PREFIX`**: Scan KV store by key prefix (native-v2 only)
+- **`nodes-by-kind --kind KIND`**: Find all nodes with given kind
+- **`nodes-by-name --pattern PATTERN`**: Find nodes matching name pattern with glob wildcards
+
+### Use Cases
+- **Agent Messaging**: Query nodes by kind patterns (e.g., `agent:*`, `message:*`)
+- **Topic-Based Pub/Sub**: Subscribe to events matching name patterns (e.g., `msg_index:*`)
+- **Secondary Indexes**: Efficient KV prefix scanning for index enumeration
+- **Dynamic Entity Discovery**: Find nodes by kind without maintaining external ID tracking
+
+### Summary
+- **4 New API Methods**: kv_prefix_scan, query_nodes_by_kind, query_nodes_by_name_pattern, pattern filters
+- **3 New CLI Commands**: kv-scan, nodes-by-kind, nodes-by-name
+- **Pattern Matching**: Glob patterns with `*`, `?`, and escape support
+- **Both Backends**: SQLite and Native V2 implementations
+
+---
+
 ## [1.3.1] - 2026-02-03
 
 ### Code Quality Improvements
