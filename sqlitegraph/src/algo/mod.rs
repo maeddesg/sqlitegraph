@@ -153,6 +153,22 @@
 //! - [`EdgeDelta`] - Edge delta (edges_added, edges_removed)
 //! - [`RefactorValidation`] - Validation result with is_safe, breaking_changes, warnings
 //!
+//! ## Security & Compliance
+//!
+//! - [`propagate_taint_forward()`] - Forward taint propagation from sources to sinks
+//! - [`propagate_taint_forward_with_progress()`] - Forward propagation with progress tracking
+//! - [`propagate_taint_backward()`] - Backward taint propagation from sink to sources
+//! - [`propagate_taint_backward_with_progress()`] - Backward propagation with progress tracking
+//! - [`sink_reachability_analysis()`] - Full vulnerability detection (all sinks)
+//! - [`sink_reachability_analysis_with_progress()`] - Sink analysis with progress tracking
+//! - [`discover_sources_and_sinks()`] - Discover sources/sinks using custom callbacks
+//! - [`discover_sources_and_sinks_default()`] - Discover using metadata-based detectors
+//! - [`TaintResult`] - Result with sources, sinks_reached, tainted_nodes, source_sink_paths
+//! - [`SourceCallback`] - Trait for custom source detection
+//! - [`SinkCallback`] - Trait for custom sink detection
+//! - [`MetadataSourceDetector`] - Default source detector using entity metadata
+//! - [`MetadataSinkDetector`] - Default sink detector using entity metadata
+//!
 //! # Algorithm Characteristics
 //!
 //! | Algorithm | Time Complexity | Best For | Limitations |
@@ -430,6 +446,14 @@ pub use graph_diff::{
     RefactorValidation,
 };
 
+// Security & Compliance algorithms
+pub use taint_analysis::{
+    discover_sources_and_sinks, discover_sources_and_sinks_default, MetadataSinkDetector,
+    MetadataSourceDetector, propagate_taint_backward, propagate_taint_backward_with_progress,
+    propagate_taint_forward, propagate_taint_forward_with_progress, sink_reachability_analysis,
+    sink_reachability_analysis_with_progress, SinkCallback, SourceCallback, TaintResult,
+};
+
 // Module declarations
 mod call_graph_analysis;
 mod centrality;
@@ -452,6 +476,7 @@ mod subgraph_isomorphism;
 mod graph_similarity;
 mod graph_rewriting;
 mod graph_diff;
+mod taint_analysis;
 mod topological_sort;
 mod transitive_closure;
 mod transitive_reduction;

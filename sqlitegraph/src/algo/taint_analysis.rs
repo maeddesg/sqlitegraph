@@ -103,9 +103,8 @@ use std::collections::VecDeque;
 
 use ahash::{AHashMap, AHashSet};
 
-use crate::graph::types::GraphEntity;
 use crate::progress::ProgressCallback;
-use crate::{errors::SqliteGraphError, graph::SqliteGraph};
+use crate::{errors::SqliteGraphError, graph::SqliteGraph, GraphEntity};
 
 use super::reachability::{can_reach, reachable_from, reverse_reachable_from};
 
@@ -486,12 +485,14 @@ pub fn propagate_taint_forward(
         }
     }
 
+    let size = tainted_nodes.len();
+
     Ok(TaintResult {
         sources: sources_set,
         sinks_reached,
         tainted_nodes,
         source_sink_paths,
-        size: tainted_nodes.len(),
+        size,
     })
 }
 
@@ -581,12 +582,14 @@ where
     // Report completion
     progress.on_complete();
 
+    let size = tainted_nodes.len();
+
     Ok(TaintResult {
         sources: sources_set,
         sinks_reached,
         tainted_nodes,
         source_sink_paths,
-        size: tainted_nodes.len(),
+        size,
     })
 }
 
@@ -667,12 +670,14 @@ pub fn propagate_taint_backward(
     let mut sinks_reached = AHashSet::new();
     sinks_reached.insert(sink);
 
+    let size = ancestors.len();
+
     Ok(TaintResult {
         sources: affecting_sources,
         sinks_reached,
         tainted_nodes: ancestors,
         source_sink_paths,
-        size: ancestors.len(),
+        size,
     })
 }
 
@@ -753,12 +758,14 @@ where
     // Report completion
     progress.on_complete();
 
+    let size = ancestors.len();
+
     Ok(TaintResult {
         sources: affecting_sources,
         sinks_reached,
         tainted_nodes: ancestors,
         source_sink_paths,
-        size: ancestors.len(),
+        size,
     })
 }
 
@@ -907,12 +914,149 @@ where
     Ok(result)
 }
 
+/// Discovers all sources and sinks in the graph using custom callbacks.
+///
+/// Iterates through all nodes in the graph and applies the provided
+/// callbacks to identify taint sources and security-sensitive sinks.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+/// * `source_detector` - Callback for detecting sources
+/// * `sink_detector` - Callback for detecting sinks
+///
+/// # Returns
+/// Tuple of (sources, sinks) where each is Vec<i64> of node IDs.
+///
+/// # Complexity
+/// - **Time**: O(V) - visits each node once
+/// - **Space**: O(V) for storing sources and sinks lists
+///
+/// # Algorithm
+/// 1. Get all nodes via graph.all_entity_ids()
+/// 2. For each node:
+///    - Fetch entity from graph
+///    - Check source_detector.is_source(), append to sources if true
+///    - Check sink_detector.is_sink(), append to sinks if true
+/// 3. Return (sources, sinks) as Vec<i64>
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{
+///     SqliteGraph,
+///     algo::{discover_sources_and_sinks, MetadataSourceDetector, MetadataSinkDetector}
+/// };
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build graph with metadata annotations ...
+///
+/// // Use default metadata-based detectors
+/// let (sources, sinks) = discover_sources_and_sinks(
+///     &graph,
+///     &MetadataSourceDetector,
+///     &MetadataSinkDetector,
+/// )?;
+///
+/// println!("Found {} sources and {} sinks", sources.len(), sinks.len());
+/// ```
+pub fn discover_sources_and_sinks(
+    graph: &SqliteGraph,
+    source_detector: &impl SourceCallback,
+    sink_detector: &impl SinkCallback,
+) -> Result<(Vec<i64>, Vec<i64>), SqliteGraphError> {
+    let mut sources = Vec::new();
+    let mut sinks = Vec::new();
+
+    // Get all nodes in the graph
+    let all_ids = graph.all_entity_ids()?;
+
+    for node_id in all_ids {
+        // Fetch entity for this node
+        let entity = graph.get_entity(node_id)?;
+
+        // Check if this is a source
+        if source_detector.is_source(node_id, &entity) {
+            sources.push(node_id);
+        }
+
+        // Check if this is a sink
+        if sink_detector.is_sink(node_id, &entity) {
+            sinks.push(node_id);
+        }
+    }
+
+    Ok((sources, sinks))
+}
+
+/// Discovers sources and sinks using default metadata-based detectors.
+///
+/// Convenience function that uses [`MetadataSourceDetector`] and
+/// [`MetadataSinkDetector`] to find sources and sinks based on
+/// entity metadata annotations.
+///
+/// # Arguments
+/// * `graph` - The graph to analyze
+///
+/// # Returns
+/// Tuple of (sources, sinks) where each is Vec<i64> of node IDs.
+///
+/// # Metadata Format
+///
+/// Sources are detected by:
+/// - `"kind": "source"` or `"kind": "untrusted"` or `"kind": "user_input"`
+/// - `"taint": "source"`
+///
+/// Sinks are detected by:
+/// - `"kind": "sink"` or `"kind": "sql_query"` or `"kind": "html_output"` or `"kind": "command"`
+/// - `"operation": "execute"` or `"operation": "query"` or `"operation": "render"` or `"operation": "write"`
+///
+/// # Complexity
+/// - **Time**: O(V) - visits each node once
+/// - **Space**: O(V) for storing sources and sinks lists
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::discover_sources_and_sinks_default};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+///
+/// // Add source with metadata
+/// graph.add_entity(GraphEntity {
+///     id: 1,
+///     kind: "variable".to_string(),
+///     name: "user_input".to_string(),
+///     file_path: None,
+///     data: json!({"kind": "source", "taint": "untrusted"}),
+/// })?;
+///
+/// // Add sink with metadata
+/// graph.add_entity(GraphEntity {
+///     id: 2,
+///     kind: "operation".to_string(),
+///     name: "sql_execute".to_string(),
+///     file_path: None,
+///     data: json!({"kind": "sql_query", "operation": "execute"}),
+/// })?;
+///
+/// // Auto-discover sources and sinks
+/// let (sources, sinks) = discover_sources_and_sinks_default(&graph)?;
+///
+/// assert_eq!(sources, vec![1]);
+/// assert_eq!(sinks, vec![2]);
+/// ```
+pub fn discover_sources_and_sinks_default(
+    graph: &SqliteGraph,
+) -> Result<(Vec<i64>, Vec<i64>), SqliteGraphError> {
+    discover_sources_and_sinks(graph, &MetadataSourceDetector, &MetadataSinkDetector)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
 
-    use crate::graph::types::GraphEntity;
+    use crate::GraphEntity;
 
     // Test helper: create a simple entity with metadata
     fn create_test_entity(id: i64, kind: &str, data: serde_json::Value) -> GraphEntity {
