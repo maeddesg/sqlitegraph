@@ -401,6 +401,81 @@ pub fn natural_loops(
     natural_loops_internal(graph, dom_result, &all_nodes)
 }
 
+/// Computes natural loops with automatic entry node detection.
+///
+/// Convenience function that automatically detects the CFG entry node (node with
+/// no incoming edges) and computes natural loops. This is the easiest way to
+/// compute natural loops when you don't need to specify a custom entry node.
+///
+/// # Arguments
+/// * `graph` - The control flow graph to analyze
+///
+/// # Returns
+/// `NaturalLoopsResult` containing all detected natural loops.
+///
+/// # Entry Node Detection
+///
+/// The entry node is detected as the node with no incoming edges. If multiple
+/// nodes have no incoming edges (disconnected graph), returns an error.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use sqlitegraph::{SqliteGraph, algo::natural_loops_from_exit};
+///
+/// let graph = SqliteGraph::open_in_memory()?;
+/// // ... build CFG ...
+///
+/// let loops = natural_loops_from_exit(&graph)?;
+///
+/// println!("Found {} natural loops", loops.count());
+/// ```
+///
+/// # Naming Note
+///
+/// Despite the `_from_exit` suffix, this function detects **entry** nodes (not exit nodes)
+/// because natural loops are computed using **dominators** (which require an entry point),
+/// not post-dominators (which require exit points). The naming follows the convention
+/// of `control_dependence_from_exit` for consistency in the CFG analysis API.
+pub fn natural_loops_from_exit(
+    graph: &SqliteGraph,
+) -> Result<NaturalLoopsResult, SqliteGraphError> {
+    // Get all nodes
+    let all_nodes = graph.all_entity_ids()?;
+
+    if all_nodes.is_empty() {
+        return Ok(NaturalLoopsResult {
+            loops: AHashMap::new(),
+        });
+    }
+
+    // Find entry nodes (nodes with no incoming edges)
+    let mut entries = Vec::new();
+    for &node in &all_nodes {
+        let incoming = graph.fetch_incoming(node)?;
+        if incoming.is_empty() {
+            entries.push(node);
+        }
+    }
+
+    if entries.is_empty() {
+        return Err(SqliteGraphError::query(
+            "Cannot compute natural loops: graph has no entry nodes (all nodes have incoming edges)",
+        ));
+    }
+
+    if entries.len() > 1 {
+        return Err(SqliteGraphError::query(
+            &format!("Cannot compute natural loops: graph has {} entry nodes (expected 1)", entries.len()),
+        ));
+    }
+
+    // Single entry - compute dominators and natural loops
+    let entry = entries[0];
+    let dom_result = super::dominators::dominators(graph, entry)?;
+    natural_loops(graph, &dom_result)
+}
+
 /// Computes natural loops with progress tracking.
 ///
 /// Same algorithm as [`natural_loops`] but reports progress during execution.

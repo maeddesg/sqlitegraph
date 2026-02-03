@@ -381,7 +381,7 @@ pub use dominance_frontiers::{
     DominanceFrontierResult, IteratedDominanceFrontierResult,
 };
 pub use dominators::{dominators, dominators_with_progress, DominatorResult};
-pub use natural_loops::{natural_loops, natural_loops_with_progress, NaturalLoop, NaturalLoopsResult};
+pub use natural_loops::{natural_loops, natural_loops_from_exit, natural_loops_with_progress, NaturalLoop, NaturalLoopsResult};
 pub use post_dominators::{
     post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
 };
