@@ -12,8 +12,8 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 Milestone: v1.14 Graph Algorithms Library (COMPLETE)
 Phase: 57 of 57 (CLI Commands) — COMPLETE
 Plan: 07 of 7 — COMPLETE
-Status: Phase 57 COMPLETE - All 7 CLI command plans delivered (38+ algorithm commands total). Phase 57-07: Graph Diff and Security commands (structural-similarity, graph-diff, validate-refactor, taint-forward, taint-backward, sink-analysis, discover-sources-sinks) with subtree comparison using Jaccard similarity and file-based JSON input for source/sink lists.
-Last activity: 2026-02-03 — Phase 57 complete, v1.14 Graph Algorithms Library milestone complete
+Status: Phase 57 COMPLETE - All 7 CLI command plans delivered (43+ algorithm commands total). Phase 57-06: Observability, Partitioning, and ML algorithms CLI commands (happens-before, impact-radius, partition, subgraph-isomorphism, graph-rewrite stub). All use ConsoleProgress, JSON output, and file-based input where required.
+Last activity: 2026-02-03 — Phase 57-06 complete, 5 observability/ML CLI commands delivered
 
 Progress: [████████████] 62% of v1.14 (38/197 plans complete, 13/14 phases complete, Phase 57 complete, v1.14 complete except for benchmarking phase)
 
@@ -156,7 +156,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 57-07 complete. All Graph Diff and Security CLI commands delivered: structural-similarity (--graph1/--graph2), graph-diff (--before/--after), validate-refactor (--before/--after), taint-forward (--sources-file), taint-backward (--sink/--sources-file), sink-analysis (--sources-file/--sinks-file), discover-sources-sinks. All use ConsoleProgress and JSON output. v1.14 Graph Algorithms Library milestone complete.
+Stopped at: Phase 57-06 complete. Observability, Partitioning, and ML algorithms CLI commands delivered: happens-before (--events-file), impact-radius (--start/--max-distance), partition (--k/--max-size), subgraph-isomorphism (--pattern-file), graph-rewrite (--rules-file stub). All use ConsoleProgress and JSON output.
 Resume file: None
 
 **Phase 57-07 new decisions:**
@@ -164,3 +164,10 @@ Resume file: None
 - **Graph diff file adaptation:** Changed --before/--after from file paths to node IDs for subtree comparison within current database
 - **CLI file input pattern:** JSON files for source/sink lists ({"sources": [1,2,3]}) enables large node lists without command-line length limits
 - **Refactor safety thresholds:** Breaking = nodes removed OR similarity < 0.5; Warning = 0.5 <= similarity < 0.8
+
+**Phase 57-06 new decisions:**
+- **Happens-before manual parsing:** TraceEvent doesn't implement Deserialize, so manual JSON parsing with VectorClock construction via increment() calls for each timestamp entry
+- **Impact radius AHashMap iteration:** distances is `AHashMap<i64, f64>` not `AHashMap<i64, Option<f64>>`, use direct map instead of filter_map
+- **PartitionConfig field names:** Uses `max_size` not `max_partition_size`, has `max_imbalance` not `max_iterations`
+- **Graph-rewrite stub implementation:** RewriteRule requires SqliteGraph objects for pattern/replacement which is complex to create from JSON, so command returns not_implemented status with documentation note
+- **AHashMap serialization:** All algorithm results use ahash collections which don't implement Serialize, requiring conversion to Vec for JSON output
