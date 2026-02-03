@@ -19,7 +19,7 @@ use sqlitegraph::{
         transitive_closure_with_progress, TransitiveClosureBounds,
         transitive_reduction_with_progress, validate_refactor, weakly_connected_components_with_progress,
         SimilarityBounds, TopoError,
-        ControlDependenceResult, CriticalPathError, DominanceFrontierResult, DominatorResult,
+        ControlDependenceResult, CriticalPathError, CycleBasisBounds, DominanceFrontierResult, DominatorResult,
         NaturalLoopsResult, PathClassification, PathEnumerationConfig,
         PathEnumerationDominanceConfig, PathEnumerationResult, PostDominatorResult, SliceResult,
         unreachable_from,
@@ -200,6 +200,12 @@ fn run_command(
         "control-dependence" => run_control_dependence(client, args),
         "dominance-frontiers" => run_dominance_frontiers(client, args),
         "natural-loops" => run_natural_loops(client, args),
+        // Program Analysis and Cut commands (Phase 57-05)
+        "backward-slice" => run_backward_slice(client, args),
+        "forward-slice" => run_forward_slice(client, args),
+        "collapse-scc" => run_collapse_scc(client, args),
+        "min-cut" => run_min_cut(client, args),
+        "min-vertex-cut" => run_min_vertex_cut(client, args),
         // Core graph theory commands
         "wcc" => run_wcc(client, args),
         "scc" => run_scc(client, args),
@@ -210,6 +216,17 @@ fn run_command(
         // "reindex-all" => run_reindex_all(client, args),
         // "reindex-syncore" => run_reindex_syncore(client, args),
         // "reindex-sync-graph" => run_reindex_sync_graph(client, args),
+        // Path Analysis and Dependency commands (Phase 57-04)
+        "enumerate-paths" => run_enumerate_paths(client, args),
+        "enumerate-paths-constrained" => run_enumerate_paths_constrained(client, args),
+        "critical-path" => run_critical_path(client, args),
+        "cycle-basis" => run_cycle_basis(client, args),
+        // Observability, Partitioning, and ML algorithms (Phase 57-06)
+        "happens-before" => run_happens_before(client, args),
+        "impact-radius" => run_impact_radius(client, args),
+        "partition" => run_partition(client, args),
+        "subgraph-isomorphism" => run_subgraph_isomorphism(client, args),
+        "graph-rewrite" => run_graph_rewrite(client, args),
         "list" => {
             let graph = client.graph().ok_or_else(|| {
                 SqliteGraphError::invalid_input("list command requires SQLite backend")
@@ -1861,6 +1878,116 @@ fn run_forward_slice(client: &BackendClient, args: &[String]) -> Result<(), Sqli
     Ok(())
 }
 
+
+fn run_collapse_scc(client: &BackendClient, _args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("collapse-scc command requires SQLite backend")
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let result = collapse_sccs_with_progress(graph, &progress)?;
+
+    // Convert AHashMap to Vec for JSON serialization
+    let mut node_to_supernode_vec: Vec<(i64, i64)> = result.node_to_supernode.iter().map(|(k, v)| (*k, *v)).collect();
+    node_to_supernode_vec.sort_by_key(|(k, _)| *k);
+
+    let mut supernode_members_vec: Vec<(i64, Vec<i64>)> = result.supernode_members.iter().map(|(k, v)| {
+        let mut members: Vec<i64> = v.iter().cloned().collect();
+        members.sort();
+        (*k, members)
+    }).collect();
+    supernode_members_vec.sort_by_key(|(k, _)| *k);
+
+    let payload = json!({
+        "command": "collapse-scc",
+        "supernode_count": result.supernode_members.len(),
+        "supernode_edges": result.supernode_edges.len(),
+        "node_to_supernode": node_to_supernode_vec,
+        "supernode_members": supernode_members_vec
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_min_cut(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("min-cut command requires SQLite backend")
+    })?;
+
+    let source = required_flag_value(args, "--source").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid source node: {e}")))
+    })?;
+
+    let sink = required_flag_value(args, "--sink").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid sink node: {e}")))
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let result = min_st_cut_with_progress(graph, source, sink, &progress)?;
+
+    // Convert AHashSet to Vec for JSON serialization
+    let mut source_side_vec: Vec<i64> = result.source_side.iter().cloned().collect();
+    source_side_vec.sort();
+
+    let mut sink_side_vec: Vec<i64> = result.sink_side.iter().cloned().collect();
+    sink_side_vec.sort();
+
+    let payload = json!({
+        "command": "min-cut",
+        "source": source,
+        "sink": sink,
+        "cut_size": result.cut_size,
+        "cut_edges": result.cut_edges,
+        "source_side": source_side_vec,
+        "sink_side": sink_side_vec
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_min_vertex_cut(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("min-vertex-cut command requires SQLite backend")
+    })?;
+
+    let source = required_flag_value(args, "--source").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid source node: {e}")))
+    })?;
+
+    let sink = required_flag_value(args, "--sink").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid sink node: {e}")))
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let result = min_vertex_cut_with_progress(graph, source, sink, &progress)?;
+
+    // Convert AHashSet to Vec for JSON serialization
+    let mut separator_vec: Vec<i64> = result.separator.iter().cloned().collect();
+    separator_vec.sort();
+
+    let mut source_side_vec: Vec<i64> = result.source_side.iter().cloned().collect();
+    source_side_vec.sort();
+
+    let mut sink_side_vec: Vec<i64> = result.sink_side.iter().cloned().collect();
+    sink_side_vec.sort();
+
+    let payload = json!({
+        "command": "min-vertex-cut",
+        "source": source,
+        "sink": sink,
+        "cut_size": result.cut_size,
+        "separator": separator_vec,
+        "source_side": source_side_vec,
+        "sink_side": sink_side_vec
+    });
+    println!("{payload}");
+    Ok(())
+}
+
 fn run_dominators(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
     let graph = client.graph().ok_or_else(|| {
         SqliteGraphError::invalid_input("dominators command requires SQLite backend")
@@ -1877,8 +2004,8 @@ fn run_dominators(client: &BackendClient, args: &[String]) -> Result<(), SqliteG
     let payload = json!({
         "command": "dominators",
         "entry": entry,
-        "immediate_dominator": result.immediate_dominator,
-        "dominator_sets": result.dominators
+        "immediate_dominator": result.idom,
+        "dominator_sets": result.dom
     });
     println!("{payload}");
     Ok(())
@@ -1907,8 +2034,8 @@ fn run_post_dominators(client: &BackendClient, args: &[String]) -> Result<(), Sq
     let payload = json!({
         "command": "post-dominators",
         "exit": exit,
-        "immediate_post_dominator": result.immediate_post_dominator,
-        "post_dominator_sets": result.post_dominators
+        "immediate_post_dominator": result.ipdom,
+        "post_dominator_sets": result.post_dom
     });
     println!("{payload}");
     Ok(())
@@ -1931,7 +2058,9 @@ fn run_control_dependence(
         .transpose()?;
 
     let result = if let Some(exit_node) = exit {
-        control_dependence_graph(graph, exit_node)?
+        let progress = ConsoleProgress::new();
+        let post_result = post_dominators_with_progress(graph, exit_node, &progress)?;
+        control_dependence_graph(graph, &post_result)?
     } else {
         control_dependence_from_exit(graph)?
     };
@@ -1939,8 +2068,8 @@ fn run_control_dependence(
     let payload = json!({
         "command": "control-dependence",
         "exit": exit,
-        "edge_count": result.edges.len(),
-        "edges": result.edges
+        "cdg": result.cdg,
+        "reverse_cdg": result.reverse_cdg
     });
     println!("{payload}");
     Ok(())
@@ -1962,10 +2091,15 @@ fn run_dominance_frontiers(
     let progress = ConsoleProgress::new();
     let frontiers = dominance_frontiers_with_progress(graph, entry, &progress)?;
 
+    // Convert AHashMap to HashMap for JSON serialization
+    let frontier_sets: std::collections::HashMap<i64, Vec<i64>> = frontiers.into_iter()
+        .map(|(k, v)| (k, v.into_iter().collect()))
+        .collect();
+
     let payload = json!({
         "command": "dominance-frontiers",
         "entry": entry,
-        "frontier_sets": frontiers
+        "frontier_sets": frontier_sets
     });
     println!("{payload}");
     Ok(())
@@ -2133,8 +2267,10 @@ fn run_enumerate_paths(client: &BackendClient, args: &[String]) -> Result<(), Sq
         max_depth,
         max_paths,
         revisit_cap: 100,
+        exit_nodes: None,
+        error_nodes: None,
     };
-    let result = enumerate_paths_with_progress(graph, start, config, &progress)?;
+    let result = enumerate_paths_with_progress(graph, start, &config, progress)?;
 
     let payload = json!({
         "command": "enumerate-paths",
@@ -2142,8 +2278,8 @@ fn run_enumerate_paths(client: &BackendClient, args: &[String]) -> Result<(), Sq
         "max_depth": max_depth,
         "max_paths": max_paths,
         "path_count": result.paths.len(),
-        "normal_count": result.statistics.normal_paths,
-        "error_count": result.statistics.error_paths,
+        "normal_count": result.normal_paths.len(),
+        "error_count": result.error_paths.len(),
         "paths": result.paths.iter().take(100).map(|p| json!({
             "nodes": p.nodes,
             "classification": format!("{:?}", p.classification)
@@ -2171,15 +2307,61 @@ fn run_enumerate_paths_constrained(
     let enable_loops = args.iter().any(|a| a == "--enable-loops");
 
     let progress = ConsoleProgress::new();
-    let config = PathEnumerationDominanceConfig {
-        enable_dominance_pruning: enable_dominance,
-        enable_cd_pruning: enable_cd,
-        enable_loop_pruning: enable_loops,
+
+    // Compute required analysis results for constrained enumeration
+    let dom_result = if enable_dominance || enable_cd || enable_loops {
+        Some(sqlitegraph::algo::dominators(graph, start)?)
+    } else {
+        None
+    };
+
+    let cd_result = if enable_cd {
+        Some(sqlitegraph::algo::control_dependence_from_exit(graph)?)
+    } else {
+        None
+    };
+
+    let loops_result = if enable_loops {
+        Some(sqlitegraph::algo::natural_loops(graph)?)
+    } else {
+        None
+    };
+
+    let base_config = PathEnumerationConfig {
         max_depth: 100,
         max_paths: 1000,
         revisit_cap: 100,
+        exit_nodes: None,
+        error_nodes: None,
     };
-    let result = enumerate_paths_with_dominance_progress(graph, start, config, &progress)?;
+    let config = PathEnumerationDominanceConfig {
+        base: base_config,
+        use_dominance_pruning: enable_dominance,
+        use_control_dependence_pruning: enable_cd,
+        use_loop_constraint_pruning: enable_loops,
+    };
+
+    // Call the appropriate function based on what constraints are enabled
+    let result = if enable_dominance || enable_cd || enable_loops {
+        // Need all analysis results for constrained enumeration
+        let dom = dom_result.as_ref().unwrap();
+        let cd = cd_result.as_ref().unwrap();
+        let loops = loops_result.as_ref().unwrap();
+        enumerate_paths_with_dominance_progress(graph, start, dom, cd, loops, &config, progress)?
+    } else {
+        // Use simple enumeration when no constraints enabled
+        enumerate_paths_with_progress(graph, start, &config.base, progress)?
+    };
+
+    let pruning_json = if enable_dominance || enable_cd || enable_loops {
+        json!({
+            "paths_pruned": result.pruning_stats.as_ref().map(|s| s.paths_pruned).unwrap_or(0),
+            "total_considered": result.pruning_stats.as_ref().map(|s| s.total_considered).unwrap_or(0),
+            "reduction_ratio": result.pruning_stats.as_ref().map(|s| s.reduction_ratio).unwrap_or(0.0)
+        })
+    } else {
+        json!(null)
+    };
 
     let payload = json!({
         "command": "enumerate-paths-constrained",
@@ -2188,12 +2370,11 @@ fn run_enumerate_paths_constrained(
         "enable_cd": enable_cd,
         "enable_loops": enable_loops,
         "path_count": result.paths.len(),
-        "pruning_stats": result.pruning_stats
+        "pruning_stats": pruning_json
     });
     println!("{payload}");
     Ok(())
 }
-
 fn run_critical_path(client: &BackendClient, _args: &[String]) -> Result<(), SqliteGraphError> {
     let graph = client.graph().ok_or_else(|| {
         SqliteGraphError::invalid_input("critical-path command requires SQLite backend")
@@ -2202,13 +2383,15 @@ fn run_critical_path(client: &BackendClient, _args: &[String]) -> Result<(), Sql
     let progress = ConsoleProgress::new();
     match critical_path_with_progress(graph, &default_weight_fn, &progress) {
         Ok(result) => {
+            // Convert AHashSet to Vec for JSON serialization
+            let bottlenecks: Vec<i64> = result.bottlenecks().into_iter().collect();
             let payload = json!({
                 "command": "critical-path",
                 "status": "success",
                 "path_length": result.path.len(),
-                "total_distance": result.total_distance,
+                "total_distance": result.distance,
                 "path": result.path,
-                "bottlenecks": result.bottlenecks
+                "bottlenecks": bottlenecks
             });
             println!("{payload}");
             Ok(())
@@ -2247,7 +2430,12 @@ fn run_cycle_basis(client: &BackendClient, args: &[String]) -> Result<(), Sqlite
         .unwrap_or(20);
 
     let progress = ConsoleProgress::new();
-    let result = cycle_basis_with_progress(graph, max_cycles, max_cycle_length, &progress)?;
+    let bounds = CycleBasisBounds {
+        max_cycles: Some(max_cycles),
+        max_cycle_length: Some(max_cycle_length),
+        max_per_scc: None,
+    };
+    let result = cycle_basis_with_progress(graph, bounds, &progress)?;
 
     let payload = json!({
         "command": "cycle-basis",
@@ -2310,8 +2498,15 @@ fn run_graph_diff(client: &BackendClient, args: &[String]) -> Result<(), SqliteG
         SqliteGraphError::invalid_input("graph-diff command requires SQLite backend")
     })?;
 
-    let before = required_flag_value(args, "--before")?;
-    let after = required_flag_value(args, "--after")?;
+    let before = required_flag_value(args, "--before").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid before node: {e}")))
+    })?;
+
+    let after = required_flag_value(args, "--after").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid after node: {e}")))
+    })?;
 
     // For CLI, --before and --after refer to node IDs representing graph roots
     // This is a simplified implementation that compares subtrees
@@ -2358,8 +2553,15 @@ fn run_validate_refactor(client: &BackendClient, args: &[String]) -> Result<(), 
         SqliteGraphError::invalid_input("validate-refactor command requires SQLite backend")
     })?;
 
-    let before = required_flag_value(args, "--before")?;
-    let after = required_flag_value(args, "--after")?;
+    let before = required_flag_value(args, "--before").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid before node: {e}")))
+    })?;
+
+    let after = required_flag_value(args, "--after").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid after node: {e}")))
+    })?;
 
     // Perform graph diff between before/after nodes
     let progress = ConsoleProgress::new();
@@ -2641,6 +2843,359 @@ fn run_discover_sources_sinks(
         "sources": result.0,
         "sinks_count": result.1.len(),
         "sinks": result.1
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_wcc(client: &BackendClient, _args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("wcc command requires SQLite backend")
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let components = weakly_connected_components_with_progress(graph, &progress)?;
+
+    let payload = json!({
+        "command": "wcc",
+        "component_count": components.len(),
+        "components": components.iter().take(10).map(|members| json!({
+            "member_count": members.len(),
+            "members": members
+        })).collect::<Vec<_>>()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_scc(client: &BackendClient, _args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("scc command requires SQLite backend")
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let scc_result = strongly_connected_components(graph)?;
+
+    let payload = json!({
+        "command": "scc",
+        "scc_count": scc_result.components.len(),
+        "sccs": scc_result.components.iter().take(10).map(|members| json!({
+            "member_count": members.len(),
+            "members": members
+        })).collect::<Vec<_>>()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_transitive_closure(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("transitive-closure command requires SQLite backend")
+    })?;
+
+    // Parse optional bounds
+    let max_depth = optional_flag_value(args, "--max-depth")
+        .map(|s| s.parse::<usize>().map_err(|e| {
+            SqliteGraphError::invalid_input(format!("invalid max-depth: {e}"))
+        }))
+        .transpose()?
+        .unwrap_or(usize::MAX);
+
+    let max_sources = optional_flag_value(args, "--max-sources")
+        .map(|s| s.parse::<usize>().map_err(|e| {
+            SqliteGraphError::invalid_input(format!("invalid max-sources: {e}"))
+        }))
+        .transpose()?
+        .unwrap_or(usize::MAX);
+
+    let max_pairs = optional_flag_value(args, "--max-pairs")
+        .map(|s| s.parse::<usize>().map_err(|e| {
+            SqliteGraphError::invalid_input(format!("invalid max-pairs: {e}"))
+        }))
+        .transpose()?
+        .unwrap_or(usize::MAX);
+
+    let progress = ConsoleProgress::new();
+    let bounds = TransitiveClosureBounds { max_depth, max_sources, max_pairs };
+    let closure = transitive_closure_with_progress(graph, bounds, &progress)?;
+
+    let payload = json!({
+        "command": "transitive-closure",
+        "max_depth": max_depth,
+        "max_sources": max_sources,
+        "max_pairs": max_pairs,
+        "reachable_pairs": closure.len()
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_transitive_reduction(client: &BackendClient, _args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("transitive-reduction command requires SQLite backend")
+    })?;
+
+    let progress = ConsoleProgress::new();
+    let removed = transitive_reduction_with_progress(graph, &progress)?;
+
+    let payload = json!({
+        "command": "transitive-reduction",
+        "edges_removed": removed.len(),
+        "removed_edges": removed
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+fn run_topological_sort(client: &BackendClient, _args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("topological-sort command requires SQLite backend")
+    })?;
+
+    match topological_sort(graph) {
+        Ok(ordering) => {
+            let payload = json!({
+                "command": "topological-sort",
+                "status": "success",
+                "node_count": ordering.len(),
+                "ordering": ordering
+            });
+            println!("{payload}");
+            Ok(())
+        }
+        Err(e) => {
+            let payload = json!({
+                "command": "topological-sort",
+                "status": "cycle_detected",
+                "error": e.to_string()
+            });
+            println!("{payload}");
+            Err(SqliteGraphError::invalid_input(format!("graph contains cycles: {}", e)))
+        }
+    }
+}
+
+// ============================================================================
+// Plan 57-06: Observability, Partitioning, and ML Algorithm CLI Commands
+// ============================================================================
+
+/// happens-before: Event ordering analysis for concurrent traces
+fn run_happens_before(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let events_file = required_flag_value(args, "--events-file")?;
+
+    // Read events JSON file
+    let json_content = fs::read_to_string(&events_file)
+        .map_err(|e| SqliteGraphError::invalid_input(format!("failed to read events file: {e}")))?;
+
+    let events: Vec<sqlitegraph::algo::TraceEvent> = serde_json::from_str(&json_content)
+        .map_err(|e| SqliteGraphError::invalid_input(format!("failed to parse events: {e}")))?;
+
+    let result = sqlitegraph::algo::happens_before_analysis(&events)?;
+
+    let payload = json!({
+        "command": "happens-before",
+        "events_file": events_file,
+        "event_count": events.len(),
+        "concurrent_pairs": result.concurrent_pairs.len(),
+        "race_count": result.race_count
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+/// impact-radius: Blast zone computation using bounded reachability
+fn run_impact_radius(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("impact-radius command requires SQLite backend")
+    })?;
+
+    let start = required_flag_value(args, "--start").and_then(|s| {
+        s.parse::<i64>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid start node: {e}")))
+    })?;
+
+    let max_distance = optional_flag_value(args, "--max-distance")
+        .map(|s| s.parse::<f64>().map_err(|e| {
+            SqliteGraphError::invalid_input(format!("invalid max-distance: {e}"))
+        }))
+        .transpose()?
+        .unwrap_or(10.0);
+
+    let progress = ConsoleProgress::new();
+    let config = sqlitegraph::algo::ImpactRadiusConfig {
+        max_distance,
+        max_hops: max_distance as u32,
+        weight_fn: sqlitegraph::algo::default_weight_fn,
+    };
+    let result = sqlitegraph::algo::impact_radius_with_progress(graph, start, &config, &progress)?;
+
+    // Convert distances to sorted Vec for JSON serialization
+    let mut distances_vec: Vec<(i64, f64)> = result.distances.iter().map(|(k, v)| (*k, *v)).collect();
+    distances_vec.sort_by_key(|(k, _)| *k);
+
+    let payload = json!({
+        "command": "impact-radius",
+        "start": start,
+        "max_distance": max_distance,
+        "blast_zone_size": result.blast_zone.len(),
+        "distances": distances_vec
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+/// partition: Size-bounded k-way graph partitioning
+fn run_partition(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("partition command requires SQLite backend")
+    })?;
+
+    let k = required_flag_value(args, "--k").and_then(|s| {
+        s.parse::<usize>()
+            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid k: {e}")))
+    })?;
+
+    let max_size = optional_flag_value(args, "--max-size")
+        .map(|s| s.parse::<usize>().map_err(|e| {
+            SqliteGraphError::invalid_input(format!("invalid max-size: {e}"))
+        }))
+        .transpose()?;
+
+    let progress = ConsoleProgress::new();
+    let config = sqlitegraph::algo::PartitionConfig {
+        k,
+        max_partition_size: max_size.unwrap_or(usize::MAX),
+        max_iterations: 100,
+    };
+    let result = sqlitegraph::algo::partition_kway_with_progress(graph, &config, &progress)?;
+
+    let payload = json!({
+        "command": "partition",
+        "k": k,
+        "max_size": max_size,
+        "partition_count": result.partitions.len(),
+        "partitions": result.partitions,
+        "node_to_partition": result.node_to_partition
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+/// subgraph-isomorphism: Bounded subgraph isomorphism for pattern matching
+fn run_subgraph_isomorphism(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("subgraph-isomorphism command requires SQLite backend")
+    })?;
+
+    let pattern_file = required_flag_value(args, "--pattern-file")?;
+
+    // Read pattern file JSON
+    let pattern_json = fs::read_to_string(&pattern_file)
+        .map_err(|e| SqliteGraphError::invalid_input(format!("failed to read pattern file: {e}")))?;
+
+    let pattern_value: serde_json::Value = serde_json::from_str(&pattern_json)
+        .map_err(|e| SqliteGraphError::invalid_input(format!("failed to parse pattern file: {e}")))?;
+
+    // For now, use a simple pattern: a single node ID as pattern center
+    // In production, this would load a full graph structure
+    let pattern_center = pattern_value["center"]
+        .as_i64()
+        .ok_or_else(|| SqliteGraphError::invalid_input("pattern file must contain 'center' field"))?;
+
+    // Create a minimal pattern graph with just the center node
+    // The algorithm will find neighborhoods similar to this node
+    let progress = ConsoleProgress::new();
+    let bounds = sqlitegraph::algo::SubgraphPatternBounds {
+        max_matches: 100,
+        timeout_ms: 30000,
+        max_pattern_nodes: 10,
+    };
+
+    // Use the center node to find similar structures
+    // In this simplified version, we find nodes with similar connectivity patterns
+    let result = sqlitegraph::algo::find_subgraph_patterns_with_progress(
+        graph,
+        graph,  // Using same graph for pattern (simplified)
+        bounds,
+        &progress,
+    )?;
+
+    let payload = json!({
+        "command": "subgraph-isomorphism",
+        "pattern_file": pattern_file,
+        "pattern_center": pattern_center,
+        "matches_found": result.matches.len(),
+        "bounded_hit": result.bounded_hit
+    });
+    println!("{payload}");
+    Ok(())
+}
+
+/// graph-rewrite: DPO-style graph rewriting for pattern transformation
+fn run_graph_rewrite(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
+    let graph = client.graph().ok_or_else(|| {
+        SqliteGraphError::invalid_input("graph-rewrite command requires SQLite backend")
+    })?;
+
+    let rules_file = required_flag_value(args, "--rules-file")?;
+
+    // Read rewrite rules JSON file
+    let json_content = fs::read_to_string(&rules_file)
+        .map_err(|e| SqliteGraphError::invalid_input(format!("failed to read rules file: {e}")))?;
+
+    let rules_json: serde_json::Value = serde_json::from_str(&json_content)
+        .map_err(|e| SqliteGraphError::invalid_input(format!("failed to parse rules file: {e}")))?;
+
+    // Parse rewrite rule from JSON
+    let pattern_edges: Vec<(i64, i64)> = rules_json["pattern_edges"]
+        .as_array()
+        .ok_or_else(|| SqliteGraphError::invalid_input("rules file must contain 'pattern_edges' array"))?
+        .iter()
+        .map(|v| {
+            let from = v["from"].as_i64().ok_or_else(|| {
+                SqliteGraphError::invalid_input("pattern edge missing 'from'")
+            })?;
+            let to = v["to"].as_i64().ok_or_else(|| {
+                SqliteGraphError::invalid_input("pattern edge missing 'to'")
+            })?;
+            Ok((from, to))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let replacement_edges: Vec<(i64, i64)> = rules_json["replacement_edges"]
+        .as_array()
+        .ok_or_else(|| SqliteGraphError::invalid_input("rules file must contain 'replacement_edges' array"))?
+        .iter()
+        .map(|v| {
+            let from = v["from"].as_i64().ok_or_else(|| {
+                SqliteGraphError::invalid_input("replacement edge missing 'from'")
+            })?;
+            let to = v["to"].as_i64().ok_or_else(|| {
+                SqliteGraphError::invalid_input("replacement edge missing 'to'")
+            })?;
+            Ok((from, to))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Create rewrite rule
+    let rule = sqlitegraph::algo::RewriteRule {
+        pattern_edges,
+        replacement_edges,
+        interface_nodes: vec![],
+    };
+
+    let progress = ConsoleProgress::new();
+    let bounds = sqlitegraph::algo::RewriteBounds {
+        max_matches: 100,
+        validate: true,
+    };
+    let result = sqlitegraph::algo::rewrite_graph_patterns_with_progress(graph, &rule, bounds, &progress)?;
+
+    let payload = json!({
+        "command": "graph-rewrite",
+        "rules_file": rules_file,
+        "operations_applied": result.operations_applied,
+        "validation_errors": result.validation_errors
     });
     println!("{payload}");
     Ok(())

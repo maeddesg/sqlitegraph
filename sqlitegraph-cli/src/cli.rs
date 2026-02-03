@@ -96,6 +96,32 @@ Commands:
   pagerank --iterations N [--damping-factor F]   PageRank centrality algorithm
   betweenness                Betweenness centrality algorithm
   louvain [--max-iterations N]    Louvain community detection algorithm
+  enumerate-paths --start ID [--max-depth N] [--max-paths N]  Enumerate execution paths with bounds
+  enumerate-paths-constrained --start ID [--enable-dominance] [--enable-cd] [--enable-loops]  Path enumeration with pruning
+  critical-path              Longest weighted path in DAG (bottleneck identification)
+  cycle-basis [--max-cycles N] [--max-cycle-length N]  Minimal cycle basis for cycle explanation
+  wcc                       Weakly Connected Components (undirected connectivity)
+  scc                       Strongly Connected Components (Tarjan's algorithm)
+  transitive-closure [--max-depth N] [--max-sources N] [--max-pairs N]  All-pairs reachability
+  transitive-reduction      Remove redundant edges while preserving reachability
+  topological-sort          Topological ordering of nodes in DAGs
+  structural-similarity --graph1 ID --graph2 ID  Structural similarity using isomorphism and MCS
+  graph-diff --before PATH --after PATH  Structural graph delta between two snapshots
+  validate-refactor --before PATH --after PATH  Refactor validation with safety heuristics
+  taint-forward --sources-file FILE    Forward taint propagation from sources to sinks
+  taint-backward --sink ID --sources-file FILE  Backward taint propagation from sink to sources
+  sink-analysis --sources-file FILE --sinks-file FILE  Full vulnerability detection (all sinks)
+  discover-sources-sinks             Discover sources/sinks using metadata-based detectors
+  backward-slice --target ID         Backward program slicing (what affects this node?)
+  forward-slice --source ID          Forward program slicing (what does this affect?)
+  collapse-scc                       Collapse SCCs into supernodes for call graph analysis
+  min-cut --source ID --sink ID      Minimum s-t edge cut for fault tolerance analysis
+  min-vertex-cut --source ID --sink ID  Minimum vertex cut for critical node identification
+  happens-before --events-file FILE  Event ordering analysis for concurrent traces
+  impact-radius --start ID [--max-distance N]  Blast zone computation using bounded reachability
+  partition --k N [--max-size N]      Size-bounded k-way graph partitioning
+  subgraph-isomorphism --pattern-file FILE  Bounded subgraph isomorphism for pattern matching
+  graph-rewrite --rules-file FILE    DPO-style graph rewriting for pattern transformation
 
 Traversal Options:
   --start                   Starting node ID for traversal
@@ -105,8 +131,10 @@ Traversal Options:
   --from                     Source node ID for shortest path or can-reach
   --to                       Target node ID for shortest path or can-reach
   --id                       Node ID for neighbors query
-  --target                   Target node ID for backward reachability
+  --target                   Target node ID for backward reachability or backward-slice
   --entry                    Entry node ID for unreachable nodes
+  --source                   Source node ID for forward-slice, min-cut, or min-vertex-cut
+  --sink                     Sink node ID for min-cut or min-vertex-cut
 
 Pattern Options:
   --edge-type                Edge type to match (required)
@@ -140,6 +168,11 @@ Examples:
   sqlitegraph pattern-match-fast --edge-type CALLS --direction outgoing
   sqlitegraph hnsw-create --dimension 768 --m 16 --ef-construction 200 --distance-metric cosine
   sqlitegraph migrate --dry-run
+  sqlitegraph backward-slice --target 456
+  sqlitegraph forward-slice --source 123
+  sqlitegraph collapse-scc
+  sqlitegraph min-cut --source 1 --sink 10
+  sqlitegraph min-vertex-cut --source 1 --sink 10
 "#
     }
 }
