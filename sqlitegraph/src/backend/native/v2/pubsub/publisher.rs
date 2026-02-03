@@ -14,7 +14,7 @@
 //! The `Publisher` uses `Arc<Mutex<>>` to allow thread-safe access to the subscriber list.
 //! This means multiple threads can subscribe/unsubscribe concurrently.
 
-use crate::backend::native::v2::pubsub::{PubSubEvent, SubscriberId, SubscriptionFilter};
+use crate::backend::native::v2::pubsub::{NodeMetadata, PubSubEvent, SubscriberId, SubscriptionFilter};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
@@ -152,6 +152,12 @@ impl Publisher {
     ///
     /// This ensures that a slow or dead subscriber cannot block the commit path.
     ///
+    /// # Pattern-Based Subscriptions
+    ///
+    /// This method uses simple matching (ID-based only). For pattern-based
+    /// subscriptions (kind_patterns, name_patterns), use `emit_with_metadata()`
+    /// instead to provide node metadata for pattern matching.
+    ///
     /// # Arguments
     ///
     /// * `event` - The event to emit
@@ -170,8 +176,50 @@ impl Publisher {
     pub fn emit(&self, event: PubSubEvent) {
         let senders = self.senders.lock().unwrap();
         for (_, sender, filter) in senders.iter() {
-            // Check if event matches filter
-            if filter.matches(&event) {
+            // Check if event matches filter (simple matching, no pattern support)
+            if filter.matches_simple(&event) {
+                // Send, ignore errors (channel full/closed = best-effort)
+                let _ = sender.send(event.clone());
+            }
+        }
+    }
+
+    /// Emit an event to all matching subscribers (with pattern support)
+    ///
+    /// This method supports pattern-based subscriptions by accepting node metadata
+    /// for NodeChanged events. For other event types, metadata is ignored.
+    ///
+    /// # Pattern-Based Subscriptions
+    ///
+    /// When any subscriber has `kind_patterns` or `name_patterns` filters, the
+    /// caller must provide node metadata for NodeChanged events. If metadata is
+    /// not provided, pattern-based subscribers will not receive the event.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` - The event to emit
+    /// * `node_metadata` - Optional node metadata for pattern matching (only used for NodeChanged events)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use sqlitegraph::backend::native::v2::pubsub::{Publisher, PubSubEvent, SubscriptionFilter, NodeMetadata};
+    ///
+    /// let publisher = Publisher::new();
+    /// let filter = SubscriptionFilter::kind_patterns(vec!["agent:*".to_string()]);
+    /// let (_id, rx) = publisher.subscribe(filter);
+    ///
+    /// let metadata = NodeMetadata::new("agent:worker".to_string(), "agent-123".to_string());
+    /// publisher.emit_with_metadata(
+    ///     PubSubEvent::NodeChanged { node_id: 1, snapshot_id: 100 },
+    ///     Some(&metadata)
+    /// );
+    /// ```
+    pub fn emit_with_metadata(&self, event: PubSubEvent, node_metadata: Option<&NodeMetadata>) {
+        let senders = self.senders.lock().unwrap();
+        for (_, sender, filter) in senders.iter() {
+            // Check if event matches filter (with pattern support)
+            if filter.matches(&event, node_metadata) {
                 // Send, ignore errors (channel full/closed = best-effort)
                 let _ = sender.send(event.clone());
             }

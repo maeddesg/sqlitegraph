@@ -39,7 +39,7 @@ pub mod subscriber;
 pub use emit::{records_to_events, should_emit_event};
 pub use event::{PubSubEvent, PubSubEventType};
 pub use publisher::Publisher;
-pub use subscriber::{Subscriber, SubscriberId, SubscriptionFilter};
+pub use subscriber::{NodeMetadata, Subscriber, SubscriberId, SubscriptionFilter};
 
 #[cfg(test)]
 mod tests;
