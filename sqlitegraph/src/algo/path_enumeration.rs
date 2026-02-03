@@ -1335,32 +1335,32 @@ fn dfs_with_constraints_progress<P: ProgressCallback>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::GraphEntityCreate;
+    use crate::{GraphEntity, GraphEdge};
 
     /// Creates a simple linear path graph: 0 -> 1 -> 2 -> 3
     fn create_linear_path_graph() -> Result<SqliteGraph, SqliteGraphError> {
         let graph = SqliteGraph::open_in_memory()?;
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node2 = graph.insert_node(GraphEntityCreate {
+        let node2 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node3 = graph.insert_node(GraphEntityCreate {
+        let node3 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
 
-        graph.insert_edge(node0, "next".into(), node1, vec![])?;
-        graph.insert_edge(node1, "next".into(), node2, vec![])?;
-        graph.insert_edge(node2, "next".into(), node3, vec![])?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node3, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
 
         Ok(graph)
     }
@@ -1369,27 +1369,27 @@ mod tests {
     fn create_diamond_cfg() -> Result<SqliteGraph, SqliteGraphError> {
         let graph = SqliteGraph::open_in_memory()?;
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node2 = graph.insert_node(GraphEntityCreate {
+        let node2 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node3 = graph.insert_node(GraphEntityCreate {
+        let node3 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
 
-        graph.insert_edge(node0, "true".into(), node1, vec![])?;
-        graph.insert_edge(node0, "false".into(), node2, vec![])?;
-        graph.insert_edge(node1, "next".into(), node3, vec![])?;
-        graph.insert_edge(node2, "next".into(), node3, vec![])?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "true".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node2, edge_type: "false".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node3, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node3, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
 
         Ok(graph)
     }
@@ -1398,27 +1398,27 @@ mod tests {
     fn create_simple_loop_cfg() -> Result<SqliteGraph, SqliteGraphError> {
         let graph = SqliteGraph::open_in_memory()?;
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["LoopHeader".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node2 = graph.insert_node(GraphEntityCreate {
+        let node2 = graph.insert_entity(&GraphEntity {
             labels: vec!["LoopBody".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node3 = graph.insert_node(GraphEntityCreate {
+        let node3 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
 
-        graph.insert_edge(node0, "next".into(), node1, vec![])?;
-        graph.insert_edge(node1, "next".into(), node2, vec![])?;
-        graph.insert_edge(node2, "loop".into(), node1, vec![])?;
-        graph.insert_edge(node1, "exit".into(), node3, vec![])?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node1, edge_type: "loop".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node3, edge_type: "exit".to_string(), data: serde_json::json!({}) })?;
 
         Ok(graph)
     }
@@ -1427,33 +1427,33 @@ mod tests {
     fn create_nested_loops_cfg() -> Result<SqliteGraph, SqliteGraphError> {
         let graph = SqliteGraph::open_in_memory()?;
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["OuterHeader".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node2 = graph.insert_node(GraphEntityCreate {
+        let node2 = graph.insert_entity(&GraphEntity {
             labels: vec!["InnerHeader".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node3 = graph.insert_node(GraphEntityCreate {
+        let node3 = graph.insert_entity(&GraphEntity {
             labels: vec!["InnerBody".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node4 = graph.insert_node(GraphEntityCreate {
+        let node4 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
 
-        graph.insert_edge(node0, "next".into(), node1, vec![])?;
-        graph.insert_edge(node1, "next".into(), node2, vec![])?;
-        graph.insert_edge(node2, "next".into(), node3, vec![])?;
-        graph.insert_edge(node3, "inner_loop".into(), node2, vec![])?;
-        graph.insert_edge(node3, "outer_loop".into(), node1, vec![])?;
-        graph.insert_edge(node1, "exit".into(), node4, vec![])?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node3, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node3, to_id: node2, edge_type: "inner_loop".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node3, to_id: node1, edge_type: "outer_loop".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node4, edge_type: "exit".to_string(), data: serde_json::json!({}) })?;
 
         Ok(graph)
     }
@@ -1462,26 +1462,26 @@ mod tests {
     fn create_error_path_cfg() -> Result<SqliteGraph, SqliteGraphError> {
         let graph = SqliteGraph::open_in_memory()?;
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node2 = graph.insert_node(GraphEntityCreate {
+        let node2 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node3 = graph.insert_node(GraphEntityCreate {
+        let node3 = graph.insert_entity(&GraphEntity {
             labels: vec!["Error".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
 
-        graph.insert_edge(node0, "next".into(), node1, vec![])?;
-        graph.insert_edge(node1, "ok".into(), node2, vec![])?;
-        graph.insert_edge(node1, "error".into(), node3, vec![])?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "ok".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node3, edge_type: "error".to_string(), data: serde_json::json!({}) })?;
 
         Ok(graph)
     }
@@ -1751,9 +1751,9 @@ mod tests {
     fn test_enumerate_paths_single_node() {
         let graph = SqliteGraph::open_in_memory().unwrap();
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
         let mut exit_nodes = AHashSet::new();
@@ -1789,15 +1789,15 @@ mod tests {
         let graph = SqliteGraph::open_in_memory().unwrap();
 
         // Create entry with no successors
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
         // Create disconnected nodes
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
         let mut exit_nodes = AHashSet::new();
@@ -1818,19 +1818,19 @@ mod tests {
     fn test_enumerate_paths_self_loop() {
         let graph = SqliteGraph::open_in_memory().unwrap();
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
         // Self-loop on node0
-        graph.insert_edge(node0, "loop".into(), node0, vec![]).unwrap();
-        graph.insert_edge(node0, "exit".into(), node1, vec![]).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node0, edge_type: "loop".to_string(), data: serde_json::json!({}) }).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "exit".to_string(), data: serde_json::json!({}) }).unwrap();
 
         let mut exit_nodes = AHashSet::new();
         exit_nodes.insert(node1);
@@ -2064,45 +2064,45 @@ mod tests {
         // Create a CFG with multiple branching levels
         let graph = SqliteGraph::open_in_memory().unwrap();
 
-        let entry = graph.insert_node(GraphEntityCreate {
+        let entry = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
-        let branch1 = graph.insert_node(GraphEntityCreate {
+        let branch1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
-        let branch2 = graph.insert_node(GraphEntityCreate {
+        let branch2 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
-        let subbranch1 = graph.insert_node(GraphEntityCreate {
+        let subbranch1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
-        let subbranch2 = graph.insert_node(GraphEntityCreate {
+        let subbranch2 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
-        let exit = graph.insert_node(GraphEntityCreate {
+        let exit = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
         // Create branching structure
-        graph.insert_edge(entry, "left".into(), branch1, vec![]).unwrap();
-        graph.insert_edge(entry, "right".into(), branch2, vec![]).unwrap();
-        graph.insert_edge(branch1, "left".into(), subbranch1, vec![]).unwrap();
-        graph.insert_edge(branch1, "right".into(), subbranch2, vec![]).unwrap();
-        graph.insert_edge(branch2, "left".into(), subbranch1, vec![]).unwrap();
-        graph.insert_edge(branch2, "right".into(), subbranch2, vec![]).unwrap();
-        graph.insert_edge(subbranch1, "next".into(), exit, vec![]).unwrap();
-        graph.insert_edge(subbranch2, "next".into(), exit, vec![]).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: branch1, edge_type: "left".to_string(), data: serde_json::json!({}) }).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: branch2, edge_type: "right".to_string(), data: serde_json::json!({}) }).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: branch1, to_id: subbranch1, edge_type: "left".to_string(), data: serde_json::json!({}) }).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: branch1, to_id: subbranch2, edge_type: "right".to_string(), data: serde_json::json!({}) }).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: branch2, to_id: subbranch1, edge_type: "left".to_string(), data: serde_json::json!({}) }).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: branch2, to_id: subbranch2, edge_type: "right".to_string(), data: serde_json::json!({}) }).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: subbranch1, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) }).unwrap();
+        graph.insert_edge(&GraphEdge { id: 0, from_id: subbranch2, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) }).unwrap();
 
         let mut exit_nodes = AHashSet::new();
         exit_nodes.insert(exit);
@@ -2128,28 +2128,28 @@ mod tests {
     fn create_dominance_pruning_cfg() -> Result<SqliteGraph, SqliteGraphError> {
         let graph = SqliteGraph::open_in_memory()?;
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node2 = graph.insert_node(GraphEntityCreate {
+        let node2 = graph.insert_entity(&GraphEntity {
             labels: vec!["Block".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node3 = graph.insert_node(GraphEntityCreate {
+        let node3 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
 
         // Diamond CFG where entry dominates all nodes
-        graph.insert_edge(node0, "left".into(), node1, vec![])?;
-        graph.insert_edge(node0, "right".into(), node2, vec![])?;
-        graph.insert_edge(node1, "next".into(), node3, vec![])?;
-        graph.insert_edge(node2, "next".into(), node3, vec![])?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "left".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node2, edge_type: "right".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node3, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node3, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
 
         Ok(graph)
     }
@@ -2158,33 +2158,33 @@ mod tests {
     fn create_control_dependence_cfg() -> Result<SqliteGraph, SqliteGraphError> {
         let graph = SqliteGraph::open_in_memory()?;
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["Condition".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node2 = graph.insert_node(GraphEntityCreate {
+        let node2 = graph.insert_entity(&GraphEntity {
             labels: vec!["Then".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node3 = graph.insert_node(GraphEntityCreate {
+        let node3 = graph.insert_entity(&GraphEntity {
             labels: vec!["Else".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node4 = graph.insert_node(GraphEntityCreate {
+        let node4 = graph.insert_entity(&GraphEntity {
             labels: vec!["Merge".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
 
         // If-then-else structure
-        graph.insert_edge(node0, "next".into(), node1, vec![])?;
-        graph.insert_edge(node1, "true".into(), node2, vec![])?;
-        graph.insert_edge(node1, "false".into(), node3, vec![])?;
-        graph.insert_edge(node2, "next".into(), node4, vec![])?;
-        graph.insert_edge(node3, "next".into(), node4, vec![])?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "true".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node3, edge_type: "false".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node4, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node3, to_id: node4, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
 
         Ok(graph)
     }
@@ -2193,28 +2193,28 @@ mod tests {
     fn create_loop_constraint_cfg() -> Result<SqliteGraph, SqliteGraphError> {
         let graph = SqliteGraph::open_in_memory()?;
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node1 = graph.insert_node(GraphEntityCreate {
+        let node1 = graph.insert_entity(&GraphEntity {
             labels: vec!["LoopHeader".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node2 = graph.insert_node(GraphEntityCreate {
+        let node2 = graph.insert_entity(&GraphEntity {
             labels: vec!["LoopBody".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
-        let node3 = graph.insert_node(GraphEntityCreate {
+        let node3 = graph.insert_entity(&GraphEntity {
             labels: vec!["Exit".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         })?;
 
         // While loop structure
-        graph.insert_edge(node0, "next".into(), node1, vec![])?;
-        graph.insert_edge(node1, "next".into(), node2, vec![])?;
-        graph.insert_edge(node2, "loop".into(), node1, vec![])?;
-        graph.insert_edge(node1, "exit".into(), node3, vec![])?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "next".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node1, edge_type: "loop".to_string(), data: serde_json::json!({}) })?;
+        graph.insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node3, edge_type: "exit".to_string(), data: serde_json::json!({}) })?;
 
         Ok(graph)
     }
@@ -2538,9 +2538,9 @@ mod tests {
         // Expected: Single path with just the node
         let graph = SqliteGraph::open_in_memory().unwrap();
 
-        let node0 = graph.insert_node(GraphEntityCreate {
+        let node0 = graph.insert_entity(&GraphEntity {
             labels: vec!["Entry".into()],
-            properties: vec![],
+            data: serde_json::json!({}),
         }).unwrap();
 
         let mut exit_nodes = AHashSet::new();

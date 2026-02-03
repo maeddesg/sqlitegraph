@@ -570,6 +570,9 @@ fn create_cycle_nodes(graph: &SqliteGraph, count: usize) -> Vec<i64> {
         let entity = GraphEntity {
             id: 0,
             kind: "test".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("cycle_{}", i),
             file_path: Some(format!("cycle_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -604,6 +607,9 @@ fn create_mutual_recursion_graph(graph: &SqliteGraph) -> Vec<i64> {
         let entity = GraphEntity {
             id: 0,
             kind: "test".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("recursion_{}", i),
             file_path: Some(format!("recursion_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -645,6 +651,9 @@ fn create_test_graph() -> SqliteGraph {
         let entity = GraphEntity {
             id: 0,
             kind: "test".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("test_{}", i),
             file_path: Some(format!("test_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -694,6 +703,9 @@ fn test_wcc_single_node() {
     let entity = GraphEntity {
         id: 0,
         kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
         name: "single_node".to_string(),
         file_path: Some("single_node.rs".to_string()),
         data: serde_json::json!({}),
@@ -754,6 +766,9 @@ fn test_wcc_disconnected() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -857,6 +872,9 @@ fn test_wcc_bidirectional_edges() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -921,6 +939,9 @@ fn test_transitive_reduction_linear() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -967,6 +988,9 @@ fn test_transitive_reduction_diamond() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1020,6 +1044,9 @@ fn test_transitive_reduction_fully_connected() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1076,6 +1103,9 @@ fn test_transitive_reduction_with_progress() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1123,6 +1153,9 @@ fn test_transitive_reduction_deterministic() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1329,6 +1362,9 @@ fn test_dominators_entry_only_dominates_itself_single_node() {
     let entity = GraphEntity {
         id: 0,
         kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
         name: "single".to_string(),
         file_path: Some("single.rs".to_string()),
         data: serde_json::json!({}),
@@ -1493,6 +1529,9 @@ fn test_post_dominators_virtual_exit_consistency() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1537,6 +1576,9 @@ fn test_post_dominators_exit_only_post_dominates_itself_single_node() {
     let entity = GraphEntity {
         id: 0,
         kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
         name: "single".to_string(),
         file_path: Some("single.rs".to_string()),
         data: serde_json::json!({}),
@@ -1681,6 +1723,9 @@ fn test_control_dependence_integration_with_post_dom() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1812,6 +1857,9 @@ fn test_control_dependence_linear_chain() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1854,6 +1902,9 @@ fn test_control_dependence_diamond_cfg() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1904,6 +1955,9 @@ fn test_dominance_frontiers_deterministic() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -1984,6 +2038,9 @@ fn test_dominance_frontiers_with_dominators_integration() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2033,6 +2090,9 @@ fn test_iterated_dominance_frontiers_ssa_use_case() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2090,6 +2150,9 @@ fn test_dominance_frontiers_empty_after_entry() {
     let entity = GraphEntity {
         id: 0,
         kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
         name: "entry".to_string(),
         file_path: Some("entry.rs".to_string()),
         data: serde_json::json!({}),
@@ -2134,6 +2197,9 @@ fn test_dominance_frontiers_linear_chain_empty() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2180,6 +2246,9 @@ fn test_dominance_frontiers_loop_creates_frontier() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2250,6 +2319,9 @@ fn test_natural_loops_deterministic() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2310,6 +2382,9 @@ fn test_natural_loops_progress_integration() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2357,6 +2432,9 @@ fn test_natural_loops_with_dominators_integration() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2409,6 +2487,9 @@ fn test_natural_loops_loop_body_complete() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2457,6 +2538,9 @@ fn test_natural_loops_header_dominates_body() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2508,6 +2592,9 @@ fn test_natural_loops_no_false_positives_irreducible() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2551,6 +2638,9 @@ fn test_natural_loops_nesting_consistent_with_dominator_tree() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2602,6 +2692,9 @@ fn test_natural_loops_multiple_entries_single_header() {
         let entity = GraphEntity {
             id: 0,
             kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
             name: format!("node_{}", i),
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
@@ -2700,31 +2793,40 @@ fn test_enumerate_paths_progress_integration() {
 
     // Create a simple linear CFG: 0 -> 1 -> 2
     let node0 = graph
-        .insert_node(crate::graph::GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            id: 0,
+            kind: "Block".to_string(),
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let node1 = graph
-        .insert_node(crate::graph::GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            id: 0,
+            kind: "Block".to_string(),
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let node2 = graph
-        .insert_node(crate::graph::GraphEntityCreate {
-            labels: vec!["Exit".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            id: 0,
+            kind: "Exit".to_string(),
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(node0, "next".into(), node1, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(node1, "next".into(), node2, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -2747,51 +2849,63 @@ fn test_enumerate_paths_progress_integration() {
 fn test_enumerate_paths_with_natural_loops_integration() {
     // Scenario: Path enumeration works after natural loops detected
     // Expected: Can enumerate paths in a CFG with loops
-    use crate::graph::GraphEntityCreate;
+    use crate::{GraphEntity, GraphEdge};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
     // Create a CFG with a loop: 0 -> 1 -> 2 -> 1, 1 -> 3
     let node0 = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Entry".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Entry".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let node1 = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["LoopHeader".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "LoopHeader".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let node2 = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["LoopBody".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "LoopBody".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let node3 = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Exit".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Exit".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(node0, "next".into(), node1, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(node1, "next".into(), node2, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(node2, "loop".into(), node1, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node1, edge_type: "loop".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(node1, "exit".into(), node3, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node3, edge_type: "exit".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
 
     // Compute natural loops
@@ -2821,7 +2935,7 @@ fn test_enumerate_paths_with_natural_loops_integration() {
 fn test_enumerate_paths_real_cfg_scenario() {
     // Scenario: Simulate real CFG with branches and loops
     // Expected: Correctly enumerate all feasible paths
-    use crate::graph::GraphEntityCreate;
+    use crate::{GraphEntity, GraphEdge};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -2836,88 +2950,112 @@ fn test_enumerate_paths_real_cfg_scenario() {
     // merge (6) -> exit (7)
 
     let entry = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Entry".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Entry".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let cond = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let true_branch = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let false_branch = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let loop_header = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["LoopHeader".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "LoopHeader".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let loop_body = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["LoopBody".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "LoopBody".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let merge = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let exit = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Exit".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Exit".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     // Build CFG
     graph
-        .insert_edge(entry, "next".into(), cond, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: cond, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(cond, "true".into(), true_branch, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: cond, to_id: true_branch, edge_type: "true".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(cond, "false".into(), false_branch, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: cond, to_id: false_branch, edge_type: "false".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(true_branch, "next".into(), loop_header, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: true_branch, to_id: loop_header, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(false_branch, "next".into(), merge, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: false_branch, to_id: merge, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(loop_header, "next".into(), loop_body, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: loop_header, to_id: loop_body, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(loop_body, "loop".into(), loop_header, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: loop_body, to_id: loop_header, edge_type: "loop".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(loop_body, "exit".into(), merge, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: loop_body, to_id: merge, edge_type: "exit".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(merge, "next".into(), exit, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: merge, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -2952,7 +3090,7 @@ fn test_enumerate_paths_real_cfg_scenario() {
 fn test_enumerate_paths_bounds_prevent_explosion() {
     // Scenario: Verify max_paths prevents exponential explosion
     // Expected: Enumeration stops at max_paths bound
-    use crate::graph::GraphEntityCreate;
+    use crate::{GraphEntity, GraphEdge};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -2963,9 +3101,12 @@ fn test_enumerate_paths_bounds_prevent_explosion() {
 
     // Create entry
     let entry = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Entry".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Entry".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
     nodes.push(entry);
@@ -2973,16 +3114,22 @@ fn test_enumerate_paths_bounds_prevent_explosion() {
     // Create 3 levels of branching (2^3 = 8 paths without loop)
     for level in 0..3 {
         let left = graph
-            .insert_node(GraphEntityCreate {
-                labels: vec!["Block".into()],
-                properties: vec![],
+            .insert_entity(&GraphEntity {
+                kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+                data: serde_json::json!({}),
             })
             .expect("Failed to insert node");
 
         let right = graph
-            .insert_node(GraphEntityCreate {
-                labels: vec!["Block".into()],
-                properties: vec![],
+            .insert_entity(&GraphEntity {
+                kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+                data: serde_json::json!({}),
             })
             .expect("Failed to insert node");
 
@@ -3001,9 +3148,12 @@ fn test_enumerate_paths_bounds_prevent_explosion() {
 
     // Create exit
     let exit = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Exit".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Exit".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
@@ -3055,38 +3205,47 @@ fn test_enumerate_paths_result_is_send() {
 fn test_enumerate_paths_with_dominance_deterministic() {
     // Scenario: Same input produces same output with dominance constraints
     // Expected: Deterministic results across multiple runs
-    use crate::graph::GraphEntityCreate;
+    use crate::{GraphEntity, GraphEdge};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
     // Create simple CFG: entry -> branch -> exit
     let entry = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Entry".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Entry".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let branch = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let exit = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Exit".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Exit".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(entry, "next".into(), branch, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: branch, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(branch, "next".into(), exit, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: branch, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3140,51 +3299,63 @@ fn test_enumerate_paths_with_dominance_deterministic() {
 fn test_enumerate_paths_with_dominance_full_integration() {
     // Scenario: All three analysis results (dom, cd, loops) used together
     // Expected: Successful integration with all constraint types enabled
-    use crate::graph::GraphEntityCreate;
+    use crate::{GraphEntity, GraphEdge};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
     // Create CFG with loop: entry -> header -> body -> header, header -> exit
     let entry = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Entry".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Entry".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let header = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["LoopHeader".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "LoopHeader".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let body = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["LoopBody".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "LoopBody".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let exit = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Exit".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Exit".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(entry, "next".into(), header, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: header, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(header, "next".into(), body, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: header, to_id: body, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(body, "loop".into(), header, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: body, to_id: header, edge_type: "loop".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(header, "exit".into(), exit, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: header, to_id: exit, edge_type: "exit".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3228,51 +3399,63 @@ fn test_enumerate_paths_with_dominance_full_integration() {
 fn test_enumerate_paths_with_dominance_vs_base() {
     // Scenario: Compare constrained vs unconstrained enumeration
     // Expected: Constrained enumeration finds same valid paths, fewer invalid paths
-    use crate::graph::GraphEntityCreate;
+    use crate::{GraphEntity, GraphEdge};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
     // Create diamond CFG
     let entry = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Entry".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Entry".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let left = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let right = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Block".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Block".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let exit = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Exit".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Exit".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(entry, "left".into(), left, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: left, edge_type: "left".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(entry, "right".into(), right, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: right, edge_type: "right".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(left, "next".into(), exit, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: left, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(right, "next".into(), exit, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: right, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3322,7 +3505,7 @@ fn test_enumerate_paths_with_dominance_vs_base() {
 fn test_enumerate_paths_with_dominance_progress_integration() {
     // Scenario: Progress callback works with dominance-constrained enumeration
     // Expected: Progress callback is invoked during enumeration
-    use crate::graph::GraphEntityCreate;
+    use crate::{GraphEntity, GraphEdge};
     use crate::progress::NoProgress;
     use ahash::AHashSet;
 
@@ -3330,21 +3513,27 @@ fn test_enumerate_paths_with_dominance_progress_integration() {
 
     // Create simple linear path
     let entry = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Entry".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Entry".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     let exit = graph
-        .insert_node(GraphEntityCreate {
-            labels: vec!["Exit".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "Exit".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(entry, "next".into(), exit, vec![])
+        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3399,15 +3588,21 @@ fn test_subgraph_isomorphism_simple_chain() {
     // Create pattern: 2-node chain
     let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
     pattern
-        .insert_node(GraphEntityCreate {
-            labels: vec!["pattern".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert pattern node");
     pattern
-        .insert_node(GraphEntityCreate {
-            labels: vec!["pattern".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert pattern node");
 
@@ -3441,15 +3636,21 @@ fn test_subgraph_isomorphism_max_matches() {
     // Create pattern: 2-node chain
     let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
     pattern
-        .insert_node(GraphEntityCreate {
-            labels: vec!["pattern".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert pattern node");
     pattern
-        .insert_node(GraphEntityCreate {
-            labels: vec!["pattern".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert pattern node");
 
@@ -3487,9 +3688,12 @@ fn test_subgraph_isomorphism_empty_result() {
     let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
     for _ in 0..3 {
         pattern
-            .insert_node(GraphEntityCreate {
-                labels: vec!["pattern".into()],
-                properties: vec![],
+            .insert_entity(&GraphEntity {
+                kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+                data: serde_json::json!({}),
             })
             .expect("Failed to insert pattern node");
     }
@@ -3529,15 +3733,21 @@ fn test_subgraph_isomorphism_progress() {
     // Create pattern: 2-node chain
     let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
     pattern
-        .insert_node(GraphEntityCreate {
-            labels: vec!["pattern".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert pattern node");
     pattern
-        .insert_node(GraphEntityCreate {
-            labels: vec!["pattern".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert pattern node");
 
@@ -3607,9 +3817,12 @@ fn test_subgraph_isomorphism_single_node_pattern() {
     // Create single node pattern
     let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
     pattern
-        .insert_node(GraphEntityCreate {
-            labels: vec!["pattern".into()],
-            properties: vec![],
+        .insert_entity(&GraphEntity {
+            kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+            data: serde_json::json!({}),
         })
         .expect("Failed to insert pattern node");
 
@@ -3627,9 +3840,12 @@ fn test_subgraph_isomorphism_pattern_larger_than_target() {
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
     for _ in 0..2 {
         graph
-            .insert_node(GraphEntityCreate {
-                labels: vec!["node".into()],
-                properties: vec![],
+            .insert_entity(&GraphEntity {
+                kind: "node".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+                data: serde_json::json!({}),
             })
             .expect("Failed to insert node");
     }
@@ -3638,9 +3854,12 @@ fn test_subgraph_isomorphism_pattern_larger_than_target() {
     let pattern = SqliteGraph::open_in_memory().expect("Failed to create pattern");
     for _ in 0..3 {
         pattern
-            .insert_node(GraphEntityCreate {
-                labels: vec!["pattern".into()],
-                properties: vec![],
+            .insert_entity(&GraphEntity {
+                kind: "pattern".to_string(),
+            id: 0,
+            name: kind.clone(),
+            file_path: None,
+                data: serde_json::json!({}),
             })
             .expect("Failed to insert pattern node");
     }

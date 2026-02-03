@@ -20,9 +20,9 @@ Progress: [██░░░░░░░░░░░░░] 4% — Test suite reco
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 259 (phases 1-57, plus 58-01 through 58-05, plus 59-01)
+- Total plans completed: 261 (phases 1-57, plus 58-01 through 58-05, plus 59-01, 59-02, 59-03)
 - Average duration: ~20 min/plan
-- Total execution time: ~86.5 hours across v1.0-v1.4.0 + Phase 59
+- Total execution time: ~86.6 hours across v1.0-v1.4.0 + Phase 59
 
 **By Phase:**
 
@@ -37,7 +37,7 @@ Progress: [██░░░░░░░░░░░░░] 4% — Test suite reco
 | v1.13 | 37-44 | 24 | Pub/Sub |
 | v1.3.0 | 45-57 | 36 | Graph Algorithms (5+1+3+2+2+2+2+2+2+3+2+1+7 = 36 plans) |
 | v1.4.0 | 58 | 5 | Pub/Sub Enhancements (COMPLETE - 5 plans: KV scan, query by kind, query by name, pattern filters, docs) |
-| v1.5.0 | 59 | 1+ | Test Suite Recovery (1 plan complete: V2WALConfig missing fields fix) |
+| v1.5.0 | 59 | 1+ | Test Suite Recovery (3 plans complete: V2WALConfig fix, GraphEntityCreate imports, natural_loops_from_exit function) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -155,11 +155,11 @@ None yet.
 **Pre-existing test compilation errors:**
 - Test suite has 660+ pre-existing compilation errors
 - V2WALConfig errors: FIXED (14 errors resolved in Phase 59-01)
+- GraphEntityCreate import errors: FIXED (Phase 59-02)
+- natural_loops_from_exit import errors: FIXED (8+ errors resolved in Phase 59-03)
 - Remaining errors:
-  - GraphEntityCreate import errors (use crate::graph::GraphEntityCreate should use crate::GraphEntityCreate)
-  - natural_loops_from_exit import errors (function doesn't exist in algo::natural_loops)
-  - API signature changes (get_node requires SnapshotId parameter)
   - KvStore/KvValue type errors in Phase 58 tests
+  - API signature changes (get_node requires SnapshotId parameter)
   - TraversalContext missing fields in prefetch_tuning_tests
 - Library compiles successfully (`cargo check --lib` passes)
 - Documentation builds successfully
@@ -168,8 +168,13 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 59-01 complete. V2WALConfig struct literal missing fields fixed in test suite.
+Stopped at: Phase 59-03 complete. Added natural_loops_from_exit convenience function for CFG analysis.
 Resume file: None
+
+**Phase 59-03 new decisions:**
+- **natural_loops_from_exit naming convention:** Despite _from_exit suffix, function detects entry nodes (not exit) because natural loops use dominators (need entry point) not post-dominators (need exit points). Naming follows control_dependence_from_exit pattern for API consistency.
+- **Entry node auto-detection:** Finds node with no incoming edges, returns error if 0 or >1 entry nodes found (ensures well-formed CFG for dominator computation).
+- **Convenience function pattern:** Auto-detection + core algorithm call encapsulation for simplified API usage (matches post_dominators_auto_exit and control_dependence_from_exit patterns).
 
 **Phase 58 new decisions:**
 - **Pattern syntax for queries:** Glob patterns with `*` (any sequence) and `?` (single character), escape with `\*` and `\?` for literal matches
