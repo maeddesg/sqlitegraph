@@ -6,7 +6,7 @@
 //! Critical invariant: Once a node slot is successfully written with version=2,
 //! it must never be truncated, zeroed, or overwritten with version=0.
 
-use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 use std::fs;
 use std::io::Read;
 
@@ -126,7 +126,7 @@ fn test_node_slots_persist_across_edge_transactions() {
 
                 // Also verify the node data is correct
                 let node = graph
-                    .get_node(node_id)
+                    .get_node(SnapshotId::current(), node_id)
                     .expect(&format!("Node {} missing after reopen", node_id));
                 assert_eq!(node.id, node_id, "Node ID mismatch after reopen");
                 assert_eq!(
@@ -250,7 +250,7 @@ fn test_file_size_never_shrinks_during_edge_operations() {
         // Verify all nodes still exist
         for &node_id in &node_ids {
             let node = graph
-                .get_node(node_id)
+                .get_node(SnapshotId::current(), node_id)
                 .expect(&format!("Node {} missing after edge operations", node_id));
             assert_eq!(node.id, node_id, "Node ID corrupted after edge operations");
         }

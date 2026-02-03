@@ -54,6 +54,7 @@ fn test_outgoing_cluster_neighbor_id_correctness() {
     // Get neighbors from source node (outgoing)
     let neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             source_id,
             sqlitegraph::NeighborQuery {
                 direction: sqlitegraph::BackendDirection::Outgoing,
@@ -122,6 +123,7 @@ fn test_incoming_cluster_neighbor_id_correctness() {
     // Get neighbors from target node (incoming)
     let neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             target_id,
             sqlitegraph::NeighborQuery {
                 direction: sqlitegraph::BackendDirection::Incoming,
@@ -190,6 +192,7 @@ fn test_cluster_byte_layout_neighbor_id() {
     // Get neighbors - this will trigger cluster creation and reading
     let neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             source_id,
             sqlitegraph::NeighborQuery {
                 direction: sqlitegraph::BackendDirection::Outgoing,

@@ -475,14 +475,8 @@ fn test_buffer_window_configuration() {
 fn test_traversal_context_custom_buffer() {
     // Verify that TraversalContext can be constructed with custom buffer
     let custom_buffer = SequentialReadBuffer::with_prefetch_window(16);
-    let ctx = TraversalContext {
-        detector: LinearDetector::new(),
-        buffer: custom_buffer,
-        cache: TraversalCache::new(),
-        stats: TraversalCacheStats::new(),
-        buffer_hits: 0,
-        buffer_misses: 0,
-    };
+    let mut ctx = TraversalContext::new();
+    ctx.buffer = custom_buffer;
 
     assert_eq!(ctx.buffer.prefetch_window(), 16);
     assert_eq!(ctx.buffer_hits, 0);

@@ -467,7 +467,7 @@ fn test_existing_functions_still_work() {
     assert_eq!(incoming[0], entity);
 
     // Test BFS traversal
-    let bfs_result = backend.bfs(entity, 2).unwrap();
+    let bfs_result = backend.bfs(SnapshotId::current(), entity, 2).unwrap();
     assert!(bfs_result.contains(&entity));
     assert!(bfs_result.contains(&entity2));
 
