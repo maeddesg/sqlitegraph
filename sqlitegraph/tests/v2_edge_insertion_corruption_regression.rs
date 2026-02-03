@@ -3,7 +3,7 @@
 //! This test reproduces the exact corruption error that occurs during Phase 55 workload:
 //! "Cluster size mismatch: expected 64356485, found 37 [header: edge_count=0, payload_size=64356477]"
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
+use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
 use tempfile::TempDir;
 
 /// Generate the exact same edge pattern as Phase 55 simple benchmark
@@ -76,6 +76,7 @@ fn test_v2_edge_insertion_corruption_phase55_small() -> Result<(), Box<dyn std::
 
     // Trigger neighbor query (this is where corruption was detected in Phase 55)
     let _neighbors = graph.neighbors(
+        SnapshotId::current(),
         node_ids[0],
         NeighborQuery {
             direction: BackendDirection::Outgoing,

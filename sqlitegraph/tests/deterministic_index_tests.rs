@@ -3,6 +3,7 @@ use sqlitegraph::{
     graph::{GraphEntity, SqliteGraph},
     graph_opt::{GraphEdgeCreate, GraphEntityCreate, bulk_insert_edges, bulk_insert_entities},
     index::{add_label, add_property, get_entities_by_label, get_entities_by_property},
+    SnapshotId,
 };
 
 // Helper function to check if index exists using schema version check
@@ -334,6 +335,7 @@ fn test_end_to_end_pattern_with_indexes() {
     // Step 3: Adjacency fetch -> should be deterministic
     let company_outgoing = backend
         .neighbors(
+            SnapshotId::current(),
             entity3,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -349,6 +351,7 @@ fn test_end_to_end_pattern_with_indexes() {
 
     let company_incoming = backend
         .neighbors(
+            SnapshotId::current(),
             entity3,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -372,6 +375,7 @@ fn test_end_to_end_pattern_with_indexes() {
         get_entities_by_property(backend.graph(), "department", "engineering").unwrap();
     let company_incoming2 = backend
         .neighbors(
+            SnapshotId::current(),
             entity3,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -410,7 +414,7 @@ fn test_existing_functions_still_work() {
         .unwrap();
     assert!(entity > 0);
 
-    let retrieved = backend.get_node(entity).unwrap();
+    let retrieved = backend.get_node(SnapshotId::current(), entity).unwrap();
     assert_eq!(retrieved.id, entity);
     assert_eq!(retrieved.kind, "test");
     assert_eq!(retrieved.name, "test_entity");
@@ -438,6 +442,7 @@ fn test_existing_functions_still_work() {
     // Test adjacency operations (cache usage)
     let outgoing = backend
         .neighbors(
+            SnapshotId::current(),
             entity,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -450,6 +455,7 @@ fn test_existing_functions_still_work() {
 
     let incoming = backend
         .neighbors(
+            SnapshotId::current(),
             entity2,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -505,6 +511,7 @@ fn test_existing_functions_still_work() {
     // Verify adjacency after bulk operations
     let outgoing_after_bulk = backend
         .neighbors(
+            SnapshotId::current(),
             entity,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,

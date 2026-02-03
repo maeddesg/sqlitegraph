@@ -26,7 +26,7 @@ use sqlitegraph::backend::native::v2::wal::recovery::states::{
     Authority, RecoveryContext, RecoveryState as ExplicitRecoveryState,
 };
 use sqlitegraph::backend::native::v2::wal::{
-    BulkIngestConfig, BulkIngestExt, TransactionIsolation, V2WALConfig, V2WALManager, V2WALReader,
+    BulkIngestConfig, BulkIngestExt, IsolationLevel, V2WALConfig, V2WALManager, V2WALReader,
     V2WALRecord,
 };
 use sqlitegraph::backend::native::{NativeBackendError, NativeResult};
@@ -55,7 +55,7 @@ fn test_export_clean_checkpoint_no_wal() -> NativeResult<()> {
     let manager = V2WALManager::create(wal_config)?;
 
     // Write and commit a clean transaction
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -112,7 +112,7 @@ fn test_export_active_wal_tail() -> NativeResult<()> {
     let manager = V2WALManager::create(wal_config)?;
 
     // Write transaction but DO NOT commit (simulates active state)
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -313,7 +313,7 @@ fn test_end_to_end_export_import_roundtrip() -> NativeResult<()> {
 
     // Write some test data
     for i in 1..10 {
-        let tx_id = source_manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+        let tx_id = source_manager.begin_transaction(IsolationLevel::ReadCommitted)?;
 
         // Write node record
         source_manager.write_transaction_record(
@@ -399,7 +399,7 @@ fn test_lsn_bounded_export_validation() -> NativeResult<()> {
 
     // Write multiple transactions to create WAL tail
     for i in 1..5 {
-        let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+        let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
         manager.write_transaction_record(
             tx_id,
             V2WALRecord::NodeInsert {
@@ -543,7 +543,7 @@ fn test_recovery_state_detection_accuracy() -> NativeResult<()> {
     let manager = V2WALManager::create(wal_config)?;
 
     // Test clean shutdown detection
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -562,7 +562,7 @@ fn test_recovery_state_detection_accuracy() -> NativeResult<()> {
     assert_eq!(recovery_context.authority, Authority::GraphFile);
 
     // Test dirty shutdown detection
-    let tx_id = manager.begin_transaction(TransactionIsolation::ReadCommitted)?;
+    let tx_id = manager.begin_transaction(IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {

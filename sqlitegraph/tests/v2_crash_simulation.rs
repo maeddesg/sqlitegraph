@@ -10,7 +10,7 @@
 mod tests {
     use assert_cmd::Command as AssertCommand;
     use sqlitegraph::backend::native::{EdgeStore, GraphFile, NodeStore};
-    use sqlitegraph::{BackendDirection, GraphConfig, NeighborQuery, open_graph};
+    use sqlitegraph::{BackendDirection, GraphConfig, NeighborQuery, SnapshotId, open_graph};
     use std::env;
     use std::fs;
     use std::path::Path;
@@ -254,10 +254,11 @@ mod tests {
     ) -> Result<(), String> {
         // Try to get a node (assuming nodes 1-100 exist)
         let test_node_id = 1;
-        match graph.get_node(test_node_id) {
+        match graph.get_node(SnapshotId::current(), test_node_id) {
             Ok(_) => {
                 // Try neighbor query
                 match graph.neighbors(
+                    SnapshotId::current(),
                     test_node_id,
                     NeighborQuery {
                         direction: BackendDirection::Outgoing,
@@ -272,7 +273,7 @@ mod tests {
                 // Node might not exist, try a few more
                 let mut found_node = false;
                 for node_id in 2..=100 {
-                    if graph.get_node(node_id).is_ok() {
+                    if graph.get_node(SnapshotId::current(), node_id).is_ok() {
                         found_node = true;
                         break;
                     }

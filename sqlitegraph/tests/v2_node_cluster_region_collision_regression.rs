@@ -3,7 +3,7 @@
 //! Tests that node slots are never overwritten by cluster data.
 //! This is a critical invariant to prevent silent data corruption.
 
-use sqlitegraph::{EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
 
 #[test]
 fn test_node_257_must_survive_cluster_writes() {
@@ -81,7 +81,7 @@ fn test_node_257_must_survive_cluster_writes() {
     // Immediately read node 257 by ID and assert it survives
     let node_257_id = node_ids[256]; // 0-based index, so 256 = node 257
     let node_257 = graph
-        .get_node(node_257_id)
+        .get_node(SnapshotId::current(), node_257_id)
         .expect("Failed to read node 257");
 
     println!(
@@ -119,7 +119,7 @@ fn test_node_257_must_survive_cluster_writes() {
 
     // Re-read node 257 and verify same assertions
     let node_257_reopened = graph
-        .get_node(node_257_id)
+        .get_node(SnapshotId::current(), node_257_id)
         .expect("Failed to read node 257 after reopen");
 
     println!(
@@ -212,7 +212,7 @@ fn test_cluster_offsets_must_be_after_reserved_node_region() {
     // This indirectly verifies cluster offsets don't overlap node slots
 
     for (i, &node_id) in node_ids.iter().enumerate() {
-        let node = graph.get_node(node_id).expect(&format!(
+        let node = graph.get_node(SnapshotId::current(), node_id).expect(&format!(
             "Failed to read node {} (index {})",
             node_id,
             i + 1
@@ -232,7 +232,7 @@ fn test_cluster_offsets_must_be_after_reserved_node_region() {
     // Test node 257 specifically
     let node_257_id = node_ids[256]; // 0-based index
     let node_257 = graph
-        .get_node(node_257_id)
+        .get_node(SnapshotId::current(), node_257_id)
         .expect("Failed to read node 257");
 
     assert_eq!(

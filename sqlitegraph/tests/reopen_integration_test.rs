@@ -3,7 +3,7 @@
 //! Tests that the V2 native backend maintains data integrity across file close/reopen cycles.
 
 use rand::{Rng, SeedableRng};
-use sqlitegraph::{EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
 
 #[test]
 fn test_reopen_maintains_graph_integrity() {
@@ -55,7 +55,7 @@ fn test_reopen_maintains_graph_integrity() {
 
             // Check if edge already exists (simple adjacency check)
             let neighbors = graph
-                .neighbors(from_id, NeighborQuery::default())
+                .neighbors(SnapshotId::current(), from_id, NeighborQuery::default())
                 .unwrap_or_default();
 
             if !neighbors.contains(&to_id) {
@@ -87,7 +87,7 @@ fn test_reopen_maintains_graph_integrity() {
 
     for &node_id in &sample_nodes {
         let neighbors = graph
-            .neighbors(node_id, NeighborQuery::default())
+            .neighbors(SnapshotId::current(), node_id, NeighborQuery::default())
             .expect("Failed to get neighbors");
         original_neighbor_counts.push(neighbors.len());
         println!("Node {} has {} neighbors", node_id, neighbors.len());
@@ -108,7 +108,7 @@ fn test_reopen_maintains_graph_integrity() {
     // Verify all 300 nodes still exist
     for &node_id in &node_ids {
         let node = graph
-            .get_node(node_id)
+            .get_node(SnapshotId::current(), node_id)
             .expect(&format!("Failed to get node {}", node_id));
         assert_eq!(
             node.id, node_id,
@@ -121,7 +121,7 @@ fn test_reopen_maintains_graph_integrity() {
     // Verify neighbor counts are stable for our sampled nodes
     for (i, &node_id) in sample_nodes.iter().enumerate() {
         let neighbors = graph
-            .neighbors(node_id, NeighborQuery::default())
+            .neighbors(SnapshotId::current(), node_id, NeighborQuery::default())
             .expect(&format!("Failed to get neighbors for node {}", node_id));
         let original_count = original_neighbor_counts[i];
 
@@ -150,7 +150,7 @@ fn test_reopen_maintains_graph_integrity() {
 
     // Check if this edge already exists
     let neighbors = graph
-        .neighbors(new_from_id, NeighborQuery::default())
+        .neighbors(SnapshotId::current(), new_from_id, NeighborQuery::default())
         .unwrap_or_default();
 
     if !neighbors.contains(&new_to_id) {
@@ -173,7 +173,7 @@ fn test_reopen_maintains_graph_integrity() {
 
     // Final verification: check that the new edge is reflected
     let final_neighbors = graph
-        .neighbors(new_from_id, NeighborQuery::default())
+        .neighbors(SnapshotId::current(), new_from_id, NeighborQuery::default())
         .expect("Failed to get final neighbors");
     assert!(
         final_neighbors.len() >= original_neighbor_counts[0],

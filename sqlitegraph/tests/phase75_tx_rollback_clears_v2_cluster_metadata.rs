@@ -4,7 +4,7 @@
 //! but before commit, the rollback properly clears cluster metadata from ALL nodes
 //! that were modified during the failed transaction.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
+use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
 
 #[cfg(test)]
 mod rollback_tests {
@@ -109,7 +109,7 @@ mod rollback_tests {
 
         for &target_node_id in &target_nodes {
             // Verify node still exists but adjacency should be empty
-            let neighbors = graph_reopened.neighbors(target_node_id, Default::default())?;
+            let neighbors = graph_reopened.neighbors(SnapshotId::current(), target_node_id, Default::default())?;
             assert_eq!(
                 neighbors.len(),
                 0,
@@ -119,6 +119,7 @@ mod rollback_tests {
             );
 
             let incoming_neighbors = graph_reopened.neighbors(
+                SnapshotId::current(),
                 target_node_id,
                 NeighborQuery {
                     direction: BackendDirection::Incoming,
@@ -145,8 +146,9 @@ mod rollback_tests {
         // Check a node that wasn't targeted for cluster updates
         let untouched_node_id = node_ids[25]; // Node outside our target range
         let untouched_neighbors =
-            graph_reopened.neighbors(untouched_node_id, Default::default())?;
+            graph_reopened.neighbors(SnapshotId::current(), untouched_node_id, Default::default())?;
         let untouched_incoming = graph_reopened.neighbors(
+            SnapshotId::current(),
             untouched_node_id,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -176,7 +178,7 @@ mod rollback_tests {
 
         // Since we can't get stats directly, verify the nodes we created are still readable
         for i in 1..=NUM_NODES {
-            let node_entity = graph_reopened.get_node(i)?;
+            let node_entity = graph_reopened.get_node(SnapshotId::current(), i)?;
             assert_eq!(
                 node_entity.id, i,
                 "Node {} should still exist after rollback",
@@ -229,7 +231,7 @@ mod rollback_tests {
         })?;
 
         // Verify edge exists after successful transaction
-        let neighbors = graph.neighbors(node1, Default::default())?;
+        let neighbors = graph.neighbors(SnapshotId::current(), node1, Default::default())?;
         assert_eq!(
             neighbors.len(),
             1,

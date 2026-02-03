@@ -5,7 +5,7 @@
 //! - Incoming clusters should store source node IDs
 
 use sqlitegraph::{
-    EdgeSpec, NodeSpec,
+    EdgeSpec, NodeSpec, SnapshotId,
     backend::native::v2::edge_cluster::{Direction, EdgeCluster},
     config::GraphConfig,
     open_graph,
@@ -259,6 +259,7 @@ fn test_multiple_outgoing_neighbor_ids() {
     // Get all outgoing neighbors from source
     let neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             source_id,
             sqlitegraph::NeighborQuery {
                 direction: sqlitegraph::BackendDirection::Outgoing,

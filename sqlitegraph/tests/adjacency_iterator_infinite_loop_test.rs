@@ -5,7 +5,7 @@
 //! to graph file operations and causing excessive repeated reads.
 
 use sqlitegraph::{
-    BackendDirection, NeighborQuery,
+    BackendDirection, NeighborQuery, SnapshotId,
     backend::native::adjacency::{AdjacencyIterator, Direction},
     backend::native::{EdgeStore, GraphFile, NodeStore},
     config::GraphConfig,
@@ -144,6 +144,7 @@ fn test_adjacency_iterator_repeated_node_reads_fixed() {
     // Test neighbors through public API - this should work without infinite reads
     let neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             node1_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -220,6 +221,7 @@ fn test_adjacency_iterator_proper_advancement() {
     // Test neighbors through public API (should work)
     let neighbors = graph
         .neighbors(
+            SnapshotId::current(),
             node1_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,

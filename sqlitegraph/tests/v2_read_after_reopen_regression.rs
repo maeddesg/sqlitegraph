@@ -4,7 +4,7 @@
 //! It exposes potential crash-consistency issues where node metadata points to cluster offsets
 //! that may not be properly persisted across file boundaries.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
+use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
 use std::collections::HashSet;
 use tempfile::TempDir;
 
@@ -107,6 +107,7 @@ fn test_v2_read_after_reopen_consistency() -> Result<(), Box<dyn std::error::Err
     for (idx, &node_id) in node_ids.iter().enumerate() {
         // Capture outgoing neighbors
         let outgoing_neighbors = graph.neighbors(
+            SnapshotId::current(),
             node_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -117,6 +118,7 @@ fn test_v2_read_after_reopen_consistency() -> Result<(), Box<dyn std::error::Err
 
         // Capture incoming neighbors
         let incoming_neighbors = graph.neighbors(
+            SnapshotId::current(),
             node_id,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -170,6 +172,7 @@ fn test_v2_read_after_reopen_consistency() -> Result<(), Box<dyn std::error::Err
     // Validate outgoing neighbors
     for (expected_node_id, expected_neighbors) in &expected_outgoing {
         let actual_neighbors = graph_reopened.neighbors(
+            SnapshotId::current(),
             *expected_node_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -193,6 +196,7 @@ fn test_v2_read_after_reopen_consistency() -> Result<(), Box<dyn std::error::Err
     // Validate incoming neighbors
     for (expected_node_id, expected_neighbors) in &expected_incoming {
         let actual_neighbors = graph_reopened.neighbors(
+            SnapshotId::current(),
             *expected_node_id,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -217,6 +221,7 @@ fn test_v2_read_after_reopen_consistency() -> Result<(), Box<dyn std::error::Err
     for (idx, node_id, expected_out, expected_in) in &sample_metadata {
         let actual_out = graph_reopened
             .neighbors(
+                SnapshotId::current(),
                 *node_id,
                 NeighborQuery {
                     direction: BackendDirection::Outgoing,
@@ -226,6 +231,7 @@ fn test_v2_read_after_reopen_consistency() -> Result<(), Box<dyn std::error::Err
             .len();
         let actual_in = graph_reopened
             .neighbors(
+                SnapshotId::current(),
                 *node_id,
                 NeighborQuery {
                     direction: BackendDirection::Incoming,
@@ -343,6 +349,7 @@ fn test_v2_read_after_reopen_stress() -> Result<(), Box<dyn std::error::Error>> 
     let mut total_outgoing_before = 0;
     for &node_id in &node_ids {
         let neighbors = graph.neighbors(
+            SnapshotId::current(),
             node_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -371,6 +378,7 @@ fn test_v2_read_after_reopen_stress() -> Result<(), Box<dyn std::error::Error>> 
     let mut total_outgoing_after = 0;
     for &node_id in &node_ids {
         let neighbors = graph_reopened.neighbors(
+            SnapshotId::current(),
             node_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,

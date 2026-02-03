@@ -1,5 +1,5 @@
 use sqlitegraph::backend::NodeSpec;
-use sqlitegraph::{GraphConfig, open_graph};
+use sqlitegraph::{GraphConfig, SnapshotId, open_graph};
 use tempfile::TempDir;
 
 #[test]
@@ -32,7 +32,7 @@ fn test_write_buffer_coherence_regression() -> Result<(), Box<dyn std::error::Er
 
     // Read node back immediately - this should trigger read_bytes path
     println!("READING NODE BACK IMMEDIATELY...");
-    let read_node = graph.get_node(node_id1).expect("Failed to read node back");
+    let read_node = graph.get_node(SnapshotId::current(), node_id1).expect("Failed to read node back");
 
     // Verify data integrity
     assert_eq!(read_node.kind, "Function");
@@ -50,7 +50,7 @@ fn test_write_buffer_coherence_regression() -> Result<(), Box<dyn std::error::Er
 
     println!("READING NODE AFTER REOPEN...");
     let reopened_node = graph_reopened
-        .get_node(node_id1)
+        .get_node(SnapshotId::current(), node_id1)
         .expect("Failed to read node after reopen");
 
     // Verify persistence
