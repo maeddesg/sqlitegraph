@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 Milestone: v1.14 Graph Algorithms Library (IN PROGRESS)
 Phase: 57 of 57 (CLI Commands) — IN PROGRESS
-Plan: 02 of 7 — COMPLETE
-Status: Phase 57-02 COMPLETE - Reachability CLI commands (forward-reachability, backward-reachability, can-reach, unreachable-nodes) with ConsoleProgress and JSON output
-Last activity: 2026-02-03 — Phase 57-02 complete, ready for Phase 57-03
+Plan: 05 of 7 — COMPLETE
+Status: Phase 57-05 COMPLETE - Program Analysis and Cut CLI commands (backward-slice, forward-slice, collapse-scc, min-cut, min-vertex-cut) with ConsoleProgress and JSON output
+Last activity: 2026-02-03 — Phase 57-05 complete, ready for Phase 57-06
 
-Progress: [█████████▌░░] 60% of v1.14 (30/197 plans complete, 12/14 phases complete, Phase 57 in progress)
+Progress: [█████████▌░░] 60% of v1.14 (31/197 plans complete, 12/14 phases complete, Phase 57 in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 209 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02, plus 54-01 through 54-03, plus 55-01 through 55-02, plus 56-01, plus 57-02)
+- Total plans completed: 210 (phases 1-44, plus 45-01 through 45-05, plus 46-01, plus 47-01 through 47-03, plus 48-01 through 48-02, plus 49-01 through 49-02, plus 50-01 through 50-02, plus 51-01 through 51-02, plus 52-01 through 52-02, plus 53-01 through 53-02, plus 54-01 through 54-03, plus 55-01 through 55-02, plus 56-01, plus 57-02, plus 57-05)
 - Average duration: ~20 min/plan
 - Total execution time: ~80 hours across v1.0-v1.14
 
@@ -35,7 +35,7 @@ Progress: [█████████▌░░] 60% of v1.14 (30/197 plans comp
 | v1.4 | 30-32 | 24 | Sequential I/O Optimization |
 | v1.6 | 33-36 | 38 | Chain Locality |
 | v1.13 | 37-44 | 24 | Pub/Sub |
-| v1.14 | 45-57 | TBD | Graph Algorithms (30/197 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete, 52 complete, 53 complete, 54 complete, 55 complete, 56-01 done, 57-02 done) |
+| v1.14 | 45-57 | TBD | Graph Algorithms (31/197 complete - Phase 45 done, 46 done, 47 done, 48 done, 49 done, 50 complete, 51 complete, 52 complete, 53 complete, 54 complete, 55 complete, 56-01 done, 57-02 done, 57-05 done) |
 
 **Recent Trend:**
 - v1.13 phases: ~3-6 plans each, ~15-25 min/plan
@@ -51,6 +51,7 @@ Progress: [█████████▌░░] 60% of v1.14 (30/197 plans comp
 - v1.14 phase 54: ~40 min/plan (3 plans complete - subgraph isomorphism, graph rewriting, structural similarity)
 - v1.14 phase 55: ~7 min/plan (2 plans complete - graph diff module, refactor validation)
 - v1.14 phase 56: ~15 min/plan (1 plan complete - taint propagation)
+- v1.14 phase 57: ~12 min/plan (2 plans complete - reachability, program analysis and cuts)
 - Trend: Stable
 *Updated after each plan completion*
 
@@ -154,5 +155,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 57-02 complete. Reachability CLI commands delivered: forward-reachability (--start), backward-reachability (--target), can-reach (--from/--to), unreachable-nodes (--entry) with ConsoleProgress and JSON output.
+Stopped at: Phase 57-05 complete. Program Analysis and Cut CLI commands delivered: backward-slice (--target), forward-slice (--source), collapse-scc, min-cut (--source/--sink), min-vertex-cut (--source/--sink) with ConsoleProgress and JSON output.
 Resume file: None

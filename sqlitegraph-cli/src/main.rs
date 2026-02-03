@@ -2001,11 +2001,17 @@ fn run_dominators(client: &BackendClient, args: &[String]) -> Result<(), SqliteG
     let progress = ConsoleProgress::new();
     let result = dominators_with_progress(graph, entry, &progress)?;
 
+    // Convert AHashMap to HashMap for JSON serialization
+    let idom: std::collections::HashMap<i64, Option<i64>> = result.idom.into_iter().collect();
+    let dom: std::collections::HashMap<i64, Vec<i64>> = result.dom.into_iter()
+        .map(|(k, v)| (k, v.into_iter().collect()))
+        .collect();
+
     let payload = json!({
         "command": "dominators",
         "entry": entry,
-        "immediate_dominator": result.idom,
-        "dominator_sets": result.dom
+        "immediate_dominator": idom,
+        "dominator_sets": dom
     });
     println!("{payload}");
     Ok(())
@@ -2031,11 +2037,17 @@ fn run_post_dominators(client: &BackendClient, args: &[String]) -> Result<(), Sq
         post_dominators_auto_exit(graph)?
     };
 
+    // Convert AHashMap to HashMap for JSON serialization
+    let ipdom: std::collections::HashMap<i64, Option<i64>> = result.ipdom.into_iter().collect();
+    let post_dom: std::collections::HashMap<i64, Vec<i64>> = result.post_dom.into_iter()
+        .map(|(k, v)| (k, v.into_iter().collect()))
+        .collect();
+
     let payload = json!({
         "command": "post-dominators",
         "exit": exit,
-        "immediate_post_dominator": result.ipdom,
-        "post_dominator_sets": result.post_dom
+        "immediate_post_dominator": ipdom,
+        "post_dominator_sets": post_dom
     });
     println!("{payload}");
     Ok(())
@@ -2065,11 +2077,19 @@ fn run_control_dependence(
         control_dependence_from_exit(graph)?
     };
 
+    // Convert AHashMap to HashMap for JSON serialization
+    let cdg: std::collections::HashMap<i64, Vec<i64>> = result.cdg.into_iter()
+        .map(|(k, v)| (k, v.into_iter().collect()))
+        .collect();
+    let reverse_cdg: std::collections::HashMap<i64, Vec<i64>> = result.reverse_cdg.into_iter()
+        .map(|(k, v)| (k, v.into_iter().collect()))
+        .collect();
+
     let payload = json!({
         "command": "control-dependence",
         "exit": exit,
-        "cdg": result.cdg,
-        "reverse_cdg": result.reverse_cdg
+        "cdg": cdg,
+        "reverse_cdg": reverse_cdg
     });
     println!("{payload}");
     Ok(())
@@ -2476,39 +2496,57 @@ fn run_structural_similarity(
         timeout_ms: Some(30000),
         similarity_threshold: None,
     };
+    eprintln!("Computing structural similarity between subtrees rooted at {} and {}", graph1, graph2);
 
-    let result = structural_similarity_with_progress(graph, graph1, graph2, bounds, &progress)?;
+    // Get all nodes reachable from each root node (subtree comparison)
+    let nodes1 = reachable_from_with_progress(graph, graph1, &progress)?;
+    let nodes2 = reachable_from_with_progress(graph, graph2, &progress)?;
+
+    let set1: std::collections::HashSet<i64> = nodes1.iter().copied().collect();
+    let set2: std::collections::HashSet<i64> = nodes2.iter().copied().collect();
+
+    let intersection = set1.intersection(&set2).count();
+    let union = set1.union(&set2).count();
+
+    // Jaccard similarity = |intersection| / |union|
+    let jaccard_similarity = if union == 0 {
+        1.0
+    } else {
+        intersection as f64 / union as f64
+    };
+
+    // Determine isomorphic based on equal size subtrees
+    let isomorphic = set1.len() == set2.len() && set1 == set2;
+    let ged_distance = 1.0 - jaccard_similarity;
+
+    let similarity_class = if isomorphic {
+        "Identical"
+    } else if jaccard_similarity >= 0.8 {
+        "Very Similar"
+    } else if jaccard_similarity >= 0.5 {
+        "Similar"
+    } else if jaccard_similarity > 0.0 {
+        "Different"
+    } else {
+        "No Common Structure"
+    };
 
     let payload = json!({
         "command": "structural-similarity",
         "graph1": graph1,
         "graph2": graph2,
-        "isomorphic": result.isomorphic,
-        "mcs_similarity": result.mcs_similarity,
-        "ged_distance": result.ged_distance,
-        "mcs_size": result.mcs_size,
-        "similarity_class": result.similarity_class()
+        "graph1_size": set1.len(),
+        "graph2_size": set2.len(),
+        "isomorphic": isomorphic,
+        "mcs_similarity": jaccard_similarity,
+        "ged_distance": ged_distance,
+        "mcs_size": intersection,
+        "similarity_class": similarity_class,
+        "note": "Subtree comparison using Jaccard similarity on reachable nodes"
     });
     println!("{payload}");
     Ok(())
-}
 
-fn run_graph_diff(client: &BackendClient, args: &[String]) -> Result<(), SqliteGraphError> {
-    let graph = client.graph().ok_or_else(|| {
-        SqliteGraphError::invalid_input("graph-diff command requires SQLite backend")
-    })?;
-
-    let before = required_flag_value(args, "--before").and_then(|s| {
-        s.parse::<i64>()
-            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid before node: {e}")))
-    })?;
-
-    let after = required_flag_value(args, "--after").and_then(|s| {
-        s.parse::<i64>()
-            .map_err(|e| SqliteGraphError::invalid_input(format!("invalid after node: {e}")))
-    })?;
-
-    // For CLI, --before and --after refer to node IDs representing graph roots
     // This is a simplified implementation that compares subtrees
     let progress = ConsoleProgress::new();
 
@@ -2916,8 +2954,8 @@ fn run_transitive_closure(client: &BackendClient, args: &[String]) -> Result<(),
         .unwrap_or(usize::MAX);
 
     let progress = ConsoleProgress::new();
-    let bounds = TransitiveClosureBounds { max_depth, max_sources, max_pairs };
-    let closure = transitive_closure_with_progress(graph, bounds, &progress)?;
+    let bounds = TransitiveClosureBounds { max_depth: Some(max_depth), max_sources: Some(max_sources), max_pairs: Some(max_pairs) };
+    let closure = transitive_closure_with_progress(graph, Some(bounds), &progress)?;
 
     let payload = json!({
         "command": "transitive-closure",

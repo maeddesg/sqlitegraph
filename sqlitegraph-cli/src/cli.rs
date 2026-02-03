@@ -117,6 +117,11 @@ Commands:
   collapse-scc                       Collapse SCCs into supernodes for call graph analysis
   min-cut --source ID --sink ID      Minimum s-t edge cut for fault tolerance analysis
   min-vertex-cut --source ID --sink ID  Minimum vertex cut for critical node identification
+  dominators --entry ID              Compute dominators and immediate dominator tree
+  post-dominators [--exit ID]        Compute post-dominators (auto-detects exit if omitted)
+  control-dependence [--exit ID]     Compute Control Dependence Graph
+  dominance-frontiers --entry ID     Compute dominance frontiers for SSA phi-placement
+  natural-loops --entry ID           Detect natural loops using back-edge dominance
   happens-before --events-file FILE  Event ordering analysis for concurrent traces
   impact-radius --start ID [--max-distance N]  Blast zone computation using bounded reachability
   partition --k N [--max-size N]      Size-bounded k-way graph partitioning
