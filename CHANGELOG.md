@@ -1,5 +1,69 @@
 # SQLiteGraph Changelog
 
+## [1.5.1] - 2026-02-06
+
+### Documentation Update Release
+**Retrospective changelog for v1.5.0 features**
+
+### Documentation
+- **Added v1.5.0 entry** to document the `delete_entity()` and `entity_ids()` additions
+- **Updated GraphBackend trait documentation** with new methods
+- **Added migration guide** for projects transitioning from `SqliteGraphBackend` to `Rc<dyn GraphBackend>`
+
+### Summary
+- **Zero code changes** from v1.5.0
+- **Documentation completed** for v1.5.0 features
+- **Ready for production use** with complete API reference
+
+---
+
+## [1.5.0] - 2026-02-06
+
+### Backend Abstraction Enhancement Release
+**Magellan v2.0 Native V2 Migration Support**
+
+### GraphBackend Trait Enhancements
+Two new methods added to enable backend-agnostic entity management:
+
+#### `delete_entity(&self, id: i64) -> Result<(), SqliteGraphError>`
+- Deletes a node (entity) from the graph by ID
+- Removes the entity and all associated edges from the graph
+- Implemented for both `SqliteGraphBackend` and `NativeGraphBackend`
+
+#### `entity_ids(&self) -> Result<Vec<i64>, SqliteGraphError>`
+- Returns all entity IDs currently stored in the graph
+- Provides iteration capability without direct database access
+- Implemented for both `SqliteGraphBackend` and `NativeGraphBackend`
+
+### Implementation Details
+- **SqliteGraphBackend**: Delegates to `SqliteGraph::delete_entity()` and `SqliteGraph::all_entity_ids()`
+- **NativeGraphBackend**: Uses `NodeStore::delete_node()` and `NodeStore::all_node_ids()`
+- **Trait object compatibility**: Both methods work with `Rc<dyn GraphBackend>`
+
+### Use Case
+These methods enable backend-agnostic code patterns in Magellan:
+```rust
+// Before: Required concrete type
+let ids = backend.graph().entity_ids()?;
+
+// After: Works with trait object
+let ids = backend.entity_ids()?;
+```
+
+### Breaking Changes
+None - additions only, backward compatible
+
+### Migration Notes
+Projects using `Rc<SqliteGraphBackend>` can now migrate to `Rc<dyn GraphBackend>` for compile-time backend selection.
+
+### Summary
+- **2 new trait methods** on GraphBackend
+- **4 files modified**: backend.rs, impl_.rs, graph_backend.rs, node_store.rs
+- **2 implementations**: SqliteGraphBackend, NativeGraphBackend
+- **Zero breaking changes**
+
+---
+
 ## [1.4.2] - 2026-02-03
 
 ### Documentation Update Release
