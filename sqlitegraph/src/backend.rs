@@ -49,6 +49,20 @@ pub trait GraphBackend {
     fn insert_node(&self, node: NodeSpec) -> Result<i64, SqliteGraphError>;
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError>;
 
+    /// Delete an entity (node) from the graph by ID
+    ///
+    /// This removes the entity and all associated edges from the graph.
+    /// For SQLite backend: deletes from entities table and cascades to edges
+    /// For Native backend: marks node as deleted and updates adjacency indexes
+    fn delete_entity(&self, id: i64) -> Result<(), SqliteGraphError>;
+
+    /// Get all entity IDs from the graph
+    ///
+    /// Returns a vector of all node IDs currently stored in the graph.
+    /// For SQLite backend: queries all IDs from entities table
+    /// For Native backend: iterates over node store
+    fn entity_ids(&self) -> Result<Vec<i64>, SqliteGraphError>;
+
     // Read operations (require snapshot_id parameter)
     fn get_node(&self, snapshot_id: SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError>;
     fn neighbors(
@@ -373,6 +387,14 @@ where
 
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
         (*self).insert_edge(edge)
+    }
+
+    fn delete_entity(&self, id: i64) -> Result<(), SqliteGraphError> {
+        (*self).delete_entity(id)
+    }
+
+    fn entity_ids(&self) -> Result<Vec<i64>, SqliteGraphError> {
+        (*self).entity_ids()
     }
 
     fn neighbors(

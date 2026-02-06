@@ -145,6 +145,14 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         })
     }
 
+    fn delete_entity(&self, id: i64) -> Result<(), SqliteGraphError> {
+        self.graph.delete_entity(id)
+    }
+
+    fn entity_ids(&self) -> Result<Vec<i64>, SqliteGraphError> {
+        self.graph.all_entity_ids()
+    }
+
     fn neighbors(
         &self,
         snapshot_id: crate::snapshot::SnapshotId,

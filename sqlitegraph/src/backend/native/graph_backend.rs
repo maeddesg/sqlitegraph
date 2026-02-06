@@ -197,6 +197,23 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
+    fn delete_entity(&self, id: i64) -> Result<(), SqliteGraphError> {
+        self.with_graph_file(|graph_file| {
+            let node_id = id as NativeNodeId;
+            let mut node_store = NodeStore::new(graph_file);
+            node_store.delete_node(node_id)?;
+            Ok(())
+        })
+    }
+
+    fn entity_ids(&self) -> Result<Vec<i64>, SqliteGraphError> {
+        self.with_graph_file(|graph_file| {
+            let mut node_store = NodeStore::new(graph_file);
+            let ids = node_store.all_node_ids()?;
+            Ok(ids.into_iter().map(|id| id as i64).collect())
+        })
+    }
+
     fn neighbors(
         &self,
         snapshot_id: crate::snapshot::SnapshotId,

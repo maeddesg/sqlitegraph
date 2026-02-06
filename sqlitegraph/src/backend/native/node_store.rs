@@ -518,6 +518,22 @@ impl<'a> NodeStore<'a> {
         Ok(())
     }
 
+    /// Get all node IDs in the file
+    pub fn all_node_ids(&mut self) -> NativeResult<Vec<NativeNodeId>> {
+        let max_id = self.max_node_id();
+        let mut ids = Vec::new();
+
+        // Iterate through all possible node IDs and check which ones exist
+        for node_id in 1..=max_id {
+            // Try to read the node - if it succeeds, the node exists
+            if self.read_node_v2(node_id).is_ok() {
+                ids.push(node_id);
+            }
+        }
+
+        Ok(ids)
+    }
+
     /// Get the maximum node ID in the file
     pub fn max_node_id(&self) -> NativeNodeId {
         self.graph_file.persistent_header().node_count as NativeNodeId
