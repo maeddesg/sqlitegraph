@@ -410,13 +410,47 @@ Backend Selection Guide:
 
 ## Conclusion
 
-SQLiteGraph v1.4.2 is a technically impressive project with ambitious architecture and excellent documentation. However, it faces an identity crisis:
+SQLiteGraph v1.4.2 is a technically impressive project with ambitious architecture and excellent documentation. The architectural decision has been made:
 
-- **V2 is fast but can't grow**
-- **SQLite can grow but isn't fast**
-- **The project can't be both without hard choices**
+### **DECISION: Create Native V3 Backend**
 
-The recommended path forward is **Option 4: Workload-Specific Backends**. Accept V2's limitations as a feature, not a bug, and guide users to the right tool for their job. This honest positioning builds trust while the team evaluates whether V3 is worth the investment.
+**Date:** 2026-02-03
+**Status:** Approved, future milestone
+
+**The Plan:**
+- **V2 remains unchanged** - No breaking changes, continues to work as-is
+- **V3 is a new backend** - Same features, scalable storage
+- **Users choose at open time** - `GraphConfig::v2()` or `GraphConfig::v3()`
+- **Feature parity** - V3 has everything V2 has, without the 2048 limit
+
+**Why This Works:**
+```
+V2 (current):              V3 (future):
+├── Fast & simple          ├── Fast & scalable
+├── 2048 node limit        ├── Unlimited nodes
+├── Fixed slot storage     ├── Dynamic pages + B-tree
+├── Proven stable          ├── Built on V2's experience
+└── KEEP AS-IS             └── NEW DEVELOPMENT
+
+Both have:
+├── Clustered edge storage
+├── MVCC snapshot isolation
+├── WAL-based transactions
+├── KV store + Pub/Sub
+└── HNSW vector search
+```
+
+**Real-World Use Cases:**
+| Project | Backend | Why? |
+|---------|---------|------|
+| **OdinCode** | V2 | ~4,500 symbols, small scale |
+| **SimdFlow** | V3 | 100K+ nodes for KV cache |
+
+**Implementation Approach:**
+- Only storage layer changes (fixed slots → dynamic pages)
+- All other code remains identical
+- O(1) → O(log n) lookup is acceptable trade-off for unlimited scale
+- Migration tool optional (V2 → V3 export)
 
 ---
 
@@ -425,7 +459,8 @@ The recommended path forward is **Option 4: Workload-Specific Backends**. Accept
 | Date | Decision | Rationale |
 |------|----------|-----------|
 | 2026-02-03 | Document analysis | Capture architectural thinking for future reference |
-| TBD | Choose V3 approach | Requires team discussion and user feedback |
+| 2026-02-03 | **Create V3 backend** | Scale requirement for SimdFlow, V2 proven for small graphs |
+| TBD | Implement V3 | Future milestone, not immediate priority |
 
 ---
 
