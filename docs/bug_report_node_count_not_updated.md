@@ -1,109 +1,88 @@
-# Bug Report: node_count Not Updated When Process Crashes
+# Bug Report: node_count Reset to 0 by Multiple GraphFile Instances
 
 **Date:** 2026-02-08
-**Severity:** High - Data Loss during abnormal termination
-**Component:** `backend/native/`, glibc thread-local storage
+**Severity:** High - Data corruption due to concurrent access
+**Status:** FIXED
+**Component:** `backend/native/graph_file/mod.rs`
 **Version:** sqlitegraph 1.5.2
 
 ## Summary
 
-When the process crashes due to `tcache_thread_shutdown: unaligned tcache chunk detected` error during shutdown, the Drop implementation may not complete, causing the header to not be written with the final `node_count`. This results in data being written to disk but appearing as 0 counts when the database is reopened.
+When multiple `GraphFile` instances access the same database file (e.g., main thread and watcher thread), the Drop implementation blindly writes the in-memory header to disk. The second instance (which never wrote any nodes) has `node_count=0` and overwrites the correct data from the first instance.
 
 ## Symptoms
 
-1. `tcache_thread_shutdown: unaligned tcache chunk detected` error appears during shutdown
-2. Database shows `node_count=0` in header after crash
-3. Node data IS present on disk at the expected offsets
-4. After clean shutdown (no crash), `node_count` is correctly updated
+1. Database shows `node_count=0` in header after process exits
+2. Node data IS present on disk at the expected offsets
+3. Status commands report 0 files/symbols despite data being present
+4. Issue occurs even without crashes (during normal shutdown)
 
 ## Root Cause
 
-The `tcache_thread_shutdown` crash occurs in glibc during thread-local storage cleanup, which happens AFTER Rust Drop implementations run. However, if the crash is severe enough, it can prevent file operations from completing, causing the header write to be incomplete.
+**Two separate bugs:**
 
-The crash is related to tree-sitter parser thread-local storage and occurs when the process exits, even during graceful shutdown with SIGINT.
+1. **Missing sync in write_header()** - `GraphFile::write_header()` only called `flush()` which writes to OS buffer, not `sync_all()` which guarantees data reaches disk. This meant header updates could be lost if the process exited before OS flush.
 
-## Reproduction Steps
+2. **Multiple GraphFile Drop corruption** - The Drop impl writes the in-memory header without checking if it's stale. When a second GraphFile instance is opened (e.g., by watcher thread for pub/sub), it reads the header from disk (which may be outdated) and writes it back on Drop, corrupting the file.
+
+### Code Path
+
+```rust
+// In watcher thread (magellan src/indexer.rs:522)
+let backend = NativeGraphBackend::open(&db_path)?;  // Opens second GraphFile
+
+// When watcher thread exits, Drop runs:
+impl Drop for GraphFile {
+    fn drop(&mut self) {
+        let _ = self.write_header();  // Writes stale header with node_count=0!
+        let _ = self.sync();
+    }
+}
+```
+
+## Fix Applied
+
+1. **Added sync_all() to write_header()** - Ensures header reaches disk before Drop
+2. **Added guard to Drop impl** - Skips header write if `node_count=0`, preventing read-only instances from corrupting data
+
+```rust
+impl Drop for GraphFile {
+    fn drop(&mut self) {
+        // Don't overwrite if this instance never wrote any nodes
+        if self.persistent_header.node_count == 0 {
+            return;
+        }
+        let _ = self.write_header();
+        let _ = self.sync();
+    }
+}
+```
+
+## Testing
 
 ```bash
-# This issue is intermittent and depends on timing
-# It typically occurs when the process is interrupted during active watching
+# Before fix:
+# node_count=0 after crash, data present but unreadable
 
-# Create a database and start watching
-magellan watch --root /tmp/test_dir --db /tmp/test.db --debounce-ms 200 &
-WATCHER_PID=$!
-
-# Add some files quickly
-echo "pub fn test1() {}" > /tmp/test_dir/test1.rs
-echo "pub fn test2() {}" > /tmp/test_dir/test2.rs
-
-# Interrupt immediately (increases chance of crash)
-sleep 1
-kill -INT $WATCHER_PID
-
-# Check database - may show 0 counts if crash occurred
+# After fix:
+magellan watch --root /tmp/test --db /tmp/test.db --debounce-ms 100
+# Ctrl+C to exit (even with tcache crash)
 magellan status --db /tmp/test.db
+# Now correctly shows: files: 1, symbols: 1
 ```
 
-## Evidence
+## Remaining Issues
 
-### Case 1: Successful Shutdown (node_count updated correctly)
-```
-=== Database header ===
-00000010: 0000 0000 0000 0002 0000 0000 0000 0000
-node_count = 2 (big-endian)
+1. **tcache_thread_shutdown crash** - This is a separate tree-sitter library issue (GitHub #3359)
+   - Occurs during glibc TLS cleanup
+   - Happens AFTER Rust Drop completes
+   - Does not cause data loss with the fixes applied
 
-=== Status ===
-files: 1
-symbols: 1
-references: 0
-```
+2. **Heuristic fix** - The Drop guard only checks `node_count==0`, which is a heuristic.
+   - Better solutions would use file locking, dirty flags, or shared GraphFile instances
 
-### Case 2: Crash During Shutdown (node_count = 0)
-```
-=== Database header ===
-00000010: 0000 0000 0000 0000 0000 0000 0000 0000
-node_count = 0 (big-endian)
+## Related
 
-=== Status ===
-files: 0
-symbols: 0
-references: 0
-```
-
-## Workaround
-
-There is no direct workaround in application code since the crash occurs in glibc during thread cleanup. However:
-
-1. **Avoid SIGTERM** - Use SIGINT (Ctrl+C) instead of `kill` to allow graceful shutdown
-2. **Wait before exit** - Give the process time to clean up after SIGINT
-3. **Manual recovery** - If data exists but header shows 0, manually patch the header
-
-### Manual Header Recovery
-
-```bash
-# If node_count is 0 but data exists, manually patch the header
-# This example sets node_count to 1 (adjust value as needed)
-printf "\x01\x00\x00\x00\x00\x00\x00\x00" | dd of=/path/to/db.db bs=1 count=8 seek=16 conv=notrunc
-```
-
-## Related Issues
-
-1. **`tcache_thread_shutdown` crash** - This is a glibc memory corruption issue during thread-local storage cleanup
-2. **Tree-sitter parser cleanup** - The crash is related to tree-sitter's use of thread-local storage
-
-## Potential Fixes
-
-1. **Explicit sync before crash** - Ensure header is written before thread cleanup begins
-2. **Signal handler improvement** - Allow more time for cleanup after SIGINT/SIGTERM
-3. **Tree-sitter cleanup** - Ensure parsers are cleaned up before glibc TLS cleanup
-
-## Resolution
-
-This is NOT a bug in the sqlitegraph header write logic. The header is correctly updated during normal operation. The issue is that process crashes during cleanup prevent the final header write from completing.
-
-The Drop implementation at `mod.rs:217-222` correctly calls `write_header()` and `sync()`, but if the process crashes during glibc cleanup, these operations may not complete.
-
-## Recommended Action
-
-Focus on fixing the `tcache_thread_shutdown` crash (tree-sitter TLS cleanup issue) rather than modifying the header write logic.
-
+- Original analysis incorrectly attributed issue to Drop not completing due to crash
+- Actual issue was multiple GraphFile instances corrupting each other's data
+- Commit: f08bd92 "fix: prevent multiple GraphFile instances from corrupting header on Drop"
