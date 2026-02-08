@@ -1,5 +1,64 @@
 # SQLiteGraph Changelog
 
+## [1.5.3] - 2026-02-08
+
+### 🐛 Critical Bug Fixes
+
+#### Header Corruption Fix - Multiple GraphFile Instances
+**Location**: `src/backend/native/graph_file/mod.rs:164-175, 222-228`
+**Severity**: CRITICAL - Data corruption during concurrent access
+**Impact**: Fixed `node_count` reset to 0 when multiple GraphFile instances access the same file
+
+**Root Cause**: When multiple `GraphFile` instances access the same database file (e.g., main thread and watcher thread), the Drop implementation blindly writes the in-memory header to disk. The second instance (which never wrote any nodes) has `node_count=0` and overwrites the correct data from the first instance.
+
+**Fixes Applied**:
+1. Added `sync_all()` call to `GraphFile::write_header()` to ensure header reaches disk before Drop
+2. Added guard to Drop impl to skip header write if `node_count=0`, preventing read-only instances from corrupting data
+
+**Code Changes**:
+```rust
+// Before: Only flush() to OS buffer
+pub fn write_header(&mut self) -> NativeResult<()> {
+    let header_bytes = encode_persistent_header(&self.persistent_header)?;
+    self.file.seek(SeekFrom::Start(0))?;
+    self.file.write_all(&header_bytes)?;
+    self.file.flush()?;  // Only flushes to OS buffer, not disk
+    Ok(())
+}
+
+// After: Includes sync_all() for durability
+pub fn write_header(&mut self) -> NativeResult<()> {
+    let header_bytes = encode_persistent_header(&self.persistent_header)?;
+    self.file.seek(SeekFrom::Start(0))?;
+    self.file.write_all(&header_bytes)?;
+    self.file.flush()?;
+    self.file.sync_all().map_err(NativeBackendError::Io)?;  // Ensures data reaches disk
+    Ok(())
+}
+
+// Drop impl now guards against stale overwrites
+impl Drop for GraphFile {
+    fn drop(&mut self) {
+        // Don't overwrite if this instance never wrote any nodes
+        if self.persistent_header.node_count == 0 {
+            return;
+        }
+        let _ = self.write_header();
+        let _ = self.sync();
+    }
+}
+```
+
+**Testing**:
+- Verified database headers now persist correctly even after process crashes
+- Status commands now report correct file/symbol counts after abnormal termination
+- No data loss when using multiple GraphFile instances concurrently
+
+**Related Documentation**:
+- See `docs/bug_report_node_count_not_updated.md` for detailed analysis
+
+---
+
 ## [1.5.2] - 2026-02-07
 
 ### 🚀 New Features

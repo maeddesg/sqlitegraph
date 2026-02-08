@@ -4,7 +4,7 @@
 **Severity:** High - Data corruption due to concurrent access
 **Status:** FIXED
 **Component:** `backend/native/graph_file/mod.rs`
-**Version:** sqlitegraph 1.5.2
+**Version:** sqlitegraph 1.5.3 (fixed in this version)
 
 ## Summary
 

@@ -5,6 +5,14 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
+## What's New in v1.5.3
+
+**Critical Bug Fix** - Header corruption from multiple GraphFile instances
+- Fixed `node_count` reset to 0 when multiple instances access the same file
+- Added `sync_all()` to `GraphFile::write_header()` for data durability
+- Guarded Drop impl to prevent stale instances from corrupting headers
+- See [docs/bug_report_node_count_not_updated.md](docs/bug_report_node_count_not_updated.md) for details
+
 ## What's New in v1.5.2
 
 **GraphBackend API Enhancement** - Direct clustered neighbor queries
@@ -182,7 +190,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.5.2"
+sqlitegraph = "1.5.3"
 ```
 
 ### SQLite Backend (Default)
@@ -212,7 +220,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.5.2", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.3", features = ["native-v2"] }
 ```
 
 ```rust
@@ -242,7 +250,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.5.2", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.3", features = ["native-v2"] }
 ```
 
 ```rust
@@ -283,13 +291,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.5.2"
+sqlitegraph = "1.5.3"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.5.2", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.3", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.5.2", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.5.3", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
@@ -340,7 +348,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (v1.5.2):**
+**Test Coverage (v1.5.3):**
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
