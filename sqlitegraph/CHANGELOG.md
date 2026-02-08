@@ -1,5 +1,41 @@
 # SQLiteGraph Changelog
 
+## [1.5.2] - 2026-02-07
+
+### 🚀 New Features
+
+#### GraphBackend API Enhancement - Clustered Neighbor Queries
+
+**Location**: `src/backend/mod.rs`
+
+Added `neighbors_clustered()` method to the `GraphBackend` trait for direct access to clustered adjacency operations. This provides a dedicated API path for performance-optimized neighbor queries on backends that support clustered storage (Native V2).
+
+**API Changes:**
+- Added `neighbors_clustered()` method to `GraphBackend` trait with default implementation
+- Default implementation falls back to standard `neighbors()` for backends without clustered storage
+- Explicit implementations for `SqliteGraphBackend` (delegates to standard neighbors)
+- Explicit implementations for `NativeGraphBackend` (uses V2 clustered adjacency)
+
+**Wrapper Implementations Added:**
+- `impl<B> GraphBackend for &B` - includes `neighbors_clustered` method
+- `impl<B> GraphBackend for Rc<B>` - includes `neighbors_clustered` method
+
+**Usage Example:**
+```rust
+use sqlitegraph::backend::GraphBackend;
+
+// Direct clustered access (delegates to standard neighbors on SQLite backend)
+let neighbors = graph.neighbors_clustered(node_id, snapshot_id)?;
+```
+
+**Performance Notes:**
+- For Native V2 backend: Uses optimized V2 clustered adjacency internally
+- For SQLite backend: Delegates to standard `neighbors()` query (no clustering)
+- The standard `neighbors()` method already uses V2 clustered adjacency when available
+- This API provides explicit access while maintaining backward compatibility
+
+---
+
 ## [0.2.5] - 2025-12-21
 
 ### 🚀 Major New Features: V2 Snapshot System & Atomic Operations

@@ -171,6 +171,8 @@ impl GraphFile {
         self.file.seek(SeekFrom::Start(0))?;
         self.file.write_all(&header_bytes)?;
         self.file.flush()?;
+        self.file.sync_all().map_err(NativeBackendError::Io)?;  // CRITICAL: Ensure header reaches disk
+
         Ok(())
     }
 
@@ -216,7 +218,16 @@ impl GraphFile {
 
 impl Drop for GraphFile {
     fn drop(&mut self) {
-        // Ensure header is written before closing
+        // CRITICAL FIX: Don't blindly write header on drop.
+        // If multiple GraphFile instances access the same file (e.g., watcher thread),
+        // the Drop from one instance can corrupt another's data.
+        // Only write if we have actual modifications (node_count > 0 indicates real data).
+        //
+        // Note: This is a heuristic - ideally we'd track actual modifications via a dirty flag.
+        if self.persistent_header.node_count == 0 {
+            // This instance never wrote any nodes - don't overwrite header
+            return;
+        }
         let _ = self.write_header();
         let _ = self.sync();
     }
