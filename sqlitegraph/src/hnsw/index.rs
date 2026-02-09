@@ -49,9 +49,9 @@
 use rusqlite::OptionalExtension;
 
 use crate::hnsw::{
-    config::HnswConfig,
+    config::{hnsw_config, HnswConfig},
     distance_metric::DistanceMetric,
-    errors::HnswError,
+    errors::{HnswError, HnswIndexError},
     layer::HnswLayer,
     multilayer::{LevelDistributor, MultiLayerNodeManager},
     neighborhood::NeighborhoodSearch,

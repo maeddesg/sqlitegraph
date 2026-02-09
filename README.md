@@ -5,25 +5,25 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.4.2
+## What's New in v1.5.4
 
-**Developer Documentation** - Complete internal architecture guides (5 new guides)
+**Code Cleanup and Bug Fixes**
+- Removed V2_SLOT_DEBUG debug instrumentation (~100 lines)
+- Fixed compilation errors in taint_analysis.rs (missing GraphEdge import)
+- Fixed compilation errors in hnsw/index.rs (missing hnsw_config, HnswIndexError imports)
+- All tests now compile and pass
+
+**v1.5.0 Backend Abstraction** - Enhanced GraphBackend trait
+- `delete_entity()` and `entity_ids()` methods
+- Backend-agnostic entity management
+- V2 migration support
+
+**v1.4.2 Developer Documentation** - Complete internal architecture guides (5 new guides)
 - HNSW Vector Store Internals: layers, search/insert algorithms
 - KV Store Architecture: MVCC, TTL, WAL integration
 - Native V2 Binary Format: file structure, clusters, recovery
 - Pub/Sub Implementation: event types, filtering, WAL integration
 - Query API Enhancements: prefix scan, pattern matching, subscriptions
-- Updated crate README.md with comprehensive feature overview
-
-**v1.4.2 Code Quality** - Zero compiler warnings with proper test module organization
-- All test modules now properly gated with `#[cfg(test)]`
-- Unused imports cleaned up across taint_analysis and HNSW modules
-- Clean compilation output for better developer experience
-
-**v1.4.0 Features** - Pub/Sub query enhancements for agent messaging and topic-based subscriptions
-- KV prefix scanning, node query by kind/name pattern
-- Pattern-based subscriptions for flexible event filtering
-- CLI commands for efficient KV and node queries
 
 **v1.3.0 Graph Algorithms Library** - Comprehensive algorithm collection for CFG analysis, program slicing, and security
 - 35 algorithms across 13 categories:

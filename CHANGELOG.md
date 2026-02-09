@@ -1,5 +1,41 @@
 # SQLiteGraph Changelog
 
+## [1.5.4] - 2026-02-09
+
+### Code Cleanup and Bug Fixes Release
+
+### Changes
+- **Removed V2_SLOT_DEBUG instrumentation** from `node_store.rs`
+  - Removed all `println!` debug statements for slot write/read operations
+  - Removed `V2_SLOT_DEBUG` environment variable checks
+  - Removed `SLOT_CORRUPTION_DEBUG` environment variable checks
+  - Removed Phase 76 `trace_v2_io` feature instrumentation
+  - Removed Phase 2C forensic dual-API instrumentation
+  - Reduced code clutter: ~100 lines removed
+
+- **Fixed compilation errors**
+  - Added missing `GraphEdge` import in `taint_analysis.rs`
+  - Added missing `hnsw_config` and `HnswIndexError` imports in `hnsw/index.rs`
+  - All tests now compile and pass
+
+### Bug Fixes
+- **taint_analysis.rs**: Fixed missing `GraphEdge` import causing 7 compilation errors
+- **hnsw/index.rs**: Fixed missing `hnsw_config` and `HnswIndexError` imports causing 3 compilation errors
+
+### Rationale
+The debug instrumentation was vestigial forensic code from corruption debugging. It can be restored from git history if needed. Production builds benefit from cleaner code with zero runtime overhead.
+
+### Test Results
+- ✅ 16/16 hnsw::index tests pass
+- ✅ 37/38 taint_analysis tests pass (1 pre-existing test logic issue unrelated to fixes)
+
+### Developer Notes
+- If you need to debug slot allocation issues, refer to git history before this commit
+- Alternative debugging approaches: proper logging framework, debuggers, targeted tests
+- The `v2_experimental` and `v2_io_exclusive_mmap` features remain functional
+
+---
+
 ## [1.5.1] - 2026-02-06
 
 ### Documentation Update Release

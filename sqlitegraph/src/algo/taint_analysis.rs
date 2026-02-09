@@ -103,7 +103,7 @@
 use ahash::{AHashMap, AHashSet};
 
 use crate::progress::ProgressCallback;
-use crate::{errors::SqliteGraphError, graph::SqliteGraph, GraphEntity};
+use crate::{errors::SqliteGraphError, graph::SqliteGraph, GraphEdge, GraphEntity};
 
 use super::reachability::{can_reach, reachable_from, reverse_reachable_from};
 

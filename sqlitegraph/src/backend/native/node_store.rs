@@ -82,128 +82,16 @@ impl<'a> NodeStore<'a> {
             self.graph_file.grow(required_size - current_size)?;
         }
 
-        // Phase 2C.2 FORENSIC: I/O path markers for write operation
+        // Write the slot data using the appropriate I/O path
         #[cfg(feature = "v2_experimental")]
         {
-            println!(
-                "[V2_SLOT_DEBUG] WRITE: node_id={}, slot_offset=0x{:x}, version={}, io_path=MMAP_WRITE, callsite={}:{}",
-                record.id,
-                slot_offset,
-                slot_buffer[0],
-                file!(),
-                line!()
-            );
             self.graph_file
                 .mmap_write_bytes(slot_offset, &slot_buffer)?;
         }
 
         #[cfg(not(feature = "v2_experimental"))]
         {
-            println!(
-                "[V2_SLOT_DEBUG] WRITE: node_id={}, slot_offset=0x{:x}, version={}, io_path=FILE_WRITE_BYTES, callsite={}:{}",
-                record.id,
-                slot_offset,
-                slot_buffer[0],
-                file!(),
-                line!()
-            );
-
             self.graph_file.write_bytes(slot_offset, &slot_buffer)?;
-
-            // SLOT CORRUPTION DEBUG: Verify write was successful
-            if std::env::var("SLOT_CORRUPTION_DEBUG").is_ok() {
-                let mut verify_buffer = [0u8; 1];
-                if self
-                    .graph_file
-                    .read_bytes(slot_offset, &mut verify_buffer)
-                    .is_ok()
-                {
-                    println!(
-                        "[SLOT_CORRUPTION] POST_WRITE_VERIFY: node_id={}, slot_offset=0x{:x}, written_version={}, read_version={}",
-                        record.id, slot_offset, slot_buffer[0], verify_buffer[0]
-                    );
-                }
-            }
-        }
-
-        // Phase 76: Read-back verification after write
-        #[cfg(all(feature = "v2_experimental", feature = "trace_v2_io"))]
-        {
-            let mut verify_buffer = vec![0u8; 32];
-            if let Ok(_) = self
-                .graph_file
-                .mmap_read_bytes(slot_offset, &mut verify_buffer)
-            {
-                println!(
-                    "[phase76] NODE_READBACK: node_id={}, slot_offset={}, verify_32={:02x?}",
-                    record.id, slot_offset, verify_buffer
-                );
-            }
-        }
-
-        // PHASE 2C.1 FORENSIC: Dual-API instrumentation to detect cache/coherence issues
-        if std::env::var("V2_SLOT_DEBUG").is_ok() {
-            let mut before_buffer_file = vec![0u8; 32];
-            let _before_buffer_mmap = vec![0u8; 32];
-            let mut after_buffer_file = vec![0u8; 32];
-            let _after_buffer_mmap = vec![0u8; 32];
-
-            let file_size_before = self.graph_file.file_size().unwrap_or(0);
-
-            // Read bytes BEFORE write using BOTH APIs
-            if slot_offset + 32 <= file_size_before {
-                let _ = self
-                    .graph_file
-                    .read_bytes(slot_offset, &mut before_buffer_file);
-                #[cfg(feature = "v2_experimental")]
-                {
-                    let _ = self
-                        .graph_file
-                        .mmap_read_bytes(slot_offset, &mut before_buffer_mmap);
-                }
-            }
-
-            // Read bytes AFTER write using BOTH APIs
-            let _ = self
-                .graph_file
-                .read_bytes(slot_offset, &mut after_buffer_file);
-            #[cfg(feature = "v2_experimental")]
-            {
-                let _ = self
-                    .graph_file
-                    .mmap_read_bytes(slot_offset, &mut after_buffer_mmap);
-            }
-
-            println!(
-                "[V2_SLOT_DEBUG] WRITE_AFTER: node_id={}, slot_offset=0x{:x}, file_size={}, callsite={}:{}",
-                record.id,
-                slot_offset,
-                file_size_before,
-                file!(),
-                line!()
-            );
-            println!(
-                "[V2_SLOT_DEBUG] WRITE_BEFORE_FILE:  version={}, bytes={:02x?}",
-                before_buffer_file.get(0).unwrap_or(&0),
-                &before_buffer_file[..before_buffer_file.len().min(32)]
-            );
-            #[cfg(feature = "v2_experimental")]
-            println!(
-                "[V2_SLOT_DEBUG] WRITE_BEFORE_MMAP:  version={}, bytes={:02x?}",
-                before_buffer_mmap.get(0).unwrap_or(&0),
-                &before_buffer_mmap[..before_buffer_mmap.len().min(32)]
-            );
-            println!(
-                "[V2_SLOT_DEBUG] WRITE_AFTER_FILE:   version={}, bytes={:02x?}",
-                after_buffer_file.get(0).unwrap_or(&0),
-                &after_buffer_file[..after_buffer_file.len().min(32)]
-            );
-            #[cfg(feature = "v2_experimental")]
-            println!(
-                "[V2_SLOT_DEBUG] WRITE_AFTER_MMAP:   version={}, bytes={:02x?}",
-                after_buffer_mmap.get(0).unwrap_or(&0),
-                &after_buffer_mmap[..after_buffer_mmap.len().min(32)]
-            );
         }
 
         self.node_index.insert(record.id, slot_offset);
@@ -256,79 +144,19 @@ impl<'a> NodeStore<'a> {
             });
         }
 
-        // PHASE 2C.1 FORENSIC: Dual-API instrumentation for reader
-        if std::env::var("V2_SLOT_DEBUG").is_ok() {
-            let mut debug_buffer_file = vec![0u8; 32];
-            let _debug_buffer_mmap = vec![0u8; 32];
-            let file_size = self.graph_file.file_size().unwrap_or(0);
 
-            if slot_offset + 32 <= file_size {
-                // Read using BOTH APIs
-                let _ = self
-                    .graph_file
-                    .read_bytes(slot_offset, &mut debug_buffer_file);
-                #[cfg(feature = "v2_experimental")]
-                {
-                    let _ = self
-                        .graph_file
-                        .mmap_read_bytes(slot_offset, &mut debug_buffer_mmap);
-                }
-
-                println!(
-                    "[V2_SLOT_DEBUG] READ_ENTRY: node_id={}, slot_offset=0x{:x}, file_size={}, callsite={}:{}",
-                    node_id,
-                    slot_offset,
-                    file_size,
-                    file!(),
-                    line!()
-                );
-                println!(
-                    "[V2_SLOT_DEBUG] READ_PRE_PARSE_FILE: version={}, bytes={:02x?}",
-                    debug_buffer_file.get(0).unwrap_or(&0),
-                    &debug_buffer_file[..debug_buffer_file.len().min(32)]
-                );
-                #[cfg(feature = "v2_experimental")]
-                println!(
-                    "[V2_SLOT_DEBUG] READ_PRE_PARSE_MMAP: version={}, bytes={:02x?}",
-                    debug_buffer_mmap.get(0).unwrap_or(&0),
-                    &debug_buffer_mmap[..debug_buffer_mmap.len().min(32)]
-                );
-            } else {
-                println!(
-                    "[V2_SLOT_DEBUG] READ_ENTRY: node_id={}, slot_offset=0x{:x}, file_size={} - SLOT BEYOND FILE",
-                    node_id, slot_offset, file_size
-                );
-            }
-        }
-
-        // Phase 2C.2 FORENSIC: I/O path markers for header read operation
+        // Read V2 header to determine record size
         let mut header_buffer = vec![0u8; 21];
         #[cfg(feature = "v2_experimental")]
         {
             self.graph_file
                 .mmap_read_bytes(slot_offset, &mut header_buffer)?;
-            println!(
-                "[V2_SLOT_DEBUG] READ_PRE_PARSE: node_id={}, slot_offset=0x{:x}, version={}, io_path=MMAP_READ_BYTES, callsite={}:{}",
-                node_id,
-                slot_offset,
-                header_buffer[0],
-                file!(),
-                line!()
-            );
         }
 
         #[cfg(not(feature = "v2_experimental"))]
         {
             self.graph_file
                 .read_bytes(slot_offset, &mut header_buffer)?;
-            println!(
-                "[V2_SLOT_DEBUG] READ_PRE_PARSE: node_id={}, slot_offset=0x{:x}, version={}, io_path=FILE_READ_BYTES, callsite={}:{}",
-                node_id,
-                slot_offset,
-                header_buffer[0],
-                file!(),
-                line!()
-            );
         }
 
         // Parse V2 header to get exact record size
@@ -351,16 +179,7 @@ impl<'a> NodeStore<'a> {
         // Read the exact V2 record size (not the entire slot)
         let mut buffer = vec![0u8; actual_record_size];
 
-        // Phase 76: Byte-proof instrumentation before read
-        #[cfg(all(feature = "v2_experimental", feature = "trace_v2_io"))]
-        {
-            println!(
-                "[phase76] NODE_READ_START: node_id={}, slot_offset={}, len={}",
-                node_id, slot_offset, actual_record_size
-            );
-        }
-
-        // Phase 41: Route node reads based on exclusive I/O mode
+        // Route node reads based on I/O mode
         #[cfg(all(feature = "v2_experimental", feature = "v2_io_exclusive_mmap"))]
         {
             self.graph_file.mmap_read_bytes(slot_offset, &mut buffer)?;
@@ -369,20 +188,6 @@ impl<'a> NodeStore<'a> {
         {
             // DEFAULT MODE: Use canonical read_bytes API for V2
             self.graph_file.read_bytes(slot_offset, &mut buffer)?;
-        }
-
-        // Phase 76: Read result verification
-        #[cfg(all(feature = "v2_experimental", feature = "trace_v2_io"))]
-        {
-            let first_32 = if buffer.len() >= 32 {
-                &buffer[..32]
-            } else {
-                &buffer
-            };
-            println!(
-                "[phase76] NODE_READ_RESULT: node_id={}, slot_offset={}, read_32={:02x?}",
-                node_id, slot_offset, first_32
-            );
         }
 
         let record = NodeRecordV2::deserialize(&buffer)?;
