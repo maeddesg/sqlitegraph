@@ -5,15 +5,15 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.5.4
+## What's New in v1.5.5
 
-**Code Cleanup and Bug Fixes**
-- Removed V2_SLOT_DEBUG debug instrumentation (~100 lines)
-- Fixed compilation errors in taint_analysis.rs (missing GraphEdge import)
-- Fixed compilation errors in hnsw/index.rs (missing hnsw_config, HnswIndexError imports)
-- All tests now compile and pass
+**User Experience Improvement - Clean Output**
+- Removed CLUSTER_DEBUG ungate debug messages from native-v2 backend
+- Removed EDGE_CLUSTER_DEBUG ungate debug messages from transaction operations
+- Native-v2 backend now silent during normal operation (matches SQLite backend)
+- No more spurious debug output cluttering your logs
 
-**v1.5.0 Backend Abstraction** - Enhanced GraphBackend trait
+**v1.5.4 Code Cleanup** - Debug instrumentation removed
 - `delete_entity()` and `entity_ids()` methods
 - Backend-agnostic entity management
 - V2 migration support

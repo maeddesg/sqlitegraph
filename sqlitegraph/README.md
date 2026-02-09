@@ -5,6 +5,21 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
+## What's New in v1.5.5
+
+**User Experience Improvement** - Clean output for native-v2 backend
+- Removed ungate CLUSTER_DEBUG debug messages from header initialization
+- Removed ungate EDGE_CLUSTER_DEBUG debug messages from transaction operations
+- Native-v2 backend now produces clean output (matches SQLite backend behavior)
+- No more spurious debug clutter in production logs
+
+**What's New in v1.5.4** (Also included in v1.5.5)
+
+**Code Cleanup and Bug Fixes**
+- Removed V2_SLOT_DEBUG debug instrumentation (~100 lines)
+- Fixed compilation errors in taint_analysis.rs (missing GraphEdge import)
+- Fixed compilation errors in hnsw/index.rs (missing hnsw_config, HnswIndexError imports)
+
 ## What's New in v1.5.3
 
 **Critical Bug Fix** - Header corruption from multiple GraphFile instances

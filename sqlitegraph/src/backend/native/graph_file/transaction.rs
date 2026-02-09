@@ -88,20 +88,6 @@ impl TransactionManager {
             }
         }
 
-        // PHASE 2D: Probe node1 corruption before any transaction operations
-        if std::env::var("EDGE_CLUSTER_DEBUG").is_ok() {
-            let mut disk_file = std::fs::File::open(file_path)?;
-            let mut node1_bytes = vec![0u8; 32];
-            disk_file.seek(SeekFrom::Start(0x400))?;
-            disk_file.read_exact(&mut node1_bytes)?;
-            let version_before_tx_ops = node1_bytes[0];
-            let file_size_before_tx_ops = file_size_fn().unwrap_or(0);
-            println!(
-                "[EDGE_CLUSTER_DEBUG] BEFORE_TX_OPS: node1_version={}, file_size={}, node1_bytes={:02x?}",
-                version_before_tx_ops, file_size_before_tx_ops, &node1_bytes
-            );
-        }
-
         // Begin transaction in header (saves current state)
         tx_state.begin_tx(1); // Use tx_id=1 for now, could be parameterized
 
@@ -121,20 +107,6 @@ impl TransactionManager {
                     "AFTER_TX_STATE_MODIFY", 257, slot_offset
                 );
             }
-        }
-
-        // PHASE 2D: Probe after header modification
-        if std::env::var("EDGE_CLUSTER_DEBUG").is_ok() {
-            let mut disk_file = std::fs::File::open(file_path)?;
-            let mut node1_bytes = vec![0u8; 32];
-            disk_file.seek(SeekFrom::Start(0x400))?;
-            disk_file.read_exact(&mut node1_bytes)?;
-            let version_after_header_modify = node1_bytes[0];
-            let file_size_after_header_modify = file_size_fn().unwrap_or(0);
-            println!(
-                "[EDGE_CLUSTER_DEBUG] AFTER_HEADER_MODIFY: node1_version={}, file_size={}, node1_bytes={:02x?}",
-                version_after_header_modify, file_size_after_header_modify, &node1_bytes
-            );
         }
 
         use super::debug::DebugInstrumentation;

@@ -1,5 +1,33 @@
 # SQLiteGraph Changelog
 
+## [1.5.5] - 2026-02-09
+
+### User Experience Improvement Release
+**Removal of ungate debug output from native-v2 backend**
+
+### Changes
+- **Removed CLUSTER_DEBUG instrumentation** from `graph_file/header.rs`
+  - Removed ungate `println!("[CLUSTER_DEBUG] initialize_v2_header()...")`
+  - Removed `print_layout_invariants()` function (7 println! statements)
+  - Removed `print_final_cluster_layout()` function (2 println! statements)
+  - Removed `log_cluster_offset_fix()` function (1 println! statement)
+  - Native-v2 backend now silent during normal operation (matches SQLite backend)
+
+- **Removed EDGE_CLUSTER_DEBUG instrumentation** from `graph_file/transaction.rs`
+  - Removed ungate debug blocks for BEFORE_TX_OPS and AFTER_HEADER_MODIFY
+  - These were printing on every transaction operation
+
+### User Impact
+- Native-v2 backend now produces clean output (no spurious debug messages)
+- Matches SQLite backend behavior (silent during normal operation)
+- Improved user experience for production use
+
+### Developer Notes
+- Debug functions in `debug.rs` remain for test/development use but are not called in production
+- Environment-gated debug features remain intact: `EDGE_CLUSTER_DEBUG`, `TX_BEGIN_AUDIT`, `PHASE75_INSTRUMENTATION`
+
+---
+
 ## [1.5.4] - 2026-02-09
 
 ### Code Cleanup and Bug Fixes Release

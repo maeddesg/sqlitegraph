@@ -25,10 +25,6 @@ impl HeaderManager {
         default_node_data_start: u64,
         reserved_node_region_bytes: u64,
     ) -> NativeResult<()> {
-        println!(
-            "[CLUSTER_DEBUG] initialize_v2_header() called - fixing cluster offsets to prevent node slot corruption"
-        );
-
         // Set basic V2 header fields
         header.magic = V2_MAGIC;
         header.version = V2_FORMAT_VERSION;
@@ -66,31 +62,18 @@ impl HeaderManager {
             header.node_data_offset + reserved_node_region_bytes,
         );
 
-        // DEBUG: Print layout invariants
-        Self::print_layout_invariants(header, node_region_end, base_cluster_start, cluster_floor);
-
         // PHASE 76 CRITICAL FIX: Prevent cluster offset corruption of node slots
         // Ensure cluster offsets are positioned AFTER the entire node region to prevent overwrites
         let node_region_end = header.node_data_offset + node_region_size;
 
         // Fix outgoing cluster offset if it's inside node region
         if header.outgoing_cluster_offset < node_region_end {
-            Self::log_cluster_offset_fix(
-                "outgoing",
-                header.outgoing_cluster_offset,
-                node_region_end,
-            );
             header.outgoing_cluster_offset = node_region_end;
         }
 
         // Position incoming clusters after outgoing clusters with reasonable spacing
         let min_incoming_offset = header.outgoing_cluster_offset + (node_count as u64 * 256);
         if header.incoming_cluster_offset < min_incoming_offset {
-            Self::log_cluster_offset_fix(
-                "incoming",
-                header.incoming_cluster_offset,
-                min_incoming_offset,
-            );
             header.incoming_cluster_offset = min_incoming_offset;
         }
 
@@ -101,26 +84,13 @@ impl HeaderManager {
 
         // CRITICAL INVARIANT: Cluster offsets must be outside node region
         if header.outgoing_cluster_offset < node_region_end {
-            Self::log_cluster_offset_fix(
-                "outgoing",
-                header.outgoing_cluster_offset,
-                node_region_end,
-            );
             header.outgoing_cluster_offset = node_region_end;
         }
 
         if header.incoming_cluster_offset < node_region_end {
             let corrected_incoming_offset = node_region_end + (node_count as u64 * 256);
-            Self::log_cluster_offset_fix(
-                "incoming",
-                header.incoming_cluster_offset,
-                corrected_incoming_offset,
-            );
             header.incoming_cluster_offset = corrected_incoming_offset;
         }
-
-        // Print final cluster layout
-        Self::print_final_cluster_layout(header);
 
         Ok(())
     }
@@ -196,49 +166,6 @@ impl HeaderManager {
         }
 
         Ok(())
-    }
-
-    /// Print cluster layout debugging information
-    fn print_layout_invariants(
-        header: &PersistentHeaderV2,
-        node_region_end: u64,
-        base_cluster_start: u64,
-        cluster_floor: u64,
-    ) {
-        println!("[CLUSTER_DEBUG] Layout invariants:");
-        println!("  node_data_offset = {}", header.node_data_offset);
-        println!("  node_count = {}", header.node_count);
-        println!("  node_region_end = {}", node_region_end);
-        println!("  base_cluster_start = {}", base_cluster_start);
-        println!("  cluster_floor = {}", cluster_floor);
-        println!(
-            "  current outgoing_cluster_offset = {}",
-            header.outgoing_cluster_offset
-        );
-        println!(
-            "  current incoming_cluster_offset = {}",
-            header.incoming_cluster_offset
-        );
-    }
-
-    /// Print final cluster layout after corrections
-    fn print_final_cluster_layout(header: &PersistentHeaderV2) {
-        println!(
-            "  final outgoing_cluster_offset = {}",
-            header.outgoing_cluster_offset
-        );
-        println!(
-            "  final incoming_cluster_offset = {}",
-            header.incoming_cluster_offset
-        );
-    }
-
-    /// Log critical cluster offset fixes
-    fn log_cluster_offset_fix(cluster_type: &str, old_offset: u64, new_offset: u64) {
-        println!(
-            "CRITICAL FIX: Moving {}_cluster_offset from {} to {} to prevent node slot corruption",
-            cluster_type, old_offset, new_offset
-        );
     }
 
     /// Get header statistics for debugging
