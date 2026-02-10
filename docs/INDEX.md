@@ -1,7 +1,7 @@
 # SQLiteGraph Documentation Index
 
-**Last Updated:** 2026-02-03
-**Version:** v1.4.2
+**Last Updated:** 2026-02-10
+**Version:** v1.5.7
 
 This index provides navigation for all SQLiteGraph documentation.
 
@@ -19,6 +19,9 @@ This index provides navigation for all SQLiteGraph documentation.
 | [TESTING.md](TESTING.md) | Testing guide | Developers |
 | [DEBUGGING.md](DEBUGGING.md) | Debugging and profiling | Developers |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines | Developers |
+| [MIGRATION.md](MIGRATION.md) | Backend migration guide | Users |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions | Users |
+| [PHILOSOPHY.md](PHILOSOPHY.md) | Design principles | All |
 
 ---
 
@@ -51,12 +54,15 @@ This index provides navigation for all SQLiteGraph documentation.
 |-------|----------|---------|
 | **Quick Start** | README.md | Quick Start |
 | **Backend Selection** | README.md | Backend Selection Guide |
+| **Realistic Example** | README.md | Quick Start |
 | **CLI Usage** | MANUAL.md | CLI Usage |
 | **Graph Algorithms** | MANUAL.md | Graph Algorithms |
 | **Vector Search** | MANUAL.md | HNSW Vector Search |
 | **Pub/Sub Events** | MANUAL.md | Section 14: Pub/Sub Events |
 | **Error Handling** | MANUAL.md | Error Handling |
-| **Troubleshooting** | MANUAL.md | Troubleshooting |
+| **Migration** | MIGRATION.md | SQLite to Native V2 |
+| **Troubleshooting** | TROUBLESHOOTING.md | Common Issues |
+| **Design Philosophy** | PHILOSOPHY.md | Principles |
 
 ---
 
@@ -89,6 +95,13 @@ This index provides navigation for all SQLiteGraph documentation.
    - Development workflow
    - Code standards
    - Submitting changes
+
+5. **[PHILOSOPHY.md](PHILOSOPHY.md)** - Design principles
+   - Embedded First
+   - Correct Over Clever
+   - Batteries Included
+   - Dual Backend Strategy
+   - LLM-Friendly Design
 
 ### Development Guides by Topic
 

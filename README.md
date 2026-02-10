@@ -268,6 +268,140 @@ while let Ok(event) = rx.recv() {
 graph.unsubscribe(subscriber_id)?;
 ```
 
+### Realistic Example: Building a Call Graph
+
+```rust
+use sqlitegraph::{GraphConfig, open_graph, NodeSpec, EdgeSpec};
+use sqlitegraph::query::NeighborQuery;
+use serde_json::json;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cfg = GraphConfig::native();
+    let temp_dir = tempfile::tempdir()?;
+    let db_path = temp_dir.path().join("callgraph.db");
+    let graph = open_graph(&db_path, &cfg)?;
+
+    // Add functions as nodes
+    let main_id = graph.insert_node(NodeSpec {
+        kind: "function".into(),
+        name: "main".into(),
+        file_path: Some("src/main.rs".into()),
+        data: json!({"lines": 10, "start_line": 1}),
+    })?;
+
+    let process_id = graph.insert_node(NodeSpec {
+        kind: "function".into(),
+        name: "process".into(),
+        file_path: Some("src/lib.rs".into()),
+        data: json!({"lines": 25, "start_line": 15}),
+    })?;
+
+    let log_id = graph.insert_node(NodeSpec {
+        kind: "function".into(),
+        name: "log".into(),
+        file_path: Some("src/lib.rs".into()),
+        data: json!({"lines": 5, "start_line": 45}),
+    })?;
+
+    // Add call relationships
+    graph.insert_edge(EdgeSpec {
+        from_id: main_id,
+        to_id: process_id,
+        edge_type: "calls".into(),
+        data: json!({"line": 5}),
+    })?;
+
+    graph.insert_edge(EdgeSpec {
+        from_id: process_id,
+        to_id: log_id,
+        edge_type: "calls".into(),
+        data: json!({"line": 18}),
+    })?;
+
+    // Query: What functions does main call (directly)?
+    let snapshot = graph.snapshot()?;
+    let main_calls = snapshot.neighbors(NeighborQuery::outgoing(main_id))?;
+    println!("main calls: {:?}", main_calls.iter().map(|n| &n.name).collect::<Vec<_>>());
+    // Output: main calls: ["process"]
+
+    // Query: What functions call log (transitively)?
+    let callers = snapshot.neighbors(NeighborQuery::incoming(log_id))?;
+    println!("log is called by: {:?}", callers.iter().map(|n| &n.name).collect::<Vec<_>>());
+    // Output: log is called by: ["process"]
+
+    // Query: Full call chain from main
+    fn print_call_chain(graph: &sqlitegraph::SqliteGraph, start_id: u64, depth: usize) -> sqlitegraph::Result<()> {
+        let snapshot = graph.snapshot()?;
+        let mut current = vec![(start_id, 0)];
+        while let Some((node_id, d)) = current.pop() {
+            if d >= depth { continue; }
+            let node = snapshot.get_node(node_id)?;
+            println!("{}└─ {}", "  ".repeat(d), node.name);
+            for neighbor in snapshot.neighbors(NeighborQuery::outgoing(node_id))? {
+                current.push((neighbor.id, d + 1));
+            }
+        }
+        Ok(())
+    }
+
+    print_call_chain(&graph, main_id, 3)?;
+    // Output:
+    // └─ main
+    //   └─ process
+    //     └─ log
+
+    Ok(())
+}
+```
+
+## When NOT to Use SQLiteGraph
+
+    // Output:
+    // └─ main
+    //   └─ process
+    //     └─ log
+
+    Ok(())
+}
+```
+
+## When NOT to Use SQLiteGraph
+
+SQLiteGraph is designed for **embedded, single-machine graph workloads**. It is **not** the best choice for:
+
+| Use Case | Better Alternative | Why |
+|----------|-------------------|-----|
+| **Distributed systems** | Neo4j, TigerGraph | SQLiteGraph is single-machine only |
+| **Real-time analytics** (millions ops/sec) | RedisGraph, GraphX | In-memory engines are faster |
+| **Full-text search** | Meilisearch, Typesense | Dedicated search engines are optimized for text |
+| **Vector-only workloads** | pgvector, qdrant | Specialized vector databases scale better |
+| **SQL queries on graph data** | PostgreSQL + foreign keys | Relational databases have mature SQL support |
+| **Multi-writer workloads** | Distributed databases | SQLiteGraph serializes writes (by design) |
+| **Very large graphs** (>100K nodes) | Neo4j, Amazon Neptune | Native V2 has ~2K node limit; SQLite scales but without graph optimizations |
+
+**SQLiteGraph shines for:**
+- **Code analysis** (call graphs, dependency graphs)
+- **Local-first applications** (no server to manage)
+- **LLM tooling** (structured JSON output, CLI-first design)
+- **Embedded systems** (single binary deployment)
+- **CI/CD pipelines** (small file sizes, fast operations)
+
+## Known Limitations
+
+| Limitation | SQLite Backend | Native V2 Backend |
+|------------|----------------|-------------------|
+| **Max nodes** | Unlimited | ~2,048 (8MB region) |
+| **Concurrent writers** | 1 (SQLite lock) | 1 (WAL serializes) |
+| **Distributed queries** | Not supported | Not supported |
+| **Real-time analytics** | Not optimized | Not optimized |
+
+**Native V2 Node Limit:** The 8MB node region limits Native V2 to approximately 2,048 nodes (at 256 bytes per node slot). This is a **design choice** for simplicity and performance. If you need more nodes:
+- Use the SQLite backend (unlimited nodes)
+- Archive old data to separate graph files
+- Wait for the V3 backend (planned)
+
+**Why 2,048 nodes?** Fixed offset in file header allows direct seeking without metadata lookup. This keeps the format simple and lookups O(1).
+
 ## Backend Selection Guide
 
 | Use Case | Recommended Backend | Why |
@@ -379,6 +513,9 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 - **[Operator Manual](MANUAL.md)** - Comprehensive usage guide (14 sections)
 - **[API Docs](API.md)** - Quick API reference
 - **[CHANGELOG](CHANGELOG.md)** - Version history
+- **[Migration Guide](docs/MIGRATION.md)** - SQLite to Native V2 migration
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Design Philosophy](docs/PHILOSOPHY.md)** - Principles and trade-offs
 
 ### Developer Documentation
 - **[Documentation Index](docs/INDEX.md)** - Navigation for all docs
