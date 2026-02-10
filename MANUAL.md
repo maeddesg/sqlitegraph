@@ -181,9 +181,17 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ### Full Documentation
 
-For complete algorithm reference with examples, complexity analysis, and CLI commands, see:
+**User Guides:**
+- **[MIGRATION.md](docs/MIGRATION.md)** - SQLite to Native V2 migration guide
+- **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[PHILOSOPHY.md](docs/PHILOSOPHY.md)** - Design principles and trade-offs
 
-**[docs/GRAPH_ALGORITHMS_GUIDE.md](docs/GRAPH_ALGORITHMS_GUIDE.md)**
+**Developer Documentation:**
+- **[docs/INDEX.md](docs/INDEX.md)** - Complete documentation index
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
+- **[docs/TESTING.md](docs/TESTING.md)** - Testing guide
+- **[docs/DEBUGGING.md](docs/DEBUGGING.md)** - Debugging and profiling
+- **[docs/GRAPH_ALGORITHMS_GUIDE.md](docs/GRAPH_ALGORITHMS_GUIDE.md)** - Algorithm reference
 
 ### Quick Reference
 
