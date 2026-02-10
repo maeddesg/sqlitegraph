@@ -307,6 +307,11 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         Ok(())
     }
 
+    fn flush(&self) -> Result<(), SqliteGraphError> {
+        // SQLite handles sync automatically; this is a no-op
+        Ok(())
+    }
+
     fn backup(
         &self,
         backup_dir: &std::path::Path,

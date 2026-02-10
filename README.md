@@ -5,9 +5,15 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.5.6
+## What's New in v1.5.7
 
-**Critical Bug Fix** - KV store now persists across process restarts
+**Enhancement** - WAL buffer flush API for immediate persistence
+- Added `flush()` method to `GraphBackend` trait
+- Forces immediate WAL buffer flush to disk
+- Makes KV writes visible to other processes immediately
+- Enables reliable cross-process KV communication
+
+**What's New in v1.5.6** - Critical Bug Fix
 - Fixed KV data loss when reopening native-v2 databases
 - Added `recover_kv_from_wal()` to restore KV data from WAL on open
 - Added `V2WALWriter::open()` for non-destructive WAL access

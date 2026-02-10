@@ -123,6 +123,16 @@ pub trait GraphBackend {
     /// For backends without WAL: returns Ok(()) as no-op
     fn checkpoint(&self) -> Result<(), SqliteGraphError>;
 
+    /// Force immediate flush of WAL buffer to disk
+    ///
+    /// Ensures all buffered WAL records (including KV writes) are persisted
+    /// immediately, making them visible to other processes.
+    ///
+    /// For Native V2 backend with WAL: flushes WAL buffer to disk
+    /// For SQLite backend: returns Ok(()) as no-op (SQLite handles sync)
+    /// For backends without WAL: returns Ok(()) as no-op
+    fn flush(&self) -> Result<(), SqliteGraphError>;
+
     /// Create a backup of the database
     ///
     /// Creates a consistent snapshot of the database including all data pages.
@@ -473,6 +483,10 @@ where
 
     fn checkpoint(&self) -> Result<(), SqliteGraphError> {
         (*self).checkpoint()
+    }
+
+    fn flush(&self) -> Result<(), SqliteGraphError> {
+        (*self).flush()
     }
 
     fn backup(&self, backup_dir: &std::path::Path) -> Result<BackupResult, SqliteGraphError> {

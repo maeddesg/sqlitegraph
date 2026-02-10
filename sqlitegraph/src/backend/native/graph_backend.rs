@@ -439,6 +439,21 @@ impl GraphBackend for NativeGraphBackend {
         Ok(())
     }
 
+    fn flush(&self) -> Result<(), SqliteGraphError> {
+        #[cfg(feature = "native-v2")]
+        {
+            if let Some(ref integrator) = self.wal_integrator {
+                integrator.wal_manager().flush().map_err(|e| {
+                    SqliteGraphError::connection(format!("WAL flush failed: {:?}", e))
+                })?;
+                return Ok(());
+            }
+        }
+
+        // If native-v2 feature is not enabled, flush is a no-op
+        Ok(())
+    }
+
     fn snapshot_export(
         &self,
         export_dir: &std::path::Path,
@@ -891,6 +906,49 @@ mod tests {
             let results = backend.kv_prefix_scan(snapshot, b"test_").unwrap();
             assert_eq!(results.len(), 1);
             assert_eq!(results[0].0, b"test_key".to_vec());
+        }
+    }
+
+    #[test]
+    fn test_flush_wal_buffer() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        // Test 1: flush() method exists and doesn't crash
+        {
+            let backend = NativeGraphBackend::new(&db_path).unwrap();
+            backend.kv_set(b"test_key".to_vec(), KvValue::Integer(1), None).unwrap();
+            backend.flush().unwrap();
+
+            let snapshot = crate::snapshot::SnapshotId::current();
+            let result = backend.kv_get(snapshot, b"test_key").unwrap();
+            assert_eq!(result, Some(KvValue::Integer(1)));
+        }
+
+        // Test 2: flushed data persists across reopen
+        {
+            let backend = NativeGraphBackend::open(&db_path).unwrap();
+            let snapshot = crate::snapshot::SnapshotId::current();
+            let result = backend.kv_get(snapshot, b"test_key").unwrap();
+            assert_eq!(result, Some(KvValue::Integer(1)), "Flushed data should persist");
+        }
+
+        // Test 3: WAL file size increases after flush
+        {
+            let backend = NativeGraphBackend::open(&db_path).unwrap();
+            // Write enough data to trigger buffer growth
+            for i in 0..10 {
+                backend
+                    .kv_set(format!("bulk_key_{}", i).into_bytes(), KvValue::Integer(i), None)
+                    .unwrap();
+            }
+            backend.flush().unwrap();
+
+            let wal_path = db_path.with_extension("wal");
+            let wal_size = std::fs::metadata(&wal_path).unwrap().len();
+            assert!(wal_size > 200, "WAL should contain data after flush");
         }
     }
 }

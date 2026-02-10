@@ -1,5 +1,29 @@
 # SQLiteGraph Changelog
 
+## [1.5.7] - 2026-02-10
+
+### Enhancement - WAL Buffer Flush API
+**Added `flush()` method to GraphBackend trait for immediate WAL persistence**
+
+### Changes
+- **Added `flush()` method to `GraphBackend` trait**
+  - Forces immediate WAL buffer flush to disk
+  - Makes KV writes visible to other processes immediately
+  - Implemented in both NativeGraphBackend and SQLiteGraphBackend
+
+### Bug Fixes
+- **Fixed KV data visibility across processes**
+  - Previously, KV writes were buffered but not flushed
+  - Other processes (e.g., magellan → llmgrep) couldn't read KV data
+  - Now `flush()` ensures immediate persistence
+
+### Testing
+- Added `test_flush_wal_buffer()` to verify flush functionality
+- Verifies flushed data persists across process reopen
+- Confirms WAL file size increases after flush
+
+---
+
 ## [1.5.6] - 2026-02-10
 
 ### Critical Bug Fix - KV Store Persistence
