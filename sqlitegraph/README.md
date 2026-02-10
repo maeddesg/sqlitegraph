@@ -32,7 +32,7 @@
 - Fixed compilation errors in taint_analysis.rs (missing GraphEdge import)
 - Fixed compilation errors in hnsw/index.rs (missing hnsw_config, HnswIndexError imports)
 
-## What's New in v1.5.3
+## What's New in v1.5.7
 
 **Critical Bug Fix** - Header corruption from multiple GraphFile instances
 - Fixed `node_count` reset to 0 when multiple instances access the same file
@@ -217,7 +217,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.5.3"
+sqlitegraph = "1.5.7"
 ```
 
 ### SQLite Backend (Default)
@@ -247,7 +247,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.5.3", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.7", features = ["native-v2"] }
 ```
 
 ```rust
@@ -277,7 +277,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.5.3", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.7", features = ["native-v2"] }
 ```
 
 ```rust
@@ -318,13 +318,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.5.3"
+sqlitegraph = "1.5.7"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.5.3", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.7", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.5.3", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.5.7", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
@@ -375,7 +375,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 
 ## Testing
 
-**Test Coverage (v1.5.3):**
+**Test Coverage (v1.5.7):**
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
 - 53 concurrent MVCC tests passing (snapshots, stress testing)
@@ -412,6 +412,9 @@ Run these before any reading/editing steps so the CLI and LLM focus on determini
 - **[Operator Manual](MANUAL.md)** - Comprehensive usage guide (14 sections)
 - **[API Docs](API.md)** - Quick API reference
 - **[CHANGELOG](CHANGELOG.md)** - Version history
+- **[Migration Guide](docs/MIGRATION.md)** - SQLite to Native V2 migration
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Design Philosophy](docs/PHILOSOPHY.md)** - Principles and trade-offs
 
 ### Developer Documentation
 - **[Documentation Index](docs/INDEX.md)** - Navigation for all docs
