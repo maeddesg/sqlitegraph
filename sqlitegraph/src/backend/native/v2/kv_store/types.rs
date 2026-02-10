@@ -48,4 +48,7 @@ pub enum KvStoreError {
 
     #[error("Invalid TTL: {0}")]
     InvalidTtl(String),
+
+    #[error("KV recovery failed: {0}")]
+    RecoveryFailed(String),
 }

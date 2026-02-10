@@ -5,9 +5,15 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.5.5
+## What's New in v1.5.6
 
-**User Experience Improvement** - Clean output for native-v2 backend
+**Critical Bug Fix** - KV store now persists across process restarts
+- Fixed KV data loss when reopening native-v2 databases
+- Added `recover_kv_from_wal()` to restore KV data from WAL on open
+- Added `V2WALWriter::open()` for non-destructive WAL access
+- Enables cross-process KV communication (e.g., magellan → llmgrep)
+
+**What's New in v1.5.5** - User Experience Improvement
 - Removed ungate CLUSTER_DEBUG debug messages from header initialization
 - Removed ungate EDGE_CLUSTER_DEBUG debug messages from transaction operations
 - Native-v2 backend now produces clean output (matches SQLite backend behavior)

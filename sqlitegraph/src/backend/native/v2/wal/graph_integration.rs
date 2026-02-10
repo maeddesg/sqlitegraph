@@ -132,6 +132,23 @@ impl V2GraphWALIntegrator {
         })
     }
 
+    /// Open an existing V2 graph WAL integrator
+    ///
+    /// This opens an existing WAL file without truncating it, preserving all
+    /// existing records. Use this when opening an existing database.
+    pub fn open(
+        wal_config: V2WALConfig,
+        integration_config: GraphWALIntegrationConfig,
+    ) -> NativeResult<Self> {
+        let wal_manager = Arc::new(V2WALManager::open(wal_config)?);
+
+        Ok(Self {
+            wal_manager,
+            graph_transactions: Arc::new(RwLock::new(HashMap::new())),
+            config: integration_config,
+        })
+    }
+
     /// Begin a graph operation transaction
     pub fn begin_transaction(&self, isolation_level: IsolationLevel) -> NativeResult<u64> {
         let wal_tx_id = self.wal_manager.begin_transaction(isolation_level)?;

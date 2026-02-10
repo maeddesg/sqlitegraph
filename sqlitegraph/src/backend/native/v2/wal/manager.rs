@@ -223,6 +223,77 @@ impl V2WALManager {
         Ok(manager)
     }
 
+    /// Open an existing WAL manager
+    ///
+    /// This opens an existing WAL file without truncating it, preserving all
+    /// existing records. Use this when opening an existing database.
+    pub fn open(config: V2WALConfig) -> NativeResult<Self> {
+        config.validate()?;
+
+        // Open WAL writer (preserves existing WAL data)
+        let writer = Arc::new(V2WALWriter::open(config.clone())?);
+
+        // Create WAL reader lazily (will be initialized on first access)
+        let reader = Arc::new(Mutex::new(None));
+
+        // Create checkpoint manager with default strategy
+        let checkpoint_strategy =
+            crate::backend::native::v2::wal::checkpoint::CheckpointStrategy::SizeThreshold(
+                config.max_wal_size / 4,
+            );
+        let checkpoint_manager = Arc::new(V2WALCheckpointManager::create(
+            config.clone(),
+            checkpoint_strategy,
+        )?);
+
+        // Initialize header from writer
+        let header = Arc::new(RwLock::new(writer.get_header()));
+
+        // Initialize transaction coordinator
+        let transaction_coordinator = Arc::new(Mutex::new(TransactionCoordinator {
+            pending_transactions: VecDeque::new(),
+            max_group_size: config.max_group_commit_size,
+            group_timeout: Duration::from_millis(config.group_commit_timeout_ms),
+            last_group_commit: Instant::now(),
+            group_commit_count: 0,
+            total_grouped_transactions: 0,
+        }));
+
+        // Initialize cluster organizer
+        let cluster_organizer = Arc::new(Mutex::new(ClusterAffinityOrganizer {
+            cluster_groups: HashMap::new(),
+            max_cluster_group_size: 100,
+            cluster_flush_timeout: Duration::from_millis(50),
+            last_cluster_flush: Instant::now(),
+        }));
+
+        // Initialize pub/sub publisher
+        let publisher = Arc::new(Publisher::new());
+
+        let manager = Self {
+            config,
+            writer,
+            reader,
+            checkpoint_manager,
+            header,
+            active_transactions: Arc::new(RwLock::new(HashMap::new())),
+            transaction_coordinator,
+            cluster_organizer,
+            metrics: Arc::new(RwLock::new(WALManagerMetrics::default())),
+            shutdown_signal: Arc::new(Mutex::new(false)),
+            coordinator_handle: Arc::new(Mutex::new(None)),
+            delta_index: Arc::new(parking_lot::RwLock::new(
+                crate::backend::native::v2::storage::DeltaIndex::new(),
+            )),
+            publisher,
+        };
+
+        // Start background coordinator
+        manager.start_background_coordinator()?;
+
+        Ok(manager)
+    }
+
     /// Ensure WAL reader is initialized (lazy initialization)
     fn ensure_reader_initialized(&self) -> NativeResult<()> {
         let mut reader_guard = self.reader.lock();

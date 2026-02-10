@@ -376,6 +376,18 @@ impl V2WALReader {
         self.read_next_record_with_validation(true)
     }
 
+    /// Read the next WAL record with optional contiguity validation
+    ///
+    /// When `validate_contiguity` is false, transaction boundaries are not enforced.
+    /// This is useful for recovery scenarios where you want to read all records
+    /// regardless of transaction state.
+    pub fn read_next_record_opt(
+        &mut self,
+        validate_contiguity: bool,
+    ) -> NativeResult<Option<(u64, V2WALRecord)>> {
+        self.read_next_record_with_validation(validate_contiguity)
+    }
+
     /// Read the next WAL record from current position with optional validation
     fn read_next_record_with_validation(
         &mut self,

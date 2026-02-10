@@ -309,6 +309,89 @@ impl KvStore {
     }
 }
 
+/// Recover KV store data from WAL file
+///
+/// This function reads the WAL file and applies all KvSet and KvDelete records
+/// to rebuild the KV store state. This is called during NativeGraphBackend::open()
+/// to populate the in-memory KvStore with persisted data from WAL.
+///
+/// # Arguments
+/// * `wal_path` - Path to the WAL file
+///
+/// # Returns
+/// A KvStore populated with recovered data, or an empty store if WAL doesn't exist
+///
+/// # Errors
+/// Returns KvStoreError if WAL recovery fails
+pub fn recover_from_wal<P: AsRef<std::path::Path>>(wal_path: P) -> Result<KvStore, KvStoreError> {
+    let wal_path = wal_path.as_ref();
+
+    // If WAL doesn't exist, return empty store (no recovery needed)
+    if !wal_path.exists() {
+        return Ok(KvStore::new());
+    }
+
+    // Open WAL reader
+    let mut reader = crate::backend::native::v2::wal::V2WALReader::open(wal_path)
+        .map_err(|e| KvStoreError::RecoveryFailed(format!("Failed to open WAL: {}", e)))?;
+
+    // Read all records directly without validation (KV records may not be in transactions)
+    let mut store = KvStore::new();
+
+    loop {
+        // Read record without contiguity validation
+        let result = reader.read_next_record_opt(false);
+
+        match result {
+            Ok(Some((lsn, record))) => {
+                match record {
+                    crate::backend::native::v2::wal::V2WALRecord::KvSet {
+                        key,
+                        value_bytes,
+                        value_type,
+                        ttl_seconds,
+                        version,
+                    } => {
+                        // Use version from WAL if provided, otherwise use LSN
+                        let record_version = if version == 0 { lsn } else { version };
+
+                        // Deserialize and apply value
+                        crate::backend::native::v2::kv_store::wal::apply_set(
+                            &mut store,
+                            key,
+                            value_bytes,
+                            value_type,
+                            ttl_seconds,
+                            record_version,
+                        )?;
+                    }
+                    crate::backend::native::v2::wal::V2WALRecord::KvDelete { key, .. } => {
+                        // Delete from store (ignore if not found)
+                        let _ = crate::backend::native::v2::kv_store::wal::apply_delete(
+                            &mut store,
+                            key,
+                            0, // old_version not needed for recovery
+                        );
+                    }
+                    _ => {
+                        // Skip non-KV records
+                    }
+                }
+            }
+            Ok(None) => {
+                // End of WAL
+                break;
+            }
+            Err(_) => {
+                // Stop reading on error
+                break;
+            }
+        }
+    }
+
+    Ok(store)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

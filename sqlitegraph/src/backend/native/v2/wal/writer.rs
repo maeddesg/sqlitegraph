@@ -218,6 +218,83 @@ impl V2WALWriter {
         })
     }
 
+    /// Open an existing WAL file for appending
+    ///
+    /// This opens an existing WAL file without truncating it, preserving all
+    /// existing records. It reads the existing header and prepares to append
+    /// new records. This is used when opening an existing database.
+    pub fn open(config: V2WALConfig) -> NativeResult<Self> {
+        // Validate configuration
+        config.validate()?;
+
+        // Read existing header if WAL file exists
+        let header = if config.wal_path.exists() {
+            let header_bytes = std::fs::read(&config.wal_path)
+                .map_err(NativeBackendError::Io)?;
+
+            if header_bytes.len() < std::mem::size_of::<V2WALHeader>() {
+                return Err(NativeBackendError::InvalidHeader {
+                    field: "wal_file".to_string(),
+                    reason: format!(
+                        "WAL file too small: expected at least {} bytes, got {}",
+                        std::mem::size_of::<V2WALHeader>(),
+                        header_bytes.len()
+                    ),
+                });
+            }
+
+            unsafe {
+                std::ptr::read_unaligned(header_bytes.as_ptr() as *const V2WALHeader)
+            }
+        } else {
+            // WAL doesn't exist yet, create new header
+            V2WALHeader::new()
+        };
+
+        // Open file for append mode (create if doesn't exist)
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(true)
+            .open(&config.wal_path)
+            .map_err(NativeBackendError::Io)?;
+
+        let write_buffer = WriteBuffer {
+            buffer: Vec::with_capacity(config.buffer_size),
+            records: Vec::new(),
+            max_size: config.buffer_size,
+            flush_timeout: Duration::from_millis(config.group_commit_timeout_ms),
+            last_flush: Instant::now(),
+        };
+
+        let group_commit = GroupCommitState {
+            pending_records: Vec::new(),
+            max_batch_size: config.max_group_commit_size,
+            timeout: Duration::from_millis(config.group_commit_timeout_ms),
+            last_commit: Instant::now(),
+            active_transactions: 0,
+        };
+
+        let bulk_mode = BulkModeState {
+            active: false,
+            original_config: None,
+            records_written: 0,
+            session_start: Instant::now(),
+            bulk_config: None,
+        };
+
+        Ok(Self {
+            config,
+            file: Arc::new(Mutex::new(BufWriter::new(file))),
+            header: Arc::new(Mutex::new(header)),
+            write_buffer: Arc::new(Mutex::new(write_buffer)),
+            group_commit: Arc::new(Mutex::new(group_commit)),
+            metrics: Arc::new(Mutex::new(WriterMetrics::default())),
+            cluster_groups: Arc::new(Mutex::new(HashMap::new())),
+            bulk_mode: Arc::new(Mutex::new(bulk_mode)),
+        })
+    }
+
     /// Write a single WAL record
     pub fn write_record(&self, record: V2WALRecord) -> NativeResult<u64> {
         let start_time = Instant::now();

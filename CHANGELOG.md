@@ -1,5 +1,32 @@
 # SQLiteGraph Changelog
 
+## [1.5.6] - 2026-02-10
+
+### Critical Bug Fix - KV Store Persistence
+**Fixed KV data loss across process restarts in native-v2 backend**
+
+### Bug Fixes
+- **KV store now persists across process restarts**
+  - Added `V2WALWriter::open()` method that opens existing WAL without truncating
+  - Added `V2WALManager::open()` method for non-destructive WAL manager creation
+  - Added `V2GraphWALIntegrator::open()` method for opening existing WAL integrator
+  - Added `recover_kv_from_wal()` function to restore KV data from WAL on database open
+  - Modified `NativeGraphBackend::open()` to use `open_wal_integrator()` instead of `create_wal_integrator()`
+  - Added `read_next_record_opt()` to WAL reader for reading without transaction validation
+  - Added `KvStoreError::RecoveryFailed` variant for recovery error handling
+
+### Technical Details
+- Previously, `NativeGraphBackend::open()` would truncate the WAL file, losing all KV data
+- KV records are now read from WAL during `open()` and restored to the in-memory `KvStore`
+- Unit test `test_kv_persistence_across_reopen` verifies the fix
+
+### User Impact
+- KV indexes created during `magellan watch` now survive process restarts
+- Downstream tools like `llmgrep` can now read KV data written by separate processes
+- Enables cross-process KV communication for symbol indexes, metadata, etc.
+
+---
+
 ## [1.5.5] - 2026-02-09
 
 ### User Experience Improvement Release

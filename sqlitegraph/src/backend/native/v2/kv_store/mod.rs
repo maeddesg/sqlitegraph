@@ -48,5 +48,5 @@ pub mod wal;
 pub mod wal_tests;
 
 // Re-export public API
-pub use store::KvStore;
+pub use store::{KvStore, recover_from_wal as recover_kv_from_wal};
 pub use types::{KvEntry, KvMetadata, KvStoreError, KvValue};

@@ -83,15 +83,54 @@ impl NativeGraphBackend {
         let graph_file = GraphFile::open(&path).map_err(map_to_graph_error)?;
 
         #[cfg(feature = "native-v2")]
-        let wal_integrator = Some(Self::create_wal_integrator(&path)?);
+        let wal_integrator = Some(Self::open_wal_integrator(&path)?);
+
+        #[cfg(feature = "native-v2")]
+        let kv_store = {
+            let wal_config = V2WALConfig::for_graph_file(path.as_ref());
+            match crate::backend::native::v2::kv_store::recover_kv_from_wal(&wal_config.wal_path) {
+                Ok(store) => Arc::new(RwLock::new(store)),
+                Err(e) => {
+                    // Log warning but continue with empty store
+                    eprintln!(
+                        "Warning: KV recovery from {} failed, starting with empty store: {}",
+                        wal_config.wal_path.display(),
+                        e
+                    );
+                    Arc::new(RwLock::new(KvStore::new()))
+                }
+            }
+        };
 
         Ok(Self {
             graph_file: RwLock::new(graph_file),
             #[cfg(feature = "native-v2")]
             wal_integrator,
             #[cfg(feature = "native-v2")]
-            kv_store: Arc::new(RwLock::new(KvStore::new())),
+            kv_store,
         })
+    }
+
+    /// Create WAL integrator for the graph (opens existing WAL without truncating)
+    #[cfg(feature = "native-v2")]
+    fn open_wal_integrator<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<Arc<V2GraphWALIntegrator>, SqliteGraphError> {
+        let path_ref = path.as_ref();
+
+        // Use the helper function to create WAL config with correct paths
+        let wal_config = V2WALConfig::for_graph_file(path_ref);
+
+        // Create integration config with default settings
+        let integration_config = GraphWALIntegrationConfig::default();
+
+        // Open the integrator (preserves existing WAL data)
+        let integrator =
+            V2GraphWALIntegrator::open(wal_config, integration_config).map_err(|e| {
+                SqliteGraphError::connection(format!("Failed to open WAL integrator: {:?}", e))
+            })?;
+
+        Ok(Arc::new(integrator))
     }
 
     /// Create WAL integrator for the graph
@@ -809,5 +848,49 @@ mod tests {
         // Unsubscribe
         let removed = backend.unsubscribe(sub_id).unwrap();
         assert!(removed);
+    }
+
+    #[test]
+    fn test_kv_persistence_across_reopen() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        // Write KV data in first session
+        {
+            let backend = NativeGraphBackend::new(&db_path).unwrap();
+            backend
+                .kv_set(b"test_key".to_vec(), KvValue::Integer(42), None)
+                .unwrap();
+            backend
+                .kv_set(
+                    b"another_key".to_vec(),
+                    KvValue::String("hello".to_string()),
+                    None,
+                )
+                .unwrap();
+
+            // Flush WAL buffer to ensure records are written to disk
+            let wal_integrator = backend.wal_integrator.as_ref().unwrap();
+            wal_integrator.wal_manager().flush().unwrap();
+        }
+
+        // Reopen and verify KV data persists
+        {
+            let backend = NativeGraphBackend::open(&db_path).unwrap();
+            let snapshot = crate::snapshot::SnapshotId::current();
+
+            let result = backend.kv_get(snapshot, b"test_key").unwrap();
+            assert_eq!(result, Some(KvValue::Integer(42)));
+
+            let result2 = backend.kv_get(snapshot, b"another_key").unwrap();
+            assert_eq!(result2, Some(KvValue::String("hello".to_string())));
+
+            // Verify prefix scan works
+            let results = backend.kv_prefix_scan(snapshot, b"test_").unwrap();
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0].0, b"test_key".to_vec());
+        }
     }
 }
