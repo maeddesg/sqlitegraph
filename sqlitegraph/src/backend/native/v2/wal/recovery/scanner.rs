@@ -290,11 +290,12 @@ impl TransactionScanner {
             }
 
             V2WALRecordType::TransactionCommit => {
-                if let V2WALRecord::TransactionCommit { tx_id, timestamp } = record {
+                if let V2WALRecord::TransactionCommit { tx_id, timestamp, commit_lsn } = record {
                     Ok(Some(self.handle_transaction_commit(
                         tx_id,
-                        lsn,
+                        lsn,          // Record LSN (position in WAL)
                         timestamp,
+                        commit_lsn,     // Commit LSN from the record
                         &mut warnings,
                     )?))
                 } else {
@@ -373,12 +374,13 @@ impl TransactionScanner {
         tx_id: u64,
         lsn: u64,
         timestamp: u64,
+        commit_lsn: u64,
         warnings: &mut Vec<String>,
     ) -> Result<(TransactionState, Vec<String>), RecoveryError> {
         let mut active_tx = self.active_transactions.lock();
 
         if let Some(mut tx_state) = active_tx.remove(&tx_id) {
-            tx_state.commit_lsn = Some(lsn);
+            tx_state.commit_lsn = Some(commit_lsn);
             tx_state.committed = true;
             tx_state.timestamp = timestamp;
             Ok((tx_state, warnings.clone()))
@@ -390,7 +392,7 @@ impl TransactionScanner {
                 TransactionState {
                     tx_id,
                     start_lsn: 0, // Unknown start
-                    commit_lsn: Some(lsn),
+                    commit_lsn: Some(commit_lsn),
                     records: Vec::new(),
                     committed: true,
                     timestamp,
