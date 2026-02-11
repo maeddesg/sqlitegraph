@@ -49,6 +49,51 @@ pub trait GraphBackend {
     fn insert_node(&self, node: NodeSpec) -> Result<i64, SqliteGraphError>;
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError>;
 
+    /// Update an existing node in place without allocating a new node ID
+    ///
+    /// This modifies the data associated with an existing node while preserving
+    /// its node_id. This is critical for avoiding node region exhaustion in
+    /// the Native V2 backend, which has a hard limit of 2048 nodes.
+    ///
+    /// # Arguments
+    /// * `node_id` - The ID of the node to update (must exist)
+    /// * `node` - New node specification (kind, name, file_path, data)
+    ///
+    /// # Returns
+    /// The same `node_id` that was passed in, if update succeeded
+    ///
+    /// # Errors
+    /// Returns `SqliteGraphError` if:
+    /// - The node_id doesn't exist
+    /// - The update operation fails
+    /// - The backend doesn't support in-place updates
+    ///
+    /// # Behavior by Backend
+    /// - **Native V2**: Uses WAL to update node data in place, preserving node_id
+    /// - **SQLite**: Uses UPDATE SQL query on entities table
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Create a node
+    /// let node_id = backend.insert_node(NodeSpec {
+    ///     kind: "File".to_string(),
+    ///     name: "main.rs".to_string(),
+    ///     file_path: Some("main.rs".to_string()),
+    ///     data: serde_json::json!({"hash": "abc123"}),
+    /// })?;
+    ///
+    /// // Update it - this does NOT allocate a new node_id
+    /// let updated_id = backend.update_node(node_id, NodeSpec {
+    ///     kind: "File".to_string(),
+    ///     name: "main.rs".to_string(),
+    ///     file_path: Some("main.rs".to_string()),
+    ///     data: serde_json::json!({"hash": "def456", "modified": true}),
+    /// })?;
+    ///
+    /// assert_eq!(updated_id, node_id); // Same ID!
+    /// ```
+    fn update_node(&self, node_id: i64, node: NodeSpec) -> Result<i64, SqliteGraphError>;
+
     /// Delete an entity (node) from the graph by ID
     ///
     /// This removes the entity and all associated edges from the graph.
@@ -291,7 +336,13 @@ pub trait GraphBackend {
         &self,
         snapshot_id: SnapshotId,
         prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, SqliteGraphError>;
+    ) -> Result<
+        Vec<(
+            Vec<u8>,
+            crate::backend::native::v2::kv_store::types::KvValue,
+        )>,
+        SqliteGraphError,
+    >;
 
     /// Query all nodes with a given kind
     ///
@@ -397,6 +448,10 @@ where
 
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
         (*self).insert_edge(edge)
+    }
+
+    fn update_node(&self, node_id: i64, node: NodeSpec) -> Result<i64, SqliteGraphError> {
+        (*self).update_node(node_id, node)
     }
 
     fn delete_entity(&self, id: i64) -> Result<(), SqliteGraphError> {
@@ -550,7 +605,13 @@ where
         &self,
         snapshot_id: SnapshotId,
         prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, SqliteGraphError> {
+    ) -> Result<
+        Vec<(
+            Vec<u8>,
+            crate::backend::native::v2::kv_store::types::KvValue,
+        )>,
+        SqliteGraphError,
+    > {
         (*self).kv_prefix_scan(snapshot_id, prefix)
     }
 
