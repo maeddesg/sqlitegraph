@@ -358,6 +358,76 @@ impl V2WALWriter {
         Ok(lsn)
     }
 
+    /// Write a WAL record with an explicitly assigned LSN
+    ///
+    /// This is used for TransactionCommit records where commit_lsn
+    /// must be recorded in record itself for snapshot isolation.
+    ///
+    /// # Arguments
+    /// * `record` - The WAL record to write
+    /// * `lsn` - The pre-assigned LSN for this record
+    ///
+    /// # Returns
+    /// The LSN that was passed in (for verification)
+    pub fn write_record_with_lsn(&self, record: V2WALRecord, lsn: u64) -> NativeResult<u64> {
+        let start_time = Instant::now();
+
+        // Update header current_lsn to the next LSN after this one
+        {
+            let mut header = self.header.lock();
+            header.current_lsn = lsn.wrapping_add(1);
+        }
+
+        // Group by cluster for optimal I/O locality
+        if let Some(cluster_key) = record.cluster_key() {
+            let mut cluster_groups = self.cluster_groups.lock();
+            cluster_groups
+                .entry(cluster_key)
+                .or_insert_with(Vec::new)
+                .push(record.clone());
+        }
+
+        // Add to write buffer
+        {
+            let mut write_buffer = self.write_buffer.lock();
+            let buffered_record = BufferedRecord {
+                record: record.clone(),
+                lsn,
+                timestamp: Instant::now(),
+                committed: true,
+            };
+
+            write_buffer.records.push(buffered_record);
+
+            // Serialize record and add to buffer
+            let serialized = V2WALSerializer::serialize(&record)?;
+            write_buffer.buffer.extend_from_slice(&serialized);
+
+            // Update metrics
+            {
+                let mut metrics = self.metrics.lock();
+                metrics.records_written += 1;
+                metrics.bytes_written += serialized.len() as u64;
+                metrics.buffer_utilization =
+                    (write_buffer.buffer.len() as f64 / write_buffer.max_size as f64) * 100.0;
+            }
+
+            // Check if buffer needs flushing
+            let should_flush = write_buffer.buffer.len() >= write_buffer.max_size
+                || start_time.elapsed() >= write_buffer.flush_timeout;
+            if should_flush {
+                drop(write_buffer); // Release lock before flush
+                self.flush_buffer()?;
+            }
+        }
+
+        // Record write latency
+        let write_latency = start_time.elapsed().as_micros() as u64;
+        self.update_latency_metrics(write_latency);
+
+        Ok(lsn)
+    }
+
     /// Write multiple records with group commit optimization
     pub fn write_records_batch(&self, records: Vec<V2WALRecord>) -> NativeResult<Vec<u64>> {
         let start_time = Instant::now();

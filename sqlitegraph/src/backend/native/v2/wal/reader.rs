@@ -127,6 +127,7 @@ impl WALReadFilter {
     }
 
     /// Check if a record matches this filter
+    /// Check if a record matches this filter
     pub fn matches(&self, record: &V2WALRecord, lsn: u64) -> bool {
         // Check record type filter
         if let Some(ref types) = self.record_types {
