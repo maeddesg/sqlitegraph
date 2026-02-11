@@ -12,10 +12,8 @@
 //! - **string_ops**: String rollback operations (insert)
 //! - **header_ops**: Header rollback operations (update)
 //! - **free_space_ops**: Free space rollback operations (allocate, deallocate)
-//! - **kv_ops**: KV store rollback operations (set, delete)
 
 use super::types::RollbackOperation;
-use crate::backend::native::v2::kv_store::KvStore;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryError;
 use crate::backend::native::v2::{FreeSpaceManager, StringTable};
 use crate::backend::native::{GraphFile, NodeStore};
@@ -27,7 +25,6 @@ pub mod cluster_ops;
 pub mod edge_ops;
 pub mod free_space_ops;
 pub mod header_ops;
-pub mod kv_ops;
 pub mod node_ops;
 pub mod string_ops;
 
@@ -44,7 +41,6 @@ pub struct RollbackSystem {
     node_store: Arc<Mutex<Option<NodeStore<'static>>>>,
     string_table: Arc<Mutex<StringTable>>,
     free_space_manager: Arc<Mutex<Option<FreeSpaceManager>>>,
-    kv_store: Arc<Mutex<KvStore>>,
 }
 
 impl RollbackSystem {
@@ -54,7 +50,6 @@ impl RollbackSystem {
         node_store: Arc<Mutex<Option<NodeStore<'static>>>>,
         string_table: Arc<Mutex<StringTable>>,
         free_space_manager: Arc<Mutex<Option<FreeSpaceManager>>>,
-        kv_store: Arc<Mutex<KvStore>>,
     ) -> Self {
         Self {
             operations: Vec::new(),
@@ -62,7 +57,6 @@ impl RollbackSystem {
             node_store,
             string_table,
             free_space_manager,
-            kv_store,
         }
     }
 

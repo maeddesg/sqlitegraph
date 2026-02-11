@@ -30,6 +30,7 @@
 //! - BFS implementations: Large algorithms left to compiler discretion
 //! - AdjacencyHelpers: Orchestration functions with complex logic
 
+mod cluster_deletion;
 mod core_iterator;
 mod iterator_impl;
 mod v2_clustered;
@@ -44,6 +45,7 @@ mod sequential_cluster_reader;
 #[cfg(test)]
 mod tests;
 
+pub use cluster_deletion::{delete_cluster, remove_back_references};
 pub use core_iterator::AdjacencyIterator;
 pub use helpers::AdjacencyHelpers;
 pub use linear_detector::{LinearDetector, TraversalPattern, are_clusters_contiguous};
