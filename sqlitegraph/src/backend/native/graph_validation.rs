@@ -164,6 +164,40 @@ pub fn node_spec_to_record(spec: NodeSpec, node_id: NativeNodeId) -> NodeRecord 
     NodeRecord::new(node_id, spec.kind, spec.name, spec.data)
 }
 
+/// Convert NodeSpec to NodeRecordV2 for storage, preserving cluster metadata
+///
+/// This is used by update_node to modify node data while preserving adjacency
+/// cluster offsets. The cluster metadata MUST be preserved or all edges
+/// connected to this node would be lost.
+///
+/// # Arguments
+/// * `spec` - New node specification with updated kind/name/data
+/// * `node_id` - ID of the node being updated
+/// * `old_record` - Existing record to preserve cluster metadata from
+///
+/// # Returns
+/// A new NodeRecordV2 with updated data but preserved cluster offsets
+pub fn node_spec_to_v2_record(
+    spec: NodeSpec,
+    node_id: NativeNodeId,
+    old_record: &crate::backend::native::v2::node_record_v2::NodeRecordV2,
+) -> Result<crate::backend::native::v2::node_record_v2::NodeRecordV2, SqliteGraphError> {
+    Ok(crate::backend::native::v2::node_record_v2::NodeRecordV2 {
+        id: node_id as i64,
+        flags: old_record.flags,
+        kind: spec.kind,
+        name: spec.name,
+        data: spec.data,
+        // Preserve cluster metadata - this is critical!
+        outgoing_cluster_offset: old_record.outgoing_cluster_offset,
+        outgoing_cluster_size: old_record.outgoing_cluster_size,
+        outgoing_edge_count: old_record.outgoing_edge_count,
+        incoming_cluster_offset: old_record.incoming_cluster_offset,
+        incoming_cluster_size: old_record.incoming_cluster_size,
+        incoming_edge_count: old_record.incoming_edge_count,
+    })
+}
+
 /// Convert NodeRecord from storage to GraphEntity
 pub fn node_record_to_entity(record: NodeRecord) -> GraphEntity {
     GraphEntity {
