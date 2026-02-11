@@ -73,14 +73,14 @@ pub fn get_dependency_info() -> HashMap<&'static str, DependencyInfo> {
         },
     );
 
-    // bincode - Deprecated, migration to 2.0 needed
+    // bincode - Updated to 2.0
     deps.insert(
         "bincode",
         DependencyInfo {
             name: "bincode",
-            version: "1.3",
-            status: DependencyStatus::Deprecated,
-            minimum_version: Some("2.0"),
+            version: "2.0",
+            status: DependencyStatus::Healthy,
+            minimum_version: None,
         },
     );
 
@@ -306,11 +306,11 @@ mod tests {
     }
 
     #[test]
-    fn test_bincode_deprecated() {
+    fn test_bincode_healthy() {
         let deps = get_dependency_info();
         let bincode = &deps["bincode"];
-        assert_eq!(bincode.status, DependencyStatus::Deprecated);
-        assert_eq!(bincode.minimum_version, Some("2.0"));
+        assert_eq!(bincode.status, DependencyStatus::Healthy);
+        assert_eq!(bincode.version, "2.0");
     }
 
     #[test]
@@ -322,17 +322,12 @@ mod tests {
     }
 
     #[test]
-    fn test_requires_action() {
-        // bincode is deprecated, so action should be required
-        assert!(requires_action());
-    }
-
-    #[test]
     fn test_get_action_required() {
         let action_deps = get_action_required();
-        assert!(!action_deps.is_empty());
-        // bincode should be in the list
-        assert!(action_deps.iter().any(|(name, _)| *name == "bincode"));
+        // No deprecated dependencies, so action should NOT be required
+        assert!(action_deps.is_empty());
+        // bincode should NOT be in the list
+        assert!(!action_deps.iter().any(|(name, _)| *name == "bincode"));
     }
 
     #[test]
