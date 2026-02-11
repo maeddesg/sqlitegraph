@@ -2,6 +2,41 @@
 
 use super::{NativeEdgeId, NativeNodeId};
 
+/// Wrapper for bincode errors to provide a unified error type
+///
+/// In bincode 2.0, there are separate `EncodeError` and `DecodeError` types.
+/// This enum provides a unified interface for both.
+#[derive(Debug)]
+pub enum BincodeError {
+    /// An encoding error occurred
+    Encode(bincode::error::EncodeError),
+    /// A decoding error occurred
+    Decode(bincode::error::DecodeError),
+}
+
+impl std::fmt::Display for BincodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BincodeError::Encode(e) => write!(f, "Bincode encode error: {}", e),
+            BincodeError::Decode(e) => write!(f, "Bincode decode error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for BincodeError {}
+
+impl From<bincode::error::EncodeError> for BincodeError {
+    fn from(err: bincode::error::EncodeError) -> Self {
+        BincodeError::Encode(err)
+    }
+}
+
+impl From<bincode::error::DecodeError> for BincodeError {
+    fn from(err: bincode::error::DecodeError) -> Self {
+        BincodeError::Decode(err)
+    }
+}
+
 /// Comprehensive error type for native backend operations
 #[derive(Debug, thiserror::Error)]
 pub enum NativeBackendError {
@@ -70,7 +105,7 @@ pub enum NativeBackendError {
     JsonError(#[from] serde_json::Error),
 
     #[error("Binary serialization error: {0}")]
-    BincodeError(#[from] Box<bincode::ErrorKind>),
+    BincodeError(#[from] BincodeError),
 
     #[error("Invalid UTF-8 string: {0}")]
     InvalidUtf8(#[from] std::str::Utf8Error),
