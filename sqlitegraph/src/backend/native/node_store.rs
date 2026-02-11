@@ -323,6 +323,160 @@ impl<'a> NodeStore<'a> {
         Ok(())
     }
 
+    /// Delete a node with full edge cascade cleanup
+    ///
+    /// This method properly handles:
+    /// 1. Reading node to get cluster metadata
+    /// 2. Deleting all outgoing and incoming edge clusters
+    /// 3. Removing node from index
+    /// 4. Marking slot as reusable for space reclamation
+    /// 5. Updating header statistics (node count)
+    ///
+    /// # Arguments
+    /// * `node_id` - The ID of the node to delete
+    ///
+    /// # Returns
+    /// * `Ok(())` if node and all related edges were deleted
+    /// * `Err` if node doesn't exist or deletion fails
+    pub fn delete_node_with_edges(&mut self, node_id: NativeNodeId) -> NativeResult<()> {
+        // 1. Read node to get cluster metadata
+        let node = self.read_node_v2(node_id)?;
+
+        // 2. Delete all outgoing edges (cluster)
+        if node.outgoing_edge_count > 0 {
+            self.delete_cluster(node_id, super::adjacency::Direction::Outgoing)?;
+        }
+
+        // 3. Delete all incoming edges (cluster)
+        if node.incoming_edge_count > 0 {
+            self.delete_cluster(node_id, super::adjacency::Direction::Incoming)?;
+        }
+
+        // 4. Remove from node index
+        self.node_index.remove(&node_id);
+
+        // 5. Mark slot as reusable
+        self.mark_slot_reusable(node_id)?;
+
+        // 6. Update header statistics
+        self.decrement_node_count()?;
+
+        Ok(())
+    }
+
+    /// Delete edge cluster for a node in the specified direction
+    ///
+    /// This marks the cluster storage space as free and clears cluster metadata
+    /// from the node record.
+    ///
+    /// # Arguments
+    /// * `node_id` - The node whose cluster should be deleted
+    /// * `direction` - Outgoing or Incoming direction
+    fn delete_cluster(
+        &mut self,
+        node_id: NativeNodeId,
+        direction: super::adjacency::Direction,
+    ) -> NativeResult<()> {
+        // 1. Read current node record
+        let mut node = self.read_node_v2(node_id)?;
+
+        // 2. Get cluster offset/size before clearing
+        let (cluster_offset, cluster_size) = match direction {
+            super::adjacency::Direction::Outgoing => {
+                (node.outgoing_cluster_offset, node.outgoing_cluster_size)
+            }
+            super::adjacency::Direction::Incoming => {
+                (node.incoming_cluster_offset, node.incoming_cluster_size)
+            }
+        };
+
+        // 3. Mark cluster space as free in file (if cluster exists)
+        if cluster_size > 0 && cluster_offset > 0 {
+            self.mark_region_free(cluster_offset, cluster_size as u64)?;
+        }
+
+        // 4. Clear cluster metadata in node record
+        match direction {
+            super::adjacency::Direction::Outgoing => {
+                node.outgoing_edge_count = 0;
+                node.outgoing_cluster_offset = 0;
+                node.outgoing_cluster_size = 0;
+            }
+            super::adjacency::Direction::Incoming => {
+                node.incoming_edge_count = 0;
+                node.incoming_cluster_offset = 0;
+                node.incoming_cluster_size = 0;
+            }
+        }
+
+        // 5. Write updated node record back to file
+        self.write_node_v2(&node)?;
+
+        Ok(())
+    }
+
+    /// Mark a file region as free for future reuse
+    ///
+    /// This writes zeros to the region, indicating it's available for reuse.
+    /// In a full implementation, this would update a free-space bitmap or list.
+    ///
+    /// # Arguments
+    /// * `offset` - File offset of the region to mark free
+    /// * `size` - Size of the region in bytes
+    fn mark_region_free(&mut self, offset: u64, size: u64) -> NativeResult<()> {
+        let zero_buffer = vec![0u8; size as usize];
+        self.graph_file.write_bytes(offset, &zero_buffer)?;
+        self.graph_file.flush()?;
+        Ok(())
+    }
+
+    /// Mark a node slot as reusable for space reclamation
+    ///
+    /// This clears the node slot data, allowing the slot to be reused.
+    /// Node slots are 4KB regions at fixed offsets.
+    ///
+    /// # Arguments
+    /// * `node_id` - The node ID whose slot should be marked reusable
+    fn mark_slot_reusable(&mut self, node_id: NativeNodeId) -> NativeResult<()> {
+        use super::constants::node::NODE_SLOT_SIZE;
+
+        let node_data_offset = self.graph_file.persistent_header().node_data_offset;
+        let slot_offset = node_data_offset + ((node_id - 1) as u64 * NODE_SLOT_SIZE);
+
+        // Zero out the slot to mark it as reusable
+        let zero_buffer = vec![0u8; NODE_SLOT_SIZE as usize];
+        self.graph_file.write_bytes(slot_offset, &zero_buffer)?;
+        self.graph_file.flush()?;
+
+        Ok(())
+    }
+
+    /// Decrement node count in file header
+    ///
+    /// This updates the persistent header's node_count field after deletion.
+    ///
+    /// # Returns
+    /// * `Ok(())` if header was updated successfully
+    /// * `Err` if node_count underflow (corruption detected)
+    fn decrement_node_count(&mut self) -> NativeResult<()> {
+        let header = self.graph_file.persistent_header_mut();
+
+        // Decrement node count with underflow check
+        if header.node_count > 0 {
+            header.node_count -= 1;
+        } else {
+            return Err(NativeBackendError::InvalidState {
+                context: "node_count underflow on deletion".to_string(),
+                source: None,
+            });
+        }
+
+        // Persist header to disk
+        self.graph_file.write_header()?;
+
+        Ok(())
+    }
+
     /// Get all node IDs in the file
     pub fn all_node_ids(&mut self) -> NativeResult<Vec<NativeNodeId>> {
         let max_id = self.max_node_id();
