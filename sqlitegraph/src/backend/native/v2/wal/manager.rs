@@ -826,6 +826,27 @@ impl V2WALManager {
 
         Ok(())
     }
+
+    /// Soft shutdown - signal shutdown and flush without consuming self
+    ///
+    /// This can be called from Drop implementations where self is owned via Arc.
+    /// It signals the background thread to stop and flushes pending data, but
+    /// doesn't wait for the thread to join (that would require unique ownership).
+    pub fn soft_shutdown(&self) -> NativeResult<()> {
+        // Signal shutdown
+        {
+            let mut shutdown = self.shutdown_signal.lock();
+            *shutdown = true;
+        }
+
+        // Force final group commit
+        self.check_group_commit();
+
+        // Flush any remaining data
+        self.flush()?;
+
+        Ok(())
+    }
 }
 
 impl Default for WALManagerMetrics {

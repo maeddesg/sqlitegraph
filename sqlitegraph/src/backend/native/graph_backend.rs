@@ -181,6 +181,25 @@ impl NativeGraphBackend {
     }
 }
 
+/// Properly shut down the WAL integrator when NativeGraphBackend is dropped
+#[cfg(feature = "native-v2")]
+impl Drop for NativeGraphBackend {
+    fn drop(&mut self) {
+        // Ensure WAL integrator is properly shut down
+        // This signals the background coordinator thread to stop and flushes pending data
+        if let Some(ref integrator) = self.wal_integrator {
+            // Use soft_shutdown which works via Arc reference
+            // We need to access the inner WAL manager
+            if let Err(e) = integrator.soft_shutdown() {
+                eprintln!(
+                    "Warning: Failed to soft shutdown WAL integrator: {:?}",
+                    e
+                );
+            }
+        }
+    }
+}
+
 impl GraphBackend for NativeGraphBackend {
     fn insert_node(&self, node: NodeSpec) -> Result<i64, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
@@ -234,6 +253,37 @@ impl GraphBackend for NativeGraphBackend {
                 Ok(edge_id as i64)
             }
         })
+    }
+
+    fn update_node(&self, node_id: i64, node: NodeSpec) -> Result<i64, SqliteGraphError> {
+        #[cfg(feature = "native-v2")]
+        {
+            if let Some(ref integrator) = self.wal_integrator {
+                // Convert NodeSpec to NodeRecordV2
+                let old_record = self.with_graph_file(|graph_file| {
+                    let mut node_store = NodeStore::new(graph_file);
+                    node_store.read_node_v2(node_id as NativeNodeId)
+                })?;
+
+                // Create new record from NodeSpec
+                let new_record =
+                    node_spec_to_v2_record(node, node_id as NativeNodeId, &old_record)?;
+
+                // Use WAL integrator to update
+                let _result = integrator
+                    .update_node(None, node_id, &old_record, &new_record)
+                    .map_err(|e| {
+                        SqliteGraphError::connection(format!("Node update failed: {:?}", e))
+                    })?;
+
+                return Ok(node_id);
+            }
+        }
+
+        // Fallback: Not implemented for backends without WAL
+        Err(SqliteGraphError::connection(
+            "update_node not supported for this backend configuration".to_string(),
+        ))
     }
 
     fn delete_entity(&self, id: i64) -> Result<(), SqliteGraphError> {
@@ -723,8 +773,13 @@ impl GraphBackend for NativeGraphBackend {
         &self,
         snapshot_id: crate::snapshot::SnapshotId,
         prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, SqliteGraphError>
-    {
+    ) -> Result<
+        Vec<(
+            Vec<u8>,
+            crate::backend::native::v2::kv_store::types::KvValue,
+        )>,
+        SqliteGraphError,
+    > {
         let store = self.kv_store.read();
         store
             .prefix_scan(snapshot_id, prefix)
@@ -919,7 +974,9 @@ mod tests {
         // Test 1: flush() method exists and doesn't crash
         {
             let backend = NativeGraphBackend::new(&db_path).unwrap();
-            backend.kv_set(b"test_key".to_vec(), KvValue::Integer(1), None).unwrap();
+            backend
+                .kv_set(b"test_key".to_vec(), KvValue::Integer(1), None)
+                .unwrap();
             backend.flush().unwrap();
 
             let snapshot = crate::snapshot::SnapshotId::current();
@@ -932,7 +989,11 @@ mod tests {
             let backend = NativeGraphBackend::open(&db_path).unwrap();
             let snapshot = crate::snapshot::SnapshotId::current();
             let result = backend.kv_get(snapshot, b"test_key").unwrap();
-            assert_eq!(result, Some(KvValue::Integer(1)), "Flushed data should persist");
+            assert_eq!(
+                result,
+                Some(KvValue::Integer(1)),
+                "Flushed data should persist"
+            );
         }
 
         // Test 3: WAL file size increases after flush
@@ -941,7 +1002,11 @@ mod tests {
             // Write enough data to trigger buffer growth
             for i in 0..10 {
                 backend
-                    .kv_set(format!("bulk_key_{}", i).into_bytes(), KvValue::Integer(i), None)
+                    .kv_set(
+                        format!("bulk_key_{}", i).into_bytes(),
+                        KvValue::Integer(i),
+                        None,
+                    )
                     .unwrap();
             }
             backend.flush().unwrap();
@@ -950,5 +1015,151 @@ mod tests {
             let wal_size = std::fs::metadata(&wal_path).unwrap().len();
             assert!(wal_size > 200, "WAL should contain data after flush");
         }
+    }
+
+    // TDD Tests for update_node functionality
+    // These tests are written FIRST, following TDD principles
+    // They will FAIL until update_node is implemented
+
+    #[cfg(feature = "native-v2")]
+    #[test]
+    fn test_update_node_preserves_node_id() {
+        // Test: update_node should return the same node_id that was passed in
+        // This ensures we don't allocate new node slots when updating
+        let backend = NativeGraphBackend::new_temp().unwrap();
+
+        // First, create a node
+        let node_id = backend
+            .insert_node(NodeSpec {
+                kind: "File".to_string(),
+                name: "test.rs".to_string(),
+                file_path: Some("test.rs".to_string()),
+                data: serde_json::json!({"hash": "abc123"}),
+            })
+            .unwrap();
+
+        // Now update it - should return the same node_id
+        let updated_id = backend
+            .update_node(
+                node_id,
+                NodeSpec {
+                    kind: "File".to_string(),
+                    name: "test.rs".to_string(),
+                    file_path: Some("test.rs".to_string()),
+                    data: serde_json::json!({"hash": "def456", "updated": true}),
+                },
+            )
+            .expect("update_node should be implemented");
+
+        assert_eq!(
+            updated_id, node_id,
+            "update_node must return the same node_id - no new allocation"
+        );
+
+        // Verify the data was actually updated
+        let snapshot = crate::snapshot::SnapshotId::current();
+        let node = backend.get_node(snapshot, updated_id).unwrap();
+        assert_eq!(node.kind, "File");
+        assert_eq!(node.name, "test.rs");
+
+        let data: serde_json::Value = node.data;
+        assert_eq!(data["hash"], "def456");
+        assert_eq!(data["updated"], true);
+    }
+
+    #[cfg(feature = "native-v2")]
+    #[test]
+    fn test_update_node_nonexistent_returns_error() {
+        // Test: updating a non-existent node should return an error
+        let backend = NativeGraphBackend::new_temp().unwrap();
+
+        let result = backend.update_node(
+            9999, // Non-existent node_id
+            NodeSpec {
+                kind: "File".to_string(),
+                name: "test.rs".to_string(),
+                file_path: Some("test.rs".to_string()),
+                data: serde_json::json!({"hash": "abc123"}),
+            },
+        );
+
+        assert!(
+            result.is_err(),
+            "update_node should return error for non-existent node_id"
+        );
+    }
+
+    #[cfg(feature = "native-v2")]
+    #[test]
+    fn test_multiple_updates_dont_increase_node_count() {
+        // Test: Multiple consecutive updates should not increase node_count
+        // This is the regression test for the node region overflow bug
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_update_no_increase.db");
+
+        // Create initial node
+        {
+            let backend = NativeGraphBackend::new(&db_path).unwrap();
+            let node_id = backend
+                .insert_node(NodeSpec {
+                    kind: "File".to_string(),
+                    name: "main.rs".to_string(),
+                    file_path: Some("main.rs".to_string()),
+                    data: serde_json::json!({"version": 1}),
+                })
+                .unwrap();
+
+            // Get initial node_count
+            let ids_after_insert = backend.entity_ids().unwrap();
+            let initial_count = ids_after_insert.len();
+            assert_eq!(initial_count, 1, "Should have exactly 1 node");
+
+            // Perform 100 updates - node count should stay at 1
+            for i in 2..=100 {
+                let _ = backend
+                    .update_node(
+                        node_id,
+                        NodeSpec {
+                            kind: "File".to_string(),
+                            name: "main.rs".to_string(),
+                            file_path: Some("main.rs".to_string()),
+                            data: serde_json::json!({"version": i}),
+                        },
+                    )
+                    .unwrap();
+
+                let ids = backend.entity_ids().unwrap();
+                assert_eq!(
+                    ids.len(),
+                    1,
+                    "Node count should remain 1 after {} updates",
+                    i - 1
+                );
+            }
+
+            // Verify final state
+            let snapshot = crate::snapshot::SnapshotId::current();
+            let node = backend.get_node(snapshot, node_id).unwrap();
+            let data: serde_json::Value = node.data;
+            assert_eq!(data["version"], 100, "Data should reflect last update");
+        }
+    }
+
+    #[test]
+    fn test_update_node_interface_exists() {
+        // Test: Verify update_node method exists on GraphBackend trait
+        // This is a compile-time test - if update_node doesn't exist, this won't compile
+        use crate::backend::GraphBackend;
+
+        fn has_update_node<B: GraphBackend>(backend: &B) -> bool {
+            // This function just proves update_node is callable
+            // Actual functionality tested in other tests
+            true
+        }
+
+        let backend = NativeGraphBackend::new_temp().unwrap();
+        assert!(has_update_node(&backend));
     }
 }

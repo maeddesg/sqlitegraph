@@ -1,5 +1,34 @@
 # SQLiteGraph Changelog
 
+## [1.5.8] - 2026-02-11
+
+### Critical Bug Fixes - Native V2 WAL System
+**Fixed underflow panic and memory corruption issues in WAL reader**
+
+### Bug Fixes
+- **Fixed underflow panic in WAL reader (reader.rs:604)**
+  - Changed regular subtraction to `saturating_sub` to prevent panic on backward time
+  - Added bounds checking to ensure LSN never goes below 1
+  - Prevents "attempt to subtract with overflow" panic during WAL replay
+
+- **Added soft_shutdown() method for proper resource cleanup**
+  - Added `V2WALManager::soft_shutdown()` for graceful shutdown via shared reference
+  - Added `V2GraphWALIntegrator::soft_shutdown()` for integrator cleanup
+  - Added `Drop` implementation for `NativeGraphBackend` to call `soft_shutdown()`
+  - Fixes memory corruption from improper WAL shutdown during process exit
+
+### Technical Details
+- **Underflow Fix**: `self.header.current_lsn.saturating_sub(1).saturating_sub(estimated_records_before).max(1)`
+- **Drop Implementation**: Ensures WAL integrator is properly flushed before backend is dropped
+- **Soft Shutdown Pattern**: Works with `Arc`-wrapped resources without requiring unique ownership
+
+### User Impact
+- Prevents watcher crashes when system clock moves backward (e.g., NTP adjustments)
+- Proper cleanup of WAL resources on process exit prevents corruption
+- More stable operation for long-running watcher processes
+
+---
+
 ## [1.5.7] - 2026-02-10
 
 ### Enhancement - WAL Buffer Flush API

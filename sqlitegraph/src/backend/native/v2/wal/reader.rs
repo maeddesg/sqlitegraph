@@ -600,8 +600,19 @@ impl V2WALReader {
         }
 
         // Simplified LSN calculation - in practice this would track LSNs more precisely
+        // The formula calculates LSN from position by estimating how many records
+        // are before this position. We need to use saturating_sub to prevent underflow.
         let offset_from_header = position - std::mem::size_of::<V2WALHeader>() as u64;
-        Ok(self.header.current_lsn - (offset_from_header / 100)) // Rough estimate
+        let estimated_records_before = offset_from_header / 100;
+
+        // current_lsn is the next LSN to be written, so LSNs in the file are:
+        // current_lsn - 1, current_lsn - 2, ..., current_lsn - n
+        // We need to ensure we don't underflow
+        let base_lsn = self.header.current_lsn.saturating_sub(1);
+        let lsn = base_lsn.saturating_sub(estimated_records_before);
+
+        // LSN 0 is invalid, ensure we return at least 1
+        Ok(lsn.max(1))
     }
 
     /// Convert LSN to file position (simplified implementation)

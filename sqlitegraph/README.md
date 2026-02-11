@@ -5,7 +5,15 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.5.7
+## What's New in v1.5.8
+
+**Critical Bug Fix** - WAL underflow panic and memory corruption
+- Fixed underflow panic in WAL reader when system clock moves backward
+- Added `soft_shutdown()` method for proper resource cleanup
+- Added `Drop` implementation to `NativeGraphBackend` for graceful shutdown
+- Prevents watcher crashes and memory corruption on process exit
+
+**What's New in v1.5.7**
 
 **Enhancement** - WAL buffer flush API for immediate persistence
 - Added `flush()` method to `GraphBackend` trait
@@ -217,7 +225,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.5.7"
+sqlitegraph = "1.5.8"
 ```
 
 ### SQLite Backend (Default)
@@ -247,7 +255,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.5.7", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.8", features = ["native-v2"] }
 ```
 
 ```rust
@@ -277,7 +285,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-sqlitegraph = { version = "1.5.7", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.8", features = ["native-v2"] }
 ```
 
 ```rust
@@ -318,13 +326,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.5.7"
+sqlitegraph = "1.5.8"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.5.7", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.8", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.5.7", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.5.8", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool

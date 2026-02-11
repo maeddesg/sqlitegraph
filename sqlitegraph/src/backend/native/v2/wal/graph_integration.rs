@@ -483,6 +483,19 @@ impl V2GraphWALIntegrator {
         &self.wal_manager
     }
 
+    /// Soft shutdown - signal shutdown and flush without consuming self
+    ///
+    /// This can be called from Drop implementations where self is owned via Arc.
+    /// It signals the background thread to stop and flushes pending data, but
+    /// doesn't require unique ownership like shutdown() does.
+    pub fn soft_shutdown(&self) -> NativeResult<()> {
+        // Force checkpoint of any remaining transactions
+        let _ = self.force_checkpoint();
+
+        // Soft shutdown the WAL manager (signals and flushes)
+        self.wal_manager.soft_shutdown()
+    }
+
     /// Shutdown the integrator gracefully
     pub fn shutdown(self) -> NativeResult<()> {
         // Force checkpoint of any remaining transactions
