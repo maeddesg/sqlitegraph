@@ -1,5 +1,24 @@
 # SQLiteGraph Changelog
 
+## [1.6.0] - 2026-02-11
+
+### User Experience Improvement - Removed Debug Output
+**Cleaned up verbose DEBUG messages from native backend operations**
+
+### Changes
+- **Removed all DEBUG println!/eprintln! statements** from native backend adjacency modules
+  - Cleaned up `v2_clustered.rs` - removed V2 cluster read/failure messages
+  - Cleaned up `core_iterator.rs` - removed collect operation and iteration debug messages
+  - Cleaned up `iterator_impl.rs` - removed V2 cluster initialization error debug messages
+  - Cleaned up `edge_store/mod.rs` - removed edge writing and scanning debug messages
+
+### User Impact
+- Graph operations (cycles, reachable, dead-code) now produce clean output
+- Watcher runs silently without debug spam
+- Algorithm commands are much more readable in production use
+
+---
+
 ## [1.5.9] - 2026-02-11
 
 ### GraphBackend API Enhancement - Node Update Support

@@ -5,7 +5,14 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.5.9
+## What's New in v1.6.0
+
+**Improvement** - Removed verbose debug output
+- Cleaned up all DEBUG println!/eprintln! statements from native backend
+- Graph operations now produce clean, production-friendly output
+- Watcher and algorithm commands are much more readable
+
+**What's New in v1.5.9**
 
 **Enhancement** - Node update API for GraphBackend trait
 - Added `update_node()` method to GraphBackend trait
@@ -233,7 +240,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.5.9"
+sqlitegraph = "1.6.0"
 ```
 
 ### SQLite Backend (Default)
@@ -334,13 +341,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.5.9"
+sqlitegraph = "1.6.0"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.5.9", features = ["native-v2"] }
+sqlitegraph = { version = "1.6.0", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.5.9", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.6.0", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool

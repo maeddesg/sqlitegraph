@@ -10,7 +10,7 @@ use super::Direction;
 // Import instrumentation when in debug mode
 #[cfg(debug_assertions)]
 use super::instrumentation::convenience::{
-    get_metrics, start_timing, track_iteration, validate_state,
+    start_timing, track_iteration, validate_state,
 };
 
 #[cfg(debug_assertions)]
@@ -195,13 +195,6 @@ impl<'a> AdjacencyIterator<'a> {
             if let Err(_) = self.try_initialize_clustered_adjacency() {
                 // Error has already been cached in try_initialize_clustered_adjacency()
                 // The cached_clustered_neighbors should now be Some(Vec::new()) with total_count = 0
-                #[cfg(debug_assertions)]
-                {
-                    println!(
-                        "DEBUG: V2 cluster initialization failed and cached for node {}",
-                        self.node_id
-                    );
-                }
             }
         }
 
@@ -241,14 +234,6 @@ impl<'a> AdjacencyIterator<'a> {
         #[cfg(debug_assertions)]
         let _timing = start_timing("adjacency_collect_operation");
 
-        #[cfg(debug_assertions)]
-        {
-            println!(
-                "DEBUG: Starting collect operation for node {} (direction: {:?})",
-                self.node_id, self.direction
-            );
-        }
-
         let mut neighbors = Vec::new();
 
         while !self.is_complete() {
@@ -259,11 +244,6 @@ impl<'a> AdjacencyIterator<'a> {
                 }
                 None => {
                     // Inconsistency detected - force termination
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "DEBUG: Terminating iteration early - no neighbor found at index {} for node {} (total_count: {})",
-                        self.current_index, self.node_id, self.total_count
-                    );
                     break;
                 }
             }
@@ -277,33 +257,6 @@ impl<'a> AdjacencyIterator<'a> {
         for neighbor in neighbors.clone() {
             if seen_neighbors.insert(neighbor) {
                 unique_neighbors.push(neighbor);
-            }
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            println!(
-                "DEBUG: Completed collect operation for node {} - {} raw neighbors, {} unique neighbors",
-                self.node_id,
-                neighbors.len(),
-                unique_neighbors.len()
-            );
-
-            let metrics = get_metrics();
-            println!(
-                "DEBUG: Final collect metrics - iterations: {}, v2_reads: {}, loop_detections: {}, efficiency: {:.2}",
-                metrics.total_iterations,
-                metrics.total_v2_reads,
-                metrics.infinite_loop_detections,
-                metrics.iteration_efficiency()
-            );
-
-            // Warn about potential infinite loop patterns
-            if metrics.suggests_infinite_loop() {
-                println!(
-                    "WARNING: Collect operation shows potential infinite loop pattern for node {}",
-                    self.node_id
-                );
             }
         }
 

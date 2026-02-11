@@ -29,13 +29,6 @@ impl<'a> Iterator for AdjacencyIterator<'a> {
                 // EVIDENCE-BASED FIX: Don't continue iteration on V2 initialization errors
                 // When V2 cluster initialization fails, we should terminate, not continue
                 // This prevents infinite loops when total_count > 0 but cluster initialization fails
-                #[cfg(debug_assertions)]
-                {
-                    println!(
-                        "DEBUG: Iterator terminating due to V2 cluster initialization error for node {}. total_count={}, current_index={}",
-                        self.node_id, self.total_count, self.current_index
-                    );
-                }
                 None
             }
         }

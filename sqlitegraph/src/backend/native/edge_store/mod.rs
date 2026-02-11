@@ -57,14 +57,6 @@ impl<'a> EdgeStore<'a> {
         edge: &crate::backend::native::types::EdgeRecord,
     ) -> crate::backend::native::types::NativeResult<()> {
         // First, write the edge record itself
-        let edge_count_before = self.graph_file.header().edge_count;
-
-        #[cfg(debug_assertions)]
-        println!(
-            "DEBUG: Before writing edge {} - header.edge_count = {}",
-            edge.id, edge_count_before
-        );
-
         let mut operations = record_operations::EdgeRecordOperations::new(self.graph_file);
         operations.write_edge(edge)?;
 
@@ -72,21 +64,8 @@ impl<'a> EdgeStore<'a> {
         // This handles manually assigned edge IDs (like in tests) that don't go through allocate_edge_id()
         let current_edge_count = self.graph_file.header().edge_count;
         if edge.id > current_edge_count as i64 {
-            #[cfg(debug_assertions)]
-            println!(
-                "DEBUG: Updating header.edge_count from {} to {} to accommodate edge {}",
-                current_edge_count, edge.id, edge.id
-            );
             self.graph_file.persistent_header_mut().edge_count = edge.id as u64;
         }
-
-        let edge_count_after = self.graph_file.header().edge_count;
-
-        #[cfg(debug_assertions)]
-        println!(
-            "DEBUG: After writing edge {} - header.edge_count = {}",
-            edge.id, edge_count_after
-        );
 
         // Then update cluster metadata on source and target nodes
         self.update_node_cluster_metadata(edge.from_id, edge.to_id)
@@ -254,34 +233,13 @@ impl<'a> EdgeStore<'a> {
             return Ok(Vec::new());
         }
 
-        #[cfg(debug_assertions)]
-        println!(
-            "DEBUG: Direct edge iteration for node {} (direction: {:?}) - {} edges expected",
-            node_id, direction, edge_count
-        );
-
         // Read edges directly from legacy edge storage by scanning all edges
         let header = self.graph_file.header();
         let mut neighbors = Vec::new();
 
-        #[cfg(debug_assertions)]
-        println!(
-            "DEBUG: Edge scanning - header.edge_count = {}, scanning edges 1..={}",
-            header.edge_count, header.edge_count
-        );
-
         for edge_id in 1..=header.edge_count as i64 {
-            #[cfg(debug_assertions)]
-            println!("DEBUG: Attempting to read edge {}", edge_id);
-
             let mut operations = record_operations::EdgeRecordOperations::new(self.graph_file);
             if let Ok(edge) = operations.read_edge(edge_id) {
-                #[cfg(debug_assertions)]
-                println!(
-                    "DEBUG: Successfully read edge {} -> {} (from_id={}, to_id={})",
-                    edge.id, edge_id, edge.from_id, edge.to_id
-                );
-
                 let matches_direction = match direction {
                     crate::backend::native::adjacency::Direction::Outgoing => {
                         edge.from_id == node_id
@@ -294,26 +252,10 @@ impl<'a> EdgeStore<'a> {
                         crate::backend::native::adjacency::Direction::Outgoing => edge.to_id,
                         crate::backend::native::adjacency::Direction::Incoming => edge.from_id,
                     };
-                    #[cfg(debug_assertions)]
-                    println!(
-                        "DEBUG: Edge {} matches direction for node {} - neighbor {}",
-                        edge_id, node_id, neighbor_id
-                    );
                     neighbors.push(neighbor_id);
                 }
-            } else {
-                #[cfg(debug_assertions)]
-                println!("DEBUG: Failed to read edge {}", edge_id);
             }
         }
-
-        #[cfg(debug_assertions)]
-        println!(
-            "DEBUG: Direct edge iteration found {} neighbors for node {} (direction: {:?})",
-            neighbors.len(),
-            node_id,
-            direction
-        );
 
         Ok(neighbors)
     }

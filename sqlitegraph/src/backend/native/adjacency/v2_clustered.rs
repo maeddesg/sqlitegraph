@@ -8,7 +8,7 @@ use super::Direction;
 
 // Import instrumentation when in debug mode
 #[cfg(debug_assertions)]
-use super::instrumentation::convenience::{get_metrics, start_timing, track_v2_read};
+use super::instrumentation::convenience::{start_timing, track_v2_read};
 
 impl super::AdjacencyIterator<'_> {
     // ========================================
@@ -72,12 +72,6 @@ impl super::AdjacencyIterator<'_> {
                                     {
                                         Ok(neighbors) => neighbors,
                                         Err(e) => {
-                                            #[cfg(debug_assertions)]
-                                            println!(
-                                                "DEBUG: V2 cluster read failed for node {}: {}, falling back to edge store traversal",
-                                                self.node_id, e
-                                            );
-
                                             // Fallback: use edge store to traverse edges directly
                                             let mut edge_store = EdgeStore::new(self.graph_file);
                                             edge_store
@@ -87,24 +81,6 @@ impl super::AdjacencyIterator<'_> {
                                     };
 
                                     // Phase 69: V2 clustered adjacency success
-                                    #[cfg(debug_assertions)]
-                                    {
-                                        println!(
-                                            "DEBUG: V2 clustered adjacency SUCCESS for node {} (direction: {:?}, {} neighbors)",
-                                            self.node_id,
-                                            self.direction,
-                                            neighbors.len()
-                                        );
-
-                                        // Log metrics snapshot
-                                        let metrics = get_metrics();
-                                        println!(
-                                            "DEBUG: Metrics snapshot - iterations: {}, v2_reads: {}, loop_detections: {}",
-                                            metrics.total_iterations,
-                                            metrics.total_v2_reads,
-                                            metrics.infinite_loop_detections
-                                        );
-                                    }
                                     self.cached_clustered_neighbors = Some(neighbors);
                                     self.total_count = edge_count;
                                     return Ok(());
@@ -151,19 +127,6 @@ impl super::AdjacencyIterator<'_> {
 
         // V2-ONLY: Return error if V2 cluster not found
         // FIXED: Cache empty result to prevent repeated initialization attempts
-        #[cfg(debug_assertions)]
-        {
-            println!(
-                "DEBUG: V2 clustered adjacency FAILED for node {} - cluster metadata not found",
-                self.node_id
-            );
-            let metrics = get_metrics();
-            println!(
-                "DEBUG: Final metrics - iterations: {}, v2_reads: {}, loop_detections: {}",
-                metrics.total_iterations, metrics.total_v2_reads, metrics.infinite_loop_detections
-            );
-        }
-
         let error = NativeBackendError::CorruptNodeRecord {
             node_id: self.node_id as i64,
             reason: "V2 cluster metadata not found".to_string(),
@@ -198,12 +161,6 @@ impl super::AdjacencyIterator<'_> {
             return Ok(Vec::new());
         }
 
-        #[cfg(debug_assertions)]
-        println!(
-            "DEBUG: Reading V2 cluster for node {} at offset {}, size {}",
-            self.node_id, cluster_offset, cluster_size
-        );
-
         // Read cluster data directly from file
         let mut cluster_data = vec![0u8; cluster_size as usize];
         self.graph_file
@@ -211,8 +168,6 @@ impl super::AdjacencyIterator<'_> {
 
         // Check if cluster data contains actual data (not all zeros)
         if cluster_data.iter().all(|&byte| byte == 0) {
-            #[cfg(debug_assertions)]
-            println!("DEBUG: V2 cluster data is all zeros - no edge cluster was written");
             return Ok(Vec::new());
         }
 
@@ -224,25 +179,9 @@ impl super::AdjacencyIterator<'_> {
                     .map(|id| id as NativeNodeId)
                     .collect();
 
-                #[cfg(debug_assertions)]
-                {
-                    println!(
-                        "DEBUG: Direct V2 cluster read for node {} (direction: {:?}) - found {} neighbors",
-                        self.node_id,
-                        self.direction,
-                        neighbors.len()
-                    );
-                }
-
                 Ok(neighbors)
             }
             Err(e) => {
-                #[cfg(debug_assertions)]
-                println!(
-                    "DEBUG: Failed to deserialize V2 cluster for node {}: {}",
-                    self.node_id, e
-                );
-
                 // This can happen if cluster metadata exists but no actual cluster was written
                 // Fall back to edge store traversal
                 Err(e)
