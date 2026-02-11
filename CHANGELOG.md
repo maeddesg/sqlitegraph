@@ -1,5 +1,28 @@
 # SQLiteGraph Changelog
 
+## [1.5.9] - 2026-02-11
+
+### GraphBackend API Enhancement - Node Update Support
+**Added `update_node()` method to GraphBackend trait and both backends**
+
+### API Additions
+- **Added `update_node()` to `GraphBackend` trait**
+  - Allows updating node properties (kind, name, data) while preserving ID
+  - Native V2: Preserves cluster metadata during update
+  - SQLite: Uses SQL UPDATE for efficient modification
+
+### New Helper Functions
+- **Added `node_spec_to_v2_record()`** in `graph_validation.rs`
+  - Converts `NodeSpec` to `NodeRecordV2` while preserving cluster offsets
+  - Critical for maintaining adjacency cluster integrity
+
+### Implementation Details
+- Native V2 backend uses WAL integrator for atomic updates
+- SQLite backend delegates to `update_entity()` SQL query
+- Both backends preserve existing cluster metadata
+
+---
+
 ## [1.5.8] - 2026-02-11
 
 ### Critical Bug Fixes - Native V2 WAL System

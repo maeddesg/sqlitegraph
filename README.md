@@ -5,7 +5,15 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.5.8
+## What's New in v1.5.9
+
+**Enhancement** - Node update API for GraphBackend trait
+- Added `update_node()` method to GraphBackend trait
+- Native V2 backend preserves cluster metadata during updates
+- SQLite backend uses efficient SQL UPDATE queries
+- New helper `node_spec_to_v2_record()` for V2 record conversion
+
+**What's New in v1.5.8**
 
 **Critical Bug Fix** - WAL underflow panic and memory corruption
 - Fixed underflow panic in WAL reader when system clock moves backward
@@ -192,7 +200,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.5.8"
+sqlitegraph = "1.5.9"
 ```
 
 ### SQLite Backend (Default)
@@ -427,13 +435,13 @@ SQLiteGraph is designed for **embedded, single-machine graph workloads**. It is 
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.5.8"
+sqlitegraph = "1.5.9"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.5.8", features = ["native-v2"] }
+sqlitegraph = { version = "1.5.9", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.5.8", features = ["trace_v2_io"] }
+sqlitegraph = { version = "1.5.9", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool
