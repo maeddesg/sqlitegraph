@@ -149,6 +149,18 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         self.graph.delete_entity(id)
     }
 
+    fn update_node(&self, node_id: i64, node: NodeSpec) -> Result<i64, SqliteGraphError> {
+        // SQLite backend: Use UPDATE SQL query
+        self.graph.update_entity(&GraphEntity {
+            id: node_id,
+            kind: node.kind,
+            name: node.name,
+            file_path: node.file_path,
+            data: node.data,
+        })?;
+        Ok(node_id)
+    }
+
     fn entity_ids(&self) -> Result<Vec<i64>, SqliteGraphError> {
         self.graph.all_entity_ids()
     }
@@ -609,8 +621,13 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         &self,
         _snapshot_id: crate::snapshot::SnapshotId,
         prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, crate::SqliteGraphError>
-    {
+    ) -> Result<
+        Vec<(
+            Vec<u8>,
+            crate::backend::native::v2::kv_store::types::KvValue,
+        )>,
+        crate::SqliteGraphError,
+    > {
         self.ensure_kv_table()?;
         let conn = self.graph.connection();
 
@@ -619,9 +636,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         let prefix_str = String::from_utf8_lossy(prefix);
         let pattern = prefix_str.replace('%', "\\%").replace('_', "\\_") + "%";
 
-        let mut stmt = conn.prepare_cached(
-            "SELECT key, value_json FROM kv_store WHERE key LIKE ?1 ESCAPE '\\'"
-        ).map_err(|e| SqliteGraphError::query(e.to_string()))?;
+        let mut stmt = conn
+            .prepare_cached("SELECT key, value_json FROM kv_store WHERE key LIKE ?1 ESCAPE '\\'")
+            .map_err(|e| SqliteGraphError::query(e.to_string()))?;
 
         let mut results = Vec::new();
         let query_result = stmt.query_map([&pattern], |row| {
@@ -649,7 +666,8 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         kind: &str,
     ) -> Result<Vec<i64>, crate::SqliteGraphError> {
         let conn = self.graph.connection();
-        let mut stmt = conn.prepare_cached("SELECT id FROM entities WHERE kind = ?1")
+        let mut stmt = conn
+            .prepare_cached("SELECT id FROM entities WHERE kind = ?1")
             .map_err(|e| SqliteGraphError::query(e.to_string()))?;
 
         let node_ids: Vec<i64> = stmt
@@ -667,7 +685,8 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         pattern: &str,
     ) -> Result<Vec<i64>, crate::SqliteGraphError> {
         let conn = self.graph.connection();
-        let mut stmt = conn.prepare_cached("SELECT id FROM entities WHERE label GLOB ?1")
+        let mut stmt = conn
+            .prepare_cached("SELECT id FROM entities WHERE label GLOB ?1")
             .map_err(|e| SqliteGraphError::query(e.to_string()))?;
 
         let node_ids: Vec<i64> = stmt
