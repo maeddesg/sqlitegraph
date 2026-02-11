@@ -71,7 +71,14 @@ fn test_delete_isolated_node() {
     node_store.write_node_v2(&node4).unwrap();
 
     // Store the node count before deletion
-    let node_count_before = graph_file.header().node_count;
+    let node_count_before = {
+        // Release mutable borrow before reading header
+        drop(node_store);
+        graph_file.header().node_count
+    };
+
+    // Create new store for deletion
+    let mut node_store = NodeStore::new(&mut graph_file);
 
     // Delete the isolated node
     let result = node_store.delete_node_with_edges(4);
@@ -137,11 +144,16 @@ fn test_deletion_updates_header() {
     );
     node_store.write_node_v2(&node5).unwrap();
 
-    let node_count_before = graph_file.header().node_count;
+    let node_count_before = {
+        drop(node_store);
+        graph_file.header().node_count
+    };
     assert_eq!(node_count_before, 5, "Should have 5 nodes initially");
 
     // Delete 2 nodes
+    let mut node_store = NodeStore::new(&mut graph_file);
     let _ = node_store.delete_node_with_edges(4).unwrap();
+    let mut node_store = NodeStore::new(&mut graph_file);
     let _ = node_store.delete_node_with_edges(5).unwrap();
 
     // Verify header shows 3 nodes
