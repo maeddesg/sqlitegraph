@@ -1646,7 +1646,6 @@ mod tests {
 
         assert!(recovery.get_header_state().is_some());
     }
-}
 
     // WALWriter tests (Task 65-04)
 
@@ -1749,3 +1748,4 @@ mod tests {
         assert_eq!(lsn3, LSN_BEGIN + 2);
         assert_eq!(writer.current_lsn(), LSN_BEGIN + 3);
     }
+}
