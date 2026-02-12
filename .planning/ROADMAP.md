@@ -136,6 +136,22 @@ See [v1.5 ROADMAP archive](.planning/milestones/v1.5-ROADMAP.md) for full detail
 - 35 unit tests (all passing)
 - 1,751 LOC in src/backend/native/v3/wal.rs
 
+#### Phase 66: NodeStore V3
+**Goal:** Implement page-based node access with B+Tree lookup, O(log n) lookup complexity, and per-traversal cache support
+**Depends on**: Phase 63, Phase 64, Phase 65
+**Requirements**: FR-2, FR-3, FR-6, NFR-2, NFR-4
+**Success Criteria**:
+1. NodeStore V3 uses B+Tree for node_id → page_id lookup
+2. Loads NodePages and decompresses NodeRecordV3
+3. O(log n) lookup complexity
+4. Per-traversal cache support
+
+**Plans**:
+- [ ] 66-01: B+Tree lookup integration (~150 LOC)
+- [ ] 66-02: NodePage loading and caching (~200 LOC)
+- [ ] 66-03: Traversal cache implementation (~100 LOC)
+- [ ] 66-04: NodeStore V3 tests (~150 LOC)
+
 ## Progress
 
 **Execution Order:**
@@ -145,3 +161,48 @@ Phases execute in numeric order: 58 → 59 → 60 → 61 → 62
 |-------|-----------|----------------|--------|-----------|
 | 45-57 | v1.3.0 Graph Algorithms Library | 36/36 | Complete | 2026-02-03 |
 | 58-62 | v1.5 Code Quality & Features | 14/14 | Complete | 2026-02-12 |
+
+### Phase 63: 66 --status READY TO PLAN --name NodeStore V3 --goal Implement page-based node access with B+Tree lookup, O(log n) lookup complexity, per-traversal cache support
+
+**Goal:** [To be planned]
+**Depends on:** Phase 62
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 63 to break down)
+
+### Phase 67: 66.1 --status READY TO PLAN --name BTree Lookup Integration --goal Integrate BTreeManager with NodeStore for node_id to page_id lookups --loc 150
+
+**Goal:** [To be planned]
+**Depends on:** Phase 66
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 67 to break down)
+
+### Phase 68: 66.2 --status READY TO PLAN --name NodePage Loading --goal Implement NodePage loading with decompression support --loc 200
+
+**Goal:** [To be planned]
+**Depends on:** Phase 67
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 68 to break down)
+
+### Phase 69: 66.3 --status READY TO PLAN --name Traversal Cache --goal Implement LRU cache for per-traversal page caching --loc 100
+
+**Goal:** [To be planned]
+**Depends on:** Phase 68
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 69 to break down)
+
+### Phase 70: 66.4 --status READY TO PLAN --name NodeStore V3 Tests --goal Create comprehensive unit tests for NodeStore V3 --loc 150
+
+**Goal:** [To be planned]
+**Depends on:** Phase 69
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 70 to break down)
