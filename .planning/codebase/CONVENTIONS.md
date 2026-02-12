@@ -1,6 +1,6 @@
 # Coding Conventions
 
-**Analysis Date:** 2025-02-11
+**Analysis Date:** 2025-02-12
 
 ## Naming Patterns
 
@@ -9,13 +9,14 @@
 - `mod.rs` for module directories (re-exports children)
 - `lib.rs` for crate root (`sqlitegraph/src/lib.rs`)
 - `main.rs` for binary entry points
-- Test files: `<module>_tests.rs` or `_<feature>_tests.rs` or descriptive names like `mvcc_baseline_tests.rs`
+- Test files: `<module>_tests.rs`, `_<feature>_tests.rs`, descriptive names like `snapshot_invariants_tests.rs`, `header_architecture_regression_tests.rs`
 
 **Functions:**
 - `snake_case` for all function and method names
-- Builder-style methods: `with_<field>()` for chainable configuration (e.g., `with_overwrite()`, `with_state()`)
+- Builder-style methods: `with_<field>()` for chainable configuration (e.g., `with_overwrite()`, `with_wal_mode()`, `with_cpu_profile()`)
 - Predicate functions: `is_<state>()`, `has_<property>()`, `contains_<item>()`
 - Getter methods: Direct property access or `get_<item>()`
+- Public API functions use descriptive verbs: `insert_node`, `bulk_insert_entities`, `neighbors_of`
 
 **Variables:**
 - `snake_case` for all variables
@@ -24,25 +25,33 @@
 
 **Types:**
 - `PascalCase` for structs, enums, and type aliases
-- Newtype wrappers: `PascalCase` wrapping single field (e.g., `NodeId(pub i64)`, `Label(pub String)`)
-- Trait names: `PascalCase` (e.g., `GraphBackend`, `ProgressCallback`)
-- Type parameters: `'a` for lifetimes, `T` for generic types
+- Newtype wrappers: `PascalCase` wrapping single field (e.g., `NodeId(pub i64)`, `Label(pub String)`, `EdgeId(pub i64)`)
+- Trait names: `PascalCase` (e.g., `GraphBackend`, `ProgressCallback`, `VectorStorage`)
+- Type aliases: `SnapshotId`, `NativeResult`, `NativeNodeId`
 
 **Constants:**
 - `SCREAMING_SNAKE_CASE` for compile-time constants
-- Prefix SQL constants: `_<purpose>_SQL` (e.g., `OUTGOING_FILTER_SQL`, `INCOMING_FILTER_SQL`)
+- Examples: `HEADER_SIZE`, `NODE_SLOT_SIZE`, `V2_MAGIC`, `EDGE_SLOT_SIZE`
+- Prefix SQL constants: `_<purpose>_SQL` (e.g., `OUTGOING_FILTER_SQL`)
 
 ## Code Style
 
 **Formatting:**
-- Standard `rustfmt` formatting (no explicit config in repo - uses defaults)
-- Line length: No strict limit enforced, but generally under 100-120 characters
+- Standard `rustfmt` formatting (no explicit config - uses defaults)
+- Line length: No strict limit, but generally under 100-120 characters
 - Indentation: 4 spaces (Rust standard)
 
 **Linting:**
-- `#![allow(dead_code)]` present at top of `lib.rs` - indicates work-in-progress code is tolerated
+- `#![allow(dead_code)]` present at top of `lib.rs` - indicates work-in-progress code tolerated
 - Compiler warnings generally fixed before commits
 - No custom `clippy` lint configuration detected
+
+**Attributes:**
+- `#[derive(Debug, Clone, Copy)]` for small copy types
+- `#[derive(Debug, Clone)]` for types with heap data
+- `#[cfg(test)]` for test-only code
+- `#[cfg(feature = "...")]` for feature-gated implementations
+- `#[serde(rename = "...")]` for field name mapping
 
 **Brace Style:**
 - Opening braces on same line for functions, structs, match arms
@@ -60,96 +69,161 @@
 **Path Aliases:**
 - `crate::<module>` for internal absolute paths
 - External crates imported by root name
-- Re-exports in `lib.rs` for public API
+- Re-exports in `lib.rs` for clean public API
 - Feature-gated items: `#[cfg(feature = "native-v2")]` imports
 
 **Grouping:**
 - Blank line between std lib, external crates, and internal imports
 - Related imports grouped together (e.g., multiple `use crate::` items)
 
+**Example:**
+```rust
+// Standard library
+use std::collections::HashMap;
+use std::sync::Arc;
+
+// Third-party
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tempfile::TempDir;
+
+// Crate
+use crate::{
+    backend::GraphBackend,
+    errors::SqliteGraphError,
+    graph::SqliteGraph,
+};
+```
+
 ## Error Handling
 
 **Patterns:**
 - All public functions return `Result<T, SqliteGraphError>`
-- `SqliteGraphError` enum with derived `thiserror::Error`
-- Error variants use specific constructors: `.connection()`, `.query()`, `.not_found()`, etc.
+- Centralized error enum in `sqlitegraph/src/errors.rs`
+- Uses `thiserror` crate for error derivation
 
+**Error Type Structure:**
 ```rust
-// Error creation pattern
-pub fn connection<T: Into<String>>(msg: T) -> Self {
-    SqliteGraphError::ConnectionError(msg.into())
+#[derive(Debug, Error)]
+pub enum SqliteGraphError {
+    #[error("connection error: {0}")]
+    ConnectionError(String),
+    #[error("schema error: {0}")]
+    SchemaError(String),
+    #[error("query error: {0}")]
+    QueryError(String),
+    #[error("entity not found: {0}")]
+    NotFound(String),
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
+    #[error("fault injected: {0}")]
+    FaultInjected(String),
+    #[error("native backend error: {0}")]
+    NativeError(#[from] crate::backend::native::types::NativeBackendError),
 }
 ```
 
-**Context propagation:**
-```rust
-.map_err(|e| SqliteGraphError::query(e.to_string()))?
-```
+**Constructor Methods:**
+- Each error variant has constructor: `.connection()`, `.schema()`, `.query()`, `.not_found()`
+- Generic `Into<String>` for flexible message types
 
-**Unwrap usage:**
-- `.expect()` in tests with descriptive messages
-- `.unwrap()` avoided in production code
-- `?` operator for error propagation everywhere else
+**Propagation:**
+- `?` operator for error propagation
+- `#[from]` attribute for automatic conversion
+- Explicit `map_err()` for context addition: `.map_err(|e| SqliteGraphError::query(e.to_string()))?`
+
+**Unwrap Usage:**
+- `.unwrap()` and `.expect()` used only in tests with descriptive messages
+- Production code returns proper `Result` types
+- Temporary files use `.expect()` with descriptive messages like `"Failed to create temp dir"`
 
 ## Logging
 
 **Framework:** `log` crate with feature-gated debug output
 
-**Patterns:**
+**Levels:**
 - `log::debug!()` for development traces
-- `debug` feature flag enables verbose output
-- Release builds have zero-overhead (feature not enabled)
+- Debug/tracing controlled via `debug` feature
+- Release builds have zero-overhead (logging disabled)
 - No structured logging detected (plain string messages)
 
-**When to log:**
+**Patterns:**
 - Significant state transitions (WAL operations, snapshot creation)
 - Performance-relevant events (cache hits/misses)
 - Errors already surfaced via Result, no redundant error logging
+- `println!()` used only in test/benchmark code
 
 ## Comments
 
 **Module-level docs:**
 - `//!` style for module documentation
 - Comprehensive doc comments at top of every module file
-- Include examples in `lib.rs` for public API
+- Include architecture, invariants, guarantees, and usage examples
 
 **Function docs:**
 - `///` triple-slash for public items
 - Document arguments with `# Arguments` sections
 - Document returns with `# Returns` sections
 - Document errors with `# Errors` sections
-- Include `# Example` sections for non-trivial usage
+- Include `# Example` code blocks where applicable
 
-**When to Comment:**
-- Invariants documented in struct-level docs (e.g., MVCC memory ordering guarantees)
+**Inline Comments:**
+- Used for complex algorithm explanations
+- Memory ordering guarantees documented (e.g., in `mvcc.rs`)
+- Invariants marked with explicit comments
 - "Why" comments for non-obvious decisions
 - "Phase XX" comments indicate implementation phases in development
-- Algorithm explanations inline for complex logic
 
-**JSDoc/TSDoc:**
-- Not applicable (Rust project)
+**Documentation Style:**
+```rust
+//! Module/Feature description
+//!
+//! # Section Heading
+//!
+//! - [`Item1`] - Description
+//! - [`Item2`] - Description
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use crate_name::Item;
+//! let item = Item::new();
+//! ```
+```
+
+**Code Examples:**
+- `rust` for compile-tested examples
+- `rust,ignore` for pseudo-code or incomplete examples
+- `no_run` for examples that shouldn't execute
 
 ## Function Design
 
-**Size:** No strict limit but generally functions under 50 lines preferred
+**Size:**
+- No strict limit but generally functions under 50 lines preferred
+- Complex algorithms split into helper functions
+- Large test functions (100+ lines) acceptable for invariants testing
 
 **Parameters:**
 - Few parameters: use structs for 3+ related parameters
-- Builder pattern for configuration (e.g., `GraphConfig`, `NativeConfig`)
+- Builder pattern for configuration (e.g., `GraphConfig`, `HnswConfig`, `SnapshotExportConfig`)
+- Fluent method chaining: `.with_wal_mode().with_cache_size(1000).with_overwrite(true)`
 - Reference passing: `&self` for read-only, `&mut self` for mutation
 - Lifetime annotations on borrowed data (`'a` common for query objects)
+- Slice parameters for collections: `&[&str]`, `&[NodeId]`
 
 **Return Values:**
 - `Result<T, E>` for fallible operations
 - `Option<T>` for absent values (not errors)
 - `Vec<T>` for collections (not iterators) in public API
-- Tuple returns for multiple related values
+- Tuple returns for multiple related values: `(usize, usize)` for `(in_degree, out_degree)`
+- Custom result types for complex returns: `CycleBasisResult`, `PartitionResult`, `SnapshotExportResult`
 
 ## Module Design
 
 **Exports:**
 - Public API re-exported in `lib.rs`
 - Internal modules marked `mod` (not `pub mod`)
+- Feature-gated exports: `#[cfg(feature = "native-v2")] pub use ...;`
 - Test-only modules: `pub mod <name> // Public for tests`
 
 **Barrel Files:**
@@ -171,18 +245,20 @@ sqlitegraph/src/
 ├── algo/mod.rs      # Algorithms library
 ├── mvcc.rs          # MVCC snapshot system
 ├── cache.rs         # LRU-K adjacency cache
+├── hnsw/mod.rs     # Vector search
 └── <feature>.rs     # Feature-specific modules
 ```
 
 ## Struct and Enum Conventions
 
 **Structs:**
-- Field-level `pub` for data-carrying structs (e.g., `GraphEntity`, `NodeSpec`)
+- Field-level `pub` for data-carrying structs (e.g., `GraphEntity`, `NodeSpec`, `EdgeSpec`)
 - Builder structs: `with_<field>()` methods return `Self`
 - Derive macros: `Debug`, `Clone`, `Copy` (newtype wrappers), `PartialEq`, `Eq`, `Hash`
+- `#[serde(...)]` attributes for serialization
 
 **Enums:**
-- PascalCase variants
+- `PascalCase` variants
 - Dataful variants: `VariantName(fields)`
 - Error enums derive `thiserror::Error`
 
@@ -191,14 +267,23 @@ sqlitegraph/src/
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId(pub i64);
 
-impl From<i64> for NodeId { ... }
-impl fmt::Display for NodeId { ... }
+impl From<i64> for NodeId {
+    fn from(value: i64) -> Self {
+        NodeId(value)
+    }
+}
+
+impl fmt::Display for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 ```
 
 ## Trait Conventions
 
 **Naming:**
-- Descriptive names: `GraphBackend`, `ProgressCallback`, `SnapshotState`
+- Descriptive names: `GraphBackend`, `ProgressCallback`, `SnapshotState`, `VectorStorage`
 - Methods: verb phrases (`insert_node`, `get_entity`, `neighbors`)
 
 **Required vs Provided:**
@@ -206,41 +291,50 @@ impl fmt::Display for NodeId { ... }
 - Default implementations provided where sensible
 - Documentation required for all trait items
 
-## Documentation Style
+## Serialization Patterns
 
-**Module Headers:**
-```rust
-//! Feature/Module description
-//!
-//! # Section Heading
-//!
-//! - [`Item1`] - Description
-//! - [`Item2`] - Description
-//!
-//! # Example
-//!
-//! ```rust,ignore
-//! use ...
-//! ```
-```
+**Serde:**
+- `#[derive(Serialize, Deserialize)]` from `serde` for data types
+- `#[serde(rename = "...")]` for field name mapping
+- JSON serialization via `serde_json::to_string()` and `json!()` macro
 
-**Code Examples:**
-- `rust` for compile-tested examples
-- `rust,ignore` for pseudo-code or incomplete examples
-- `no_run` for examples that shouldn't execute
+**Binary Formats:**
+- `bincode` for compact binary encoding
+- `binrw` crate for native backend file formats (`#[derive(BinRead, BinWrite)]`)
+- `bytemuck` for zero-copy casts in memory-mapped I/O (`#[derive(Pod, Zeroable)]`)
 
-## Testing Conventions
+## Concurrency Patterns
 
-**Test Organization:**
-- Unit tests in `sqlitegraph/tests/` directory
-- Integration tests in `tests/` directory
-- Test helpers as private functions in test files
+**Interior Mutability:**
+- `RefCell` for single-threaded interior mutability (`SqliteGraph`)
+- `ArcSwap` for lock-free atomic updates (`SnapshotManager`)
+- `parking_lot` for efficient mutexes and RwLocks
 
-**Test Naming:**
-- `test_<feature>_scenario` for specific tests
-- `test_<feature>_<variant>` for related tests
-- Descriptive names preferred over brief ones
+**Thread Safety:**
+- Types explicitly marked as NOT thread-safe when applicable
+- `Sync` not implemented for graph with `RefCell`
+- Use `GraphSnapshot` for concurrent reads
+- Writes must be serialized
+
+**Atomic Operations:**
+- `ArcSwap` provides Acquire/Release memory ordering
+- Documented in `mvcc.rs` with happens-before guarantees
+- Comments explain memory ordering: `// Load uses Acquire ordering`, `// Store uses Release ordering`
+
+## Unsafe Code Guidelines
+
+**Usage:**
+- Minimal unsafe code (primarily in FFI/low-level I/O)
+- `unsafe` blocks clearly documented with safety invariants
+- Memory-mapped I/O in backend modules uses unsafe
+- Comments with `// SAFETY:` explaining why unsafe code is correct
+
+**Documentation:**
+- Safety comments required: `// SAFETY: ...`
+- Explains why unsafe code is correct
+- Documents preconditions that must hold
+- Documents behavior with `bytemuck` zero-copy operations
 
 ---
 
-*Convention analysis: 2025-02-11*
+*Convention analysis: 2025-02-12*

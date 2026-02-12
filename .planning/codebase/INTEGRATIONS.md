@@ -1,6 +1,6 @@
 # External Integrations
 
-**Analysis Date:** 2026-02-11
+**Analysis Date:** 2026-02-12
 
 ## APIs & External Services
 
@@ -16,6 +16,7 @@ SQLiteGraph is designed as a fully embedded database with no external API depend
 - **Client:** rusqlite 0.31 with bundled libsqlite3
 - **Connection:** `rusqlite::Connection` with OpenFlags
 - **ORM/Client:** Direct SQL queries (no ORM layer)
+- **Implementation:** `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/backend/sqlite/`
 - **Tables:** `entities`, `edges`, `hnsw_indexes`, `hnsw_vectors`, `hnsw_layers`, `hnsw_entry_points`, `graph_meta_history`
 - **File extension:** `.db`
 - **Location:** User-provided path or in-memory (`:memory:`)
@@ -25,6 +26,7 @@ SQLiteGraph is designed as a fully embedded database with no external API depend
 - **File structure:** `FileHeader` + reserved regions + node storage + edge clusters
 - **Connection:** Direct file I/O via `std::fs` and `memmap2`
 - **WAL:** Write-Ahead Logging for crash recovery
+- **Implementation:** `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/backend/native/`
 - **File extension:** `.db` (same as SQLite)
 - **No external database dependency**
 
@@ -42,9 +44,9 @@ SQLiteGraph is designed as a fully embedded database with no external API depend
 
 | Cache Type | Implementation | Location |
 |------------|-----------------|------------|
-| Adjacency cache | LRU-K (`sqlitegraph/src/cache.rs`) | In-memory |
+| Adjacency cache | LRU-K | `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/cache.rs` |
 | Node cache | `NodeRecordCache` (native backend) | In-memory |
-| Query cache | `QueryCache` (`sqlitegraph/src/query_cache.rs`) | In-memory |
+| Query cache | `QueryCache` | `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/query_cache.rs` |
 | Connection pool | r2d2 pool (SQLite backend) | In-memory |
 
 ## Authentication & Identity
@@ -58,7 +60,7 @@ SQLiteGraph is an embedded database with no authentication, user management, or 
 **Error Tracking:**
 - No external error tracking service
 - Errors returned as `SqliteGraphError` and `NativeBackendError` enums
-- Error types defined in `sqlitegraph/src/errors.rs`
+- Error types defined in `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/errors.rs`
 
 **Logging:**
 - log 0.4 facade (debug feature only)
@@ -66,12 +68,14 @@ SQLiteGraph is an embedded database with no authentication, user management, or 
 - No log aggregation service
 
 **Introspection:**
-- `GraphIntrospection` API (`sqlitegraph/src/introspection.rs`)
+- `GraphIntrospection` API
+- Implementation: `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/introspection.rs`
 - JSON-serializable state snapshots
 - Cache statistics, file sizes, node/edge counts
 
 **Progress Tracking:**
-- `ProgressCallback` trait (`sqlitegraph/src/progress.rs`)
+- `ProgressCallback` trait
+- Implementation: `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/progress.rs`
 - `ConsoleProgress` for CLI output
 - `NoProgress` zero-overhead implementation
 
@@ -125,7 +129,7 @@ SQLiteGraph is an embedded database with no authentication, user management, or 
 - `unsubscribe(subscriber_id)` - Remove subscription
 - Channel-based delivery via `std::sync::mpsc`
 - No cross-process delivery
-- File: `sqlitegraph/src/backend/native/v2/pubsub/`
+- Implementation: `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/backend/native/v2/pubsub/`
 
 ## Library Integrations
 
@@ -144,7 +148,7 @@ The codebase contains algorithm documentation references to external resources:
 
 | Tool | Purpose | Files |
 |------|---------|--------|
-| Magellan | Code graph indexing | `scripts/watch-magellan.sh`, `scripts/magellan-workflow.sh` |
+| Magellan | Code graph indexing | `/home/feanor/Projects/sqlitegraph/scripts/watch-magellan.sh` |
 | llmgrep | Semantic code search | Referenced in docs |
 | Mirage | CFG analysis (planned) | Referenced in docs |
 | splice | Precision code editing | Referenced in docs |
@@ -182,6 +186,10 @@ Located at external repositories:
 | Free space map | End of file | Dynamic | Free block tracking |
 | WAL | Separate file | Dynamic | Transaction logging |
 
+**Schema Implementation:**
+- SQLite backend: `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/schema.rs`
+- Native backend: `/home/feanor/Projects/sqlitegraph/sqlitegraph/src/backend/native/graph_file/header.rs`
+
 ## Feature Flags
 
 **Backend Selection:**
@@ -201,4 +209,4 @@ Located at external repositories:
 
 ---
 
-*Integration audit: 2026-02-11*
+*Integration audit: 2026-02-12*
