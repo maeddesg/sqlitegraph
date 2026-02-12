@@ -222,7 +222,7 @@ impl NodeEdgeAccessManager {
     }
 
     /// Validate node record structure
-    #[allow(unused_comparisons)]
+    #[allow(clippy::absurd_extreme_comparisons)]
     pub fn validate_node_record(node: &NodeRecord) -> bool {
         // Basic validation checks
         // Note: These comparisons are documented for clarity even though
@@ -235,7 +235,7 @@ impl NodeEdgeAccessManager {
     }
 
     /// Validate edge record structure
-    #[allow(unused_comparisons)]
+    #[allow(clippy::absurd_extreme_comparisons)]
     pub fn validate_edge_record(edge: &EdgeRecord) -> bool {
         // Basic validation checks
         // Note: These comparisons are documented for clarity even though

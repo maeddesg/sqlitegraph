@@ -171,7 +171,7 @@ impl ExportPlanner {
 
         // Check header consistency
         let header = graph_file.persistent_header();
-        #[allow(unused_comparisons)]
+        #[allow(clippy::absurd_extreme_comparisons)]
         if header.node_count < 0 || header.edge_count < 0 {
             return Ok(false);
         }

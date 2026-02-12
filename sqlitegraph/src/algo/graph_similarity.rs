@@ -404,30 +404,14 @@ fn maximum_common_subgraph(
         &mut edge_match,
     );
 
-    if let Some(iso_iter) = iso_iter {
-        for _mapping in iso_iter {
-            // Check timeout
-            if let Some(to) = timeout {
-                if start_time.elapsed() >= to {
-                    break;
-                }
-            }
-
-            // Check max_matches
-            if let Some(max) = bounds.max_matches {
-                if matches_checked >= max {
-                    break;
-                }
-            }
-
-            // Each successful match means the entire pattern was found
-            // So the MCS size is at least the pattern size
+    // Check if at least one match exists - pattern is subgraph of target
+    if let Some(mut iso_iter) = iso_iter {
+        // Use next() to check if any match exists without looping
+        // (we only need to know if pattern is a subgraph)
+        let has_match = iso_iter.next().is_some();
+        if has_match {
             max_size = pattern_count;
-            matches_checked += 1;
-
-            // If we found the full pattern as a subgraph, that's the maximum possible
-            // (can't be larger than the pattern itself)
-            break;
+            matches_checked = 1;
         }
     }
 

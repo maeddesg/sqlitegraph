@@ -264,7 +264,7 @@ impl SnapshotExporter {
 
         // Additional header consistency checks
         let header = self.graph_file.persistent_header();
-        #[allow(unused_comparisons)]
+        #[allow(clippy::absurd_extreme_comparisons)]
         if header.node_count < 0 || header.edge_count < 0 {
             report.file_consistent = false;
             report
