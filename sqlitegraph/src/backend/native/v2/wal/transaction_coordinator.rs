@@ -316,6 +316,18 @@ impl DeadlockDetector {
         for waiting_set in wait_for_graph.values_mut() {
             waiting_set.remove(&tx_id);
         }
+
+        // Clean up resource wait graphs
+        let mut resource_graph = self.resource_wait_graph.write();
+        for waiters in resource_graph.values_mut() {
+            waiters.remove(&tx_id);
+        }
+        // Remove empty resource entries
+        resource_graph.retain(|_, waiters| !waiters.is_empty());
+
+        // Remove transaction's resource waits
+        let mut tx_waiting = self.tx_waiting_for.write();
+        tx_waiting.remove(&tx_id);
     }
 
     /// Add a wait edge: tx_waiter is waiting for tx_holder to release a lock
@@ -325,6 +337,56 @@ impl DeadlockDetector {
             .entry(tx_waiter)
             .or_insert_with(HashSet::new)
             .insert(tx_holder);
+    }
+
+    /// Add a resource wait edge: transaction is waiting for a resource
+    pub fn add_resource_wait(
+        &self,
+        tx_id: TransactionId,
+        resource: ResourceId,
+    ) -> NativeResult<()> {
+        // Add to resource -> waiters mapping
+        let mut resource_graph = self.resource_wait_graph.write();
+        resource_graph
+            .entry(resource)
+            .or_insert_with(HashSet::new)
+            .insert(tx_id);
+
+        // Add to tx -> resources mapping
+        let mut tx_waiting = self.tx_waiting_for.write();
+        tx_waiting
+            .entry(tx_id)
+            .or_insert_with(HashSet::new)
+            .insert(resource);
+
+        Ok(())
+    }
+
+    /// Remove a resource wait edge
+    pub fn remove_resource_wait(
+        &self,
+        tx_id: TransactionId,
+        resource: ResourceId,
+    ) -> NativeResult<()> {
+        // Remove from resource -> waiters
+        let mut resource_graph = self.resource_wait_graph.write();
+        if let Some(waiters) = resource_graph.get_mut(&resource) {
+            waiters.remove(&tx_id);
+            if waiters.is_empty() {
+                resource_graph.remove(&resource);
+            }
+        }
+
+        // Remove from tx -> resources
+        let mut tx_waiting = self.tx_waiting_for.write();
+        if let Some(resources) = tx_waiting.get_mut(&tx_id) {
+            resources.remove(&resource);
+            if resources.is_empty() {
+                tx_waiting.remove(&tx_id);
+            }
+        }
+
+        Ok(())
     }
 
     /// Detect if a cycle exists starting from the given transaction
@@ -469,6 +531,21 @@ impl DeadlockDetector {
         }
 
         let cleaned = initial_size - wait_for_graph.len();
+
+        // Clean up resource wait graphs
+        let mut resource_graph = self.resource_wait_graph.write();
+        let mut tx_waiting = self.tx_waiting_for.write();
+
+        // Remove non-active transactions from resource waiters
+        for waiters in resource_graph.values_mut() {
+            waiters.retain(|tx_id| active_ids.contains(tx_id));
+        }
+        // Remove resources with no waiters
+        resource_graph.retain(|_, waiters| !waiters.is_empty());
+
+        // Remove non-active transactions from tx_waiting_for
+        tx_waiting.retain(|tx_id, _| active_ids.contains(tx_id));
+
         if cleaned > 0 {
             log::debug!("Cleaned {} stale deadlock detector entries", cleaned);
         }
