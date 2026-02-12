@@ -569,6 +569,401 @@ impl V3WALRecord {
     }
 }
 
+/// WAL writer for appending records to WAL file
+///
+/// Handles writing WAL records to disk with proper synchronization
+/// for crash recovery. Records are written in format:
+///
+/// ```text
+/// [4 bytes: record size (little-endian u32)]
+/// [N bytes: serialized record]
+/// ```
+///
+/// # Durability
+///
+/// Each record is followed by an optional fsync for durability.
+/// For performance, multiple records can be batched before syncing.
+#[derive(Debug)]
+pub struct WALWriter {
+    /// WAL file path
+    wal_path: PathBuf,
+    /// Current LSN
+    current_lsn: u64,
+    /// Committed LSN
+    committed_lsn: u64,
+    /// Buffered records before fsync
+    buffer: Vec<u8>,
+    /// Buffer size threshold for auto-flush
+    flush_threshold: usize,
+}
+
+impl WALWriter {
+    /// Create a new WAL writer
+    ///
+    /// # Arguments
+    ///
+    /// * `wal_path` - Path to WAL file
+    /// * `start_lsn` - Starting LSN (default LSN_BEGIN for new WAL)
+    ///
+    /// # Returns
+    ///
+    /// Returns error if WAL file exists but cannot be read.
+    pub fn new(wal_path: PathBuf, start_lsn: u64) -> NativeResult<Self> {
+        let mut writer = Self {
+            wal_path,
+            current_lsn: start_lsn,
+            committed_lsn: LSN_INVALID,
+            buffer: Vec::new(),
+            flush_threshold: 64 * 1024, // 64KB default buffer
+        };
+
+        // If WAL exists, read current LSN from header
+        if writer.wal_path.exists() {
+            writer.read_header()?;
+        }
+
+        Ok(writer)
+    }
+
+    /// Get current LSN
+    pub fn current_lsn(&self) -> u64 {
+        self.current_lsn
+    }
+
+    /// Get committed LSN
+    pub fn committed_lsn(&self) -> u64 {
+        self.committed_lsn
+    }
+
+    /// Read WAL header to get current state
+    fn read_header(&mut self) -> NativeResult<()> {
+        use std::io::Read;
+
+        let mut file = std::fs::File::open(&self.wal_path).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to open WAL for reading".to_string(),
+                source: e,
+            }
+        })?;
+
+        let mut header_bytes = [0u8; V3_WAL_HEADER_SIZE];
+        file.read_exact(&mut header_bytes).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to read WAL header".to_string(),
+                source: e,
+            }
+        })?;
+
+        let header = V3WALHeader::from_bytes(&header_bytes)?;
+        header.validate()?;
+
+        self.current_lsn = header.current_lsn;
+        self.committed_lsn = header.committed_lsn;
+
+        Ok(())
+    }
+
+    /// Write WAL header (initializes new WAL file)
+    pub fn write_header(&self) -> NativeResult<()> {
+        use std::io::Write;
+
+        let header = V3WALHeader {
+            magic: V3_WAL_MAGIC,
+            version: V3_WAL_VERSION,
+            page_size: 4096,
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            current_lsn: self.current_lsn,
+            committed_lsn: self.committed_lsn,
+            checkpointed_lsn: LSN_INVALID,
+            reserved: [0; 3],
+        };
+
+        let header_bytes = header.to_bytes();
+
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&self.wal_path)
+            .map_err(|e| {
+                NativeBackendError::IoError {
+                    context: format!("Failed to create WAL file: {}", self.wal_path.display()),
+                    source: e,
+                }
+            })?;
+
+        file.write_all(&header_bytes).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to write WAL header".to_string(),
+                source: e,
+            }
+        })?;
+
+        file.sync_all().map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to sync WAL file".to_string(),
+                source: e,
+            }
+        })?;
+
+        Ok(())
+    }
+
+    /// Append a record to WAL buffer
+    ///
+    /// Record is buffered until flush() is called or buffer threshold is reached.
+    pub fn append(&mut self, record: &V3WALRecord) -> NativeResult<()> {
+        let bytes = record.to_bytes()?;
+        let size = bytes.len() as u32;
+
+        // Check size limit
+        if bytes.len() > MAX_RECORD_SIZE {
+            return Err(NativeBackendError::SerializationError {
+                context: format!("Record size {} exceeds maximum {}", bytes.len(), MAX_RECORD_SIZE),
+            });
+        }
+
+        // Write size prefix and record data
+        self.buffer.extend_from_slice(&size.to_le_bytes());
+        self.buffer.extend_from_slice(&bytes);
+
+        // Auto-flush if threshold exceeded
+        if self.buffer.len() >= self.flush_threshold {
+            self.flush()?;
+        }
+
+        self.current_lsn = lsn_next(self.current_lsn);
+
+        Ok(())
+    }
+
+    /// Flush buffered records to disk
+    ///
+    /// Writes all buffered records and optionally syncs to disk.
+    pub fn flush(&mut self) -> NativeResult<()> {
+        use std::io::Write;
+
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
+
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(&self.wal_path)
+            .map_err(|e| {
+                NativeBackendError::IoError {
+                    context: "Failed to open WAL for writing".to_string(),
+                    source: e,
+                }
+            })?;
+
+        file.write_all(&self.buffer).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to write WAL records".to_string(),
+                source: e,
+            }
+        })?;
+
+        file.sync_all().map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to sync WAL file".to_string(),
+                source: e,
+            }
+        })?;
+
+        self.buffer.clear();
+        Ok(())
+    }
+
+    /// Mark records up to current LSN as committed
+    ///
+    /// Updates the committed_lsn in WAL header.
+    /// Requires flush to persist the updated header.
+    pub fn commit(&mut self) -> NativeResult<()> {
+        self.committed_lsn = self.current_lsn;
+
+        // Update header on disk
+        self.update_header()?;
+
+        Ok(())
+    }
+
+    /// Update WAL header with current LSN values
+    fn update_header(&self) -> NativeResult<()> {
+        use std::io::{Read, Seek, SeekFrom, Write};
+
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&self.wal_path)
+            .map_err(|e| {
+                NativeBackendError::IoError {
+                    context: "Failed to open WAL for header update".to_string(),
+                    source: e,
+                }
+            })?;
+
+        // Read existing header to preserve fields
+        file.seek(SeekFrom::Start(0)).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to seek in WAL file".to_string(),
+                source: e,
+            }
+        })?;
+
+        let mut header_bytes = [0u8; V3_WAL_HEADER_SIZE];
+        file.read_exact(&mut header_bytes).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to read WAL header".to_string(),
+                source: e,
+            }
+        })?;
+
+        let mut header = V3WALHeader::from_bytes(&header_bytes)?;
+
+        // Update LSN fields
+        header.current_lsn = self.current_lsn;
+        header.committed_lsn = self.committed_lsn;
+
+        // Write updated header
+        let updated_bytes = header.to_bytes();
+        file.seek(SeekFrom::Start(0)).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to seek to WAL header".to_string(),
+                source: e,
+            }
+        })?;
+
+        file.write_all(&updated_bytes).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to write updated WAL header".to_string(),
+                source: e,
+            }
+        })?;
+
+        file.sync_all().map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to sync WAL header".to_string(),
+                source: e,
+            }
+        })?;
+
+        Ok(())
+    }
+
+    /// Truncate WAL file (after checkpoint)
+    ///
+    /// Removes WAL records that are no longer needed.
+    pub fn truncate(&self) -> NativeResult<()> {
+        if !self.wal_path.exists() {
+            return Ok(());
+        }
+
+        std::fs::remove_file(&self.wal_path).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to truncate WAL file".to_string(),
+                source: e,
+            }
+        })?;
+
+        Ok(())
+    }
+
+    /// Write page allocate record
+    pub fn page_allocate(&mut self, page_id: u64) -> NativeResult<u64> {
+        let record = V3WALRecord::page_allocate(page_id, self.current_lsn);
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Write page free record
+    pub fn page_free(&mut self, page_id: u64, checksum: u32) -> NativeResult<u64> {
+        let record = V3WALRecord::page_free(page_id, checksum, self.current_lsn);
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Write page write record
+    pub fn page_write(&mut self, page_id: u64, offset: u32, data: Vec<u8>) -> NativeResult<u64> {
+        let record = V3WALRecord::page_write(page_id, offset, data, self.current_lsn);
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Write B+Tree split record
+    pub fn btree_split(&mut self, original_page_id: u64, new_page_id: u64, split_key: u64, page_type: bool) -> NativeResult<u64> {
+        let record = V3WALRecord::btree_split(original_page_id, new_page_id, split_key, page_type, self.current_lsn);
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Write checkpoint record
+    pub fn checkpoint(&mut self, root_page_id: u64, total_pages: u64, btree_height: u32, free_page_list_head: u64, header: &PersistentHeaderV3) -> NativeResult<u64> {
+        let record = V3WALRecord::checkpoint(root_page_id, total_pages, btree_height, free_page_list_head, header, self.current_lsn);
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Write transaction begin record
+    pub fn transaction_begin(&mut self, tx_id: u64) -> NativeResult<u64> {
+        let record = V3WALRecord::TransactionBegin {
+            tx_id,
+            lsn: self.current_lsn,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+        };
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Write transaction commit record
+    pub fn transaction_commit(&mut self, tx_id: u64) -> NativeResult<u64> {
+        let record = V3WALRecord::TransactionCommit {
+            tx_id,
+            lsn: self.current_lsn,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+        };
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Write transaction rollback record
+    pub fn transaction_rollback(&mut self, tx_id: u64) -> NativeResult<u64> {
+        let record = V3WALRecord::TransactionRollback {
+            tx_id,
+            lsn: self.current_lsn,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+        };
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Set buffer flush threshold
+    pub fn set_flush_threshold(&mut self, threshold: usize) {
+        self.flush_threshold = threshold;
+    }
+}
+
 /// WAL file path utilities
 pub struct V3WALPaths;
 
@@ -1252,3 +1647,105 @@ mod tests {
         assert!(recovery.get_header_state().is_some());
     }
 }
+
+    // WALWriter tests (Task 65-04)
+
+    #[test]
+    fn test_wal_writer_new() {
+        let wal_path = std::path::PathBuf::from("/tmp/test_writer.v3wal");
+        let writer = WALWriter::new(wal_path.clone(), LSN_BEGIN).unwrap();
+
+        assert_eq!(writer.current_lsn(), LSN_BEGIN);
+        assert_eq!(writer.committed_lsn(), LSN_INVALID);
+    }
+
+    #[test]
+    fn test_wal_writer_set_flush_threshold() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut writer = WALWriter::new(wal_path, LSN_BEGIN).unwrap();
+
+        writer.set_flush_threshold(128 * 1024);
+        assert_eq!(writer.flush_threshold, 128 * 1024);
+    }
+
+    #[test]
+    fn test_wal_writer_page_allocate_helper() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut writer = WALWriter::new(wal_path, LSN_BEGIN).unwrap();
+
+        let lsn = writer.page_allocate(42).unwrap();
+        assert_eq!(lsn, LSN_BEGIN);
+        assert_eq!(writer.current_lsn(), LSN_BEGIN + 1);
+    }
+
+    #[test]
+    fn test_wal_writer_page_free_helper() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut writer = WALWriter::new(wal_path, LSN_BEGIN).unwrap();
+
+        let lsn = writer.page_free(42, 0).unwrap();
+        assert_eq!(lsn, LSN_BEGIN);
+        assert_eq!(writer.current_lsn(), LSN_BEGIN + 1);
+    }
+
+    #[test]
+    fn test_wal_writer_page_write_helper() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut writer = WALWriter::new(wal_path, LSN_BEGIN).unwrap();
+
+        let data = vec![1, 2, 3, 4, 5];
+        let lsn = writer.page_write(42, 0, data).unwrap();
+        assert_eq!(lsn, LSN_BEGIN);
+        assert_eq!(writer.current_lsn(), LSN_BEGIN + 1);
+    }
+
+    #[test]
+    fn test_wal_writer_btree_split_helper() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut writer = WALWriter::new(wal_path, LSN_BEGIN).unwrap();
+
+        let lsn = writer.btree_split(10, 20, 500, true).unwrap();
+        assert_eq!(lsn, LSN_BEGIN);
+        assert_eq!(writer.current_lsn(), LSN_BEGIN + 1);
+    }
+
+    #[test]
+    fn test_wal_writer_checkpoint_helper() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut writer = WALWriter::new(wal_path, LSN_BEGIN).unwrap();
+
+        let header = PersistentHeaderV3::new_v3();
+        let lsn = writer.checkpoint(5, 100, 3, 0, &header).unwrap();
+        assert_eq!(lsn, LSN_BEGIN);
+        assert_eq!(writer.current_lsn(), LSN_BEGIN + 1);
+    }
+
+    #[test]
+    fn test_wal_writer_transaction_helpers() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut writer = WALWriter::new(wal_path, LSN_BEGIN).unwrap();
+
+        let begin_lsn = writer.transaction_begin(1).unwrap();
+        assert_eq!(begin_lsn, LSN_BEGIN);
+
+        let commit_lsn = writer.transaction_commit(1).unwrap();
+        assert_eq!(commit_lsn, LSN_BEGIN + 1);
+
+        let rollback_lsn = writer.transaction_rollback(2).unwrap();
+        assert_eq!(rollback_lsn, LSN_BEGIN + 2);
+    }
+
+    #[test]
+    fn test_wal_writer_multiple_records() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut writer = WALWriter::new(wal_path, LSN_BEGIN).unwrap();
+
+        let lsn1 = writer.page_allocate(42).unwrap();
+        let lsn2 = writer.page_allocate(43).unwrap();
+        let lsn3 = writer.page_allocate(44).unwrap();
+
+        assert_eq!(lsn1, LSN_BEGIN);
+        assert_eq!(lsn2, LSN_BEGIN + 1);
+        assert_eq!(lsn3, LSN_BEGIN + 2);
+        assert_eq!(writer.current_lsn(), LSN_BEGIN + 3);
+    }
