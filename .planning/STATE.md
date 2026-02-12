@@ -17,7 +17,7 @@ Phase 58: [==========================----------------] 60%
   58-01: [COMPLETED] bincode 1.3 to 2.0 migration
   58-02: [COMPLETED] WAL snapshot isolation
   58-03: [COMPLETED] Node deletion with edge cleanup
-  58-04: [PENDING]
+  58-04: [COMPLETED] Transaction rollback for KV store
   58-05: [PENDING]
 ```
 
@@ -46,4 +46,4 @@ Phase 58: [==========================----------------] 60%
 
 See git log for full history.
 
-**Last Session**: Completed 58-02-PLAN.md (2026-02-12)
+**Last Session**: Completed 58-04 Transaction rollback for KV store (2026-02-12)
