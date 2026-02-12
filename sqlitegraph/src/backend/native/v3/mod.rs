@@ -1,16 +1,19 @@
 //! V3 native backend implementation
 //!
-//! This module implements the V3 storage format with:
+//! This module implements V3 storage format with:
 //! - B+Tree node index for unlimited capacity
 //! - Page-based node storage
 //! - Delta/varint compression (Phase 63b)
-//! - Append-only page allocation (free list deferred to Phase 64)
+//! - Page allocator (Phase 64)
+//! - Write-Ahead Logging for crash recovery (Phase 65)
 
+pub mod allocator;
 pub mod compression;
 pub mod constants;
 pub mod header;
 pub mod index;
 pub mod node;
+pub mod wal;
 
 // Re-export V3 types
 pub use header::{offset as header_offset, size as header_size, PersistentHeaderV3};
@@ -33,6 +36,9 @@ pub use node::{NodeRecordV3, NodePage, FIXED_METADATA_SIZE, MAX_INLINE_DATA,
               MAX_PAGE_SIZE as NODE_PAGE_SIZE,
               USABLE_SIZE as NODE_PAGE_USABLE_SIZE,
               MAX_NODE_CAPACITY};
+
+// Re-export allocator types
+pub use allocator::{PageAllocator, PageState, FreePageHeader};
 
 #[cfg(test)]
 mod tests {

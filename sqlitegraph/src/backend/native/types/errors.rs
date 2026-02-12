@@ -184,6 +184,12 @@ pub enum NativeBackendError {
 
     #[error("WAL contiguity violation: {0}")]
     WalContiguityViolation(String),
+
+    #[error("Serialization error: {context}")]
+    SerializationError { context: String },
+
+    #[error("Deserialization error: {context}")]
+    DeserializationError { context: String },
 }
 
 // Add conversion from SystemTimeError
