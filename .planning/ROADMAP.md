@@ -116,11 +116,25 @@ See [v1.5 ROADMAP archive](.planning/milestones/v1.5-ROADMAP.md) for full detail
 
 </details>
 
-### 📋 v2.0 Future Work (Planned)
+### 🚧 v2.0 Native-V3 Backend (Active)
 
-**Milestone Goal:** TBD
+**Milestone Goal:** B+tree-based native backend with unlimited node capacity, full GraphBackend trait support, and complete integration of 35+ graph algorithms.
 
-Deferred to future milestone.
+**Phases:**
+
+| Phase | Goal | Plans | Status |
+|-------|-------|-------|--------|
+| 63a-63b | V3 Storage Foundation | 8 | ✅ Complete |
+| 64 | Page Allocator | 4 | ✅ Complete |
+| 65 | V3 WAL Integration | 4 | ✅ Complete |
+
+**Phase 65 Summary:**
+- V3WALRecord enum with 8 variants (page ops + transaction control)
+- V3WALHeader with 64-byte fixed format and manual serialization
+- WALRecovery engine with sequential replay and page cache
+- WALWriter with buffered writes and fsync durability
+- 35 unit tests (all passing)
+- 1,751 LOC in src/backend/native/v3/wal.rs
 
 ## Progress
 
