@@ -12,8 +12,10 @@
 //! - **string_ops**: String rollback operations (insert)
 //! - **header_ops**: Header rollback operations (update)
 //! - **free_space_ops**: Free space rollback operations (allocate, deallocate)
+//! - **kv_ops**: KV store rollback operations (set, delete)
 
 use super::types::RollbackOperation;
+use crate::backend::native::v2::kv_store::KvStore;
 use crate::backend::native::v2::wal::recovery::errors::RecoveryError;
 use crate::backend::native::v2::{FreeSpaceManager, StringTable};
 use crate::backend::native::{GraphFile, NodeStore};
@@ -26,6 +28,7 @@ pub mod edge_ops;
 pub mod free_space_ops;
 pub mod header_ops;
 pub mod node_ops;
+pub mod kv_ops;
 pub mod string_ops;
 
 // Re-export summary type
@@ -41,6 +44,7 @@ pub struct RollbackSystem {
     node_store: Arc<Mutex<Option<NodeStore<'static>>>>,
     string_table: Arc<Mutex<StringTable>>,
     free_space_manager: Arc<Mutex<Option<FreeSpaceManager>>>,
+    kv_store: Arc<Mutex<KvStore>>,
 }
 
 impl RollbackSystem {
@@ -50,6 +54,7 @@ impl RollbackSystem {
         node_store: Arc<Mutex<Option<NodeStore<'static>>>>,
         string_table: Arc<Mutex<StringTable>>,
         free_space_manager: Arc<Mutex<Option<FreeSpaceManager>>>,
+        kv_store: Arc<Mutex<KvStore>>,
     ) -> Self {
         Self {
             operations: Vec::new(),
@@ -57,6 +62,7 @@ impl RollbackSystem {
             node_store,
             string_table,
             free_space_manager,
+            kv_store,
         }
     }
 
@@ -230,14 +236,31 @@ impl RollbackSystem {
                     *block_type,
                 )?;
             }
-            // KV rollback operations - placeholder for future transaction rollback support
-            RollbackOperation::KvSet { .. } => {
-                debug_log!("KV set rollback not yet implemented - skipping");
-                // TODO: Implement KV rollback by restoring previous value or deleting
+            // KV rollback operations
+            RollbackOperation::KvSet {
+                key,
+                value_bytes: _,
+                value_type: _,
+                ttl_seconds: _,
+                version: _,
+            } => {
+                debug_log!("Rolling back KV set for key: {:?}", key);
+                kv_ops::rollback_kv_set(
+                    self,
+                    key,
+                )?;
             }
-            RollbackOperation::KvDelete { .. } => {
-                debug_log!("KV delete rollback not yet implemented - skipping");
-                // TODO: Implement KV rollback by restoring deleted value
+            RollbackOperation::KvDelete {
+                key,
+                old_value_bytes: _,
+                old_value_type: _,
+                version: _,
+            } => {
+                debug_log!("Rolling back KV delete for key: {:?}", key);
+                kv_ops::rollback_kv_delete(
+                    self,
+                    key,
+                )?;
             }
         }
         Ok(())
@@ -310,5 +333,9 @@ impl RollbackSystem {
 
     pub(crate) fn free_space_manager(&self) -> &Arc<Mutex<Option<FreeSpaceManager>>> {
         &self.free_space_manager
+    }
+
+    pub(crate) fn kv_store(&self) -> &Arc<Mutex<KvStore>> {
+        &self.kv_store
     }
 }

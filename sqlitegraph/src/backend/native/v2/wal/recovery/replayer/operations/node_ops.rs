@@ -822,6 +822,7 @@ mod tests {
             Arc::new(Mutex::new(Some(FreeSpaceManager::new(
                 AllocationStrategy::FirstFit,
             )))),
+            Arc::new(Mutex::new(crate::backend::native::v2::KvStore::new())),
         );
 
         let rollback_result = crate::backend::native::v2::wal::recovery::replayer::rollback::node_ops::rollback_node_delete(
