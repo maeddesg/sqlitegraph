@@ -307,6 +307,72 @@ impl KvStore {
 
         Ok(())
     }
+
+    /// Direct set with explicit version (bypasses version check)
+    ///
+    /// This method is used during rollback to restore a value with its
+    /// original version without going through the normal version conflict check.
+    /// Unlike set_with_version(), this does NOT check if the version is newer
+    /// than existing versions - it directly sets the entry at the specified version.
+    ///
+    /// # Arguments
+    /// * `key` - Key to set
+    /// * `value` - Value to store
+    /// * `ttl_seconds` - Optional TTL in seconds
+    /// * `version` - Version number to assign
+    ///
+    /// # Returns
+    /// * `Ok(())` - Value was set successfully
+    /// * `Err(KvStoreError)` - Error occurred
+    pub fn set_with_version_direct(
+        &mut self,
+        key: Vec<u8>,
+        value: KvValue,
+        ttl_seconds: Option<u64>,
+        version: u64,
+    ) -> Result<(), KvStoreError> {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        let mut entries = self.entries.write();
+
+        // Get created_at from existing versions (if any)
+        let created_at = if let Some(versions) = entries.get(&key) {
+            if let Some(latest) = versions.last() {
+                latest.metadata.created_at
+            } else {
+                now
+            }
+        } else {
+            now
+        };
+
+        let metadata = KvMetadata {
+            created_at,
+            updated_at: now,
+            ttl_seconds,
+            version,
+        };
+
+        let entry = KvEntry {
+            key: key.clone(),
+            value,
+            metadata,
+        };
+
+        // Insert into version history, maintaining sorted order by version
+        let versions = entries.entry(key).or_default();
+
+        // Find insertion point to maintain sorted order
+        let pos = versions.partition_point(|e| e.metadata.version < version);
+
+        // Insert at correct position
+        versions.insert(pos, entry);
+
+        Ok(())
+    }
 }
 
 /// Recover KV store data from WAL file
