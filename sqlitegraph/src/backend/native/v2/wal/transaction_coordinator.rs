@@ -573,6 +573,74 @@ impl DeadlockDetector {
     }
 }
 
+/// Lock type validator with compatibility matrix
+///
+/// Implements standard multi-granularity locking rules for lock
+/// type compatibility, upgrades, and downgrades.
+pub struct LockTypeValidator;
+
+impl LockTypeValidator {
+    /// Check if lock upgrade is allowed
+    ///
+    /// Validates whether a transaction holding lock type `from` can
+    /// upgrade to lock type `to`.
+    pub fn can_upgrade(from: LockType, to: LockType) -> bool {
+        match (from, to) {
+            // Same lock type always allowed
+            (a, b) if a == b => true,
+
+            // Intention locks can upgrade to stronger
+            (LockType::IntentionShared, LockType::Shared) => true,
+            (LockType::IntentionShared, LockType::Exclusive) => true,
+            (LockType::IntentionExclusive, LockType::Exclusive) => true,
+
+            // Shared can upgrade to Exclusive
+            (LockType::Shared, LockType::Exclusive) => true,
+
+            // IS -> IX allowed (intention hierarchy)
+            (LockType::IntentionShared, LockType::IntentionExclusive) => true,
+
+            // Downgrades
+            (LockType::Exclusive, LockType::Shared) => true,
+            (LockType::Exclusive, LockType::IntentionShared) => true,
+            (LockType::Exclusive, LockType::IntentionExclusive) => true,
+            (LockType::IntentionExclusive, LockType::IntentionShared) => true,
+
+            // Other combinations not allowed
+            _ => false,
+        }
+    }
+
+    /// Check if two lock types conflict
+    ///
+    /// Returns true if the two lock types cannot coexist on the same resource.
+    pub fn has_conflict(lock1: LockType, lock2: LockType) -> bool {
+        match (lock1, lock2) {
+            // Exclusive conflicts with everything except IS
+            (LockType::Exclusive, LockType::Exclusive) => true,
+            (LockType::Exclusive, LockType::Shared) => true,
+            (LockType::Exclusive, LockType::IntentionExclusive) => true,
+            (LockType::Shared, LockType::Exclusive) => true,
+            (LockType::Shared, LockType::IntentionExclusive) => true,
+            (LockType::IntentionExclusive, LockType::Shared) => true,
+            (LockType::IntentionExclusive, LockType::Exclusive) => true,
+
+            // IS and S compatible
+            (LockType::IntentionShared, _) => false,
+            (_, LockType::IntentionShared) => false,
+
+            // IS and IX compatible
+            (LockType::IntentionShared, LockType::IntentionExclusive) => false,
+            (LockType::IntentionExclusive, LockType::IntentionShared) => false,
+
+            (LockType::Shared, LockType::Shared) => false,
+            (LockType::IntentionExclusive, LockType::IntentionExclusive) => false,
+
+            _ => false,
+        }
+    }
+}
+
 /// Transaction ID manager with wraparound protection
 ///
 /// Uses PostgreSQL's pattern: stop accepting writes at 1M transactions
