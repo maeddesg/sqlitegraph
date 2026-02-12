@@ -8,6 +8,8 @@
 
 pub mod constants;
 pub mod header;
+pub mod index;
+pub mod node;
 
 // Re-export V3 types
 pub use header::{offset as header_offset, size as header_size, PersistentHeaderV3};
@@ -20,6 +22,12 @@ pub use constants::V3_FORMAT_VERSION;
 
 /// V3 header size
 pub use constants::V3_HEADER_SIZE;
+
+// Re-export index types
+pub use index::{IndexPage, IndexPageType};
+
+// Re-export node types
+pub use node::{NodeRecordV3, FIXED_METADATA_SIZE, MAX_INLINE_DATA};
 
 #[cfg(test)]
 mod tests {

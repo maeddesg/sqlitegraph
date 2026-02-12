@@ -34,8 +34,9 @@ pub const MAX_ENTRIES_PER_LEAF: usize = 254;
 /// Maximum children per internal page (keys + 1)
 pub const MAX_CHILDREN_PER_PAGE: usize = MAX_KEYS_PER_PAGE + 1;
 
-/// Default feature flags for V3 (inherited from V2)
-pub const DEFAULT_V3_FEATURE_FLAGS: u32 = crate::backend::native::constants::DEFAULT_FEATURE_FLAGS;
+/// Default feature flags for V3 (includes V2 flags + V3 B+Tree index)
+pub const DEFAULT_V3_FEATURE_FLAGS: u32 =
+    crate::backend::native::constants::DEFAULT_FEATURE_FLAGS | v3_flags::FLAG_V3_BTREE_INDEX;
 
 /// Default schema version for V3
 pub const DEFAULT_SCHEMA_VERSION: u32 = 1;
