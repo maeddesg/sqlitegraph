@@ -292,19 +292,90 @@ impl DeadlockDetector {
     pub fn would_cause_deadlock(
         &self,
         tx_id: TransactionId,
-        _resource_id: ResourceId, // TODO: Implement resource-specific deadlock detection
+        resource_id: ResourceId,
     ) -> NativeResult<bool> {
-        let wait_for_graph = self.wait_for_graph.read();
+        // Use enhanced resource-aware detection
+        self.detect_resource_deadlock(tx_id, resource_id)
+    }
 
-        // Simple cycle detection using DFS
-        let mut visited = HashSet::new();
-        let mut recursion_stack = HashSet::new();
-
-        if self.has_cycle_util(tx_id, &mut visited, &mut recursion_stack, &wait_for_graph) {
-            Ok(true)
-        } else {
-            Ok(false)
+    /// Detect deadlock using resource-level wait graph
+    ///
+    /// Checks both transaction-level cycles (Tx A waits for Tx B) and
+    /// resource-level cycles (Tx A waits for Resource R1 held by Tx B,
+    /// which waits for Resource R2 held by Tx A).
+    pub fn detect_resource_deadlock(
+        &self,
+        tx_id: TransactionId,
+        resource: ResourceId,
+    ) -> NativeResult<bool> {
+        // Check transaction-level cycle first
+        if self.detect_cycle(tx_id)? {
+            return Ok(true);
         }
+
+        // Check resource-level cycle
+        let resource_graph = self.resource_wait_graph.read();
+        let tx_waiting = self.tx_waiting_for.read();
+
+        // Build resource-aware wait-for graph
+        let mut visited = HashSet::new();
+        let mut recursion_stack = Vec::new();
+
+        self.has_resource_cycle_util(
+            tx_id,
+            resource,
+            &resource_graph,
+            &tx_waiting,
+            &mut visited,
+            &mut recursion_stack,
+        )
+    }
+
+    /// DFS utility for resource-level cycle detection
+    ///
+    /// Traverses the resource wait graph to detect cycles that involve
+    /// both transactions and resources.
+    fn has_resource_cycle_util(
+        &self,
+        tx_id: TransactionId,
+        resource_waiting_on: ResourceId,
+        resource_graph: &HashMap<ResourceId, HashSet<TransactionId>>,
+        tx_waiting: &HashMap<TransactionId, HashSet<ResourceId>>,
+        visited: &mut HashSet<TransactionId>,
+        recursion_stack: &mut Vec<TransactionId>,
+    ) -> NativeResult<bool> {
+        visited.insert(tx_id);
+        recursion_stack.push(tx_id);
+
+        // Find transactions holding the resource we're waiting for
+        if let Some(holders) = resource_graph.get(&resource_waiting_on) {
+            for holder in holders {
+                if recursion_stack.contains(holder) {
+                    return Ok(true); // Cycle detected
+                }
+
+                if !visited.contains(holder) {
+                    // Recursively check what holder is waiting for
+                    if let Some(resources) = tx_waiting.get(holder) {
+                        for res in resources {
+                            if self.has_resource_cycle_util(
+                                *holder,
+                                *res,
+                                resource_graph,
+                                tx_waiting,
+                                visited,
+                                recursion_stack,
+                            )? {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        recursion_stack.pop();
+        Ok(false)
     }
 
     /// Remove transaction from deadlock detector
