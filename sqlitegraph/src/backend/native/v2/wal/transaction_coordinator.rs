@@ -783,13 +783,16 @@ impl TransactionIdManager {
     }
 }
 
-/// Isolation level manager
+/// Isolation level manager with lock type tracking
 pub struct IsolationManager {
     /// Active transactions with their isolation requirements
     transaction_isolation: Arc<RwLock<HashMap<TransactionId, IsolationLevel>>>,
 
     /// Read validation timestamps for repeatable read
     read_timestamps: Arc<RwLock<HashMap<ResourceId, SystemTime>>>,
+
+    /// Track locks held by each transaction: tx_id -> (resource_id, lock_type)
+    transaction_locks: Arc<RwLock<HashMap<TransactionId, HashMap<ResourceId, LockType>>>>,
 }
 
 impl IsolationManager {
@@ -798,6 +801,7 @@ impl IsolationManager {
         Self {
             transaction_isolation: Arc::new(RwLock::new(HashMap::new())),
             read_timestamps: Arc::new(RwLock::new(HashMap::new())),
+            transaction_locks: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -811,15 +815,108 @@ impl IsolationManager {
     pub fn unregister_transaction(&self, tx_id: TransactionId) {
         let mut transaction_isolation = self.transaction_isolation.write();
         transaction_isolation.remove(&tx_id);
+
+        // Clean up lock tracking
+        let mut transaction_locks = self.transaction_locks.write();
+        transaction_locks.remove(&tx_id);
     }
 
-    /// Validate access according to isolation level
+    /// Record that a transaction has acquired a lock on a resource
+    pub fn record_lock(
+        &self,
+        tx_id: TransactionId,
+        resource_id: ResourceId,
+        lock_type: LockType,
+    ) {
+        let mut transaction_locks = self.transaction_locks.write();
+        transaction_locks
+            .entry(tx_id)
+            .or_insert_with(HashMap::new)
+            .insert(resource_id, lock_type);
+    }
+
+    /// Record that a transaction has released a lock on a resource
+    pub fn record_lock_release(&self, tx_id: TransactionId, resource_id: ResourceId) {
+        let mut transaction_locks = self.transaction_locks.write();
+        if let Some(locks) = transaction_locks.get_mut(&tx_id) {
+            locks.remove(&resource_id);
+            if locks.is_empty() {
+                transaction_locks.remove(&tx_id);
+            }
+        }
+    }
+
+    /// Get the current lock type a transaction holds on a resource
+    fn get_current_lock(
+        &self,
+        tx_id: TransactionId,
+        resource_id: ResourceId,
+    ) -> Option<LockType> {
+        let transaction_locks = self.transaction_locks.read();
+        transaction_locks.get(&tx_id)?.get(&resource_id).copied()
+    }
+
+    /// Get all locks held on a resource by other transactions
+    fn get_locks_on_resource(
+        &self,
+        resource_id: ResourceId,
+        exclude_tx: TransactionId,
+    ) -> Vec<(TransactionId, LockType)> {
+        let transaction_locks = self.transaction_locks.read();
+        let mut result = Vec::new();
+
+        for (&tx_id, locks) in transaction_locks.iter() {
+            if tx_id != exclude_tx {
+                if let Some(&lock_type) = locks.get(&resource_id) {
+                    result.push((tx_id, lock_type));
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Validate access according to isolation level and lock compatibility
     pub fn validate_access(
         &self,
         tx_id: TransactionId,
         resource_id: ResourceId,
-        _lock_type: LockType, // TODO: Implement lock type validation
+        lock_type: LockType,
     ) -> NativeResult<()> {
+        // 1. Check if transaction already holds a lock on this resource
+        let current_lock = self.get_current_lock(tx_id, resource_id);
+
+        if let Some(existing_lock) = current_lock {
+            // 2. Check if upgrade is allowed
+            if !LockTypeValidator::can_upgrade(existing_lock, lock_type) {
+                return Err(NativeBackendError::InvalidState {
+                    context: format!(
+                        "Cannot upgrade lock from {:?} to {:?} on resource {:?}",
+                        existing_lock, lock_type, resource_id
+                    ),
+                    source: None,
+                });
+            }
+        } else {
+            // 3. Check for conflicts with other transactions
+            let conflicting_locks = self.get_locks_on_resource(resource_id, tx_id);
+            for (other_tx, other_lock) in conflicting_locks {
+                if LockTypeValidator::has_conflict(lock_type, other_lock) {
+                    return Err(NativeBackendError::DeadlockDetected {
+                        tx_id,
+                        conflicting_resources: vec![match resource_id {
+                            ResourceId::Node(id) => id,
+                            ResourceId::Edge(id) => id,
+                            ResourceId::Cluster(id) => id,
+                            ResourceId::StringTable(id) => id as i64,
+                            ResourceId::FreeSpace => -1,
+                        }],
+                    });
+                }
+            }
+        }
+
+        // Check isolation level specific validation
         let transaction_isolation = self.transaction_isolation.read();
 
         if let Some(&isolation_level) = transaction_isolation.get(&tx_id) {
@@ -955,12 +1052,19 @@ impl V2TransactionCoordinator {
         resource_id: ResourceId,
         lock_type: LockType,
     ) -> NativeResult<()> {
+        // Validate access first
+        self.isolation_manager
+            .validate_access(tx_id, resource_id, lock_type)?;
+
         // Attempt to acquire lock
         let acquired = self
             .lock_manager
             .acquire_lock(tx_id, resource_id, lock_type)?;
 
         if acquired {
+            // Record the lock in isolation manager
+            self.isolation_manager.record_lock(tx_id, resource_id, lock_type);
+
             // Update transaction context
             {
                 let mut active = self.active_transactions.write();
@@ -978,10 +1082,6 @@ impl V2TransactionCoordinator {
                     }
                 }
             }
-
-            // Check isolation level constraints
-            self.isolation_manager
-                .validate_access(tx_id, resource_id, lock_type)?;
         } else {
             // Check for deadlock before adding to wait queue
             // (wait edges were added by V2LockManager::acquire_lock)
@@ -1031,6 +1131,9 @@ impl V2TransactionCoordinator {
     /// Release lock held by transaction
     pub fn release_lock(&self, tx_id: TransactionId, resource_id: ResourceId) -> NativeResult<()> {
         self.lock_manager.release_lock(tx_id, resource_id)?;
+
+        // Record lock release in isolation manager
+        self.isolation_manager.record_lock_release(tx_id, resource_id);
 
         // Update transaction context
         {
