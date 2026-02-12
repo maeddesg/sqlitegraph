@@ -720,7 +720,7 @@ impl WALRecovery {
         let mut file = std::fs::File::open(&self.wal_path).map_err(|e| {
             NativeBackendError::IoError {
                 context: format!("Failed to open WAL file: {}", self.wal_path.display()),
-                source: std::sync::Arc::new(e.into()),
+                source: e,
             }
         })?;
 
@@ -729,7 +729,7 @@ impl WALRecovery {
         file.read_exact(&mut header_bytes).map_err(|e| {
             NativeBackendError::IoError {
                 context: "Failed to read WAL header".to_string(),
-                source: std::sync::Arc::new(e.into()),
+                source: e,
             }
         })?;
 
@@ -744,7 +744,7 @@ impl WALRecovery {
             let n = file.read(&mut size_bytes).map_err(|e| {
                 NativeBackendError::IoError {
                     context: "Failed to read record size".to_string(),
-                    source: std::sync::Arc::new(e.into()),
+                    source: e,
                 }
             })?;
 
@@ -827,6 +827,7 @@ impl WALRecovery {
                 data,
                 checksum: _,
                 lsn,
+                timestamp: _,
             } => {
                 // Update page in cache
                 let page = self.page_cache.entry(*page_id).or_insert_with(|| vec![0; 4096]);
@@ -844,6 +845,7 @@ impl WALRecovery {
                 split_key: _,
                 page_type: _,
                 lsn,
+                timestamp: _,
             } => {
                 // Allocate new page for split
                 self.page_cache.insert(*new_page_id, vec![0; 4096]);
