@@ -3,9 +3,10 @@
 //! This module implements the V3 storage format with:
 //! - B+Tree node index for unlimited capacity
 //! - Page-based node storage
-//! - Fixed-size node records (compression deferred to Phase 63b)
+//! - Delta/varint compression (Phase 63b)
 //! - Append-only page allocation (free list deferred to Phase 64)
 
+pub mod compression;
 pub mod constants;
 pub mod header;
 pub mod index;

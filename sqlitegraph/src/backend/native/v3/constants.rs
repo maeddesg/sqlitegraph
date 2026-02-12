@@ -79,6 +79,24 @@ pub mod checksum {
     }
 }
 
+/// V3 compression constants
+pub mod compression {
+    /// Maximum delta value for ID encoding (u32::MAX)
+    pub const MAX_ID_DELTA: u32 = u32::MAX;
+
+    /// Maximum bytes needed for varint encoding (u64 requires 10 bytes)
+    pub const MAX_VARINT_BYTES: usize = 10;
+
+    /// Single-byte varint threshold (values < 128 fit in 1 byte)
+    pub const SINGLE_BYTE_VARINT_MAX: u64 = 0x7F;
+
+    /// Space savings from delta encoding (i64 -> u32 = 4 bytes)
+    pub const DELTA_ENCODING_SAVINGS: usize = 4;
+
+    /// Space savings from varint encoding for small values (u16 -> 1 byte = 1 byte)
+    pub const VARINT_SMALL_VALUE_SAVINGS: usize = 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
