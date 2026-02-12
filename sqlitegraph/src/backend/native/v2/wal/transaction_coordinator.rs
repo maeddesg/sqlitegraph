@@ -263,6 +263,12 @@ pub struct DeadlockDetector {
     /// Wait-for graph: transaction -> set of transactions it's waiting for
     wait_for_graph: Arc<RwLock<HashMap<TransactionId, HashSet<TransactionId>>>>,
 
+    /// Resource-level wait graph: resource -> set of transactions waiting for this resource
+    resource_wait_graph: Arc<RwLock<HashMap<ResourceId, HashSet<TransactionId>>>>,
+
+    /// Reverse mapping: transaction -> set of resources it's waiting for
+    tx_waiting_for: Arc<RwLock<HashMap<TransactionId, HashSet<ResourceId>>>>,
+
     /// Last detection timestamp
     last_detection: Arc<Mutex<Instant>>,
 
@@ -275,6 +281,8 @@ impl DeadlockDetector {
     pub fn new() -> Self {
         Self {
             wait_for_graph: Arc::new(RwLock::new(HashMap::new())),
+            resource_wait_graph: Arc::new(RwLock::new(HashMap::new())),
+            tx_waiting_for: Arc::new(RwLock::new(HashMap::new())),
             last_detection: Arc::new(Mutex::new(Instant::now())),
             detection_interval: Duration::from_millis(100),
         }
