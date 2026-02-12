@@ -1,12 +1,16 @@
-//! Node record structure for V3 native backend
+//! Node storage structure for V3 native backend
 //!
-//! This module defines the simplified NodeRecordV3 format with full ID encoding.
+//! This module defines the NodePage and NodeRecordV3 formats with full ID encoding.
 //! Delta/varint compression is deferred to Phase 63b.
 
+pub mod page;
 pub mod record;
 
 // Re-export node record types
 pub use record::{NodeRecordV3, FIXED_METADATA_SIZE, MAX_INLINE_DATA};
+
+// Re-export node page types
+pub use page::{NodePage, PAGE_HEADER_SIZE, MAX_PAGE_SIZE, USABLE_SIZE, MAX_NODE_CAPACITY};
 
 /// Node record constants
 pub mod constants {
@@ -56,5 +60,14 @@ mod tests {
         assert_eq!(constants::MAX_INLINE_DATA, 64);
         assert_eq!(constants::ID_SIZE, 8);
         assert_eq!(constants::FLAGS_SIZE, 4);
+    }
+
+    #[test]
+    fn test_node_page_constants() {
+        // NodePage constants should be accessible
+        assert!(PAGE_HEADER_SIZE > 0);
+        assert!(MAX_PAGE_SIZE > 0);
+        assert!(USABLE_SIZE > 0);
+        assert!(MAX_NODE_CAPACITY > 0);
     }
 }

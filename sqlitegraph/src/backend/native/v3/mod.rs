@@ -27,7 +27,11 @@ pub use constants::V3_HEADER_SIZE;
 pub use index::{IndexPage, IndexPageType};
 
 // Re-export node types
-pub use node::{NodeRecordV3, FIXED_METADATA_SIZE, MAX_INLINE_DATA};
+pub use node::{NodeRecordV3, NodePage, FIXED_METADATA_SIZE, MAX_INLINE_DATA,
+              PAGE_HEADER_SIZE as NODE_PAGE_HEADER_SIZE,
+              MAX_PAGE_SIZE as NODE_PAGE_SIZE,
+              USABLE_SIZE as NODE_PAGE_USABLE_SIZE,
+              MAX_NODE_CAPACITY};
 
 #[cfg(test)]
 mod tests {
