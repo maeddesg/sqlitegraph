@@ -7,6 +7,7 @@ use crate::backend::native::{
     graph_file::buffers::WriteBuffer,
     graph_file::file_ops::IOMode,
     types::NativeResult,
+    NativeBackendError,
 };
 
 #[cfg(feature = "v2_experimental")]

@@ -669,7 +669,7 @@ impl V2WALRecoveryEngine {
                     critical_error,
                 } => {
                     error_log!("Database integrity validation failed: {}", critical_error);
-                    for _error in &errors {
+                    for error in &errors {
                         debug_log!("Integrity error: {}", error);
                     }
                     return Err(RecoveryError::validation(format!(
@@ -688,7 +688,7 @@ impl V2WALRecoveryEngine {
                 "Post-recovery validation passed with {} warnings",
                 all_warnings.len()
             );
-            for _warning in &all_warnings {
+            for warning in &all_warnings {
                 debug_log!("Validation warning: {}", warning);
             }
         }
