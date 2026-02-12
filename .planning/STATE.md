@@ -4,11 +4,80 @@
 
 ## Current Milestone
 
-**v1.5: Code Quality & Features** (COMPLETE 2026-02-12)
+**v2.0: Native-V3 Backend** (Planning Phase)
+
+## Overview
+
+**Milestone Goal:** Implement B+tree-based native backend with unlimited node capacity, full GraphBackend trait support, and complete integration of 35+ graph algorithms.
+
+**Problem Being Solved:**
+- Native V2 limited to ~2,048 nodes (8MB fixed node region)
+- Native V2 uses fixed 4KB slots — no dynamic allocation
+- Algorithms (35+) already exist from v1.3.0 but need V3 backend to work efficiently with binary format
+
+**Key Decision:** Skip NativeV2 algorithms integration; proceed directly to Native-V3 milestone which provides both unlimited scale AND algorithm support through B+Tree architecture.
 
 ## Current Phase
 
-Phase 62 of 62 is now complete.
+**Phase 63a: V3 Storage Foundation (Stabilized Scope)** — Task 63-01 Complete
+
+## Progress
+
+```
+Milestone Progress: [██████████████                      ] 7%
+
+Phase 63a: [███████████████████------------] 33% IN PROGRESS
+  63-01: [COMPLETED] PersistentHeaderV3 implementation (Wave 1)
+  63-02: [PENDING] B+Tree index structure, split only (Wave 2)
+  63-03: [PENDING] NodePage fixed-size pack/unpack (Wave 3)
+  63-04: [PENDING] NodeRecordV3 simplified format, no compression (Wave 2)
+
+Phase 63b: [                             ] 0% DEFERRED (compression layer)
+Phase 64: [                             ] 0% NOT STARTED
+Phase 65: [                             ] 0% NOT STARTED
+Phase 66: [                             ] 0% NOT STARTED
+Phase 67: [                             ] 0% NOT STARTED
+Phase 68: [                             ] 0% NOT STARTED
+```
+
+**Phase 63: V3 Storage Foundation** — Task 63-01 Complete
+
+## Progress
+
+```
+Milestone Progress: [██████████████                      ] 7%
+
+Phase 63: [████████████████████------------------] 25% IN PROGRESS
+  63-01: [COMPLETED] PersistentHeaderV3 implementation (Wave 1)
+  63-02: [PENDING] B+Tree index structure (Wave 2)
+  63-03: [PENDING] Page definitions - NodePage (Wave 3)
+  63-04: [PENDING] NodeRecordV3 compressed format (Wave 2)
+
+Phase 64: [                             ] 0% NOT STARTED
+Phase 65: [                             ] 0% NOT STARTED
+Phase 66: [                             ] 0% NOT STARTED
+Phase 67: [                             ] 0% NOT STARTED
+Phase 68: [                             ] 0% NOT STARTED
+```
+
+## Overall Progress
+
+**Total Plans:** 0 planned
+**Completion:** 0/0 = 0%
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- v1.0-v1.5 completed: Production baseline, ACID, benchmarks, chain performance, sequential I/O, pub/sub, graph algorithms library, code quality
+- **2026-02-12**: Started v2.0 Native-V3 Backend milestone planning
+- Decision: Skip NativeV2 intermediate step; go directly to V3 with B+Tree index
+
+### Key Decisions
+
+- **Native-V3 over NativeV2**: Direct implementation of unlimited-scale backend rather than porting algorithms to limited V2
+- **Leverage v1.3.0 algorithms**: 35+ algorithms already exist; need V3 storage backend to work efficiently
+- **Preserve V2 features**: WAL, MVCC, clustered edges, Pub/Sub, HNSW all maintained
 
 ### Progress
 
@@ -79,6 +148,7 @@ Phase 62: [=========================================] 100% COMPLETED
 
 **Total Duration (Phases 58-62):** ~4 hours
 **Total Tasks:** 43 tasks completed across 13 plans
+| Phase 63a P63-01 | 587 | 1 tasks | 6 files |
 
 ### Requirements Coverage
 
@@ -96,6 +166,70 @@ Phase 62: [=========================================] 100% COMPLETED
 - **Deferred:** 1 (CODE-02 - remaining dead_code suppression)
 
 ## Session History
+
+**Current Session**: Phase 63a Execution (2026-02-12)
+
+**Phase 63a Task 63-01: PersistentHeaderV3 Implementation** — COMPLETED
+- 112-byte V3 header with magic byte detection
+- V3_FORMAT_VERSION: 4
+- Unit tests for header round-trip and validation
+- Commit: 9bd56bc
+
+Created detailed implementation plan for V3 storage foundation with 4 tasks across 3 waves.
+
+**STRATEGIC PIVOT**: Revised plan to implement "Minimal Viable V3" approach:
+- Deferred delta/varint compression to Phase 63b (~200 LOC)
+- Deferred free list allocator to Phase 64
+- B+Tree split only (merge logic deferred)
+- Fixed-size node records (simplified from variable)
+- **Result**: ~800 LOC vs ~960 original, reduced complexity risk
+
+### Planning Output
+
+**File Created:**
+- `.planning/phases/063-v3-storage-foundation/63-PLAN.md`
+
+**Plan Structure:**
+- **4 Tasks** (63-01 through 63-04) with detailed implementation approach
+- **3 Waves** for parallel execution:
+  - Wave 1: 63-01 (PersistentHeaderV3) - sequential dependency
+  - Wave 2: 63-02 (IndexPage) + 63-04 (NodeRecordV3) - parallel after 63-01
+  - Wave 3: 63-03 (NodePage) - depends on 63-04
+
+**Key Design Decisions:**
+- Header size: 112 bytes (80 preserved + 32 new fields)
+- Magic byte: magic[7] = 3 for V3 detection
+- Page size: 4KB (4096 bytes) default
+- B+Tree fanout: 255 (128-ary with pointers)
+- NodePage capacity: 10-50 variable-size nodes per page
+- NodeRecordV3: Delta encoding + varint compression
+
+**Estimated Total LOC:** ~960 lines across 11 new files
+
+**Files to Create:**
+```
+sqlitegraph/src/backend/native/v3/
+├── mod.rs
+├── constants.rs
+├── header.rs
+├── index/mod.rs
+├── index/page.rs
+├── index/search.rs
+├── node/mod.rs
+├── node/page.rs
+└── node/record.rs
+```
+
+**Updated STATE.md** to reflect Phase 63 planning complete.
+
+### Next Steps
+
+1. Execute Wave 1: Implement PersistentHeaderV3 (63-01)
+2. Execute Wave 2: Parallel - IndexPage (63-02) and NodeRecordV3 (63-04)
+3. Execute Wave 3: NodePage (63-03)
+4. Run comprehensive unit and property-based tests
+
+---
 
 **Last Session**: Completed Phase 62: Bug Fixes (2026-02-12)
 
