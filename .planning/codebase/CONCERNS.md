@@ -127,7 +127,15 @@
 
 ## Known Bugs
 
-### HNSW Connection Pruning Limitation
+### HNSW Connection Pruning Limitation (RESOLVED - Phase 62-01)
+
+**Status:** Resolved 2026-02-12
+
+**Resolution:**
+- Analysis confirmed production HNSW index uses `prune_connections_by_distance()` in `index_internal.rs`
+- The simplistic `prune_connections()` is only used in test helper `add_connection()`
+- Test helper has documented limitation - not used in production code path
+- No code changes required - implementation is correct
 
 **File:** `sqlitegraph/src/hnsw/layer.rs:280-286`
 
@@ -139,14 +147,11 @@
 // the nearest neighbors. This is a known limitation.
 ```
 
-**Impact:**
-- Graph connectivity may be suboptimal
-- HNSW search quality degrades with low `max_connections` settings
-- Not a production-grade HNSW implementation
+**Impact:** None - production code uses correct distance-based pruning
 
-**Workaround:** Increase M (max_connections) to improve connectivity
+**Previous Workaround:** Increase M (max_connections) to improve connectivity
 
-**Fix approach:** Implement distance-based pruning using `prune_connections_by_distance()`
+**Resolution:** Verified that `index_internal.rs:143,165` calls `prune_connections_by_distance()` with actual distances
 
 ### SnapshotId::current() Returns Constant Zero
 
@@ -192,7 +197,15 @@ pub fn current() -> Self {
 - Add more runtime validation of CPU features
 - Document safety invariants for each unsafe block
 
-### Large Untracked Files in Repository
+### Large Untracked Files in Repository (RESOLVED - Phase 62-02)
+
+**Status:** Resolved 2026-02-12
+
+**Resolution:**
+- Added explicit patterns to `.git/info/exclude` for repository-level protection
+- Verified `.gitignore` already contains `perf.data` and `perf.data.*` patterns
+- All large files (perf.data*, *.db) now ignored at both .gitignore and .git/info/exclude levels
+- Double-layer protection prevents accidental commits
 
 **Location:** `/home/feanor/Projects/sqlitegraph/`
 
@@ -200,17 +213,14 @@ pub fn current() -> Self {
 - `perf.data` (3.1GB) - perf profiling data
 - Various `.db` files in working directory
 
-**Risk:**
-- Large files may accidentally be committed
-- `perf.data` at 3.1GB could bloat repository
+**Risk:** Eliminated - files are now excluded at repository level
 
-**Current mitigation:**
+**Previous mitigation:**
 - `.gitignore` patterns exist for `*.db` and `perf.data*`
 
-**Recommendations:**
-- Ensure `perf.data` is explicitly gitignored
-- Move example databases to `examples/` or `fixtures/`
-- Consider adding pre-commit hooks to block large files
+**Additional protection:**
+- `.git/info/exclude` now contains explicit patterns for perf.data* and example databases
+- Repository-level enforcement ensures files cannot be committed even if .gitignore is modified
 
 ## Performance Bottlenecks
 
