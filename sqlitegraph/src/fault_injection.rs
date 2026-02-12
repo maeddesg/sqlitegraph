@@ -3,7 +3,8 @@
 //! This module provides controlled fault injection for testing resilience
 //! of various operations against failures.
 
-#![allow(dead_code)]
+// Module-level dead_code suppression removed as part of CODE-02
+// Individual items may still need specific allows where truly unused
 
 use std::{
     collections::HashMap,

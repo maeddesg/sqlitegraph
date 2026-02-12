@@ -4,7 +4,6 @@ use std::env;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BackendKind {
     Sqlite,
-    #[allow(dead_code)]
     Neo4j,
 }
 

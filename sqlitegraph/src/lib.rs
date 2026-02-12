@@ -1,5 +1,6 @@
 //! SQLite-based graph database with unified backend support.
-#![allow(dead_code)]
+// Module-level dead_code suppression removed as part of CODE-02
+// Individual items may still need specific allows where truly unused
 //!
 //! `sqlitegraph` provides a lightweight, deterministic graph database for embedded Rust applications.
 //! It supports both SQLite and Native storage backends through a unified API.
