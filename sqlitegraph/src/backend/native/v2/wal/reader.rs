@@ -267,8 +267,8 @@ impl V2WALReader {
                 V2WALRecord::TransactionBegin { tx_id, .. } => {
                     self.tx_index.begin_tx(tx_id, lsn);
                 }
-                V2WALRecord::TransactionCommit { tx_id, commit_lsn, .. } => {
-                    self.tx_index.commit_tx(tx_id, commit_lsn);
+                V2WALRecord::TransactionCommit { tx_id, .. } => {
+                    self.tx_index.commit_tx(tx_id, lsn);
                 }
                 V2WALRecord::TransactionRollback { tx_id, .. } => {
                     self.tx_index.rollback_tx(tx_id);
@@ -321,7 +321,7 @@ impl V2WALReader {
                 Ok(())
             }
 
-            V2WALRecord::TransactionCommit { tx_id, commit_lsn, .. } => {
+            V2WALRecord::TransactionCommit { tx_id, .. } => {
                 // Invariant: Commit tx_id must match active transaction
                 if let Some(active) = self.active_tx {
                     if active != *tx_id {
