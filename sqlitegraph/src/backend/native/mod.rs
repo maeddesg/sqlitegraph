@@ -30,6 +30,10 @@ pub mod graph_validation;
 // V2 clustered edge kernel (Phase 14)
 pub mod v2;
 
+// V3 B+Tree backend (Phase 63)
+#[cfg(feature = "native-v3")]
+pub mod v3;
+
 // Re-export public types for external use
 pub use types::{
     CpuProfile, EdgeFlags, EdgeRecord, FileHeader, FileOffset, NativeBackendError, NativeEdgeId,
@@ -59,3 +63,7 @@ pub use v2::{
     import::SnapshotImporter,
     import::snapshot::SnapshotImportConfig,
 };
+
+// V3 re-exports (feature-gated)
+#[cfg(feature = "native-v3")]
+pub use v3::{PersistentHeaderV3, V3_FORMAT_VERSION, V3_HEADER_SIZE, V3_MAGIC};

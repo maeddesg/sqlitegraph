@@ -114,3 +114,30 @@ pub mod checksum {
 
 /// File permissions for new graph files
 pub const FILE_PERMISSIONS: u32 = 0o644;
+
+/// V3 header size in bytes (80 preserved + 32 new = 112 bytes)
+pub const V3_HEADER_SIZE: u64 = 112;
+
+/// V3 magic number for native graph database files
+/// Distinguished from V2 by magic[7] = 3 (instead of 0)
+pub const V3_MAGIC: [u8; 8] = [b'S', b'Q', b'L', b'T', b'G', b'F', 0, 3];
+
+/// V3 file format version (incremented from V2's version 3)
+pub const V3_FORMAT_VERSION: u32 = 4;
+
+/// V3 feature flags (extends V2 flags)
+pub mod v3_flags {
+    use super::{FLAG_V2_ATOMIC_COMMIT, FLAG_V2_FRAMED_RECORDS};
+
+    /// V3: B+Tree index enabled (always true for V3 files)
+    pub const FLAG_V3_BTREE_INDEX: u32 = 0x0000_0004;
+
+    /// V3: Dynamic page allocation enabled
+    pub const FLAG_V3_DYNAMIC_ALLOCATION: u32 = 0x0000_0008;
+
+    /// Default V3 feature flags
+    pub const DEFAULT: u32 = FLAG_V2_FRAMED_RECORDS
+        | FLAG_V2_ATOMIC_COMMIT
+        | FLAG_V3_BTREE_INDEX
+        | FLAG_V3_DYNAMIC_ALLOCATION;
+}

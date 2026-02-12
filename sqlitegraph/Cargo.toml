@@ -53,6 +53,7 @@ default = ["sqlite-backend"]
 # Backend selection
 sqlite-backend = []          # SQLite backend (mature, ACID transactions)
 native-v2 = ["v2_io_exclusive_std"]  # Native V2 backend (high performance, production ready)
+native-v3 = []                # Native V3 backend (B+Tree index, unlimited capacity - experimental)
 
 # Development/debug features
 debug = []                   # Enable debug/info logging (disabled in release for zero overhead)
