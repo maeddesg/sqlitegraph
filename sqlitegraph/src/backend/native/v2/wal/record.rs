@@ -278,11 +278,7 @@ pub enum V2WALRecord {
     TransactionBegin { tx_id: u64, timestamp: u64 },
 
     /// Transaction commit marker
-    TransactionCommit {
-        tx_id: u64,
-        timestamp: u64,
-        commit_lsn: u64,  // LSN at commit time for snapshot filtering
-    },
+    TransactionCommit { tx_id: u64, timestamp: u64 },
 
     /// Transaction rollback marker
     TransactionRollback { tx_id: u64, timestamp: u64 },
@@ -586,7 +582,7 @@ impl V2WALRecord {
             }
             Self::TransactionBegin { .. }
             | Self::TransactionCommit { .. }
-            | Self::TransactionRollback { .. } => base_size + 8 + 8 + 8,
+            | Self::TransactionRollback { .. } => base_size + 8 + 8,
             Self::Checkpoint { .. } => base_size + 8 + 8,
             Self::HeaderUpdate {
                 old_data, new_data, ..
@@ -811,10 +807,9 @@ impl V2WALSerializer {
                 buffer.extend_from_slice(&timestamp.to_le_bytes());
             }
 
-            V2WALRecord::TransactionCommit { tx_id, timestamp, commit_lsn } => {
+            V2WALRecord::TransactionCommit { tx_id, timestamp } => {
                 buffer.extend_from_slice(&tx_id.to_le_bytes());
                 buffer.extend_from_slice(&timestamp.to_le_bytes());
-                buffer.extend_from_slice(&commit_lsn.to_le_bytes());
             }
 
             V2WALRecord::TransactionRollback { tx_id, timestamp } => {
@@ -1133,7 +1128,7 @@ impl V2WALSerializer {
             }
 
             V2WALRecordType::TransactionCommit => {
-                if record_data.len() < 24 {
+                if record_data.len() < 16 {
                     return Err(NativeBackendError::CorruptStringTable {
                         reason: "TransactionCommit deserialization error - insufficient data"
                             .to_string(),
@@ -1142,9 +1137,8 @@ impl V2WALSerializer {
 
                 let tx_id = u64::from_le_bytes(record_data[0..8].try_into().unwrap());
                 let timestamp = u64::from_le_bytes(record_data[8..16].try_into().unwrap());
-                let commit_lsn = u64::from_le_bytes(record_data[16..24].try_into().unwrap());
 
-                Ok(V2WALRecord::TransactionCommit { tx_id, timestamp, commit_lsn })
+                Ok(V2WALRecord::TransactionCommit { tx_id, timestamp })
             }
 
             V2WALRecordType::TransactionRollback => {

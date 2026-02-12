@@ -13,9 +13,9 @@
 ### Progress
 
 ```
-Phase 58: [==========================----------------] 40%
+Phase 58: [==========================----------------] 60%
   58-01: [COMPLETED] bincode 1.3 to 2.0 migration
-  58-02: [PENDING]
+  58-02: [COMPLETED] WAL snapshot isolation
   58-03: [COMPLETED] Node deletion with edge cleanup
   58-04: [PENDING]
   58-05: [PENDING]
@@ -32,6 +32,7 @@ Phase 58: [==========================----------------] 40%
 - Technical debt cleanup prioritized after algorithms library completion
 - Focus on correctness over new features
 - **2026-02-11**: Migrated from bincode 1.3 to 2.0 with custom BincodeError wrapper to handle separate EncodeError/DecodeError types
+- **2026-02-12**: Added commit_lsn field to TransactionCommit for snapshot isolation. TransactionCommit records now track LSN at commit time. Added snapshot_id filtering to WALReadFilter. SnapshotId can query TxRangeIndex for max_committed_lsn.
 
 ### Performance Metrics
 
@@ -39,9 +40,10 @@ Phase 58: [==========================----------------] 40%
 |--------|-------|-------|----------|
 | 58 | 58-01 | 6 | ~9 minutes |
 | 58 | 58-03 | 6 | ~14 minutes |
+| 58 | 58-02 | 4 | ~3 minutes |
 
 ## Session History
 
 See git log for full history.
 
-**Last Session**: Completed 58-03-PLAN.md (2026-02-12)
+**Last Session**: Completed 58-02-PLAN.md (2026-02-12)

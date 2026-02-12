@@ -1182,25 +1182,16 @@ impl TwoPhaseCommitCoordinator {
             }
         }
 
-        // Reserve next LSN for commit record
-        let commit_lsn = {
-            let mut header = self.wal_manager.get_header();
-            let reserved_lsn = header.current_lsn;
-            header.current_lsn = reserved_lsn.wrapping_add(1);
-            reserved_lsn
-        };
-
-        // Write commit record with commit_lsn
+        // Write commit record
         let commit_record = V2WALRecord::TransactionCommit {
             tx_id,
             timestamp: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
-            commit_lsn,
         };
 
-        self.wal_manager.write_record_with_lsn(commit_record, commit_lsn)?;
+        self.wal_manager.write_record(commit_record)?;
 
         // Flush to ensure durability
         self.wal_manager.flush()?;

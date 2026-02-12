@@ -430,25 +430,16 @@ impl V2WALManager {
         // Collect transaction records before committing
         let records = transaction.records.clone();
 
-        // Reserve next LSN for commit record (assign before writing)
-        let commit_lsn = {
-            let mut header = self.header.write();
-            let reserved_lsn = header.current_lsn;
-            header.current_lsn = reserved_lsn.wrapping_add(1);
-            reserved_lsn
-        };
-
-        // Write transaction commit record with commit_lsn
+        // Write transaction commit record and get commit_lsn
         let commit_record = V2WALRecord::TransactionCommit {
             tx_id,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
-            commit_lsn,
         };
 
-        let actual_lsn = self.writer.write_record_with_lsn(commit_record, commit_lsn)?;
+        let commit_lsn = self.writer.write_record(commit_record)?;
 
         // Emit pub/sub events for committed changes
         {
@@ -535,23 +526,6 @@ impl V2WALManager {
         }
 
         Ok(())
-    }
-
-    /// Write a WAL record with an explicitly assigned LSN
-    ///
-    /// Used for TransactionCommit records where the commit_lsn must be
-    /// recorded in the record itself for snapshot isolation.
-    pub fn write_record_with_lsn(&self, record: V2WALRecord, lsn: u64) -> NativeResult<u64> {
-        let result = self.writer.write_record_with_lsn(record, lsn)?;
-
-        // Synchronize writer metrics with manager metrics
-        {
-            let writer_metrics = self.writer.get_metrics();
-            let mut manager_metrics = self.metrics.write();
-            manager_metrics.total_records_written = writer_metrics.records_written;
-        }
-
-        Ok(result)
     }
 
     /// Write a single WAL record (outside transaction)

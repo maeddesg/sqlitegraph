@@ -233,7 +233,7 @@ impl V2GraphIntegrator {
                 Ok(())
             }
 
-            V2WALRecord::TransactionCommit { tx_id, timestamp, commit_lsn: _ } => {
+            V2WALRecord::TransactionCommit { tx_id, timestamp } => {
                 // Transaction commit markers are handled at higher level
                 // Just log for now
                 println!(

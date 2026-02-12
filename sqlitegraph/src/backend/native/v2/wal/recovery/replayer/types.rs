@@ -303,9 +303,9 @@ pub enum RollbackOperation {
     /// Rollback KV set operation
     KvSet {
         key: Vec<u8>,
-        old_value_bytes: Option<Vec<u8>>,
-        old_value_type: u8,
-        old_ttl_seconds: Option<u64>,
+        value_bytes: Vec<u8>,
+        value_type: u8,
+        ttl_seconds: Option<u64>,
         version: u64,
     },
     /// Rollback KV delete operation
