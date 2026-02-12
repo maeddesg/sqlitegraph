@@ -333,12 +333,14 @@ impl GraphBackend for NativeGraphBackend {
                 }
             } else {
                 // Phase 38-04: Use snapshot-aware neighbor retrieval
+                // Note: WAL reader not available at this layer - pass None for base data only
                 match query.direction {
                     BackendDirection::Outgoing => {
                         AdjacencyHelpers::get_outgoing_neighbors_at_snapshot(
                             graph_file,
                             node_id,
                             snapshot_id,
+                            None, // WAL reader - base data only
                         )
                     }
                     BackendDirection::Incoming => {
@@ -346,6 +348,7 @@ impl GraphBackend for NativeGraphBackend {
                             graph_file,
                             node_id,
                             snapshot_id,
+                            None, // WAL reader - base data only
                         )
                     }
                 }

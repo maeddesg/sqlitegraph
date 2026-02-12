@@ -9,6 +9,12 @@ use crate::graph::GraphEntity;
 pub fn map_to_graph_error(err: NativeBackendError) -> SqliteGraphError {
     match err {
         NativeBackendError::Io(e) => SqliteGraphError::connection(e.to_string()),
+        NativeBackendError::SerializationError { context } => {
+            SqliteGraphError::connection(format!("Serialization error: {}", context))
+        }
+        NativeBackendError::DeserializationError { context } => {
+            SqliteGraphError::connection(format!("Deserialization error: {}", context))
+        }
         NativeBackendError::InvalidNodeId { id, max_id } => {
             SqliteGraphError::query(format!("Invalid node ID: {} (max: {})", id, max_id))
         }
@@ -155,6 +161,12 @@ pub fn map_to_graph_error(err: NativeBackendError) -> SqliteGraphError {
         )),
         NativeBackendError::WalContiguityViolation(msg) => {
             SqliteGraphError::connection(format!("WAL contiguity violation: {}", msg))
+        }
+        NativeBackendError::SerializationError { context } => {
+            SqliteGraphError::connection(format!("Serialization error: {}", context))
+        }
+        NativeBackendError::DeserializationError { context } => {
+            SqliteGraphError::connection(format!("Deserialization error: {}", context))
         }
     }
 }
