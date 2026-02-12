@@ -597,6 +597,308 @@ impl V3WALPaths {
     }
 }
 
+/// WAL recovery statistics
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WALRecoveryStats {
+    /// Number of records processed
+    pub records_processed: usize,
+    /// Number of records successfully applied
+    pub records_applied: usize,
+    /// Number of records skipped (corrupt/invalid)
+    pub records_skipped: usize,
+    /// Number of page allocations
+    pub page_allocations: usize,
+    /// Number of page frees
+    pub page_frees: usize,
+    /// Number of page writes
+    pub page_writes: usize,
+    /// Number of B+Tree splits
+    pub btree_splits: usize,
+    /// Number of checkpoints encountered
+    pub checkpoints: usize,
+}
+
+impl WALRecoveryStats {
+    /// Create new empty statistics
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Check if any records were processed
+    pub fn has_activity(&self) -> bool {
+        self.records_processed > 0
+    }
+
+    /// Get success rate (0.0 to 1.0)
+    pub fn success_rate(&self) -> f64 {
+        if self.records_processed == 0 {
+            1.0
+        } else {
+            self.records_applied as f64 / self.records_processed as f64
+        }
+    }
+}
+
+/// WAL recovery engine
+///
+/// Reconstructs database state by replaying WAL records.
+/// Uses in-memory page cache during recovery; actual page operations
+/// are deferred until BTreeManager integration.
+///
+/// # Recovery Process
+///
+/// 1. Open WAL file and read header
+/// 2. Read records sequentially until EOF or unrecoverable error
+/// 3. For each valid record, update internal state
+/// 4. Return final header state and statistics
+///
+/// # Note
+///
+/// This is a simplified recovery implementation that works without
+/// BTreeManager. Full integration with BTreeManager is deferred
+/// to Task 65-04.
+#[derive(Debug)]
+pub struct WALRecovery {
+    /// WAL file path
+    wal_path: PathBuf,
+    /// In-memory page cache (page_id -> data)
+    page_cache: std::collections::HashMap<u64, Vec<u8>>,
+    /// Recovery statistics
+    stats: WALRecoveryStats,
+    /// Last checkpoint header state
+    checkpoint_header: Option<PersistentHeaderV3>,
+    /// Last LSN processed
+    last_lsn: u64,
+}
+
+impl WALRecovery {
+    /// Create a new WAL recovery engine
+    pub fn new(wal_path: PathBuf) -> Self {
+        Self {
+            wal_path,
+            page_cache: std::collections::HashMap::new(),
+            stats: WALRecoveryStats::new(),
+            checkpoint_header: None,
+            last_lsn: LSN_INVALID,
+        }
+    }
+
+    /// Get recovery statistics
+    pub fn stats(&self) -> &WALRecoveryStats {
+        &self.stats
+    }
+
+    /// Get last checkpoint header (if any)
+    pub fn checkpoint_header(&self) -> Option<&PersistentHeaderV3> {
+        self.checkpoint_header.as_ref()
+    }
+
+    /// Get last LSN processed
+    pub fn last_lsn(&self) -> u64 {
+        self.last_lsn
+    }
+
+    /// Get in-memory page cache
+    pub fn page_cache(&self) -> &std::collections::HashMap<u64, Vec<u8>> {
+        &self.page_cache
+    }
+
+    /// Recover from WAL file
+    ///
+    /// Reads WAL file and applies all records sequentially.
+    /// Returns Ok(()) on successful recovery, even if some records were skipped.
+    pub fn recover(&mut self) -> NativeResult<()> {
+        use std::io::Read;
+
+        // Check if WAL file exists
+        if !self.wal_path.exists() {
+            // No WAL file is not an error - database is clean
+            return Ok(());
+        }
+
+        // Open WAL file
+        let mut file = std::fs::File::open(&self.wal_path).map_err(|e| {
+            NativeBackendError::IoError {
+                context: format!("Failed to open WAL file: {}", self.wal_path.display()),
+                source: std::sync::Arc::new(e.into()),
+            }
+        })?;
+
+        // Read and validate header
+        let mut header_bytes = [0u8; V3_WAL_HEADER_SIZE];
+        file.read_exact(&mut header_bytes).map_err(|e| {
+            NativeBackendError::IoError {
+                context: "Failed to read WAL header".to_string(),
+                source: std::sync::Arc::new(e.into()),
+            }
+        })?;
+
+        let header = V3WALHeader::from_bytes(&header_bytes)?;
+        header.validate()?;
+
+        // Read records sequentially
+        let mut buffer = Vec::new();
+        loop {
+            // Read record size (4 bytes)
+            let mut size_bytes = [0u8; 4];
+            let n = file.read(&mut size_bytes).map_err(|e| {
+                NativeBackendError::IoError {
+                    context: "Failed to read record size".to_string(),
+                    source: std::sync::Arc::new(e.into()),
+                }
+            })?;
+
+            if n == 0 {
+                // EOF reached
+                break;
+            }
+
+            if n < 4 {
+                // Incomplete record size - stop
+                self.stats.records_skipped += 1;
+                break;
+            }
+
+            let record_size = u32::from_le_bytes(size_bytes) as usize;
+
+            if record_size == 0 || record_size > MAX_RECORD_SIZE {
+                // Invalid size - skip
+                self.stats.records_skipped += 1;
+                continue;
+            }
+
+            // Read record data
+            buffer.clear();
+            buffer.resize(record_size, 0);
+            let n = file.read_exact(&mut buffer);
+
+            if n.is_err() {
+                // Incomplete record - stop
+                self.stats.records_skipped += 1;
+                break;
+            }
+
+            // Deserialize and apply record
+            self.stats.records_processed += 1;
+            let result = V3WALRecord::from_bytes(&buffer);
+
+            match result {
+                Ok(record) => {
+                    if let Err(e) = self.apply_record(&record) {
+                        // Record application failed - skip
+                        eprintln!("WAL Recovery: Failed to apply record LSN {}: {:?}", record.lsn(), e);
+                        self.stats.records_skipped += 1;
+                    } else {
+                        self.stats.records_applied += 1;
+                        self.last_lsn = record.lsn();
+                    }
+                }
+                Err(e) => {
+                    // Deserialization failed - skip
+                    eprintln!("WAL Recovery: Failed to deserialize record: {:?}", e);
+                    self.stats.records_skipped += 1;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Apply a single WAL record to recovery state
+    fn apply_record(&mut self, record: &V3WALRecord) -> NativeResult<()> {
+        match record {
+            V3WALRecord::PageAllocate { page_id, lsn, .. } => {
+                // Allocate empty page in cache
+                self.page_cache.insert(*page_id, vec![0; 4096]);
+                self.stats.page_allocations += 1;
+                self.last_lsn = *lsn;
+                Ok(())
+            }
+            V3WALRecord::PageFree { page_id, lsn, .. } => {
+                // Remove page from cache
+                self.page_cache.remove(page_id);
+                self.stats.page_frees += 1;
+                self.last_lsn = *lsn;
+                Ok(())
+            }
+            V3WALRecord::PageWrite {
+                page_id,
+                offset,
+                data,
+                checksum: _,
+                lsn,
+            } => {
+                // Update page in cache
+                let page = self.page_cache.entry(*page_id).or_insert_with(|| vec![0; 4096]);
+                let offset = *offset as usize;
+                if offset + data.len() <= page.len() {
+                    page[offset..offset + data.len()].copy_from_slice(data);
+                }
+                self.stats.page_writes += 1;
+                self.last_lsn = *lsn;
+                Ok(())
+            }
+            V3WALRecord::BTreeSplit {
+                original_page_id: _,
+                new_page_id,
+                split_key: _,
+                page_type: _,
+                lsn,
+            } => {
+                // Allocate new page for split
+                self.page_cache.insert(*new_page_id, vec![0; 4096]);
+                self.stats.btree_splits += 1;
+                self.last_lsn = *lsn;
+                Ok(())
+            }
+            V3WALRecord::Checkpoint {
+                root_page_id: _,
+                total_pages: _,
+                btree_height: _,
+                free_page_list_head: _,
+                header_snapshot,
+                timestamp: _,
+                lsn,
+            } => {
+                // Restore header from checkpoint
+                // Note: This is a simplified version - full integration
+                // with BTreeManager will happen in Task 65-04
+                if !header_snapshot.is_empty() {
+                    let restored = PersistentHeaderV3::from_bytes(header_snapshot)
+                        .map_err(|e| NativeBackendError::DeserializationError {
+                            context: format!("Failed to restore checkpoint header: {:?}", e),
+                        })?;
+                    self.checkpoint_header = Some(restored);
+                }
+                self.stats.checkpoints += 1;
+                self.last_lsn = *lsn;
+                Ok(())
+            }
+            V3WALRecord::TransactionBegin { tx_id: _, lsn, .. } => {
+                self.last_lsn = *lsn;
+                Ok(())
+            }
+            V3WALRecord::TransactionCommit { tx_id: _, lsn, .. } => {
+                self.last_lsn = *lsn;
+                Ok(())
+            }
+            V3WALRecord::TransactionRollback { tx_id: _, lsn, .. } => {
+                self.last_lsn = *lsn;
+                Ok(())
+            }
+        }
+    }
+
+    /// Get header state from last checkpoint (if available)
+    ///
+    /// Returns the PersistentHeaderV3 that was captured in the most
+    /// recent checkpoint record. This can be used to restore the
+    /// database to a consistent state.
+    pub fn get_header_state(&self) -> Option<&PersistentHeaderV3> {
+        self.checkpoint_header.as_ref()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -776,5 +1078,175 @@ mod tests {
 
         let temp_path = V3WALPaths::temp_checkpoint_file(db_path);
         assert!(temp_path.to_string_lossy().contains("v3checkpoint.tmp"));
+    }
+
+    // WALRecovery tests (Task 65-03)
+
+    #[test]
+    fn test_wal_recovery_new() {
+        let wal_path = std::path::PathBuf::from("/tmp/test_recovery.v3wal");
+        let recovery = WALRecovery::new(wal_path);
+
+        assert_eq!(recovery.last_lsn(), LSN_INVALID);
+        assert!(!recovery.stats().has_activity());
+        assert_eq!(recovery.stats().records_processed, 0);
+        assert!(recovery.checkpoint_header().is_none());
+    }
+
+    #[test]
+    fn test_wal_recovery_stats_default() {
+        let stats = WALRecoveryStats::new();
+
+        assert_eq!(stats.records_processed, 0);
+        assert_eq!(stats.records_applied, 0);
+        assert_eq!(stats.records_skipped, 0);
+        assert_eq!(stats.page_allocations, 0);
+        assert_eq!(stats.page_frees, 0);
+        assert_eq!(stats.page_writes, 0);
+        assert_eq!(stats.btree_splits, 0);
+        assert_eq!(stats.checkpoints, 0);
+    }
+
+    #[test]
+    fn test_wal_recovery_stats_success_rate() {
+        let mut stats = WALRecoveryStats::new();
+
+        // No activity = 100% success
+        assert!((stats.success_rate() - 1.0).abs() < f64::EPSILON);
+
+        stats.records_processed = 10;
+        stats.records_applied = 8;
+        stats.records_skipped = 2;
+
+        assert!((stats.success_rate() - 0.8).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_wal_recovery_apply_page_allocate() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut recovery = WALRecovery::new(wal_path);
+
+        let record = V3WALRecord::page_allocate(42, 100);
+        recovery.apply_record(&record).unwrap();
+
+        assert!(recovery.page_cache().contains_key(&42));
+        assert_eq!(recovery.stats().page_allocations, 1);
+        assert_eq!(recovery.stats().records_applied, 0); // apply_record doesn't increment this
+        assert_eq!(recovery.last_lsn(), 100);
+    }
+
+    #[test]
+    fn test_wal_recovery_apply_page_free() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut recovery = WALRecovery::new(wal_path);
+
+        // First allocate, then free
+        let alloc_record = V3WALRecord::page_allocate(42, 100);
+        recovery.apply_record(&alloc_record).unwrap();
+
+        let free_record = V3WALRecord::page_free(42, 0x12345678, 101);
+        recovery.apply_record(&free_record).unwrap();
+
+        assert!(!recovery.page_cache().contains_key(&42));
+        assert_eq!(recovery.stats().page_allocations, 1);
+        assert_eq!(recovery.stats().page_frees, 1);
+        assert_eq!(recovery.last_lsn(), 101);
+    }
+
+    #[test]
+    fn test_wal_recovery_apply_page_write() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut recovery = WALRecovery::new(wal_path);
+
+        let data = vec![1, 2, 3, 4, 5];
+        let record = V3WALRecord::page_write(42, 0, data.clone(), 0x12345678);
+        recovery.apply_record(&record).unwrap();
+
+        assert!(recovery.page_cache().contains_key(&42));
+        let page = recovery.page_cache().get(&42).unwrap();
+        assert_eq!(page[0..5], data[..]);
+        assert_eq!(recovery.stats().page_writes, 1);
+    }
+
+    #[test]
+    fn test_wal_recovery_apply_btree_split() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut recovery = WALRecovery::new(wal_path);
+
+        let record = V3WALRecord::btree_split(10, 20, 500, true, 100);
+        recovery.apply_record(&record).unwrap();
+
+        assert!(recovery.page_cache().contains_key(&20));
+        assert_eq!(recovery.stats().btree_splits, 1);
+        assert_eq!(recovery.last_lsn(), 100);
+    }
+
+    #[test]
+    fn test_wal_recovery_apply_checkpoint() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut recovery = WALRecovery::new(wal_path);
+
+        let header = PersistentHeaderV3::new_v3();
+        let record = V3WALRecord::checkpoint(5, 100, 3, 0, &header, 100);
+        recovery.apply_record(&record).unwrap();
+
+        assert!(recovery.checkpoint_header().is_some());
+        assert_eq!(recovery.stats().checkpoints, 1);
+        assert_eq!(recovery.last_lsn(), 100);
+    }
+
+    #[test]
+    fn test_wal_recovery_apply_transaction_control() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut recovery = WALRecovery::new(wal_path);
+
+        let begin = V3WALRecord::TransactionBegin {
+            tx_id: 1,
+            lsn: 100,
+            timestamp: 0,
+        };
+        let commit = V3WALRecord::TransactionCommit {
+            tx_id: 1,
+            lsn: 101,
+            timestamp: 0,
+        };
+        let rollback = V3WALRecord::TransactionRollback {
+            tx_id: 2,
+            lsn: 102,
+            timestamp: 0,
+        };
+
+        recovery.apply_record(&begin).unwrap();
+        recovery.apply_record(&commit).unwrap();
+        recovery.apply_record(&rollback).unwrap();
+
+        assert_eq!(recovery.last_lsn(), 102);
+    }
+
+    #[test]
+    fn test_wal_recovery_no_file() {
+        // Non-existent WAL file should not error
+        let wal_path = std::path::PathBuf::from("/tmp/nonexistent_wal_file_xyz.v3wal");
+        let mut recovery = WALRecovery::new(wal_path);
+
+        let result = recovery.recover();
+        assert!(result.is_ok());
+        assert!(!recovery.stats().has_activity());
+    }
+
+    #[test]
+    fn test_wal_recovery_get_header_state() {
+        let wal_path = std::path::PathBuf::from("/tmp/test.v3wal");
+        let mut recovery = WALRecovery::new(wal_path);
+
+        // Initially no header
+        assert!(recovery.get_header_state().is_none());
+
+        // After checkpoint, should have header
+        let header = PersistentHeaderV3::new_v3();
+        let record = V3WALRecord::checkpoint(5, 100, 3, 0, &header, 100);
+        recovery.apply_record(&record).unwrap();
+
+        assert!(recovery.get_header_state().is_some());
     }
 }
