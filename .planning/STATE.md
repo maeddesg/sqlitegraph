@@ -4,7 +4,7 @@
 
 ## Current Milestone
 
-**v2.0: Native-V3 Backend** (Planning Phase)
+**v2.0: Native-V3 Backend** (Active Development)
 
 ## Overview
 
@@ -19,31 +19,37 @@
 
 ## Current Phase
 
-**Phase 64: Page Allocator** — READY TO PLAN
+**Phase 65: V3 WAL Integration** — IN PROGRESS
+
+**Current Plan:** 65-02 - WAL Page Operation Logging (COMPLETE)
 
 ## Progress
 
 ```
-Milestone Progress: [███████████████░░░░░░░░      ] 14%
+Milestone Progress: [██████████████████░░░░░░░   ] 18%
 
-Phase 63a: [████████████████████████████] 100% COMPLETE 🎉
-Phase 63b: [████████████████████████████] 100% COMPLETE 🎉
+Phase 63a: [████████████████████████████] 100% COMPLETE
+Phase 63b: [████████████████████████████] 100% COMPLETE
+Phase 64:  [████████████████████████████] 100% COMPLETE
+Phase 65:  [████████░░░░░░░░░░░░░░░░░] 40% (2 of 4 tasks complete)
 
-Phase 63b Deliverables:
-  63-01: [COMPLETED] NodeRecordV3 delta/varint encoding
-  63-02: [COMPLETED] Varint compression utilities
-  63-03: [COMPLETED] Variable-size NodePage packing
-  63-04: [COMPLETED] Page compaction heuristics (stub only, no cross-page relocation)
+Phase 63 Deliverables:
+  63-01 through 63-04: COMPLETED - NodeRecordV3 with delta/varint encoding
 
-Phase 63b Test Results:
-  - All 46 compression unit tests passing
-  - 126 total V3 tests passing (80 from Phase 63a + 46 from Phase 63b)
-  - V3 module compiles with native-v3 feature
+Phase 64 Deliverables:
+  64-01 through 64-03: COMPLETED - PageAllocator with free list management
 
-V2 Pre-existing Bugs (block V3 lib tests):
-- AdjacencyHelpers::get_*_at_snapshot now requires 4th parameter (wal_reader)
-- Affects graph_backend.rs neighbor calls when native-v3 enabled
-- These are V2 bugs in graph_backend.rs and adjacency/helpers.rs
-- NOT introduced by Phase 63b
-- Fix tracked separately, should NOT block Phase 64 planning
+Phase 65 Deliverables:
+  65-01: [COMPLETED] V3WALRecord type definitions
+  65-02: [COMPLETED] WAL page operation logging (14 unit tests)
+  65-03: [PENDING] WAL recovery engine
+  65-04: [PENDING] Checkpoint B+Tree integration
+
+Phase 65-02 Summary:
+  - V3WALRecord enum with 8 variants (page ops + transaction control)
+  - V3WALHeader with 64-byte fixed format and manual serialization
+  - LSN (Log Sequence Number) utilities for ordering
+  - 14 unit tests for header, records, serialization
+  - 780 LOC in src/backend/native/v3/wal.rs
+  - Commits: 5f21459 (initial), 8a6eba0 (complete)
 ```
