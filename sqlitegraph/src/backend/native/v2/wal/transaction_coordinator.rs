@@ -642,6 +642,22 @@ impl DeadlockDetector {
     ) -> &Arc<RwLock<HashMap<TransactionId, HashSet<TransactionId>>>> {
         &self.wait_for_graph
     }
+
+    /// Get the resource wait graph for testing purposes
+    #[cfg(test)]
+    pub fn resource_wait_graph_for_test(
+        &self,
+    ) -> &Arc<RwLock<HashMap<ResourceId, HashSet<TransactionId>>>> {
+        &self.resource_wait_graph
+    }
+
+    /// Get the tx_waiting_for graph for testing purposes
+    #[cfg(test)]
+    pub fn tx_waiting_for_for_test(
+        &self,
+    ) -> &Arc<RwLock<HashMap<TransactionId, HashSet<ResourceId>>>> {
+        &self.tx_waiting_for
+    }
 }
 
 /// Lock type validator with compatibility matrix
@@ -696,18 +712,15 @@ impl LockTypeValidator {
             (LockType::IntentionExclusive, LockType::Shared) => true,
             (LockType::IntentionExclusive, LockType::Exclusive) => true,
 
-            // IS and S compatible
+            // IS compatible with everything (no conflicts)
             (LockType::IntentionShared, _) => false,
             (_, LockType::IntentionShared) => false,
 
-            // IS and IX compatible
-            (LockType::IntentionShared, LockType::IntentionExclusive) => false,
-            (LockType::IntentionExclusive, LockType::IntentionShared) => false,
-
+            // S and S compatible
             (LockType::Shared, LockType::Shared) => false,
-            (LockType::IntentionExclusive, LockType::IntentionExclusive) => false,
 
-            _ => false,
+            // IX and IX compatible
+            (LockType::IntentionExclusive, LockType::IntentionExclusive) => false,
         }
     }
 }
@@ -847,7 +860,7 @@ impl IsolationManager {
     }
 
     /// Get the current lock type a transaction holds on a resource
-    fn get_current_lock(
+    pub fn get_current_lock(
         &self,
         tx_id: TransactionId,
         resource_id: ResourceId,
@@ -857,7 +870,7 @@ impl IsolationManager {
     }
 
     /// Get all locks held on a resource by other transactions
-    fn get_locks_on_resource(
+    pub fn get_locks_on_resource(
         &self,
         resource_id: ResourceId,
         exclude_tx: TransactionId,
@@ -900,7 +913,7 @@ impl IsolationManager {
         } else {
             // 3. Check for conflicts with other transactions
             let conflicting_locks = self.get_locks_on_resource(resource_id, tx_id);
-            for (other_tx, other_lock) in conflicting_locks {
+            for (_other_tx, other_lock) in conflicting_locks {
                 if LockTypeValidator::has_conflict(lock_type, other_lock) {
                     return Err(NativeBackendError::DeadlockDetected {
                         tx_id,
@@ -2476,5 +2489,293 @@ mod tests {
                 "Transaction 1 should have no wait references after cleanup"
             );
         }
+    }
+
+    #[test]
+    fn test_lock_type_validator_can_upgrade() {
+        // Test same lock type (always allowed)
+        assert!(LockTypeValidator::can_upgrade(LockType::Shared, LockType::Shared));
+        assert!(LockTypeValidator::can_upgrade(LockType::Exclusive, LockType::Exclusive));
+
+        // Test intention lock upgrades
+        assert!(LockTypeValidator::can_upgrade(LockType::IntentionShared, LockType::Shared));
+        assert!(LockTypeValidator::can_upgrade(LockType::IntentionShared, LockType::Exclusive));
+        assert!(LockTypeValidator::can_upgrade(LockType::IntentionExclusive, LockType::Exclusive));
+
+        // Test Shared to Exclusive upgrade
+        assert!(LockTypeValidator::can_upgrade(LockType::Shared, LockType::Exclusive));
+
+        // Test intention hierarchy
+        assert!(LockTypeValidator::can_upgrade(LockType::IntentionShared, LockType::IntentionExclusive));
+
+        // Test downgrades
+        assert!(LockTypeValidator::can_upgrade(LockType::Exclusive, LockType::Shared));
+        assert!(LockTypeValidator::can_upgrade(LockType::Exclusive, LockType::IntentionShared));
+        assert!(LockTypeValidator::can_upgrade(LockType::IntentionExclusive, LockType::IntentionShared));
+
+        // Test invalid upgrade: Shared to IS (not allowed)
+        assert!(!LockTypeValidator::can_upgrade(LockType::Shared, LockType::IntentionShared));
+    }
+
+    #[test]
+    fn test_lock_type_validator_has_conflict() {
+        // Exclusive conflicts with everything except IS
+        assert!(LockTypeValidator::has_conflict(LockType::Exclusive, LockType::Exclusive));
+        assert!(LockTypeValidator::has_conflict(LockType::Exclusive, LockType::Shared));
+        assert!(LockTypeValidator::has_conflict(LockType::Exclusive, LockType::IntentionExclusive));
+        assert!(!LockTypeValidator::has_conflict(LockType::Exclusive, LockType::IntentionShared));
+
+        // Shared conflicts with IX
+        assert!(LockTypeValidator::has_conflict(LockType::Shared, LockType::IntentionExclusive));
+        assert!(LockTypeValidator::has_conflict(LockType::IntentionExclusive, LockType::Shared));
+
+        // IS and S compatible
+        assert!(!LockTypeValidator::has_conflict(LockType::IntentionShared, LockType::Shared));
+        assert!(!LockTypeValidator::has_conflict(LockType::Shared, LockType::IntentionShared));
+
+        // IS and IX compatible
+        assert!(!LockTypeValidator::has_conflict(LockType::IntentionShared, LockType::IntentionExclusive));
+        assert!(!LockTypeValidator::has_conflict(LockType::IntentionExclusive, LockType::IntentionShared));
+
+        // S and S compatible
+        assert!(!LockTypeValidator::has_conflict(LockType::Shared, LockType::Shared));
+
+        // IX and IX compatible
+        assert!(!LockTypeValidator::has_conflict(LockType::IntentionExclusive, LockType::IntentionExclusive));
+    }
+
+    #[test]
+    fn test_resource_wait_tracking() {
+        let detector = DeadlockDetector::new();
+
+        // Add resource wait
+        detector.add_resource_wait(1, ResourceId::Node(100)).unwrap();
+        detector.add_resource_wait(2, ResourceId::Node(200)).unwrap();
+
+        // Verify tracking via resource graph
+        let resource_graph = detector.resource_wait_graph_for_test().read();
+        assert!(resource_graph.contains_key(&ResourceId::Node(100)));
+        assert!(resource_graph.contains_key(&ResourceId::Node(200)));
+        assert!(resource_graph.get(&ResourceId::Node(100)).unwrap().contains(&1));
+        assert!(resource_graph.get(&ResourceId::Node(200)).unwrap().contains(&2));
+
+        // Verify reverse mapping
+        let tx_waiting = detector.tx_waiting_for_for_test().read();
+        assert!(tx_waiting.get(&1).unwrap().contains(&ResourceId::Node(100)));
+        assert!(tx_waiting.get(&2).unwrap().contains(&ResourceId::Node(200)));
+
+        // Remove resource wait
+        detector.remove_resource_wait(1, ResourceId::Node(100)).unwrap();
+
+        // Verify removal
+        let resource_graph = detector.resource_wait_graph_for_test().read();
+        assert!(!resource_graph.contains_key(&ResourceId::Node(100)));
+        assert!(resource_graph.contains_key(&ResourceId::Node(200))); // Other still present
+
+        let tx_waiting = detector.tx_waiting_for_for_test().read();
+        assert!(!tx_waiting.contains_key(&1));
+        assert!(tx_waiting.contains_key(&2)); // Other still present
+    }
+
+    #[test]
+    fn test_isolation_manager_lock_tracking() {
+        let isolation_mgr = IsolationManager::new();
+
+        // Record locks
+        isolation_mgr.record_lock(1, ResourceId::Node(100), LockType::Shared);
+        isolation_mgr.record_lock(1, ResourceId::Node(200), LockType::Exclusive);
+        isolation_mgr.record_lock(2, ResourceId::Node(100), LockType::IntentionShared);
+
+        // Verify current locks
+        assert_eq!(
+            isolation_mgr.get_current_lock(1, ResourceId::Node(100)),
+            Some(LockType::Shared)
+        );
+        assert_eq!(
+            isolation_mgr.get_current_lock(1, ResourceId::Node(200)),
+            Some(LockType::Exclusive)
+        );
+        assert_eq!(
+            isolation_mgr.get_current_lock(2, ResourceId::Node(100)),
+            Some(LockType::IntentionShared)
+        );
+        assert_eq!(
+            isolation_mgr.get_current_lock(3, ResourceId::Node(100)),
+            None
+        );
+
+        // Get locks on resource (excluding tx 1)
+        let locks = isolation_mgr.get_locks_on_resource(ResourceId::Node(100), 1);
+        assert_eq!(locks.len(), 1);
+        assert_eq!(locks[0], (2, LockType::IntentionShared));
+
+        // Record lock release
+        isolation_mgr.record_lock_release(1, ResourceId::Node(100));
+
+        // Verify release
+        assert_eq!(
+            isolation_mgr.get_current_lock(1, ResourceId::Node(100)),
+            None
+        );
+
+        // Node(200) lock still exists
+        assert_eq!(
+            isolation_mgr.get_current_lock(1, ResourceId::Node(200)),
+            Some(LockType::Exclusive)
+        );
+    }
+
+    #[test]
+    fn test_isolation_manager_validate_access_upgrade_allowed() {
+        let isolation_mgr = IsolationManager::new();
+
+        // Register transaction
+        isolation_mgr.register_transaction(1, IsolationLevel::Serializable);
+
+        // Record initial lock
+        isolation_mgr.record_lock(1, ResourceId::Node(100), LockType::IntentionShared);
+
+        // Validate upgrade to Shared (should be allowed)
+        assert!(isolation_mgr
+            .validate_access(1, ResourceId::Node(100), LockType::Shared)
+            .is_ok());
+
+        // Validate upgrade to Exclusive (should be allowed)
+        assert!(isolation_mgr
+            .validate_access(1, ResourceId::Node(100), LockType::Exclusive)
+            .is_ok());
+
+        // Validate upgrade to IX (should be allowed)
+        assert!(isolation_mgr
+            .validate_access(1, ResourceId::Node(100), LockType::IntentionExclusive)
+            .is_ok());
+    }
+
+    #[test]
+    fn test_isolation_manager_validate_access_upgrade_blocked() {
+        let isolation_mgr = IsolationManager::new();
+
+        // Register transaction
+        isolation_mgr.register_transaction(1, IsolationLevel::Serializable);
+
+        // Record Exclusive lock
+        isolation_mgr.record_lock(1, ResourceId::Node(100), LockType::Exclusive);
+
+        // Validate downgrade to Shared (should be allowed - it's a downgrade)
+        assert!(isolation_mgr
+            .validate_access(1, ResourceId::Node(100), LockType::Shared)
+            .is_ok());
+
+        // Record Shared lock
+        isolation_mgr.record_lock_release(1, ResourceId::Node(100));
+        isolation_mgr.record_lock(1, ResourceId::Node(100), LockType::Shared);
+
+        // Trying to "upgrade" Shared back to IS (not allowed)
+        let result = isolation_mgr.validate_access(1, ResourceId::Node(100), LockType::IntentionShared);
+        assert!(result.is_err(), "Shared to IS upgrade should be blocked");
+    }
+
+    #[test]
+    fn test_isolation_manager_validate_access_conflict_detection() {
+        let isolation_mgr = IsolationManager::new();
+
+        // Register two transactions
+        isolation_mgr.register_transaction(1, IsolationLevel::Serializable);
+        isolation_mgr.register_transaction(2, IsolationLevel::Serializable);
+
+        // Tx1 holds Shared lock on Node(100)
+        isolation_mgr.record_lock(1, ResourceId::Node(100), LockType::Shared);
+
+        // Tx2 requests IntentionExclusive on Node(100) - should conflict
+        let result = isolation_mgr.validate_access(2, ResourceId::Node(100), LockType::IntentionExclusive);
+        assert!(result.is_err(), "IX conflicts with S");
+
+        // Tx2 requests IntentionShared on Node(100) - should be OK
+        assert!(isolation_mgr
+            .validate_access(2, ResourceId::Node(100), LockType::IntentionShared)
+            .is_ok());
+
+        // Tx2 requests Shared on Node(100) - should be OK
+        assert!(isolation_mgr
+            .validate_access(2, ResourceId::Node(100), LockType::Shared)
+            .is_ok());
+    }
+
+    #[test]
+    fn test_resource_deadlock_detection() {
+        let detector = DeadlockDetector::new();
+
+        // Setup: Tx1 waits for ResourceA held by Tx2
+        //         Tx2 waits for ResourceB held by Tx1
+        detector.add_resource_wait(1, ResourceId::Node(100)).unwrap();
+        detector.add_resource_wait(2, ResourceId::Node(200)).unwrap();
+
+        // Both transactions hold the other's desired resource
+        detector.add_resource_wait(2, ResourceId::Node(100)).unwrap();
+        detector.add_resource_wait(1, ResourceId::Node(200)).unwrap();
+
+        // Check for resource-level deadlock
+        // This creates a cycle: Tx1 -> Node200 (held by Tx2) -> Node100 (held by Tx1)
+        let has_deadlock = detector.detect_resource_deadlock(1, ResourceId::Node(100)).unwrap();
+        assert!(has_deadlock, "Resource-level deadlock should be detected");
+    }
+
+    #[test]
+    fn test_no_deadlock_without_cycle() {
+        let detector = DeadlockDetector::new();
+
+        // Setup: Tx1 waits for ResourceA, Tx2 waits for ResourceB
+        // No cycle - different resources
+        detector.add_resource_wait(1, ResourceId::Node(100)).unwrap();
+        detector.add_resource_wait(2, ResourceId::Node(200)).unwrap();
+
+        // No deadlock - just two transactions waiting for different resources
+        let has_deadlock = detector.detect_resource_deadlock(1, ResourceId::Node(100)).unwrap();
+        assert!(!has_deadlock, "No deadlock without cycle");
+    }
+
+    #[test]
+    fn test_deadlock_detector_select_victim_with_resource_cycles() {
+        let detector = DeadlockDetector::new();
+        let mut contexts = HashMap::new();
+
+        let now = Instant::now();
+
+        let tx1_context = TransactionContext {
+            tx_id: 1,
+            start_time: now,
+            isolation_level: IsolationLevel::Serializable,
+            locked_resources: HashSet::new(),
+            wal_records: Vec::new(),
+            state: TransactionState::Active,
+            dependencies: HashSet::new(),
+            savepoints: Vec::new(),
+            read_set: HashSet::new(),
+            write_set: HashSet::new(),
+        };
+
+        let tx2_context = TransactionContext {
+            tx_id: 2,
+            start_time: now + Duration::from_millis(10),
+            isolation_level: IsolationLevel::Serializable,
+            locked_resources: HashSet::new(),
+            wal_records: Vec::new(),
+            state: TransactionState::Active,
+            dependencies: HashSet::new(),
+            savepoints: Vec::new(),
+            read_set: HashSet::new(),
+            write_set: HashSet::new(),
+        };
+
+        contexts.insert(1, tx1_context);
+        contexts.insert(2, tx2_context);
+
+        // Create cycle: 1 -> 2 -> 1 (transaction level)
+        detector.add_wait_edge(1, 2);
+        detector.add_wait_edge(2, 1);
+
+        let cycle = vec![1, 2];
+        let victim = detector.select_victim(&cycle, &contexts);
+        assert_eq!(victim, Some(2), "Should select youngest transaction");
     }
 }
