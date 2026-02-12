@@ -441,6 +441,12 @@ impl V2WALManager {
 
         let commit_lsn = self.writer.write_record(commit_record)?;
 
+        // Update committed_lsn in header for SnapshotId::current()
+        {
+            let mut header = self.header.write();
+            header.committed_lsn = commit_lsn;
+        }
+
         // Emit pub/sub events for committed changes
         {
             use crate::backend::native::v2::pubsub::emit;
@@ -623,6 +629,25 @@ impl V2WALManager {
     /// and cleaned up after checkpoint.
     pub fn get_delta_index(&self) -> &SharedDeltaIndex {
         &self.delta_index
+    }
+
+    /// Get the maximum committed LSN for SnapshotId::current()
+    ///
+    /// Returns the LSN of the most recently committed transaction.
+    /// This can be used to create a snapshot that sees all committed data.
+    /// Returns 0 if no transactions have been committed yet.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use sqlitegraph::backend::native::v2::wal::{V2WALManager, V2WALConfig};
+    /// # let manager = V2WALManager::create(V2WALConfig::in_memory()).unwrap();
+    /// let max_lsn = manager.max_committed_lsn();
+    /// let snapshot = sqlitegraph::snapshot::SnapshotId::from_lsn(max_lsn);
+    /// ```
+    pub fn max_committed_lsn(&self) -> u64 {
+        let header = self.header.read();
+        header.committed_lsn
     }
 
     /// Notification callback when checkpoint completes

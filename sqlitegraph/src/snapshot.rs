@@ -43,6 +43,56 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SnapshotId(pub u64);
 
+#[cfg(feature = "native-v2")]
+use std::sync::Arc;
+#[cfg(feature = "native-v2")]
+use std::sync::OnceLock;
+#[cfg(feature = "native-v2")]
+use crate::backend::native::v2::wal::manager::V2WALManager;
+
+/// Global storage for the current WAL manager reference.
+///
+/// This is set by V2GraphBackend when initialized and allows
+/// SnapshotId::current() to access the actual max committed LSN.
+///
+/// We use OnceLock to provide safe shared access to the WAL manager.
+#[cfg(feature = "native-v2")]
+static CURRENT_WAL_MANAGER: OnceLock<Arc<V2WALManager>> = OnceLock::new();
+
+/// Register the WAL manager for use by SnapshotId::current()
+///
+/// This should be called by the V2GraphBackend when it is initialized.
+/// Returns an error if a WAL manager is already registered.
+///
+/// # Note
+///
+/// This function takes ownership of an Arc clone. The WAL manager will
+/// remain available until explicitly replaced or the program exits.
+#[cfg(feature = "native-v2")]
+pub(crate) fn register_wal_manager(manager: Arc<V2WALManager>) -> Result<(), Arc<V2WALManager>> {
+    CURRENT_WAL_MANAGER.set(manager)
+}
+
+/// Unregister the WAL manager (called on backend shutdown)
+///
+/// Note: OnceLock cannot be cleared, so this is a no-op.
+/// The WAL manager reference remains valid for the lifetime of the program.
+#[cfg(feature = "native-v2")]
+pub(crate) fn unregister_wal_manager() {
+    // OnceLock cannot be cleared, so we intentionally do nothing here.
+    // The WAL manager reference remains valid for the lifetime of the program.
+}
+
+/// Get access to the current WAL manager (if registered)
+#[cfg(feature = "native-v2")]
+fn with_wal_manager<F, R>(f: F) -> R
+where
+    F: FnOnce(Option<&V2WALManager>) -> R,
+{
+    let manager = CURRENT_WAL_MANAGER.get();
+    f(manager.map(|m| m.as_ref()))
+}
+
 impl SnapshotId {
     /// The "current" snapshot - sees only committed data
     ///
@@ -52,20 +102,46 @@ impl SnapshotId {
     ///
     /// # Implementation Note
     ///
-    /// In the initial implementation, this returns 0 to indicate
-    /// "all committed data". Future implementations will track
-    /// the maximum committed transaction ID from the WAL.
+    /// - For native-v2 backend: Returns the maximum committed LSN from the WAL manager
+    /// - For SQLite backend: Returns 0 to indicate "all committed data"
     ///
-    /// # Future Enhancement
+    /// # Example
     ///
-    /// Once commit tracking is added, this will query:
-    /// ```sql
-    /// SELECT MAX(tx_id) FROM wal_records WHERE record_type = 'commit'
+    /// ```rust
+    /// # use sqlitegraph::snapshot::SnapshotId;
+    /// let snapshot = SnapshotId::current();
+    /// // snapshot now points to the most recent committed transaction
     /// ```
+    #[cfg(not(feature = "native-v2"))]
     pub fn current() -> Self {
-        // TODO: Track max committed transaction ID in WAL manager
-        // For now, 0 means "all committed data visible"
+        // For SQLite backend, 0 means "all committed data visible"
         SnapshotId(0)
+    }
+
+    /// The "current" snapshot - sees only committed data (native-v2)
+    ///
+    /// This returns the most recent committed LSN from the WAL manager.
+    /// All reads using this snapshot are guaranteed to see only
+    /// data that has been durably committed.
+    ///
+    /// Returns 0 if no WAL manager is registered or no transactions
+    /// have been committed yet.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use sqlitegraph::snapshot::SnapshotId;
+    /// let snapshot = SnapshotId::current();
+    /// // snapshot now points to the most recent committed transaction
+    /// ```
+    #[cfg(feature = "native-v2")]
+    pub fn current() -> Self {
+        let lsn = with_wal_manager(|manager| {
+            manager
+                .map(|m| m.max_committed_lsn())
+                .unwrap_or(0)
+        });
+        SnapshotId(lsn)
     }
 
     /// Create from explicit transaction ID
@@ -196,8 +272,6 @@ mod tests {
         let current = SnapshotId::current();
         // Current snapshot should always be valid
         assert!(current.is_valid());
-        // For now, current returns 0 (all committed data)
-        assert_eq!(current.as_u64(), 0);
     }
 
     #[test]

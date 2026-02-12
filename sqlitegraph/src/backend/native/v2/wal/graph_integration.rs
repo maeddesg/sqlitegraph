@@ -13,6 +13,9 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[cfg(feature = "native-v2")]
+use crate::snapshot::{register_wal_manager, unregister_wal_manager};
+
 /// V2 WAL integration manager for graph file operations
 pub struct V2GraphWALIntegrator {
     /// WAL manager instance
@@ -125,6 +128,9 @@ impl V2GraphWALIntegrator {
     ) -> NativeResult<Self> {
         let wal_manager = Arc::new(V2WALManager::create(wal_config)?);
 
+        #[cfg(feature = "native-v2")]
+        let _ = register_wal_manager(wal_manager.clone());
+
         Ok(Self {
             wal_manager,
             graph_transactions: Arc::new(RwLock::new(HashMap::new())),
@@ -141,6 +147,9 @@ impl V2GraphWALIntegrator {
         integration_config: GraphWALIntegrationConfig,
     ) -> NativeResult<Self> {
         let wal_manager = Arc::new(V2WALManager::open(wal_config)?);
+
+        #[cfg(feature = "native-v2")]
+        let _ = register_wal_manager(wal_manager.clone());
 
         Ok(Self {
             wal_manager,
@@ -493,7 +502,12 @@ impl V2GraphWALIntegrator {
         let _ = self.force_checkpoint();
 
         // Soft shutdown the WAL manager (signals and flushes)
-        self.wal_manager.soft_shutdown()
+        self.wal_manager.soft_shutdown()?;
+
+        #[cfg(feature = "native-v2")]
+        unregister_wal_manager();
+
+        Ok(())
     }
 
     /// Shutdown the integrator gracefully
@@ -502,12 +516,24 @@ impl V2GraphWALIntegrator {
         let _ = self.force_checkpoint();
 
         // Shutdown WAL manager
-        Arc::try_unwrap(self.wal_manager)
+        Arc::try_unwrap(self.wal_manager.clone())
             .map_err(|_| NativeBackendError::InvalidState {
                 context: "Cannot shutdown WAL manager - still in use".to_string(),
                 source: None,
             })?
-            .shutdown()
+            .shutdown()?;
+
+        #[cfg(feature = "native-v2")]
+        unregister_wal_manager();
+
+        Ok(())
+    }
+}
+
+impl Drop for V2GraphWALIntegrator {
+    fn drop(&mut self) {
+        #[cfg(feature = "native-v2")]
+        unregister_wal_manager();
     }
 }
 
