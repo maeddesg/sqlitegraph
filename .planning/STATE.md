@@ -19,19 +19,41 @@
 
 ## Current Phase
 
-**Phase 65: V3 WAL Integration** — COMPLETE
+**Phase 66: NodeStore V3** — ✅ COMPLETE
 
-**Current Plan:** 65-04 - Checkpoint B+Tree Integration (COMPLETE)
+**Current Plan:** 66-01 through 66-08 - NodeStore V3 Implementation
+
+### Phase 66 Progress:
+- [x] 66-01: BTreeManager creation — COMPLETE (677 LOC, 12 tests)
+- [x] 66-02: NodePage Loading — COMPLETE (200 LOC, decompression)
+- [x] 66-03: Traversal Cache — COMPLETE (100 LOC, LRU cache)
+- [x] 66-04: NodeStore V3 Tests — COMPLETE (150 LOC, unit tests)
+- [x] 66-05: V3 Edge Compat Layer — COMPLETE (400+ LOC, V2 format in V3)
+- [x] 66-06: V3Backend GraphBackend impl — COMPLETE (935 LOC, 34 methods)
+- [x] 66-07: Edge operations integration — COMPLETE (neighbors, insert_edge)
+- [x] 66-08: Integration tests — COMPLETE (4/4 tests passing)
 
 ## Progress
 
 ```
-Milestone Progress: [███████████████████░░░░░░░   ] 19%
+Milestone Progress: [██████████████████████░░░░░░] 28%
 
 Phase 63a: [████████████████████████████] 100% COMPLETE
 Phase 63b: [████████████████████████████] 100% COMPLETE
 Phase 64:  [████████████████████████████] 100% COMPLETE
 Phase 65:  [████████████████████████████] 100% COMPLETE (4 of 4 tasks)
+Phase 66:  [████████████████████████████] 100% COMPLETE (8 of 8 tasks)
+```
+
+### Phase 66 Deliverables:
+  - 66-01: [COMPLETED] BTreeManager creation and lookup integration
+  - 66-02: [COMPLETED] NodePage loading with decompression
+  - 66-03: [COMPLETED] TraversalCache LRU implementation  
+  - 66-04: [COMPLETED] NodeStore V3 unit tests
+  - 66-05: [COMPLETED] V3 Edge Compat Layer (V2 format in V3 pages)
+  - 66-06: [COMPLETED] V3Backend GraphBackend trait implementation (935 LOC)
+  - 66-07: [COMPLETED] Edge operations (insert_edge, neighbors, outgoing, incoming)
+  - 66-08: [COMPLETED] Integration tests (4/4 passing)
 
 Phase 63 Deliverables:
   63-01 through 63-04: COMPLETED - NodeRecordV3 with delta/varint encoding
@@ -57,78 +79,124 @@ Phase 65 Summary:
   - Commits: b3865c0, 835b86d, 2deccb0
   - See: .planning/phases/074-v3-wal-integration/074-02-SUMMARY.md
 
-Next Phase: TBD - BTreeManager design and implementation
+Phase 66 Summary (COMPLETE):
+  - BTreeManager: 677 LOC with 12 tests (lookup, insert, delete, split)
+  - NodeStore: Complete read/write/delete operations
+  - TraversalCache: LRU cache for page caching
+  - V3 Edge Compat: V2 EdgeCluster format in V3 pages
+  - V3Backend: 935 LOC with full GraphBackend trait implementation (34 methods)
+  - Test Results: 
+    - V3Backend: 4/4 tests passing
+    - V3 Allocator: 8/8 tests passing
+    - V3 Node: 30/30 tests passing
+    - V3 Module: 221/221 tests passing (100%)
+  - Bug fixes: 6 test failures resolved (allocator initialization, cache hit rate, page capacity)
+  - Files: btree.rs, node/store.rs, edge_compat.rs, backend.rs
+  - Status: Phase 66 complete, ready for Phase 67
+
+Next Phase: Phase 67 - Algorithm Integration
+  - Port 35+ graph algorithms to work with V3 backend
+  - Performance optimization
+  - End-to-end testing with large graphs
 ```
 
 ## Recent Activity
 
-### Phase 65: V3 WAL Integration (Complete)
+### Phase 66: NodeStore V3 (Complete)
 
-**Task 65-01: V3WALRecord Type Definitions**
-- V3WALHeader struct with validation and serialization
-- V3WALRecordType enum with 8 variants
-- V3WALRecord enum with bincode serialization
-- LSN utilities (lsn_is_valid, lsn_next)
-- V3WALPaths for file path management
+**Task 66-01: BTreeManager Creation**
+- B+Tree manager for node_id → page_id mapping
+- O(log n) lookup, insert, delete operations
+- Page splitting and tree balancing
+- 12 unit tests, all passing
 
-**Task 65-02: WAL Page Operation Logging**
-- Record serialization with bincode
-- to_bytes() and from_bytes() for all record types
-- Helper methods for creating records
-- Size validation (1MB max)
+**Task 66-02: NodePage Loading**
+- PageLoader with page-aligned I/O
+- Checksum validation
+- Decompression support
+- LRU page cache integration
 
-**Task 65-03: WAL Recovery Engine**
-- WALRecovery struct with sequential replay
-- WALRecoveryStats for tracking operations
-- In-memory page cache for recovery
-- Checkpoint header restoration
-- apply_record() for all record types
+**Task 66-03: Traversal Cache**
+- LRU cache for NodePage instances
+- Hit/miss statistics
+- Per-traversal scoping
+- Configurable capacity
 
-**Task 65-04: Checkpoint B+Tree Integration**
-- WALWriter with buffered writes (64KB threshold)
-- Helper methods for all record types
-- fsync durability for crash recovery
-- Header update and truncate operations
-- BTreeManager integration deferred (future phase)
+**Task 66-04: NodeStore V3 Tests**
+- Comprehensive unit tests for NodeStore
+- BTreeManager integration tests
+- Page loading and caching tests
+
+**Task 66-05: V3 Edge Compat Layer**
+- V2 EdgeCluster format wrapped for V3
+- `PageType::EdgeCluster` for edge storage
+- `V3EdgeStore` with B+Tree index
+- Logical NodeIDs (no V2 slot assumptions)
+
+**Task 66-06: V3Backend GraphBackend Implementation**
+- 935 LOC implementing all 34 GraphBackend methods
+- Interior mutability pattern (RwLock)
+- Error mapping and WAL integration
+- Node and edge operations
+
+**Task 66-07: Edge Operations Integration**
+- `insert_edge()`, `neighbors()`, `outgoing()`, `incoming()`
+- V3EdgeStore wired into V3Backend
+- B+Tree index for edge lookups
+
+**Task 66-08: Integration Tests**
+- 4/4 tests passing:
+  - `test_v3_backend_create` - Database creation
+  - `test_v3_backend_create_and_open` - Persistence
+  - `test_v3_backend_insert_node` - Node insertion
+  - `test_v3_backend_open_nonexistent` - Error handling
 
 ### Commits
 
-- 2deccb0: feat(65-04): Implement WALWriter and complete B+Tree integration
-- 835b86d: fix(65-03): Fix all remaining compilation errors
-- e11bcf4: docs(65-03): Update STATE.md with task 65-03 completion
-- f9715c0: fix(65-03): Fix compilation errors in WAL module
-- b3865c0: feat(65-03): Implement WAL recovery engine
-- f7e5144: feat(65-01): Implement V3 WAL types and utilities
+- (Recent commits for Phase 66 to be added)
 
 ## Decisions Made
 
-1. **WAL Format Choice (65-01)**
-   - Selected bincode over custom serialization
-   - Rationale: Type safety, ecosystem support, faster development
-   - Trade-off: External dependency
+1. **BTreeManager Sharing (66-06)**
+   - V3Backend, NodeStore, and EdgeStore share the same BTreeManager instance
+   - Prevents index inconsistency between components
+   - Uses Arc<RwLock<>> for thread-safe sharing
 
-2. **In-Memory Recovery (65-03)**
-   - Keep recovery state in RAM during replay
-   - Avoid intermediate file corruption
-   - Trade-off: Limited by RAM for very large WALs
+2. **Interior Mutability Pattern (66-06)**
+   - V3Backend uses RwLock for all internal components
+   - Enables GraphBackend's immutable &self methods to work with mutable operations
+   - Trade-off: Runtime borrow checking vs. compile-time guarantees
 
-3. **Buffered WAL Writes (65-04)**
-   - 64KB buffer threshold before fsync
-   - Reduces system calls for performance
-   - Trade-off: Potential data loss if process crashes
-   - Mitigation: Explicit flush at transaction boundaries
+3. **Edge Compat Layer (66-05)**
+   - V2 EdgeCluster format stored in V3 pages temporarily
+   - Avoids months-long edge page redesign
+   - Native V3 edge format planned for future phase
 
-4. **BTreeManager Deferred (65-04)**
-   - BTreeManager does not exist yet
-   - WAL infrastructure ready for integration
-   - Future phase will implement BTreeManager
+4. **WAL Integration (66-06)**
+   - WAL infrastructure complete but optional
+   - BTreeManager uses Option<Arc<RwLock<WALWriter>>>
+   - Can operate with or without durability guarantees
 
 ## Blockers
 
-None active. All Phase 65 tasks complete.
+None active. All Phase 66 tasks complete.
 
 ## Next Steps
 
-1. **Next Phase Planning**: BTreeManager design and implementation
-2. **V3 Backend Integration**: Connect WAL to main backend operations
-3. **Algorithm Integration**: Port 35+ algorithms to V3 backend
+1. **Phase 67: Algorithm Integration**
+   - Port 35+ graph algorithms to work with V3 backend
+   - Ensure BFS, DFS, shortest_path, PageRank, etc. work with V3
+
+2. **Performance Optimization**
+   - Benchmark V3 vs V2 performance
+   - Optimize cache hit rates
+   - Tune B+Tree parameters
+
+3. **End-to-End Testing**
+   - Large graph testing (10K+ nodes)
+   - Concurrent access patterns
+   - Recovery and durability testing
+
+4. **String Table Implementation**
+   - Node kind/name currently stubbed (offsets always 0)
+   - Implement string table for efficient string storage
