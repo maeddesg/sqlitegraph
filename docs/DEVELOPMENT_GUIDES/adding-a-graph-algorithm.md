@@ -1,7 +1,7 @@
 # Adding a Graph Algorithm
 
 **Last Updated:** 2026-02-12  
-**Version:** v1.6.0
+**Version:** v2.0.0
 
 This guide explains how to add a new graph algorithm to SQLiteGraph.
 

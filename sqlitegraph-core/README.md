@@ -5,7 +5,7 @@
 
 **Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
 
-## What's New in v1.6.0
+## What's New in v2.0.0
 
 **Improvement** - Removed verbose debug output
 - Cleaned up all DEBUG println!/eprintln! statements from native backend
@@ -240,7 +240,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlitegraph = "1.6.0"
+sqlitegraph = "2.0.0"
 ```
 
 ### SQLite Backend (Default)
@@ -341,13 +341,13 @@ graph.unsubscribe(subscriber_id)?;
 
 ```toml
 # Default - SQLite backend only
-sqlitegraph = "1.6.0"
+sqlitegraph = "2.0.0"
 
 # Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.6.0", features = ["native-v2"] }
+sqlitegraph = { version = "2.0.0", features = ["native-v2"] }
 
 # Development features - I/O tracing
-sqlitegraph = { version = "1.6.0", features = ["trace_v2_io"] }
+sqlitegraph = { version = "2.0.0", features = ["trace_v2_io"] }
 ```
 
 ## CLI Tool

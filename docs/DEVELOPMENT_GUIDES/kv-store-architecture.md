@@ -1,7 +1,7 @@
 # KV Store Architecture
 
 **Last Updated:** 2026-02-12  
-**Version:** v1.6.0
+**Version:** v2.0.0
 
 This guide explains SQLiteGraph's transactional Key-Value store architecture. The KV store is available on **all backends** (SQLite, V3, and V2).
 
@@ -35,7 +35,7 @@ The KV store provides a typed key-value interface with MVCC snapshot isolation a
 
 ### V3 Backend (Lazy Initialization)
 
-**New in v1.6.0:** V3 uses lazy initialization for zero overhead when unused.
+**New in v2.0.0:** V3 uses lazy initialization for zero overhead when unused.
 
 ```rust
 pub struct V3Backend {

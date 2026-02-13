@@ -1,7 +1,7 @@
 # Adding a CLI Command
 
 **Last Updated:** 2026-02-12  
-**Version:** v1.6.0
+**Version:** v2.0.0
 
 This guide explains how to add a new command to the SQLiteGraph CLI.
 
@@ -16,7 +16,7 @@ The SQLiteGraph CLI (`sqlitegraph-cli`) uses the `clap` crate for argument parsi
 | Backend | CLI Flag | Status |
 |---------|----------|--------|
 | SQLite | `--backend sqlite` | Stable, recommended for production |
-| Native V3 | `--backend native` | New in v1.6.0, recommended for development |
+| Native V3 | `--backend native` | New in v2.0.0, recommended for development |
 | Native V2 | `--backend v2` | Deprecated, removal in v1.7.0 |
 
 ---

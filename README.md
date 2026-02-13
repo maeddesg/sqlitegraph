@@ -25,7 +25,7 @@ SQLite backend: best for point lookups. Native V3: 10-20× faster for traversals
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "1.6"
+sqlitegraph = "2.0"
 
 # OR Native V3 backend (faster traversals)
 sqlitegraph = { version = "1.6", features = ["native-v3"] }

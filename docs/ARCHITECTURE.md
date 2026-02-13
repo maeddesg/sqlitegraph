@@ -1,7 +1,7 @@
 # SQLiteGraph Architecture
 
 **Last Updated:** 2026-02-12
-**Version:** v1.6.0
+**Version:** v2.0.0
 
 This document describes the architecture of SQLiteGraph from a developer's perspective. For user-facing documentation, see [README.md](../README.md) and [MANUAL.md](../MANUAL.md).
 
@@ -320,7 +320,7 @@ impl GraphBackend for V3Backend {
 - V3 has cleaner architecture (B+Tree vs clustered)
 
 **Timeline:**
-- v1.6.0: V2 deprecated but still available
+- v2.0.0: V3 stable, V2 removed
 - v1.7.0: V2 removed, V3 becomes primary native backend
 
 ---

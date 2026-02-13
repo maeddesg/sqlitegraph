@@ -1,6 +1,6 @@
 # SQLiteGraph API Reference
 
-**Version:** v1.6.0  
+**Version:** v2.0.0  
 **Last Updated:** 2026-02-12
 
 The complete API documentation is available at **[docs.rs/sqlitegraph](https://docs.rs/sqlitegraph)**.
@@ -87,7 +87,7 @@ let backend = SqliteGraphBackend::from_graph(graph);
 let graph = backend.graph();
 ```
 
-### Pub/Sub (New in v1.6.0)
+### Pub/Sub (New in v2.0.0)
 
 ```rust
 use sqlitegraph::backend::{SubscriptionFilter, PubSubEvent};
@@ -313,7 +313,7 @@ fn set_config(backend: &dyn GraphBackend) -> Result<(), SqliteGraphError> {
 | **SQLite** | ✅ Full | In-memory publisher |
 | **V2** | ✅ Full | In-memory publisher |
 
-**Note:** Before v1.6.0, Pub/Sub was documented as "V2 only" - this is now fixed.
+**Note:** Before v2.0.0, Pub/Sub was documented as "V2 only" - this is now fixed.
 
 ### Basic Usage
 
@@ -397,4 +397,4 @@ pub enum SqliteGraphError {
 
 ---
 
-**Note:** This API reference is accurate for v1.6.0. We document deprecations and limitations honestly - check backend-specific sections for feature availability.
+**Note:** This API reference is accurate for v2.0.0. We document deprecations and limitations honestly - check backend-specific sections for feature availability.

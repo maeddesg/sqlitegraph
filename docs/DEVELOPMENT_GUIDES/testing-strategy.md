@@ -1,7 +1,7 @@
 # Testing Strategy & Safety Guidelines
 
 **Last Updated:** 2026-02-12  
-**Version:** v1.6.0  
+**Version:** v2.0.0  
 **Status:** Critical - Read Before Testing
 
 ---
@@ -228,7 +228,7 @@ See [Benchmarks](#benchmarks) section below.
 **Document reality, don't sell hype.**
 
 ```
-SQLiteGraph V3: Performance and Storage Analysis (v1.6.0)
+SQLiteGraph V3: Performance and Storage Analysis (v2.0.0)
 ```
 
 Not:

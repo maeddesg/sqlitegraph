@@ -1,6 +1,6 @@
 # SQLiteGraph Changelog
 
-## [Unreleased] - 2026-02-12
+## [2.0.0] - 2026-02-13
 
 ### V3 Backend Feature Completion + SQLite Pub/Sub
 **Completed V3 backend with lazy initialization, HNSW storage, and added Pub/Sub to SQLite**
@@ -42,7 +42,7 @@
 - **Native V2 Backend**
   - Marked as deprecated in documentation
   - Hard 2048 node limit makes it unsuitable for production
-  - Will be removed in v1.7.0
+  - Will be removed in v2.1.0
   - Migration path: V2 → V3 (or V2 → SQLite → V3 as intermediate)
 
 ### Code Quality

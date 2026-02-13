@@ -1,7 +1,7 @@
 # HNSW Vector Store Internals
 
 **Last Updated:** 2026-02-12  
-**Version:** v1.6.0
+**Version:** v2.0.0
 
 This guide explains SQLiteGraph's HNSW (Hierarchical Navigable Small World) vector search implementation, available on **all backends** (SQLite, V3, V2).
 
@@ -45,7 +45,7 @@ src/hnsw/
 ├── distance_metric.rs # Distance metric definitions
 ├── distance_functions.rs # SIMD-optimized distance computation
 ├── storage.rs         # Vector storage abstraction + SQLite implementation
-├── v3_storage.rs      # V3 backend vector storage (NEW in v1.6.0)
+├── v3_storage.rs      # V3 backend vector storage (NEW in v2.0.0)
 ├── config.rs          # Configuration builder
 ├── errors.rs          # Error types
 ├── simd.rs            # SIMD intrinsics for AVX2
@@ -108,7 +108,7 @@ pub trait VectorStorage {
 
 **Implementations:**
 - `SQLiteVectorStorage` - SQL table storage
-- `V3VectorStorage` - KV store storage (NEW in v1.6.0)
+- `V3VectorStorage` - KV store storage (NEW in v2.0.0)
 - `InMemoryVectorStorage` - RAM only
 
 ---
@@ -143,7 +143,7 @@ let storage = SQLiteVectorStorage::new(index_id, conn);
 let index = HnswIndex::new_with_storage("my_index", config, Box::new(storage))?;
 ```
 
-### V3VectorStorage (NEW in v1.6.0)
+### V3VectorStorage (NEW in v2.0.0)
 
 Located in `v3_storage.rs`:
 

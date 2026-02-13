@@ -1,7 +1,7 @@
 # Query API Enhancements Guide
 
 **Last Updated:** 2026-02-12  
-**Version:** v1.6.0
+**Version:** v2.0.0
 
 This guide explains the query API for efficient data retrieval and pattern-based filtering.
 

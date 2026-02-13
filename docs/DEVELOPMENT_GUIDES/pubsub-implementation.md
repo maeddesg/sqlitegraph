@@ -1,7 +1,7 @@
 # Pub/Sub Implementation Guide
 
 **Last Updated:** 2026-02-12  
-**Version:** v1.6.0
+**Version:** v2.0.0
 
 This guide explains SQLiteGraph's pub/sub system, available on **all backends** (SQLite, V3, and V2).
 
@@ -15,7 +15,7 @@ SQLiteGraph provides an in-process, best-effort pub/sub system for graph change 
 
 | Backend | Status | Implementation | Notes |
 |---------|--------|----------------|-------|
-| **SQLite** | ✅ Full | In-memory Publisher | New in v1.6.0 |
+| **SQLite** | ✅ Full | In-memory Publisher | New in v2.0.0 |
 | **Native V3** | ✅ Full | Lazy-initialized Publisher | Zero overhead if unused |
 | **Native V2** | ✅ Full | In-memory Publisher | Original implementation |
 

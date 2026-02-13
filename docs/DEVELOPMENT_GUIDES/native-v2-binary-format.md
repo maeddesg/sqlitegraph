@@ -2,14 +2,14 @@
 
 **Status:** ⚠️ **DEPRECATED**  
 **Last Updated:** 2026-02-12  
-**Version:** v1.6.0  
+**Version:** v2.0.0  
 **Removal Target:** v1.7.0
 
 ---
 
 ## ⚠️ Deprecation Notice
 
-The Native V2 backend is **deprecated as of v1.6.0** and will be removed in v1.7.0.
+The Native V2 backend is **deprecated as of v2.0.0** and will be removed in v1.7.0.
 
 ### Migration Path
 
@@ -272,7 +272,7 @@ V2 was introduced in v1.3.0 as the first native binary format, providing:
 - Smaller file sizes
 - Direct memory mapping
 
-V3 (v1.6.0) supersedes V2 with:
+V3 (v2.0.0) supersedes V2 with:
 - Lazy-initialized KV store
 - HNSW vector storage support
 - Better memory management
