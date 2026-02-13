@@ -28,7 +28,7 @@ SQLite backend: best for point lookups. Native V3: 10-20× faster for traversals
 sqlitegraph = "2.0"
 
 # OR Native V3 backend (faster traversals)
-sqlitegraph = { version = "1.6", features = ["native-v3"] }
+sqlitegraph = { version = "2.0", features = ["native-v3"] }
 ```
 
 ```rust
