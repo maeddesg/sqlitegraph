@@ -1,3 +1,7 @@
 [build]
 target-dir = "target"
 
+[test]
+# Run tests sequentially to prevent desktop freezing from too many concurrent tests
+# Each V3 test creates files/mmaps that can exhaust resources when run in parallel
+test-threads = 1

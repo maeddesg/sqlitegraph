@@ -1,15 +1,23 @@
 # Pub/Sub Implementation Guide
 
-**Last Updated:** 2026-02-03
-**Version:** v1.4.2
+**Last Updated:** 2026-02-12  
+**Version:** v1.6.0
 
-This guide explains how SQLiteGraph's pub/sub system works internally and how to extend it.
+This guide explains SQLiteGraph's pub/sub system, available on **all backends** (SQLite, V3, and V2).
 
 ---
 
 ## Overview
 
-SQLiteGraph provides an in-process, best-effort pub/sub system for Native V2 backend. Events are emitted when transactions commit and carry only identifiers (node_id, edge_id, key_hash, snapshot_id).
+SQLiteGraph provides an in-process, best-effort pub/sub system for graph change notifications. Events are emitted synchronously when operations complete and carry only identifiers (consumers read actual data using the snapshot_id if needed).
+
+### Backend Support
+
+| Backend | Status | Implementation | Notes |
+|---------|--------|----------------|-------|
+| **SQLite** | ✅ Full | In-memory Publisher | New in v1.6.0 |
+| **Native V3** | ✅ Full | Lazy-initialized Publisher | Zero overhead if unused |
+| **Native V2** | ✅ Full | In-memory Publisher | Original implementation |
 
 ### Key Characteristics
 
@@ -18,8 +26,9 @@ SQLiteGraph provides an in-process, best-effort pub/sub system for Native V2 bac
 | **Scope** | In-process only (no networking/IPC) |
 | **Delivery** | Best-effort via `std::sync::mpsc` channels |
 | **Event Content** | ID-only (consumers read actual data using snapshot_id) |
-| **Emission** | Only on commit, not rollback |
+| **Emission** | Synchronous on successful operation |
 | **Persistence** | None - events are lost if not delivered |
+| **Filtering** | By event type (Node, Edge, KV, Commit) |
 
 ---
 
@@ -27,41 +36,59 @@ SQLiteGraph provides an in-process, best-effort pub/sub system for Native V2 bac
 
 ### Module Structure
 
+**Generic Types** (all backends):
 ```
-src/backend/native/v2/pubsub/
-├── mod.rs          # Public exports and module documentation
-├── event.rs        # Event type definitions (PubSubEvent, PubSubEventType)
-├── subscriber.rs   # Subscription management (Subscriber, SubscriptionFilter)
-├── publisher.rs    # Channel-based event delivery (Publisher)
-├── emit.rs         # WAL record to event conversion
-└── tests.rs        # Integration tests (59 tests passing)
+src/backend/mod.rs
+├── PubSubEvent       # Event enum (NodeChanged, EdgeChanged, KVChanged, SnapshotCommitted)
+├── PubSubEventType   # Event type enum
+└── SubscriptionFilter # Filter struct
+```
+
+**Per-Backend Implementation:**
+
+```
+SQLite Backend:
+src/backend/sqlite/impl_.rs
+├── Publisher (private struct)
+├── subscribe() -> (u64, Receiver<PubSubEvent>)
+└── Events emitted in insert_node(), insert_edge()
+
+V3 Backend:
+src/backend/native/v3/
+├── backend.rs
+│   ├── publisher: RwLock<Option<Publisher>>  # Lazy init
+│   ├── subscribe() / unsubscribe()
+│   └── Events emitted in insert_node(), insert_edge(), kv_set()
+└── pubsub/
+    ├── publisher.rs    # Publisher implementation
+    └── types.rs        # V3-specific types
 ```
 
 ### Data Flow
 
 ```
-Transaction Commit
+User calls insert_node()
         │
         ▼
 ┌───────────────────────────────────────┐
-│  V2WALManager::commit_internal()     │
-│  - Writes WAL records                │
-│  - Calls publisher.emit(events)      │
+│  Backend::insert_node()              │
+│  - Write to storage                  │
+│  - If publisher initialized:         │
+│    publisher.emit(NodeChanged {...}) │
 └───────────────┬───────────────────────┘
                 │
                 ▼
 ┌───────────────────────────────────────┐
 │  Publisher::emit()                    │
-│  - Iterates subscribers              │
-│  - Checks each subscription filter   │
-│  - Sends to matching channels        │
+│  - Iterate subscribers               │
+│  - Check SubscriptionFilter::matches │
+│  - Send to matching channels         │
 └───────────────┬───────────────────────┘
                 │
                 ▼
 ┌───────────────────────────────────────┐
-│  Subscriber Channel (mpsc)            │
-│  - Receivers get events via .recv()   │
-│  - Non-blocking try_recv() available │
+│  Subscriber Receiver (mpsc)           │
+│  - User code receives via .recv()    │
 └───────────────────────────────────────┘
 ```
 
@@ -69,45 +96,173 @@ Transaction Commit
 
 ## Event Types
 
-### PubSubEvent Enum
-
-Located in `event.rs`:
+### PubSubEvent Enum (All Backends)
 
 ```rust
 pub enum PubSubEvent {
     NodeChanged {
         node_id: i64,
-        snapshot_id: SnapshotId,
+        snapshot_id: u64,      // Snapshot when change occurred
     },
     EdgeChanged {
         edge_id: i64,
-        snapshot_id: SnapshotId,
+        snapshot_id: u64,
     },
     KVChanged {
-        key_hash: u64,
-        snapshot_id: SnapshotId,
+        key_hash: u64,         // Hash of the key (not the key itself)
+        snapshot_id: u64,
     },
     SnapshotCommitted {
-        snapshot_id: SnapshotId,
+        snapshot_id: u64,      // Transaction committed
     },
 }
 ```
 
-### Event Conversion
+### Event Emission by Backend
 
-WAL records are converted to events in `emit.rs`:
+| Operation | SQLite | V3 | V2 |
+|-----------|--------|----|----|
+| `insert_node()` | ✅ NodeChanged | ✅ NodeChanged | ✅ NodeChanged |
+| `insert_edge()` | ✅ EdgeChanged | ✅ EdgeChanged | ✅ EdgeChanged |
+| `kv_set()` | ❌ N/A | ✅ KVChanged | ✅ KVChanged |
+| `kv_delete()` | ❌ N/A | ✅ KVChanged | ✅ KVChanged |
+| Transaction commit | ❌ (no explicit tx) | ✅ SnapshotCommitted | ✅ SnapshotCommitted |
+
+---
+
+## Usage Examples
+
+### Basic Subscription (Any Backend)
 
 ```rust
-pub fn records_to_events(
-    records: &[WALRecord],
-    snapshot_id: SnapshotId,
-) -> Vec<PubSubEvent> {
-    // Convert NodeInserted, NodeUpdated -> NodeChanged
-    // Convert EdgeInserted, EdgeUpdated -> EdgeChanged
-    // Convert KVPut, KVDelete -> KVChanged
-    // Always emit SnapshotCommitted at the end
+use sqlitegraph::backend::{GraphBackend, NodeSpec, SubscriptionFilter, PubSubEvent};
+
+fn watch_changes(backend: &dyn GraphBackend) -> Result<(), SqliteGraphError> {
+    // Subscribe to all node changes
+    let filter = SubscriptionFilter {
+        node_changes: true,
+        edge_changes: false,
+        kv_changes: false,
+        snapshot_commits: false,
+    };
+    
+    let (sub_id, rx) = backend.subscribe(filter)?;
+    
+    // Spawn receiver thread
+    std::thread::spawn(move || {
+        while let Ok(event) = rx.recv() {
+            match event {
+                PubSubEvent::NodeChanged { node_id, snapshot_id } => {
+                    println!("Node {} changed at snapshot {}", node_id, snapshot_id);
+                }
+                _ => {}
+            }
+        }
+    });
+    
+    // Create a node - event will be emitted
+    backend.insert_node(NodeSpec {
+        kind: "User".to_string(),
+        name: "Alice".to_string(),
+        file_path: None,
+        data: serde_json::json!({"role": "admin"}),
+    })?;
+    
+    // Cleanup
+    backend.unsubscribe(sub_id)?;
+    Ok(())
 }
 ```
+
+### Filtered Subscription
+
+```rust
+// Only edge changes
+let filter = SubscriptionFilter {
+    node_changes: false,
+    edge_changes: true,
+    kv_changes: false,
+    snapshot_commits: false,
+};
+
+// Multiple types
+let filter = SubscriptionFilter::all();  // All event types
+```
+
+### Reading Changed Data
+
+```rust
+use sqlitegraph::snapshot::SnapshotId;
+
+while let Ok(PubSubEvent::NodeChanged { node_id, snapshot_id }) = rx.recv() {
+    // Read the node at the snapshot when it changed
+    let snapshot = SnapshotId::from(snapshot_id);
+    match backend.get_node(snapshot, node_id) {
+        Ok(node) => println!("Updated node: {:?}", node),
+        Err(e) => println!("Node was deleted or error: {}", e),
+    }
+}
+```
+
+---
+
+## Backend-Specific Details
+
+### SQLite Backend
+
+**Implementation:** Simple in-memory Publisher
+
+```rust
+// SqliteGraphBackend
+pub struct Publisher {
+    subscribers: Vec<(u64, Sender<PubSubEvent>, SubscriptionFilter)>,
+    next_id: AtomicU64,
+}
+```
+
+**Events emitted:**
+- `insert_node()` → `NodeChanged`
+- `insert_edge()` → `EdgeChanged`
+
+**Note:** No KV events (SQLite backend doesn't emit KV change events as KV is SQL-based).
+
+### V3 Backend (Lazy Initialization)
+
+**Implementation:** Publisher only created when first subscriber connects
+
+```rust
+pub struct V3Backend {
+    publisher: RwLock<Option<Publisher>>,  // Lazy
+}
+
+fn subscribe(&self, filter: SubscriptionFilter) -> Result<...> {
+    // Initialize publisher on first subscribe
+    if self.publisher.read().is_none() {
+        *self.publisher.write() = Some(Publisher::new());
+    }
+    // ... subscribe logic
+}
+```
+
+**Inspection:**
+```rust
+let backend = V3Backend::create("data.graph")?;
+assert!(!backend.is_pubsub_initialized());  // false
+
+let (sub_id, rx) = backend.subscribe(SubscriptionFilter::all())?;
+assert!(backend.is_pubsub_initialized());   // true
+```
+
+**Events emitted:**
+- `insert_node()` → `NodeChanged`
+- `insert_edge()` → `EdgeChanged`
+- `kv_set()` / `kv_delete()` → `KVChanged`
+
+### V2 Backend
+
+**Implementation:** Always-allocated Publisher (not lazy)
+
+**Note:** V2 is deprecated. Use V3 for new projects.
 
 ---
 
@@ -115,471 +270,146 @@ pub fn records_to_events(
 
 ### SubscriptionFilter Structure
 
-Located in `subscriber.rs`:
-
 ```rust
 pub struct SubscriptionFilter {
-    /// Event type filter (Node, Edge, KV, Commit, or All)
-    pub event_types: Vec<PubSubEventType>,
+    /// Subscribe to NodeChanged events
+    pub node_changes: bool,
+    
+    /// Subscribe to EdgeChanged events
+    pub edge_changes: bool,
+    
+    /// Subscribe to KVChanged events
+    pub kv_changes: bool,
+    
+    /// Subscribe to SnapshotCommitted events
+    pub snapshot_commits: bool,
+}
 
-    /// Specific node IDs to watch (empty = all nodes)
-    pub node_ids: Vec<i64>,
-
-    /// Specific edge IDs to watch (empty = all edges)
-    pub edge_ids: Vec<i64>,
-
-    /// Specific key hashes to watch (empty = all keys)
-    pub key_hashes: Vec<u64>,
-
-    /// Glob patterns for node kind (e.g., ["agent:*", "user:*"])
-    pub kind_patterns: Vec<String>,
-
-    /// Glob patterns for node name (e.g., ["msg_index:*"])
-    pub name_patterns: Vec<String>,
+impl SubscriptionFilter {
+    pub fn all() -> Self {
+        Self {
+            node_changes: true,
+            edge_changes: true,
+            kv_changes: true,
+            snapshot_commits: true,
+        }
+    }
 }
 ```
 
-### Filter Matching Logic
+### Filter Matching
 
 ```rust
 impl SubscriptionFilter {
-    /// Check if an event matches this subscription
-    pub fn matches(&self, event: &PubSubEvent, metadata: Option<&NodeMetadata>) -> bool {
-        // 1. Check event type
-        if !self.event_types.contains(&event.event_type()) {
-            return false;
-        }
-
-        // 2. Check ID-based filters
+    pub fn should_send(&self, event: &PubSubEvent) -> bool {
         match event {
-            PubSubEvent::NodeChanged { node_id, .. } => {
-                if !self.node_ids.is_empty() && !self.node_ids.contains(node_id) {
-                    return false;
-                }
-            }
-            // ... similar for EdgeChanged, KVChanged
-        }
-
-        // 3. Check pattern filters (requires metadata)
-        if let Some(meta) = metadata {
-            if !self.kind_patterns.is_empty() {
-                if !self.kind_patterns.iter().any(|p| glob_matches(p, &meta.kind)) {
-                    return false;
-                }
-            }
-            if !self.name_patterns.is_empty() {
-                if !self.name_patterns.iter().any(|p| glob_matches(p, &meta.name)) {
-                    return false;
-                }
-            }
-        }
-
-        true
-    }
-}
-```
-
-### Pattern Performance Note
-
-> **Important:** Pattern filters require fetching node metadata at publish time, which has performance cost. Use ID-based filters when possible.
-
----
-
-## Publisher Implementation
-
-### Channel-Based Delivery
-
-Located in `publisher.rs`:
-
-```rust
-pub struct Publisher {
-    /// Channel senders for each subscriber
-    senders: Arc<Mutex<Vec<(SubscriberId, Sender<PubSubEvent>, SubscriptionFilter)>>>,
-    next_id: Arc<Mutex<u64>>,
-}
-
-impl Publisher {
-    pub fn subscribe(
-        &self,
-        filter: SubscriptionFilter,
-    ) -> Result<(SubscriberId, Receiver<PubSubEvent>), Error> {
-        let (tx, rx) = mpsc::channel();
-        let id = SubscriberId::new();
-        let mut senders = self.senders.lock().unwrap();
-        senders.push((id, tx, filter));
-        Ok((id, rx))
-    }
-
-    pub fn unsubscribe(&self, id: SubscriberId) -> bool {
-        let mut senders = self.senders.lock().unwrap();
-        let original_len = senders.len();
-        senders.retain(|(sub_id, _, _)| *sub_id != id);
-        senders.len() < original_len
-    }
-
-    pub fn emit(&self, event: &PubSubEvent, metadata: Option<&NodeMetadata>) {
-        let senders = self.senders.lock().unwrap();
-        for (subscriber_id, sender, filter) in senders.iter() {
-            if filter.matches(event, metadata) {
-                // Best-effort: ignore errors if channel full/closed
-                let _ = sender.send(event.clone());
-            }
+            PubSubEvent::NodeChanged { .. } => self.node_changes,
+            PubSubEvent::EdgeChanged { .. } => self.edge_changes,
+            PubSubEvent::KVChanged { .. } => self.kv_changes,
+            PubSubEvent::SnapshotCommitted { .. } => self.snapshot_commits,
         }
     }
 }
 ```
 
-### Best-Effort Semantics
-
-The `emit()` method uses `let _ =` to intentionally ignore send errors:
-- **Channel full**: Event is dropped (no blocking on commit path)
-- **Receiver dropped**: Event is dropped (subscriber gone)
-- **No retry**: Events are fire-and-forget
-
 ---
 
-## WAL Integration
+## Best Practices
 
-### Event Emission on Commit
-
-Events are emitted in `V2WALManager::commit_internal()`:
+### 1. Handle Channel Closure
 
 ```rust
-// After writing WAL records successfully
-let events = records_to_events(&records, self.snapshot_id);
+while let Ok(event) = rx.recv() {
+    // Process event
+}
+// Channel closed - subscriber was dropped or backend shut down
+```
 
-// Emit events (non-blocking)
-let publisher = self.publisher.read();
-for (record_index, record) in records.iter().enumerate() {
-    if let Some(event) = events.get(record_index) {
-        // For NodeChanged/EdgeChanged, fetch metadata for pattern matching
-        let metadata = extract_node_metadata(record, &self.backend);
-        publisher.emit(event, metadata.as_ref());
+### 2. Don't Block the Emitter
+
+```rust
+// BAD: Slow processing blocks insert_node() return
+while let Ok(event) = rx.recv() {
+    expensive_operation(event);  // Blocks emitter!
+}
+
+// GOOD: Spawn separate thread for processing
+let (tx, rx) = mpsc::channel();
+std::thread::spawn(move || {
+    while let Ok(event) = rx.recv() {
+        expensive_operation(event);
     }
-}
+});
 
-// Always emit commit event
-publisher.emit(&PubSubEvent::SnapshotCommitted { snapshot_id }, None);
-```
-
-### No Events on Rollback
-
-Rollback does **not** emit events:
-
-```rust
-pub fn rollback(&self) -> Result<(), Error> {
-    // Discard WAL records
-    self.pending_records.write().unwrap().clear();
-
-    // NO events emitted for rollback
-    Ok(())
+// Quick forward from pub/sub channel
+while let Ok(event) = backend_rx.recv() {
+    let _ = tx.send(event);  // Non-blocking, may drop if full
 }
 ```
 
----
-
-## Adding New Event Types
-
-### Step 1: Define Event Type
-
-Add to `event.rs`:
+### 3. Unsubscribe When Done
 
 ```rust
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PubSubEvent {
-    // ... existing events
+let (sub_id, rx) = backend.subscribe(filter)?;
 
-    /// Your new event type
-    YourEventType {
-        /// Event-specific data
-        your_id: u64,
-        snapshot_id: SnapshotId,
-    },
-}
+// ... use subscription ...
+
+drop(rx);  // Drop receiver first
+backend.unsubscribe(sub_id)?;  // Then unsubscribe
 ```
 
-### Step 2: Add Event Type Category
-
-Update `PubSubEventType`:
+### 4. Don't Rely on Delivery
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PubSubEventType {
-    // ... existing types
-    YourEventType,  // Add this
-}
-```
+// Pub/sub is best-effort - events may be dropped
+// Always have a way to query current state
 
-### Step 3: Implement Conversion
+// Instead of:
+assert!(rx.recv().is_ok());  // May fail!
 
-Update `event.rs` to add `event_type()` method:
-
-```rust
-impl PubSubEvent {
-    pub fn event_type(&self) -> PubSubEventType {
-        match self {
-            // ... existing cases
-            PubSubEvent::YourEventType { .. } => PubSubEventType::YourEventType,
-        }
-    }
-}
-```
-
-### Step 4: Add WAL Conversion
-
-Update `emit.rs`:
-
-```rust
-pub fn records_to_events(
-    records: &[WALRecord],
-    snapshot_id: SnapshotId,
-) -> Vec<PubSubEvent> {
-    let mut events = Vec::new();
-
-    for record in records {
-        match record {
-            WALRecord::YourRecordType { your_id, .. } => {
-                events.push(PubSubEvent::YourEventType {
-                    your_id: *your_id,
-                    snapshot_id,
-                });
-            }
-            // ... existing cases
-        }
-    }
-
-    events
-}
-```
-
-### Step 5: Update Filter Matching
-
-Update `subscriber.rs`:
-
-```rust
-impl SubscriptionFilter {
-    pub fn matches(&self, event: &PubSubEvent, metadata: Option<&NodeMetadata>) -> bool {
-        // Check event type
-        let event_type = event.event_type();
-        if !self.event_types.contains(&event_type) {
-            return false;
-        }
-
-        // Handle your event type specific matching
-        if let PubSubEvent::YourEventType { your_id, .. } = event {
-            if !self.your_ids.is_empty() && !self.your_ids.contains(your_id) {
-                return false;
-            }
-        }
-
-        // ... rest of matching logic
-    }
+// Do:
+if let Ok(event) = rx.recv_timeout(Duration::from_secs(1)) {
+    // Process event
+} else {
+    // Fallback: query current state
+    let current = backend.get_node(snapshot, node_id)?;
 }
 ```
 
 ---
 
-## Testing Pub/Sub Features
+## Testing
 
-### Unit Test Template
+```bash
+# SQLite Pub/Sub tests
+cargo test --lib backend::sqlite::pubsub_tests
 
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::backend::native::v2::pubsub::{Publisher, SubscriptionFilter};
+# V3 Pub/Sub tests  
+cargo test --features native-v3 --lib lazy_init_tests
 
-    #[test]
-    fn test_subscription_filter() {
-        let filter = SubscriptionFilter {
-            event_types: vec![PubSubEventType::Node],
-            node_ids: vec![1, 2, 3],
-            ..Default::default()
-        };
-
-        let event = PubSubEvent::NodeChanged {
-            node_id: 2,
-            snapshot_id: 100,
-        };
-
-        assert!(filter.matches(&event, None));
-    }
-
-    #[test]
-    fn test_pattern_filter() {
-        let filter = SubscriptionFilter {
-            kind_patterns: vec!["agent:*".to_string()],
-            ..Default::default()
-        };
-
-        let metadata = NodeMetadata {
-            kind: "agent:worker".to_string(),
-            name: "agent-123".to_string(),
-        };
-
-        let event = PubSubEvent::NodeChanged {
-            node_id: 1,
-            snapshot_id: 100,
-        };
-
-        assert!(filter.matches(&event, Some(&metadata)));
-    }
-}
-```
-
-### Integration Test Template
-
-See `src/backend/native/v2/pubsub/tests.rs` for full integration test examples. Key scenarios:
-
-1. **Event emission on commit** - verify events emitted when transaction commits
-2. **No events on rollback** - verify no events when transaction rolls back
-3. **Filter by event type** - subscribers only receive matching event types
-4. **Filter by entity IDs** - subscribers only receive matching node/edge/key IDs
-5. **Pattern filters** - glob pattern matching on kind/name
-6. **Multiple subscribers** - each subscriber gets independent events
-7. **Unsubscribe** - verify events stop after unsubscribe
-
----
-
-## Performance Considerations
-
-### Emission Path
-
-Event emission is **synchronous** on the commit path. Keep it fast:
-
-| Consideration | Recommendation |
-|---------------|----------------|
-| Channel capacity | Use bounded channels (default: 1000 messages) |
-| Event cloning | Events are `Clone`, keep them small |
-| Filter matching | O(subscribers) per event, keep subscriber count reasonable |
-| Pattern matching | O(patterns) per event, use ID filters when possible |
-
-### Memory Usage
-
-| Component | Memory Impact |
-|-----------|---------------|
-| Unbounded channels | Unbounded memory growth (not recommended) |
-| Per-subscriber channels | ~1KB per subscriber (sender + receiver) |
-| Event queue | Depends on channel capacity and subscriber speed |
-
-### Scaling Limits
-
-| Limit | Approximate Value |
-|-------|-------------------|
-| Max subscribers | ~1000 (practical, limited by lock contention) |
-| Max events/second | ~100K (depends on subscriber consumption speed) |
-| Channel capacity | 1000 messages (default, configurable) |
-
----
-
-## Common Patterns
-
-### Subscribe to All Node Changes
-
-```rust
-let filter = SubscriptionFilter {
-    event_types: vec![PubSubEventType::Node],
-    ..Default::default()
-};
-
-let (id, rx) = publisher.subscribe(filter)?;
-```
-
-### Subscribe to Specific Node
-
-```rust
-let filter = SubscriptionFilter {
-    node_ids: vec![123],
-    ..Default::default()
-};
-
-let (id, rx) = publisher.subscribe(filter)?;
-```
-
-### Subscribe by Pattern (Agent Messaging)
-
-```rust
-let filter = SubscriptionFilter {
-    kind_patterns: vec!["agent:*".to_string()],
-    name_patterns: vec!["msg_to:agent-*".to_string()],
-    ..Default::default()
-};
-
-let (id, rx) = publisher.subscribe(filter)?;
-```
-
-### Non-Polling Event Loop
-
-```rust
-use std::sync::mpsc::RecvTimeoutError;
-
-let (id, rx) = publisher.subscribe(filter)?;
-
-loop {
-    match rx.recv_timeout(Duration::from_secs(1)) {
-        Ok(event) => handle_event(event),
-        Err(RecvTimeoutError::Timeout) => continue,
-        Err(RecvTimeoutError::Disconnected) => break,
-    }
-}
+# All 12 tests covering:
+# - Subscribe/unsubscribe
+# - Node creation events
+# - Edge creation events
+# - Filtered subscriptions
+# - Multiple subscribers
+# - No events after unsubscribe
 ```
 
 ---
 
-## Troubleshooting
+## Limitations
 
-### Issue: Events not received
-
-**Possible causes:**
-1. Transaction rolled back (not committed) - events only emit on commit
-2. Filter doesn't match - check event type and ID filters
-3. Channel full - events dropped when channel at capacity
-4. Subscriber unsubscribed - verify subscriber ID still active
-
-**Debug:**
-```rust
-eprintln!("Subscriber count: {}", publisher.subscriber_count());
-eprintln!("Filter: {:?}", filter);
-```
-
-### Issue: Slow commit path
-
-**Possible cause:** Too many subscribers or expensive pattern matching
-
-**Solutions:**
-1. Reduce number of subscribers
-2. Use ID-based filters instead of patterns
-3. Batch operations to reduce commit frequency
-
-### Issue: Memory growing
-
-**Possible cause:** Slow consumer blocking channel
-
-**Solutions:**
-1. Use `try_recv()` instead of `recv()` to avoid blocking
-2. Add timeout to `recv_timeout()`
-3. Spawn dedicated task to drain channel
+1. **In-process only** - No network/IPC support
+2. **Best-effort delivery** - Events may be dropped if channel full
+3. **No persistence** - Events lost if process crashes
+4. **No replay** - Subscribe after event = won't receive it
+5. **SQLite backend** - No KV change events (KV is SQL-based)
 
 ---
 
-## References
+## See Also
 
-- **Source:** `src/backend/native/v2/pubsub/`
-- **Tests:** 59 passing in `pubsub/tests.rs`
-- **Related:** `src/backend/native/pattern.rs` for glob matching
-- **User Docs:** `MANUAL.md` Section 14: Pub/Sub Events
-- **Comparison:** `docs/PUBSUB_COMPARISON.md` (Redis comparison)
-
----
-
-## Future Enhancements (Not Implemented)
-
-Potential areas for extension:
-
-1. **Async API** - `async fn subscribe()` returning `Stream<Event>`
-2. **Persistence** - Optional event persistence for replay
-3. **Filter language** - More powerful expression language
-4. **Event batching** - Batch multiple events per channel message
-5. **Priority channels** - High/low priority event delivery
-
-Note: These are **not currently planned** - the pub/sub system is intentionally minimal.
+- [KV Store Architecture](kv-store-architecture.md) - KV change events
+- [Architecture](../../ARCHITECTURE.md) - Backend comparison
+- [API Reference](../../API.md) - Pub/Sub API

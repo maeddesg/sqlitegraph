@@ -33,7 +33,7 @@ cargo doc --workspace --no-deps
 
 ### Code Organization
 
-- Module files limited to 300 lines maximum
+- Module files should be focused and maintainable (target: <500 lines)
 - Strict module boundaries with clear interfaces
 - No circular dependencies between modules
 - Internal invariants documented in code comments

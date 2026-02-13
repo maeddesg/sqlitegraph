@@ -1,87 +1,81 @@
-//! Minimal BackendClient wrapper for v0.2.5 compatibility
-//!
-//! This provides a simplified BackendClient that wraps existing v0.2.5 backends
-//! without the missing pipeline/subgraph/safety modules.
+use sqlitegraph::backend::GraphBackend;
+use sqlitegraph::backend::SqliteGraphBackend;
 
-use sqlitegraph::{GraphBackend, NativeGraphBackend, SqliteGraph, SqliteGraphBackend};
-
-/// Minimal client wrapper for v0.2.5
-pub enum BackendClient {
+/// CLI backend client supporting SQLite and V3 backends
+pub enum CliClient {
     Sqlite(SqliteGraphBackend),
-    Native(NativeGraphBackend),
-    /// Dynamic backend for factory-created backends (e.g., from open_graph())
-    Dynamic(Box<dyn GraphBackend>),
+    #[cfg(feature = "native-v3")]
+    V3(sqlitegraph::backend::native::v3::V3Backend),
 }
 
-impl BackendClient {
-    pub fn new(backend: SqliteGraphBackend) -> Self {
-        Self::Sqlite(backend)
+impl CliClient {
+    /// Open database with specified backend
+    pub fn open(
+        backend: super::cli::BackendType,
+        path: &std::path::Path,
+    ) -> anyhow::Result<Self> {
+        match backend {
+            super::cli::BackendType::Sqlite => {
+                let graph = sqlitegraph::SqliteGraph::open(path)?;
+                Ok(Self::Sqlite(SqliteGraphBackend::from_graph(graph)))
+            }
+            #[cfg(feature = "native-v3")]
+            super::cli::BackendType::V3 => {
+                use sqlitegraph::backend::native::v3::V3Backend;
+                let backend = if path.exists() {
+                    V3Backend::open(path)?
+                } else {
+                    V3Backend::create(path)?
+                };
+                Ok(Self::V3(backend))
+            }
+        }
     }
 
-    pub fn new_native(backend: NativeGraphBackend) -> Self {
-        Self::Native(backend)
+    /// Open in-memory database
+    pub fn open_in_memory(backend: super::cli::BackendType) -> anyhow::Result<Self> {
+        match backend {
+            super::cli::BackendType::Sqlite => {
+                let graph = sqlitegraph::SqliteGraph::open_in_memory()?;
+                Ok(Self::Sqlite(SqliteGraphBackend::from_graph(graph)))
+            }
+            #[cfg(feature = "native-v3")]
+            super::cli::BackendType::V3 => {
+                anyhow::bail!("V3 backend does not support in-memory mode")
+            }
+        }
     }
 
-    /// Create from a boxed trait object (e.g., from open_graph factory)
-    pub fn from_dynamic(backend: Box<dyn GraphBackend>) -> Self {
-        Self::Dynamic(backend)
-    }
-
-    /// Get the GraphBackend trait object
+    /// Get backend trait object
     pub fn backend(&self) -> &dyn GraphBackend {
         match self {
-            BackendClient::Sqlite(b) => b,
-            BackendClient::Native(b) => b,
-            BackendClient::Dynamic(b) => b.as_ref(),
+            Self::Sqlite(b) => b,
+            #[cfg(feature = "native-v3")]
+            Self::V3(b) => b,
         }
     }
 
-    /// Get the underlying SqliteGraph if this is a SQLite backend
-    pub fn graph(&self) -> Option<&SqliteGraph> {
+    /// Get SQLite graph reference (if SQLite backend)
+    pub fn sqlite_graph(&self) -> Option<&sqlitegraph::SqliteGraph> {
         match self {
-            BackendClient::Sqlite(b) => Some(b.graph()),
-            BackendClient::Native(_) => None,
-            BackendClient::Dynamic(_) => None,
+            Self::Sqlite(b) => Some(b.graph()),
+            #[cfg(feature = "native-v3")]
+            Self::V3(_) => None,
         }
     }
 
-    /// Get all entity IDs if this is a SQLite backend
-    pub fn entity_ids(&self) -> Result<Option<Vec<i64>>, sqlitegraph::SqliteGraphError> {
+    /// Get backend name
+    pub fn backend_name(&self) -> &'static str {
         match self {
-            BackendClient::Sqlite(b) => Ok(Some(b.entity_ids()?)),
-            BackendClient::Native(_) => Ok(None),
-            BackendClient::Dynamic(_) => Ok(None),
+            Self::Sqlite(_) => "sqlite",
+            #[cfg(feature = "native-v3")]
+            Self::V3(_) => "v3",
         }
     }
 
-    /// Get backend type name for debugging
-    pub fn backend_type(&self) -> &str {
-        match self {
-            BackendClient::Sqlite(_) => "sqlite",
-            BackendClient::Native(_) => "native",
-            BackendClient::Dynamic(_) => "dynamic",
-        }
-    }
-
-    /// Get WAL metrics (only available for Native backend with native-v2 feature)
-    #[cfg(feature = "native-v2")]
-    pub fn get_wal_metrics(
-        &self,
-    ) -> Option<sqlitegraph::backend::native::v2::wal::WALManagerMetrics> {
-        match self {
-            BackendClient::Native(b) => b.get_wal_metrics(),
-            BackendClient::Dynamic(_) => None, // Dynamic backends don't expose WAL-specific methods
-            BackendClient::Sqlite(_) => None,
-        }
-    }
-
-    /// Get active transaction count (only available for Native backend with native-v2 feature)
-    #[cfg(feature = "native-v2")]
-    pub fn get_active_transaction_count(&self) -> Option<usize> {
-        match self {
-            BackendClient::Native(b) => b.get_active_transaction_count(),
-            BackendClient::Dynamic(_) => None,
-            BackendClient::Sqlite(_) => None,
-        }
+    /// Get node count
+    pub fn node_count(&self) -> anyhow::Result<usize> {
+        let ids = self.backend().entity_ids()?;
+        Ok(ids.len())
     }
 }

@@ -27,7 +27,7 @@
 
 ## Overview
 
-SQLiteGraph v1.3.0 includes a comprehensive graph algorithms library with **35 algorithms** across **13 categories**. These algorithms enable:
+SQLiteGraph v1.3.0 includes a graph algorithms library with **35 algorithms** across **13 categories**. These algorithms enable:
 
 - **CFG Analysis**: Dominators, control dependence, natural loops
 - **Program Slicing**: Forward/backward slicing for impact analysis
@@ -42,7 +42,7 @@ All algorithms:
 - Accept `&dyn GraphBackend` (works with both SQLite and Native V2)
 - Return results in `HashMap<u64, T>` (node-scoped)
 - Support progress tracking via `_with_progress` variants
-- Include comprehensive tests
+- Include tests
 - Cross-validated against petgraph reference implementations
 
 ---

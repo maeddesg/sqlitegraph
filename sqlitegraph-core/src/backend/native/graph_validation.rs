@@ -1,0 +1,423 @@
+//! Validation and error mapping utilities for native graph backend.
+
+use super::types::*;
+use crate::SqliteGraphError;
+use crate::backend::{EdgeSpec, NodeSpec};
+use crate::graph::GraphEntity;
+
+/// Error mapping from NativeBackendError to SqliteGraphError
+pub fn map_to_graph_error(err: NativeBackendError) -> SqliteGraphError {
+    match err {
+        NativeBackendError::Io(e) => SqliteGraphError::connection(e.to_string()),
+        NativeBackendError::SerializationError { context } => {
+            SqliteGraphError::connection(format!("Serialization error: {}", context))
+        }
+        NativeBackendError::DeserializationError { context } => {
+            SqliteGraphError::connection(format!("Deserialization error: {}", context))
+        }
+        NativeBackendError::InvalidNodeId { id, max_id } => {
+            SqliteGraphError::query(format!("Invalid node ID: {} (max: {})", id, max_id))
+        }
+        NativeBackendError::InvalidEdgeId { id, max_id } => {
+            SqliteGraphError::query(format!("Invalid edge ID: {} (max: {})", id, max_id))
+        }
+        NativeBackendError::CorruptNodeRecord { node_id, reason } => {
+            SqliteGraphError::connection(format!("Corrupt node record {}: {}", node_id, reason))
+        }
+        NativeBackendError::CorruptEdgeRecord { edge_id, reason } => {
+            SqliteGraphError::connection(format!("Corrupt edge record {}: {}", edge_id, reason))
+        }
+        NativeBackendError::FileTooSmall { size, min_size } => {
+            SqliteGraphError::connection(format!("File too small: {} < {}", size, min_size))
+        }
+        NativeBackendError::RecordTooLarge { size, max_size } => {
+            SqliteGraphError::connection(format!("Record too large: {} > {}", size, max_size))
+        }
+        NativeBackendError::InconsistentAdjacency {
+            node_id,
+            count,
+            direction,
+            file_count,
+        } => SqliteGraphError::connection(format!(
+            "Inconsistent adjacency for node {}: {} {} != {} in file",
+            node_id, direction, count, file_count
+        )),
+        NativeBackendError::InvalidMagic { expected, found } => {
+            SqliteGraphError::connection(format!(
+                "Invalid magic number: expected {:#x}, got {:#x}",
+                expected, found
+            ))
+        }
+        NativeBackendError::UnsupportedVersion {
+            version,
+            supported_version,
+        } => SqliteGraphError::connection(format!(
+            "Unsupported version: {} (supported: {})",
+            version, supported_version
+        )),
+        NativeBackendError::InvalidHeader { field, reason } => {
+            SqliteGraphError::connection(format!("Invalid header field '{}': {}", field, reason))
+        }
+        NativeBackendError::InvalidChecksum { expected, found } => {
+            SqliteGraphError::connection(format!(
+                "Invalid checksum: expected {:#x}, got {:#x}",
+                expected, found
+            ))
+        }
+        NativeBackendError::Utf8Error(e) => SqliteGraphError::connection(e.to_string()),
+        NativeBackendError::JsonError(e) => SqliteGraphError::connection(e.to_string()),
+        NativeBackendError::BincodeError(e) => SqliteGraphError::connection(e.to_string()),
+        NativeBackendError::InvalidUtf8(e) => SqliteGraphError::connection(e.to_string()),
+        NativeBackendError::BufferTooSmall { size, min_size } => {
+            SqliteGraphError::connection(format!("Buffer too small: {} < {}", size, min_size))
+        }
+        NativeBackendError::InvalidStringOffset { offset } => {
+            SqliteGraphError::connection(format!("Invalid string table offset: {}", offset))
+        }
+        NativeBackendError::CorruptStringTable { reason } => {
+            SqliteGraphError::connection(format!("Corrupt string table: {}", reason))
+        }
+        NativeBackendError::InvalidMagicBytes { found } => {
+            SqliteGraphError::connection(format!("Invalid magic bytes: {:?}", found))
+        }
+        NativeBackendError::ValidationFailed {
+            metric,
+            expected,
+            actual,
+        } => SqliteGraphError::connection(format!(
+            "Validation failed for {}: expected {}, got {}",
+            metric, expected, actual
+        )),
+        NativeBackendError::OutOfSpace => {
+            SqliteGraphError::connection("Out of space in file".to_string())
+        }
+        NativeBackendError::CorruptFreeSpace { reason } => {
+            SqliteGraphError::connection(format!("Corrupt free space: {}", reason))
+        }
+        NativeBackendError::TransactionRolledBack(reason) => {
+            SqliteGraphError::connection(format!("Transaction rolled back: {}", reason))
+        }
+        NativeBackendError::NodeNotFound { node_id, operation } => {
+            SqliteGraphError::query(format!("Node {} not found during {}", node_id, operation))
+        }
+        NativeBackendError::InvalidParameter { context, .. } => {
+            SqliteGraphError::query(format!("Invalid parameter: {}", context))
+        }
+        NativeBackendError::InvalidState { context, .. } => {
+            SqliteGraphError::connection(format!("Invalid state: {}", context))
+        }
+        NativeBackendError::CorruptionDetected { context, .. } => {
+            SqliteGraphError::connection(format!("Corruption detected: {}", context))
+        }
+        NativeBackendError::InvalidConfiguration { parameter, reason } => {
+            SqliteGraphError::InvalidInput(format!("Invalid {}: {}", parameter, reason))
+        }
+        NativeBackendError::VersionMismatch {
+            expected, found, ..
+        } => SqliteGraphError::connection(format!(
+            "Version mismatch: expected {}, found {}",
+            expected, found
+        )),
+        // New V2 WAL error variants
+        NativeBackendError::NodeExists { node_id } => {
+            SqliteGraphError::query(format!("Node {} already exists", node_id))
+        }
+        NativeBackendError::EdgeExists { edge_id } => {
+            SqliteGraphError::query(format!("Edge {} already exists", edge_id))
+        }
+        NativeBackendError::EdgeNotFound { edge_id } => {
+            SqliteGraphError::query(format!("Edge {} not found", edge_id))
+        }
+        NativeBackendError::TransactionNotFound { tx_id } => {
+            SqliteGraphError::connection(format!("Transaction {} not found", tx_id))
+        }
+        NativeBackendError::SavepointNotFound { savepoint_id } => {
+            SqliteGraphError::connection(format!("Savepoint {} not found", savepoint_id))
+        }
+        NativeBackendError::DeadlockDetected { tx_id, .. } => {
+            SqliteGraphError::connection(format!("Deadlock detected for transaction {}", tx_id))
+        }
+        NativeBackendError::InvalidTransaction { tx_id, reason } => {
+            SqliteGraphError::connection(format!("Invalid transaction {}: {}", tx_id, reason))
+        }
+        NativeBackendError::IoError { context, .. } => {
+            SqliteGraphError::connection(format!("I/O error: {}", context))
+        }
+        NativeBackendError::InvalidTransactionState { tx_id, state } => {
+            SqliteGraphError::connection(format!("Invalid transaction {} state: {}", tx_id, state))
+        }
+        NativeBackendError::Recovery(message) => {
+            SqliteGraphError::connection(format!("Recovery error: {}", message))
+        }
+        NativeBackendError::MigrationFailed(message) => {
+            SqliteGraphError::connection(format!("Migration failed: {}", message))
+        }
+        NativeBackendError::TransactionIdExhaustion {
+            current_id,
+            remaining,
+        } => SqliteGraphError::connection(format!(
+            "Transaction ID exhaustion at ID {}: {} remaining",
+            current_id, remaining
+        )),
+        NativeBackendError::WalContiguityViolation(msg) => {
+            SqliteGraphError::connection(format!("WAL contiguity violation: {}", msg))
+        }
+        NativeBackendError::SerializationError { context } => {
+            SqliteGraphError::connection(format!("Serialization error: {}", context))
+        }
+        NativeBackendError::DeserializationError { context } => {
+            SqliteGraphError::connection(format!("Deserialization error: {}", context))
+        }
+        NativeBackendError::LockError { context } => {
+            SqliteGraphError::connection(format!("Lock error: {}", context))
+        }
+        NativeBackendError::InvalidOperation { context } => {
+            SqliteGraphError::connection(format!("Invalid operation: {}", context))
+        }
+    }
+}
+
+/// Convert NodeSpec to NodeRecord for storage
+pub fn node_spec_to_record(spec: NodeSpec, node_id: NativeNodeId) -> NodeRecord {
+    NodeRecord::new(node_id, spec.kind, spec.name, spec.data)
+}
+
+/// Convert NodeSpec to NodeRecordV2 for storage, preserving cluster metadata
+///
+/// This is used by update_node to modify node data while preserving adjacency
+/// cluster offsets. The cluster metadata MUST be preserved or all edges
+/// connected to this node would be lost.
+///
+/// # Arguments
+/// * `spec` - New node specification with updated kind/name/data
+/// * `node_id` - ID of the node being updated
+/// * `old_record` - Existing record to preserve cluster metadata from
+///
+/// # Returns
+/// A new NodeRecordV2 with updated data but preserved cluster offsets
+pub fn node_spec_to_v2_record(
+    spec: NodeSpec,
+    node_id: NativeNodeId,
+    old_record: &crate::backend::native::v2::node_record_v2::NodeRecordV2,
+) -> Result<crate::backend::native::v2::node_record_v2::NodeRecordV2, SqliteGraphError> {
+    Ok(crate::backend::native::v2::node_record_v2::NodeRecordV2 {
+        id: node_id as i64,
+        flags: old_record.flags,
+        kind: spec.kind,
+        name: spec.name,
+        data: spec.data,
+        // Preserve cluster metadata - this is critical!
+        outgoing_cluster_offset: old_record.outgoing_cluster_offset,
+        outgoing_cluster_size: old_record.outgoing_cluster_size,
+        outgoing_edge_count: old_record.outgoing_edge_count,
+        incoming_cluster_offset: old_record.incoming_cluster_offset,
+        incoming_cluster_size: old_record.incoming_cluster_size,
+        incoming_edge_count: old_record.incoming_edge_count,
+    })
+}
+
+/// Convert NodeRecord from storage to GraphEntity
+pub fn node_record_to_entity(record: NodeRecord) -> GraphEntity {
+    GraphEntity {
+        id: record.id as i64,
+        kind: record.kind,
+        name: record.name,
+        file_path: None, // Native backend doesn't store file_path
+        data: record.data,
+    }
+}
+
+/// Convert EdgeSpec to EdgeRecord for storage
+pub fn edge_spec_to_record(spec: EdgeSpec, edge_id: NativeEdgeId) -> EdgeRecord {
+    // DEBUG: Print what EdgeSpec contains before conversion to EdgeRecord
+    if std::env::var("EDGE_DEBUG").is_ok() {
+        println!(
+            "[EDGE_DEBUG] edge_spec_to_record: from={}, to={}, edge_type={}",
+            spec.from, spec.to, spec.edge_type
+        );
+    }
+
+    EdgeRecord::new(
+        edge_id,
+        spec.from as NativeNodeId,
+        spec.to as NativeNodeId,
+        spec.edge_type,
+        spec.data,
+    )
+}
+
+/// Validate node exists and is accessible
+pub fn validate_node_exists(
+    graph_file: &mut super::graph_file::GraphFile,
+    node_id: NativeNodeId,
+) -> Result<(), NativeBackendError> {
+    let mut node_store = super::node_store::NodeStore::new(graph_file);
+
+    // Try to read the node - this will return an error if node doesn't exist
+    node_store.read_node(node_id)?;
+
+    Ok(())
+}
+
+/// Validate edge exists and is accessible
+pub fn validate_edge_exists(
+    graph_file: &mut super::graph_file::GraphFile,
+    edge_id: NativeEdgeId,
+) -> Result<(), NativeBackendError> {
+    let mut edge_store = super::edge_store::EdgeStore::new(graph_file);
+
+    // Try to read the edge - this will return an error if edge doesn't exist
+    edge_store.read_edge(edge_id)?;
+
+    Ok(())
+}
+
+/// Validate node ID is in valid range
+pub fn validate_node_id_range(
+    graph_file: &super::graph_file::GraphFile,
+    node_id: NativeNodeId,
+) -> Result<(), NativeBackendError> {
+    let header = graph_file.persistent_header();
+
+    // Check lower bound (must be positive)
+    if node_id <= 0 {
+        return Err(NativeBackendError::InvalidNodeId {
+            id: node_id,
+            max_id: header.node_count as NativeNodeId,
+        });
+    }
+
+    // For upper bound, allow both existing nodes and reasonable future allocation
+    // Allow up to 100,000 OR current node count + space for 1000 more nodes
+    let max_allowed = std::cmp::max(100_000, header.node_count + 1000);
+    if node_id > max_allowed as NativeNodeId {
+        return Err(NativeBackendError::InvalidNodeId {
+            id: node_id,
+            max_id: max_allowed as NativeNodeId,
+        });
+    }
+
+    Ok(())
+}
+
+/// Validate edge ID is in valid range
+pub fn validate_edge_id_range(
+    graph_file: &super::graph_file::GraphFile,
+    edge_id: NativeEdgeId,
+) -> Result<(), NativeBackendError> {
+    let header = graph_file.persistent_header();
+
+    if edge_id <= 0 || edge_id > header.edge_count as NativeEdgeId {
+        return Err(NativeBackendError::InvalidEdgeId {
+            id: edge_id,
+            max_id: header.edge_count as NativeEdgeId,
+        });
+    }
+
+    Ok(())
+}
+
+/// Check if file operations are in a consistent state
+pub fn check_file_consistency(
+    graph_file: &super::graph_file::GraphFile,
+) -> Result<(), NativeBackendError> {
+    let header = graph_file.persistent_header();
+
+    // Basic header validation
+    #[allow(clippy::absurd_extreme_comparisons)]
+    if header.node_count < 0 || header.edge_count < 0 {
+        return Err(NativeBackendError::CorruptNodeRecord {
+            node_id: 0,
+            reason: "Negative counts in header".to_string(),
+        });
+    }
+
+    // Check for reasonable limits
+    if header.node_count > 1_000_000 || header.edge_count > 10_000_000 {
+        return Err(NativeBackendError::CorruptNodeRecord {
+            node_id: 0,
+            reason: "Counts exceed reasonable limits".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::graph_file::GraphFile;
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_error_mapping() {
+        let node_error = NativeBackendError::InvalidNodeId { id: 0, max_id: 10 };
+        let mapped = map_to_graph_error(node_error);
+
+        match mapped {
+            SqliteGraphError::QueryError(msg) => {
+                assert!(msg.contains("Invalid node ID"));
+                assert!(msg.contains("0"));
+                assert!(msg.contains("10"));
+            }
+            _ => panic!("Expected QueryError"),
+        }
+    }
+
+    #[test]
+    fn test_node_spec_to_record() {
+        let spec = NodeSpec {
+            kind: "Test".to_string(),
+            name: "test_node".to_string(),
+            file_path: Some("/path/to/file".to_string()),
+            data: serde_json::json!({"key": "value"}),
+        };
+
+        let record = node_spec_to_record(spec, 5);
+        assert_eq!(record.id, 5);
+        assert_eq!(record.kind, "Test");
+        assert_eq!(record.name, "test_node");
+        assert_eq!(record.data, serde_json::json!({"key": "value"}));
+    }
+
+    #[test]
+    fn test_node_record_to_entity() {
+        let record = NodeRecord::new(
+            42,
+            "Test".to_string(),
+            "test_node".to_string(),
+            serde_json::json!({"key": "value"}),
+        );
+
+        let entity = node_record_to_entity(record);
+        assert_eq!(entity.id, 42);
+        assert_eq!(entity.kind, "Test");
+        assert_eq!(entity.name, "test_node");
+        assert_eq!(entity.data, serde_json::json!({"key": "value"}));
+    }
+
+    #[test]
+    fn test_validate_node_id_range() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+        let graph_file = GraphFile::create(path).unwrap();
+
+        // Valid node ID should pass (even though node doesn't exist yet)
+        assert!(validate_node_id_range(&graph_file, 1).is_ok());
+
+        // Invalid node IDs should fail
+        assert!(validate_node_id_range(&graph_file, 0).is_err());
+        assert!(validate_node_id_range(&graph_file, -1).is_err());
+        assert!(validate_node_id_range(&graph_file, 1000000).is_err());
+    }
+
+    #[test]
+    fn test_check_file_consistency() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+        let graph_file = GraphFile::create(path).unwrap();
+
+        // Fresh file should be consistent
+        assert!(check_file_consistency(&graph_file).is_ok());
+    }
+}

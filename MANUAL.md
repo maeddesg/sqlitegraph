@@ -1,6 +1,6 @@
 # SQLiteGraph Manual
 
-Comprehensive usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V2).
+Usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V2).
 
 ---
 
@@ -52,7 +52,7 @@ let graph = SqliteGraph::open_in_memory()?;
 
 ### Native V2 Backend
 
-**Use**: High-performance scenarios, large graphs, traversal-heavy workloads
+**Use**: Large graphs, traversal-heavy workloads
 
 ```rust
 use sqlitegraph::{GraphConfig, open_graph, NodeSpec, EdgeSpec};
@@ -135,7 +135,7 @@ let edge_id = graph.insert_edge(edge_spec)?;
 
 ### Overview
 
-SQLiteGraph v1.4.1 includes a comprehensive graph algorithms library with **35 algorithms** across 13 categories:
+SQLiteGraph v1.4.1 includes a graph algorithms library with **35 algorithms** across 13 categories:
 
 | Category | Algorithms |
 |----------|------------|
@@ -604,7 +604,7 @@ sqlitegraph --backend native-v2 --db mygraph.db kv-scan --prefix ""
 
 ### Overview
 
-Phase 58 introduces query API enhancements that make it easier to work with graph data without maintaining external ID tracking. These features are particularly useful for pub/sub use cases like agent messaging and topic-based subscriptions.
+Phase 58 introduces query API enhancements for working with graph data without maintaining external ID tracking. These features are particularly useful for pub/sub use cases like agent messaging and topic-based subscriptions.
 
 ### Query Nodes by Kind
 
@@ -1147,7 +1147,7 @@ graph.kv_set(
 - **Simplicity**: Avoids complex query engine implementation
 - **Performance**: Direct ID lookup is O(1)
 - **Explicit tracking**: Users control their own index strategies
-- **Extensibility**: KV store provides flexible indexing options
+- **Extensibility**: KV store provides indexing options
 
 ### Test Coverage
 

@@ -12,7 +12,7 @@ This index provides navigation for all SQLiteGraph documentation.
 | Document | Purpose | Audience |
 |----------|---------|----------|
 | [README.md](../README.md) | Project overview, quick start | Users |
-| [MANUAL.md](../MANUAL.md) | Comprehensive usage guide | Users |
+| [MANUAL.md](../MANUAL.md) | Usage guide | Users |
 | [API.md](../API.md) | Quick API reference | Users |
 | [CHANGELOG.md](../CHANGELOG.md) | Version history | All |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture | Developers |
@@ -35,7 +35,7 @@ This index provides navigation for all SQLiteGraph documentation.
    - Quick start examples
    - Performance benchmarks
 
-2. **[MANUAL.md](../MANUAL.md)** - Comprehensive guide
+2. **[MANUAL.md](../MANUAL.md)** - Detailed guide
    - Backend selection (SQLite vs Native V2)
    - Core operations
    - Graph algorithms

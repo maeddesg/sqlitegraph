@@ -1,142 +1,121 @@
 # KV Store Architecture
 
-**Last Updated:** 2026-02-03
-**Version:** v1.4.2
+**Last Updated:** 2026-02-12  
+**Version:** v1.6.0
 
-This guide explains the internal architecture of SQLiteGraph's transactional Key-Value store for Native V2 backend.
+This guide explains SQLiteGraph's transactional Key-Value store architecture. The KV store is available on **all backends** (SQLite, V3, and V2).
 
 ---
 
 ## Overview
 
-The KV store is an **in-memory HashMap-based** storage system built as a VIEW over Native V2 storage. It uses the existing WAL infrastructure for persistence and provides true MVCC snapshot isolation.
+The KV store provides a typed key-value interface with MVCC snapshot isolation and optional TTL. Each backend has its own implementation optimized for that storage layer.
+
+### Backend Comparison
+
+| Backend | Storage | Initialization | Persistence |
+|---------|---------|----------------|-------------|
+| **SQLite** | SQL table (`kv_store`) | On first use | SQLite durability |
+| **Native V3** | In-memory HashMap | **Lazy** - created on first KV operation | WAL (optional) |
+| **Native V2** | In-memory HashMap | On backend creation | WAL |
 
 ### Key Characteristics
 
 | Characteristic | Value |
 |----------------|-------|
-| **Storage** | In-memory HashMap |
 | **Key Type** | `Vec<u8>` (binary keys) |
-| **Value Types** | Bytes, String, Integer, Float, Boolean, JSON |
+| **Value Types** | Null, Bytes, String, Integer, Float, Boolean, JSON |
 | **Isolation** | MVCC snapshot isolation |
 | **TTL** | Lazy cleanup (no background threads) |
-| **Persistence** | Via WAL (plan 02) |
+| **Multi-version** | Full history retained per key (V3/V2) |
 
 ---
 
-## Architecture Principles
+## Architecture by Backend
 
-### Design Philosophy
+### V3 Backend (Lazy Initialization)
 
+**New in v1.6.0:** V3 uses lazy initialization for zero overhead when unused.
+
+```rust
+pub struct V3Backend {
+    // ... other fields ...
+    /// KV store - only created when first accessed
+    kv_store: RwLock<Option<KvStore>>,
+}
 ```
-KV Store is NOT a separate storage system.
-It's a VIEW over Native V2 infrastructure:
-- Uses WAL for durability
-- Uses snapshot_id for versioning
-- Uses commit LSN for version assignment
+
+**Benefits:**
+- Zero memory overhead if you don't use KV
+- No HashMap allocation for pure graph workloads
+- First access has small initialization cost
+
+**Example:**
+```rust
+let backend = V3Backend::create("data.graph")?;
+
+// Before any KV operation:
+assert!(!backend.is_kv_initialized());  // false
+
+// First KV operation triggers initialization:
+backend.kv_set_v3(b"key".to_vec(), KvValue::Integer(42), None);
+assert!(backend.is_kv_initialized());   // true
 ```
 
-### Key Decisions
+### SQLite Backend
 
-1. **No internal version counter**: Versions come from WAL commit LSN
-2. **Byte keys**: `Vec<u8>` for maximum flexibility
-3. **Typed values**: `KvValue` enum with JSON for complex data
-4. **Lazy TTL**: Cleanup on read, no background threads
-5. **Multi-version**: Full history retained per key
+The SQLite backend stores KV data in a SQL table created on first use:
 
----
-
-## Module Structure
-
+```sql
+CREATE TABLE IF NOT EXISTS kv_store (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    ttl_seconds INTEGER,
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
 ```
-src/backend/native/v2/kv_store/
-├── mod.rs          # Module exports and documentation
-├── store.rs        # KvStore implementation (HashMap-based)
-├── types.rs        # Data structures (KvValue, KvEntry, KvMetadata)
-├── ttl.rs          # TTL helpers and lazy cleanup
-├── wal.rs          # WAL integration (serialization, recovery)
-├── tests.rs        # Unit tests
-├── wal_tests.rs    # WAL integration tests
-├── integration_tests.rs  #[cfg(test)] - comprehensive integration tests
-└── snapshot_tests.rs     #[cfg(test)] - snapshot isolation tests
-```
+
+**Benefits:**
+- Debuggable with SQL queries
+- Survives process restarts (persistent)
+- ACID via SQLite transactions
+
+### V2 Backend (Deprecated)
+
+V2 KV store is always allocated (not lazy). This was the motivation for V3's lazy approach.
 
 ---
 
 ## Data Structures
 
-### KvStore (Main Structure)
-
-Located in `store.rs`:
+### KvValue (All Backends)
 
 ```rust
-#[derive(Debug, Default)]
-pub struct KvStore {
-    /// Multi-version storage: key → version history
-    /// Each Vec<KvEntry> is sorted by version (ascending LSN)
-    pub(crate) entries: RwLock<HashMap<Vec<u8>, Vec<KvEntry>>>,
-}
-```
-
-### KvEntry (Versioned Entry)
-
-Located in `types.rs`:
-
-```rust
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct KvEntry {
-    /// The key (Vec<u8> for flexibility)
-    pub key: Vec<u8>,
-
-    /// The value (typed enum)
-    pub value: KvValue,
-
-    /// Metadata including version, timestamps, TTL
-    pub metadata: KvMetadata,
-}
-```
-
-### KvMetadata (Version Metadata)
-
-```rust
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct KvMetadata {
-    /// Creation time (Unix timestamp)
-    pub created_at: u64,
-
-    /// Last update time (Unix timestamp)
-    pub updated_at: u64,
-
-    /// TTL in seconds (None = never expires)
-    pub ttl_seconds: Option<u64>,
-
-    /// Version number (from WAL commit LSN)
-    pub version: u64,
-}
-```
-
-### KvValue (Typed Values)
-
-```rust
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum KvValue {
-    /// Raw bytes
-    Bytes(Vec<u8>),
+    Null,                           // Deleted/tombstone marker
+    Bytes(Vec<u8>),                // Raw binary
+    String(String),                // UTF-8 text
+    Integer(i64),                  // 64-bit signed
+    Float(f64),                    // 64-bit float
+    Boolean(bool),                 // true/false
+    Json(serde_json::Value),       // Complex structures
+}
+```
 
-    /// UTF-8 string
-    String(String),
+### V3 KvStore Structure
 
-    /// 64-bit integer
-    Integer(i64),
+```rust
+pub struct KvStore {
+    /// key_hash → version history (Vec sorted by version)
+    entries: RwLock<HashMap<u64, Vec<KvEntry>>>,
+}
 
-    /// 64-bit float
-    Float(f64),
-
-    /// Boolean value
-    Boolean(bool),
-
-    /// JSON for complex structured data
-    Json(serde_json::Value),
+pub struct KvEntry {
+    pub key: Vec<u8>,               // Original key
+    pub value: KvValue,             // Value (Null = tombstone)
+    pub metadata: KvMetadata,       // Timestamps, TTL, version
 }
 ```
 
@@ -144,627 +123,219 @@ pub enum KvValue {
 
 ## Core Operations
 
-### Set (Insert/Update)
+### Get (V3 Native)
 
 ```rust
-impl KvStore {
-    /// Set a key-value pair with optional TTL
-    ///
-    /// Creates a new version in the history. If the key already exists,
-    /// the new version is appended to the history.
-    pub fn set(
-        &self,
-        key: Vec<u8>,
-        value: KvValue,
-        ttl_seconds: Option<u64>,
-    ) -> Result<(), KvStoreError> {
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+use sqlitegraph::backend::native::v3::{V3Backend, KvValue};
+use sqlitegraph::snapshot::SnapshotId;
 
-        let entry = KvEntry {
-            key: key.clone(),
-            value,
-            metadata: KvMetadata {
-                created_at: now,
-                updated_at: now,
-                ttl_seconds,
-                version: 0, // Assigned by WAL on commit
-            },
-        };
+let backend = V3Backend::create("data.graph")?;
+let snapshot = SnapshotId::current();
 
-        let mut entries = self.entries.write();
-        entries.entry(key).or_default().push(entry);
-
-        Ok(())
-    }
+// Returns Option<KvValue>
+match backend.kv_get_v3(snapshot, b"my_key") {
+    Some(KvValue::String(s)) => println!("Value: {}", s),
+    Some(KvValue::Integer(n)) => println!("Number: {}", n),
+    Some(KvValue::Json(j)) => println!("JSON: {:?}", j),
+    Some(KvValue::Null) => println!("Deleted (tombstone)"),
+    None => println!("Key not found"),
 }
 ```
 
-### Get (Latest Version)
+### Set (V3 Native)
 
 ```rust
-/// Get a value by key (latest committed version)
-///
-/// TTL is checked lazily: expired entries return None
-pub fn get(&self, key: &[u8]) -> Result<Option<KvValue>, KvStoreError> {
-    let entries = self.entries.read();
+use sqlitegraph::backend::native::v3::KvValue;
 
-    if let Some(versions) = entries.get(key) {
-        // Get latest version (last element in Vec)
-        if let Some(entry) = versions.last() {
-            if ttl::is_expired(entry) {
-                return Ok(None); // Lazy TTL cleanup
-            }
-            return Ok(Some(entry.value.clone()));
-        }
-    }
+// Simple value
+backend.kv_set_v3(
+    b"counter".to_vec(),
+    KvValue::Integer(42),
+    None,  // No TTL
+);
 
-    Ok(None)
-}
+// JSON value
+backend.kv_set_v3(
+    b"config".to_vec(),
+    KvValue::Json(json!({
+        "theme": "dark",
+        "notifications": true
+    })),
+    Some(3600),  // TTL: 1 hour
+);
 ```
 
-### Get at Snapshot (MVCC)
+### Generic Trait Methods (All Backends)
 
 ```rust
-/// Get a value at a specific snapshot (MVCC isolation)
-///
-/// Uses binary search to find the latest version with version <= snapshot_id
-pub fn get_at_snapshot(
-    &self,
-    key: &[u8],
-    snapshot_id: SnapshotId,
-) -> Result<Option<KvValue>, KvStoreError> {
-    let entries = self.entries.read();
-    let snapshot_lsn = snapshot_id.as_lsn();
+use sqlitegraph::backend::{GraphBackend, KvValue};
 
-    if let Some(versions) = entries.get(key) {
-        // Snapshot at 0 means "see all data"
-        if snapshot_lsn == 0 {
-            if let Some(entry) = versions.last() {
-                if ttl::is_expired(entry) {
-                    return Ok(None);
-                }
-                return Ok(Some(entry.value.clone()));
-            }
-            return Ok(None);
-        }
-
-        // Binary search for latest version with version <= snapshot_lsn
-        let idx = versions.partition_point(|e| e.metadata.version <= snapshot_lsn);
-
-        if idx == 0 {
-            return Ok(None); // All versions are newer than snapshot
-        }
-
-        let entry = &versions[idx - 1];
-
-        // Check TTL lazily
-        if ttl::is_expired(entry) {
-            return Ok(None);
-        }
-
-        return Ok(Some(entry.value.clone()));
-    }
-
-    Ok(None)
+fn increment_counter(backend: &dyn GraphBackend) -> Result<(), SqliteGraphError> {
+    let snapshot = SnapshotId::current();
+    
+    // Get current value
+    let current = backend.kv_get(snapshot, b"counter")?
+        .and_then(|v| match v {
+            KvValue::Integer(n) => Some(n),
+            _ => None,
+        })
+        .unwrap_or(0);
+    
+    // Increment and set
+    backend.kv_set(
+        b"counter".to_vec(),
+        KvValue::Integer(current + 1),
+        None,
+    )?;
+    
+    Ok(())
 }
+
+// Works with any backend
+increment_counter(&sqlite_backend)?;
+increment_counter(&v3_backend)?;
+```
+
+---
+
+## MVCC Snapshot Isolation
+
+All backends support MVCC reads:
+
+```rust
+let snapshot = SnapshotId::current();
+
+// This read sees data committed at or before the snapshot
+let value = backend.kv_get(snapshot, b"key");
+
+// Concurrent writes don't affect this snapshot
+backend.kv_set(b"key".to_vec(), new_value, None)?;  // Newer version
+
+// Original snapshot still sees old value
+let value2 = backend.kv_get(snapshot, b"key");  // Same as value
 ```
 
 ---
 
 ## TTL (Time-To-Live)
 
-### Lazy Cleanup Strategy
-
-The KV store uses **lazy TTL cleanup** - expiration is checked on read, not proactively by background threads.
-
-### TTL Check
-
-Located in `ttl.rs`:
+Set optional expiration in seconds:
 
 ```rust
-/// Check if an entry is expired (TTL exceeded)
-///
-/// Entry is expired if: current_time > created_at + ttl_seconds
-pub fn is_expired(entry: &KvEntry) -> bool {
-    if let Some(ttl) = entry.metadata.ttl_seconds {
-        if ttl == 0 {
-            return true; // TTL of 0 means "already expired"
-        }
+// Expires after 60 seconds
+backend.kv_set_v3(
+    b"session_token".to_vec(),
+    KvValue::String("abc123".to_string()),
+    Some(60),
+)?;
 
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-
-        // Check if current time > expiration time
-        let expiration_time = entry.metadata.created_at.saturating_add(ttl);
-        now > expiration_time
-    } else {
-        false // No TTL set - entry never expires
-    }
-}
+// After 60 seconds, kv_get returns None (lazy cleanup)
+thread::sleep(Duration::from_secs(61));
+assert!(backend.kv_get_v3(snapshot, b"session_token").is_none());
 ```
 
-### Manual Cleanup (Optional)
+**Note:** Expired entries are cleaned up lazily on read. No background thread.
+
+---
+
+## WAL Persistence (V3/V2)
+
+V3 and V2 backends can persist KV changes via WAL:
 
 ```rust
-/// Explicit cleanup of all expired entries
-///
-/// This is NOT called automatically - users must call it explicitly
-/// if they want to reclaim space from expired entries.
-pub fn cleanup_expired_entries(store: &mut KvStore) -> usize {
-    let mut entries = store.entries.write();
-    let mut total_removed = 0;
+// Create with WAL enabled
+let backend = V3Backend::create_with_wal("data.graph", true)?;
 
-    // Remove keys where ALL versions are expired
-    let keys_to_remove: Vec<Vec<u8>> = entries
-        .iter()
-        .filter(|(_, versions)| versions.iter().all(|v| is_expired(v)))
-        .map(|(key, _)| key.clone())
-        .collect();
+// All kv_set/kv_delete operations are logged
+backend.kv_set_v3(b"key".to_vec(), KvValue::Integer(1), None);
 
-    for key in keys_to_remove {
-        let count = entries.remove(&key).map_or(0, |v| v.len());
-        total_removed += count;
-    }
-
-    // Filter expired versions from remaining keys
-    for versions in entries.values_mut() {
-        let original_len = versions.len();
-        versions.retain(|v| !is_expired(v));
-        total_removed += original_len - versions.len();
-    }
-
-    total_removed
-}
+// Recovery on reopen reads WAL and replays KV operations
+let backend = V3Backend::open("data.graph")?;  // KV restored from WAL
 ```
 
 ---
 
-## WAL Integration
+## Module Structure
 
-### WAL Record Types
+### V3 KV Store
 
-The KV store uses two WAL record types:
-
-| Record Type | Code | Description |
-|-------------|------|-------------|
-| `KvSet` | 31 | Key-value set operation |
-| `KvDelete` | 32 | Key delete operation |
-
-### Serialization
-
-Located in `wal.rs`:
-
-```rust
-/// Value type tags for WAL serialization
-pub const VALUE_TYPE_BYTES: u8 = 0;
-pub const VALUE_TYPE_STRING: u8 = 1;
-pub const VALUE_TYPE_INTEGER: u8 = 2;
-pub const VALUE_TYPE_FLOAT: u8 = 3;
-pub const VALUE_TYPE_BOOLEAN: u8 = 4;
-pub const VALUE_TYPE_JSON: u8 = 5;
-
-/// Convert KvValue to serialized bytes with type tag
-pub fn serialize_value(value: &KvValue) -> Result<Vec<u8>, KvStoreError> {
-    match value {
-        KvValue::Bytes(data) => Ok(data.clone()),
-        KvValue::String(s) => Ok(s.as_bytes().to_vec()),
-        KvValue::Integer(n) => Ok(n.to_le_bytes().to_vec()),
-        KvValue::Float(f) => Ok(f.to_le_bytes().to_vec()),
-        KvValue::Boolean(b) => Ok(vec![*b as u8]),
-        KvValue::Json(v) => serde_json::to_vec(v)
-            .map_err(|e| KvStoreError::SerializationError(format!("JSON: {}", e))),
-    }
-}
-
-/// Convert serialized bytes back to KvValue
-pub fn deserialize_value(bytes: &[u8], type_tag: u8) -> Result<KvValue, KvStoreError> {
-    match type_tag {
-        VALUE_TYPE_BYTES => Ok(KvValue::Bytes(bytes.to_vec())),
-        VALUE_TYPE_STRING => String::from_utf8(bytes.to_vec())
-            .map(KvValue::String)
-            .map_err(|e| KvStoreError::DeserializationError(format!("UTF-8: {}", e))),
-        VALUE_TYPE_INTEGER => {
-            if bytes.len() != 8 {
-                return Err(KvStoreError::DeserializationError("Invalid integer length".into()));
-            }
-            let val = i64::from_le_bytes(bytes.try_into().unwrap());
-            Ok(KvValue::Integer(val))
-        }
-        VALUE_TYPE_FLOAT => {
-            if bytes.len() != 8 {
-                return Err(KvStoreError::DeserializationError("Invalid float length".into()));
-            }
-            let val = f64::from_le_bytes(bytes.try_into().unwrap());
-            Ok(KvValue::Float(val))
-        }
-        VALUE_TYPE_BOOLEAN => {
-            if bytes.len() != 1 {
-                return Err(KvStoreError::DeserializationError("Invalid boolean length".into()));
-            }
-            Ok(KvValue::Boolean(bytes[0] != 0))
-        }
-        VALUE_TYPE_JSON => serde_json::from_slice(bytes)
-            .map(KvValue::Json)
-            .map_err(|e| KvStoreError::DeserializationError(format!("JSON: {}", e))),
-        _ => Err(KvStoreError::DeserializationError(format!("Unknown type: {}", type_tag))),
-    }
-}
+```
+src/backend/native/v3/kv_store/
+├── mod.rs          # Module exports
+├── store.rs        # KvStore implementation
+├── types.rs        # KvValue, KvEntry, KvMetadata
+├── wal.rs          # WAL integration
+└── tests.rs        # Unit tests (24 tests)
 ```
 
-### Recovery
+### SQLite KV Store
 
-```rust
-/// Apply a KvSet WAL record during recovery
-///
-/// This bypasses the normal WAL write path to avoid infinite recursion
-pub fn apply_set(
-    store: &mut KvStore,
-    key: Vec<u8>,
-    value_bytes: Vec<u8>,
-    value_type: u8,
-    ttl_seconds: Option<u64>,
-    version: u64,
-) -> Result<(), KvStoreError> {
-    let value = deserialize_value(&value_bytes, value_type)?;
-
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-
-    let entry = KvEntry {
-        key: key.clone(),
-        value,
-        metadata: KvMetadata {
-            created_at: now,
-            updated_at: now,
-            ttl_seconds,
-            version,
-        },
-    };
-
-    let mut entries = store.entries.write();
-    entries.entry(key).or_default().push(entry);
-
-    Ok(())
-}
-```
+Integrated into `src/backend/sqlite/impl_.rs`:
+- `ensure_kv_table()` - Creates SQL table
+- `kv_get()` - SQL SELECT
+- `kv_set()` - SQL INSERT/UPDATE
+- `kv_delete()` - SQL DELETE
 
 ---
 
-## Snapshot Isolation
+## Use Cases
 
-### MVCC Model
-
-The KV store provides true MVCC (Multi-Version Concurrency Control):
-
-```
-Timeline:
-LSN 10: SET key1 = "value1"  → version 10
-LSN 20: SET key1 = "value2"  → version 20
-LSN 30: SET key1 = "value3"  → version 30
-
-Snapshot at LSN 25 sees: version 20 (value2)
-Snapshot at LSN 35 sees: version 30 (value3)
-```
-
-### Version History Structure
-
-```
-key → [KvEntry(version=10), KvEntry(version=20), KvEntry(version=30)]
-       ↑                         ↑                    ↑
-       oldest                 middle               newest
-```
-
-### Binary Search for Snapshot
+### Session Storage
 
 ```rust
-// versions is sorted by version (ascending LSN)
-let idx = versions.partition_point(|e| e.metadata.version <= snapshot_lsn);
-
-if idx == 0 {
-    return None; // All versions are newer than snapshot
-}
-
-let entry = &versions[idx - 1]; // Latest visible version
+// Store user session with TTL
+backend.kv_set(
+    format!("session:{}", session_id).into_bytes(),
+    KvValue::Json(json!({
+        "user_id": user_id,
+        "login_time": now(),
+    })),
+    Some(3600),  // 1 hour TTL
+)?;
 ```
 
----
-
-## Query API Enhancements
-
-### Prefix Scan
+### Configuration Cache
 
 ```rust
-/// Scan all keys with a given prefix
-///
-/// Returns matching key-value pairs, sorted by key
-pub fn prefix_scan(
-    &self,
-    snapshot_id: SnapshotId,
-    prefix: &[u8],
-) -> Result<Vec<(Vec<u8>, KvValue)>, KvStoreError> {
-    let entries = self.entries.read();
-    let snapshot_lsn = snapshot_id.as_lsn();
-
-    let mut results = Vec::new();
-
-    for (key, versions) in entries.iter() {
-        // Filter by prefix
-        if !key.starts_with(prefix) {
-            continue;
-        }
-
-        // Find version visible at snapshot
-        let entry = self.find_version_at_snapshot(versions, snapshot_lsn);
-
-        if let Some(entry) = entry {
-            // Check TTL
-            if !ttl::is_expired(entry) {
-                results.push((key.clone(), entry.value.clone()));
-            }
-        }
-    }
-
-    // Sort results lexicographically
-    results.sort_by_key(|(k, _)| k.clone());
-
-    Ok(results)
-}
+// Cache computed configuration
+let config = expensive_config_computation();
+backend.kv_set(
+    b"app:config".to_vec(),
+    KvValue::Json(config),
+    None,  // Never expires
+)?;
 ```
 
----
+### HNSW Vector Storage
 
-## Performance Characteristics
+V3 uses KV store for HNSW vector persistence:
 
-### Time Complexity
-
-| Operation | Complexity | Notes |
-|-----------|-----------|-------|
-| `set()` | O(1) | HashMap insert |
-| `get()` | O(1) | HashMap lookup |
-| `get_at_snapshot()` | O(log V) | V = versions per key |
-| `prefix_scan()` | O(K log V) | K = total keys |
-| `delete()` | O(1) | Logical delete |
-
-### Space Complexity
-
-| Component | Space |
-|-----------|-------|
-| Base storage | O(K × V) | K = keys, V = avg versions |
-| Per-version overhead | ~100 bytes | metadata + Vec overhead |
-| HashMap overhead | ~2x base | Rust HashMap factor |
-
-### Memory Estimates
-
-| Keys | Avg Versions | Est. Memory |
-|-------|--------------|-------------|
-| 1,000 | 2 | ~500 KB |
-| 100,000 | 5 | ~100 MB |
-| 1,000,000 | 10 | ~2 GB |
+```rust
+// V3VectorStorage stores vectors as JSON in KV
+let storage = backend.create_hnsw_storage("embeddings").unwrap();
+// Keys: hnsw:embeddings:vector:{vector_id}
+```
 
 ---
 
 ## Testing
 
-### Test Files
+```bash
+# V3 KV tests
+cargo test --features native-v3 --lib backend::native::v3::kv_store
 
-| File | Description |
-|------|-------------|
-| `kv_store/tests.rs` | Unit tests for basic operations |
-| `kv_store/wal_tests.rs` | WAL integration tests |
-| `kv_store/snapshot_tests.rs` | Snapshot isolation tests |
-| `kv_store/integration_tests.rs` | Comprehensive integration tests |
-
-### Key Test Scenarios
-
-```rust
-#[test]
-fn test_set_get() {
-    let store = KvStore::new();
-
-    store.set(b"key".to_vec(), KvValue::Integer(42), None).unwrap();
-    let value = store.get(b"key").unwrap();
-
-    assert_eq!(value, Some(KvValue::Integer(42)));
-}
-
-#[test]
-fn test_snapshot_isolation() {
-    let store = KvStore::new();
-
-    // Version 1
-    store.set(b"key".to_vec(), KvValue::Integer(1), None).unwrap();
-
-    // Create snapshot at version 1
-    let snapshot1 = SnapshotId::from_lsn(1);
-
-    // Version 2
-    store.set(b"key".to_vec(), KvValue::Integer(2), None).unwrap();
-
-    // Snapshot 1 should see version 1
-    let value1 = store.get_at_snapshot(b"key", snapshot1).unwrap();
-    assert_eq!(value1, Some(KvValue::Integer(1)));
-
-    // Current should see version 2
-    let value_curr = store.get(b"key").unwrap();
-    assert_eq!(value_curr, Some(KvValue::Integer(2)));
-}
-
-#[test]
-fn test_ttl_expiration() {
-    let store = KvStore::new();
-
-    // Set with TTL of 1 second
-    store.set(b"key".to_vec(), KvValue::Integer(42), Some(1)).unwrap();
-
-    // Wait for expiration
-    std::thread::sleep(Duration::from_secs(2));
-
-    // Should return None (lazy cleanup)
-    let value = store.get(b"key").unwrap();
-    assert_eq!(value, None);
-}
-
-#[test]
-fn test_prefix_scan() {
-    let store = KvStore::new();
-
-    store.set(b"agent:123:state".to_vec(), KvValue::String("active".into()), None).unwrap();
-    store.set(b"agent:123:meta".to_vec(), KvValue::String("worker".into()), None).unwrap();
-    store.set(b"other:key".to_vec(), KvValue::Integer(0), None).unwrap();
-
-    let results = store.prefix_scan(SnapshotId::current(), b"agent:123:");
-
-    assert_eq!(results.len(), 2);
-}
+# 24 tests covering:
+# - Basic get/set/delete
+# - Snapshot isolation
+# - TTL expiration
+# - Prefix scan
+# - WAL recovery
 ```
 
 ---
 
-## Common Patterns
+## See Also
 
-### Using as Secondary Index
-
-```rust
-// Store inverted index: kind_name → node_id
-let index_key = format!("index:kind:{}:{}", node.kind, node.name);
-graph.kv_set(
-    index_key.as_bytes(),
-    KvValue::Integer(node.id),
-    None
-)?;
-
-// Query: find all nodes of kind "Class" starting with "Test"
-let prefix = b"index:kind:Class:test_";
-let results = graph.kv_prefix_scan(snapshot.id(), prefix)?;
-
-for (key, value) in results {
-    if let KvValue::Integer(node_id) = value {
-        let node = graph.get_node(snapshot.id(), node_id)?;
-        println!("Found: {:?}", node.name);
-    }
-}
-```
-
-### Agent Messaging
-
-```rust
-// Send message to agent-123
-let msg_key = format!("agent_to:agent-123:{}", timestamp);
-graph.kv_set(
-    msg_key.as_bytes(),
-    KvValue::String(message_content),
-    Some(3600) // 1 hour TTL
-)?;
-
-// Agent receives messages
-let prefix = b"agent_to:agent-123:";
-let messages = graph.kv_prefix_scan(snapshot.id(), prefix)?;
-
-for (key, value) in messages {
-    println!("Message: {:?}", value);
-}
-```
-
-### Caching with TTL
-
-```rust
-// Cache expensive computation result
-let cache_key = format!("cache:compute:{}", hash);
-graph.kv_set(
-    cache_key.as_bytes(),
-    KvValue::Json(serde_json::to_value(result)?),
-    Some(300) // 5 minute TTL
-)?;
-
-// Try cache first
-if let Some(KvValue::Json(cached)) = graph.kv_get(cache_key.as_bytes())? {
-    return Ok(serde_json::from_value(cached)?);
-}
-
-// Cache miss - compute and store
-```
-
----
-
-## Troubleshooting
-
-### Issue: Memory growing unbounded
-
-**Symptoms:** Memory usage keeps increasing
-
-**Causes:**
-1. Too many versions retained per key
-2. Expired entries not cleaned up
-
-**Solutions:**
-1. Call `cleanup_expired_entries()` periodically
-2. Implement version truncation for long-running systems
-3. Use shorter TTL values
-
-### Issue: Slow prefix scan
-
-**Symptoms:** `prefix_scan()` takes too long
-
-**Causes:**
-1. Too many keys in store
-2. Linear scan through all keys
-
-**Solutions:**
-1. Use more specific prefixes
-2. Consider adding secondary index structure
-3. Partition data across multiple KV stores
-
-### Issue: Stale data at snapshot
-
-**Symptoms:** `get_at_snapshot()` returns unexpected data
-
-**Causes:**
-1. Snapshot ID is too old (before data was written)
-2. Version numbering issue
-
-**Solutions:**
-1. Verify snapshot_id is from after the write
-2. Check WAL commit LSN assignment
-3. Use `SnapshotId::current()` for latest data
-
----
-
-## References
-
-- **Source:** `src/backend/native/v2/kv_store/` - Full implementation
-- **Related:** `docs/DEVELOPMENT_GUIDES/query-api-enhancements.md` - Query API usage
-- **User Docs:** `MANUAL.md` Section 13 - Key-Value Store
-- **WAL:** `src/backend/native/v2/wal/` - WAL system
-
----
-
-## Design Trade-offs
-
-| Decision | Rationale | Trade-off |
-|----------|-----------|-----------|
-| In-memory HashMap | Fast lookups, simple code | Limited by RAM |
-| Lazy TTL | No background threads | Stale entries until accessed |
-| Full history | True MVCC | Unbounded memory growth |
-| Binary keys | Maximum flexibility | No built-in string operations |
-| Typed values | Rich data support | Serialization overhead |
-
----
-
-## Future Enhancements
-
-Potential areas for extension (not currently planned):
-
-1. **Persistent backend** - Disk-based KV for large datasets
-2. **Version truncation** - Automatic old version cleanup
-3. **Prefix index (trie)** - O(prefix) instead of O(K) prefix scan
-4. **Transaction support** - Multi-key atomic operations
-5. **Compression** - Compress large values
-
-Note: These are **not currently planned** - the KV store is focused on in-memory performance and simplicity.
+- [Pub/Sub Implementation](pubsub-implementation.md) - Events on KV changes
+- [Architecture](../../ARCHITECTURE.md) - Backend comparison
+- [API Reference](../../API.md) - KV API details

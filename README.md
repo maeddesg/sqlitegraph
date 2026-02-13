@@ -3,617 +3,84 @@
 [![crates.io](https://img.shields.io/crates/v/sqlitegraph.svg)](https://crates.io/crates/sqlitegraph)
 [![Documentation](https://docs.rs/sqlitegraph/badge.svg)](https://docs.rs/sqlitegraph)
 
-**Embedded Graph Database with Native V2 Backend and Graph Algorithms Library**
+Embedded graph database with dual backend architecture.
 
-## What's New in v1.6.0
+**Positioning:** Single-binary embedded database (no server). Persistent storage with
+atomic batch commits. Graph algorithms + HNSW vector search in one engine.
+SQLite backend: best for point lookups. Native V3: 10-20× faster for traversals.
 
-**Improvement** - Removed verbose debug output
-- Cleaned up all DEBUG println!/eprintln! statements from native backend
-- Graph operations now produce clean, production-friendly output
-- Watcher and algorithm commands are much more readable
+## Backends
 
-**What's New in v1.5.9**
-
-**Enhancement** - Node update API for GraphBackend trait
-- Added `update_node()` method to GraphBackend trait
-- Native V2 backend preserves cluster metadata during updates
-- SQLite backend uses efficient SQL UPDATE queries
-- New helper `node_spec_to_v2_record()` for V2 record conversion
-
-**What's New in v1.5.8**
-
-**Critical Bug Fix** - WAL underflow panic and memory corruption
-- Fixed underflow panic in WAL reader when system clock moves backward
-- Added `soft_shutdown()` method for proper resource cleanup
-- Added `Drop` implementation to `NativeGraphBackend` for graceful shutdown
-- Prevents watcher crashes and memory corruption on process exit
-
-**What's New in v1.5.7**
-
-**Enhancement** - WAL buffer flush API for immediate persistence
-- Added `flush()` method to `GraphBackend` trait
-- Forces immediate WAL buffer flush to disk
-- Makes KV writes visible to other processes immediately
-- Enables reliable cross-process KV communication
-
-**What's New in v1.5.6** - Critical Bug Fix
-- Fixed KV data loss when reopening native-v2 databases
-- Added `recover_kv_from_wal()` to restore KV data from WAL on open
-- Added `V2WALWriter::open()` for non-destructive WAL access
-- Enables cross-process KV communication (e.g., magellan → llmgrep)
-
-**What's New in v1.5.5** - User Experience Improvement
-- Removed CLUSTER_DEBUG ungate debug messages from native-v2 backend
-- Removed EDGE_CLUSTER_DEBUG ungate debug messages from transaction operations
-- Native-v2 backend now silent during normal operation (matches SQLite backend)
-- No more spurious debug output cluttering your logs
-
-**v1.5.4 Code Cleanup** - Debug instrumentation removed
-- `delete_entity()` and `entity_ids()` methods
-- Backend-agnostic entity management
-- V2 migration support
-
-**v1.4.2 Developer Documentation** - Complete internal architecture guides (5 new guides)
-- HNSW Vector Store Internals: layers, search/insert algorithms
-- KV Store Architecture: MVCC, TTL, WAL integration
-- Native V2 Binary Format: file structure, clusters, recovery
-- Pub/Sub Implementation: event types, filtering, WAL integration
-- Query API Enhancements: prefix scan, pattern matching, subscriptions
-
-**v1.3.0 Graph Algorithms Library** - Comprehensive algorithm collection for CFG analysis, program slicing, and security
-- 35 algorithms across 13 categories:
-  - Core Graph Theory: WCC, SCC, transitive closure, transitive reduction, topological sort
-  - Reachability: forward/backward reachability, can-reach, unreachable-nodes
-  - CFG Analysis: dominators, post-dominators, control dependence, dominance frontiers, natural loops
-  - Path Analysis: path enumeration with constraints, critical path, cycle basis
-  - Program Analysis: backward/forward slicing, SCC collapse
-  - Distributed Systems: min cut, min vertex cut, graph partitioning
-  - Observability: happens-before analysis, impact radius
-  - ML/Inference: subgraph isomorphism, graph rewriting, structural similarity
-  - Graph Diff: structural delta, refactor validation
-  - Security: taint propagation, sink analysis, source/sink discovery
-- CLI commands for all 35 algorithms with progress tracking
-- Foundation for compiler optimization, security analysis, and program understanding
-
-**Full ACID Transactions** - Complete transaction correctness
-- Atomicity with full rollback support
-- Consistency validation at runtime
-- Isolation via MVCC snapshots
-- Durability with WAL recovery
-
-**Developer Documentation** - Comprehensive guides for contributors
-- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [Testing Guide](docs/TESTING.md) - Test patterns and utilities
-- [Debugging Guide](docs/DEBUGGING.md) - Profiling and troubleshooting
-- [Contributing](docs/CONTRIBUTING.md) - Development workflow
-
-**Test Coverage**: 530+ tests passing (59 pubsub + 42 WAL + 53 MVCC + 180 algorithms + 134 HNSW + 65 others)
-
----
-
-SQLiteGraph is an embedded graph database in Rust featuring a dual backend architecture. It provides SQLite and Native V2 storage options with graph algorithms, HNSW vector search, and MVCC snapshots.
-
-See [CHANGELOG.md](CHANGELOG.md) for version history.
-
-SQLiteGraph provides two backend options:
-- **SQLite Backend**: SQLite storage with ACID transactions
-- **Native V2 Backend**: Clustered adjacency storage with WAL
-
-## Features
-
-### Native V2 Architecture
-- **Clustered Adjacency Storage**: Stores edges in clusters for locality
-- **Write-Ahead Logging (WAL)**: Transaction logging with crash recovery
-- **Snapshot System**: Export/import with lifecycle management
-- **Cross-Platform Atomic Operations**: Concurrent access across platforms
-- **Storage Format**: Binary format with 70%+ size reduction vs legacy V1
-- **Pub/Sub Events**: In-process event notification for graph changes (Native V2 only)
-
-### Dual Backend Architecture
-- **SQLite Backend**: Traditional SQLite with full ACID transactions
-- **Native V2 Backend**: Clustered adjacency for traversal-heavy workloads
-- **Unified API**: Single API works with both backends
-- **Runtime Selection**: Switch backends via configuration
-
-### Core Graph Operations
-- **Entity/Node Management**: Insert, update, retrieve, delete
-- **Edge Management**: Create and manage typed relationships
-- **JSON Data Storage**: Arbitrary JSON metadata on entities and edges
-- **Bulk Operations**: Batch insert for higher throughput
-
-### Traversal & Querying
-- **Neighbor Queries**: Get incoming/outgoing connections
-- **Pattern Matching**: Graph pattern queries
-- **Traversal Algorithms**: BFS, shortest path, connected components
-
-### Graph Algorithms Library
-- **35 algorithms across 13 categories**: Comprehensive collection for CFG analysis, program slicing, security
-  - Core Graph Theory: WCC, SCC, transitive closure, transitive reduction, topological sort
-  - Reachability: forward/backward reachability, can-reach, unreachable-nodes
-  - CFG Analysis: dominators, post-dominators, control dependence, dominance frontiers, natural loops
-  - Path Analysis: path enumeration with constraints, critical path, cycle basis
-  - Program Analysis: backward/forward slicing, SCC collapse
-  - Distributed Systems: min cut, min vertex cut, graph partitioning
-  - Observability: happens-before analysis, impact radius
-  - ML/Inference: subgraph isomorphism, graph rewriting, structural similarity
-  - Graph Diff: structural delta, refactor validation
-  - Security: taint propagation, sink analysis, source/sink discovery
-
-### Performance & Reliability
-- **MVCC Snapshots**: Read isolation with snapshot views
-- **Parallel WAL Recovery**: 2-3x speedup for large WAL files (500+ transactions)
-- **Automated Benchmarks**: Criterion-based regression detection
-- **Safety Tools**: Orphan edge detection and integrity checks
-
-### Vector Search (HNSW)
-- **HNSW Algorithm**: Hierarchical Navigable Small World for ANN search
-- **Supported Metrics**: Cosine, Euclidean, Dot Product, Manhattan
-- **OpenAI Compatible**: Support for 1536-dimensional embeddings
-- **Flexible Dimensions**: Any size from 1-4096
-
-### Developer Tools (Phase 9)
-- **Introspection API**: `GraphIntrospection` for statistics and debugging
-- **Progress Tracking**: `ProgressCallback` with `ConsoleProgress`
-- **CLI Debug Commands**: `debug-stats`, `debug-dump`, `debug-trace`
-- **Algorithm CLI Commands**: `pagerank`, `betweenness`, `louvain` with progress bars
-
-## Performance Benchmarks
-
-**Benchmark Methodology:**
-- Hardware: Linux x86_64 (kernel 6.18+)
-- Sizes: 100-500 nodes (V2 backend has 8MB node region limit, ~2048 nodes max)
-- Cache state: Warm (after warmup iterations)
-- Measurements: Criterion-based statistical analysis (95% confidence interval)
-
-**Native V2 vs SQLite Backend (Phase 24, 2026-01-21):**
-
-| Operation | Size | Native V2 | SQLite | Ratio |
-|-----------|------|-----------|--------|-------|
-| Node Insert | 100 | 1.14 ms | 3.63 ms | 3.2x faster |
-| Node Insert | 500 | 4.91 ms | 10.57 ms | 2.2x faster |
-| Edge Insert (star) | 100 | 3.85 ms | 7.18 ms | 1.9x faster |
-| BFS Traversal (star) | 100 | 4.68 ms | 7.28 ms | 1.6x faster |
-| BFS Traversal (chain) | 100 | 15.38 ms | 7.24 ms | 2.1x **slower** |
-| BFS Traversal (chain) | 500 | 266.50 ms | 24.98 ms | 10.7x **slower** |
-| 1-Hop Query | 100 | 3.87 ms | 6.93 ms | 1.8x faster |
-
-**Key Findings:**
-- Native V2 excels at insert operations (1.3-3.2x faster)
-- Star-pattern traversals favor Native V2 (clustered adjacency locality)
-- Chain traversals show regression (V2 cluster lookup overhead vs SQLite indexed adjacency)
-- Workload pattern matters: choose backend based on your graph shape and access patterns
-
-**Connection Pooling:**
-- Warm checkout: 205 ns (pooled) vs 16.4 µs (direct) = **79.8x faster**
-- First checkout overhead: ~5 ms (pool initialization)
-
-**HNSW Vector Search:**
-- Insertion: 3-5 ms for 100 vectors (64-256 dimensions)
-- Search: Sub-millisecond typical latency
-- Accuracy: 95%+ recall on standard datasets
-
-**Storage Efficiency:**
-- Native V2 format: 70%+ size reduction vs legacy V1 format
-
-**Caveats:**
-- Numbers are for single-node embedded use (not distributed)
-- Performance varies based on graph topology, hardware, and configuration
-- V2 backend currently constrained to ~2048 nodes (8MB reserved region)
-- In-memory benchmarks show 1000-10000x headroom for future optimization
+| Feature | SQLite | Native V3 |
+|---------|--------|-----------|
+| Status | Stable | Beta |
+| Storage | `.db` file | `.graph` file |
+| Max nodes | Unlimited | Unlimited |
+| Graph algorithms | 35+ | 35+ |
+| HNSW vectors | Yes | Yes |
+| Pub/Sub | Yes | Yes |
 
 ## Quick Start
 
-Add to your `Cargo.toml`:
-
 ```toml
 [dependencies]
-sqlitegraph = "1.6.0"
+# SQLite backend (default)
+sqlitegraph = "1.6"
+
+# OR Native V3 backend (faster traversals)
+sqlitegraph = { version = "1.6", features = ["native-v3"] }
 ```
 
-### SQLite Backend (Default)
-
 ```rust
-use sqlitegraph::{SqliteGraph, GraphEntity, GraphEdge};
+use sqlitegraph::backend::{GraphBackend, NodeSpec};
+use sqlitegraph::backend::sqlite::SqliteGraphBackend;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let graph = SqliteGraph::open_in_memory()?;
-
-    let user_entity = GraphEntity {
-        id: 0,
+    let backend = SqliteGraphBackend::in_memory()?;
+    
+    let node_id = backend.insert_node(NodeSpec {
         kind: "User".to_string(),
         name: "Alice".to_string(),
         file_path: None,
         data: serde_json::json!({"age": 30}),
-    };
-
-    let user_id = graph.insert_entity(&user_entity)?;
-    println!("Created entity: {}", user_id);
-
+    })?;
+    
+    println!("Created node: {}", node_id);
     Ok(())
 }
 ```
 
-### Native V2 Backend
-
-```toml
-[dependencies]
-sqlitegraph = { version = "1.5.8", features = ["native-v2"] }
-```
-
-```rust
-use sqlitegraph::{GraphConfig, open_graph, NodeSpec, EdgeSpec};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = GraphConfig::native();
-    let temp_dir = tempfile::tempdir()?;
-    let db_path = temp_dir.path().join("graph.db");
-
-    let graph = open_graph(&db_path, &cfg)?;
-
-    let node_spec = NodeSpec {
-        kind: "User".to_string(),
-        name: "Alice".to_string(),
-        file_path: None,
-        data: serde_json::json!({"age": 30}),
-    };
-    let user_id = graph.insert_node(node_spec)?;
-
-    println!("Created node: {}", user_id);
-    Ok(())
-}
-```
-
-### Pub/Sub Events (Native V2)
-
-```toml
-[dependencies]
-sqlitegraph = { version = "1.5.8", features = ["native-v2"] }
-```
-
-```rust
-use sqlitegraph::{GraphConfig, open_graph};
-use sqlitegraph::backend::SubscriptionFilter;
-
-let cfg = GraphConfig::native();
-let graph = open_graph("graph.db", &cfg)?;
-
-// Subscribe to all node change events
-let filter = SubscriptionFilter::all();
-let (subscriber_id, rx) = graph.subscribe(filter)?;
-
-// In a separate task or thread, receive events
-while let Ok(event) = rx.recv() {
-    println!("Event: {:?}", event);
-    // Events contain only IDs - read actual data from graph using snapshot_id
-}
-
-// Unsubscribe when done
-graph.unsubscribe(subscriber_id)?;
-```
-
-### Realistic Example: Building a Call Graph
-
-```rust
-use sqlitegraph::{GraphConfig, open_graph, NodeSpec, EdgeSpec};
-use sqlitegraph::query::NeighborQuery;
-use serde_json::json;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = GraphConfig::native();
-    let temp_dir = tempfile::tempdir()?;
-    let db_path = temp_dir.path().join("callgraph.db");
-    let graph = open_graph(&db_path, &cfg)?;
-
-    // Add functions as nodes
-    let main_id = graph.insert_node(NodeSpec {
-        kind: "function".into(),
-        name: "main".into(),
-        file_path: Some("src/main.rs".into()),
-        data: json!({"lines": 10, "start_line": 1}),
-    })?;
-
-    let process_id = graph.insert_node(NodeSpec {
-        kind: "function".into(),
-        name: "process".into(),
-        file_path: Some("src/lib.rs".into()),
-        data: json!({"lines": 25, "start_line": 15}),
-    })?;
-
-    let log_id = graph.insert_node(NodeSpec {
-        kind: "function".into(),
-        name: "log".into(),
-        file_path: Some("src/lib.rs".into()),
-        data: json!({"lines": 5, "start_line": 45}),
-    })?;
-
-    // Add call relationships
-    graph.insert_edge(EdgeSpec {
-        from_id: main_id,
-        to_id: process_id,
-        edge_type: "calls".into(),
-        data: json!({"line": 5}),
-    })?;
-
-    graph.insert_edge(EdgeSpec {
-        from_id: process_id,
-        to_id: log_id,
-        edge_type: "calls".into(),
-        data: json!({"line": 18}),
-    })?;
-
-    // Query: What functions does main call (directly)?
-    let snapshot = graph.snapshot()?;
-    let main_calls = snapshot.neighbors(NeighborQuery::outgoing(main_id))?;
-    println!("main calls: {:?}", main_calls.iter().map(|n| &n.name).collect::<Vec<_>>());
-    // Output: main calls: ["process"]
-
-    // Query: What functions call log (transitively)?
-    let callers = snapshot.neighbors(NeighborQuery::incoming(log_id))?;
-    println!("log is called by: {:?}", callers.iter().map(|n| &n.name).collect::<Vec<_>>());
-    // Output: log is called by: ["process"]
-
-    // Query: Full call chain from main
-    fn print_call_chain(graph: &sqlitegraph::SqliteGraph, start_id: u64, depth: usize) -> sqlitegraph::Result<()> {
-        let snapshot = graph.snapshot()?;
-        let mut current = vec![(start_id, 0)];
-        while let Some((node_id, d)) = current.pop() {
-            if d >= depth { continue; }
-            let node = snapshot.get_node(node_id)?;
-            println!("{}└─ {}", "  ".repeat(d), node.name);
-            for neighbor in snapshot.neighbors(NeighborQuery::outgoing(node_id))? {
-                current.push((neighbor.id, d + 1));
-            }
-        }
-        Ok(())
-    }
-
-    print_call_chain(&graph, main_id, 3)?;
-    // Output:
-    // └─ main
-    //   └─ process
-    //     └─ log
-
-    Ok(())
-}
-```
-
-## When NOT to Use SQLiteGraph
-
-    // Output:
-    // └─ main
-    //   └─ process
-    //     └─ log
-
-    Ok(())
-}
-```
-
-## When NOT to Use SQLiteGraph
-
-SQLiteGraph is designed for **embedded, single-machine graph workloads**. It is **not** the best choice for:
-
-| Use Case | Better Alternative | Why |
-|----------|-------------------|-----|
-| **Distributed systems** | Neo4j, TigerGraph | SQLiteGraph is single-machine only |
-| **Real-time analytics** (millions ops/sec) | RedisGraph, GraphX | In-memory engines are faster |
-| **Full-text search** | Meilisearch, Typesense | Dedicated search engines are optimized for text |
-| **Vector-only workloads** | pgvector, qdrant | Specialized vector databases scale better |
-| **SQL queries on graph data** | PostgreSQL + foreign keys | Relational databases have mature SQL support |
-| **Multi-writer workloads** | Distributed databases | SQLiteGraph serializes writes (by design) |
-| **Very large graphs** (>100K nodes) | Neo4j, Amazon Neptune | Native V2 has ~2K node limit; SQLite scales but without graph optimizations |
-
-**SQLiteGraph shines for:**
-- **Code analysis** (call graphs, dependency graphs)
-- **Local-first applications** (no server to manage)
-- **LLM tooling** (structured JSON output, CLI-first design)
-- **Embedded systems** (single binary deployment)
-- **CI/CD pipelines** (small file sizes, fast operations)
-
-## Known Limitations
-
-| Limitation | SQLite Backend | Native V2 Backend |
-|------------|----------------|-------------------|
-| **Max nodes** | Unlimited | ~2,048 (8MB region) |
-| **Concurrent writers** | 1 (SQLite lock) | 1 (WAL serializes) |
-| **Distributed queries** | Not supported | Not supported |
-| **Real-time analytics** | Not optimized | Not optimized |
-
-**Native V2 Node Limit:** The 8MB node region limits Native V2 to approximately 2,048 nodes (at 256 bytes per node slot). This is a **design choice** for simplicity and performance. If you need more nodes:
-- Use the SQLite backend (unlimited nodes)
-- Archive old data to separate graph files
-- Wait for the V3 backend (planned)
-
-**Why 2,048 nodes?** Fixed offset in file header allows direct seeking without metadata lookup. This keeps the format simple and lookups O(1).
-
-## Backend Selection Guide
-
-| Use Case | Recommended Backend | Why |
-|----------|-------------------|-----|
-| **Write-Heavy Workloads** | Native V2 Backend | 1.3-3.2x faster insert operations |
-| **Star-Pattern Graphs** | Native V2 Backend | Clustered adjacency benefits local queries |
-| **Chain-Depth Traversals** | SQLite Backend | V2 has 2-10x chain traversal regression |
-| **Enterprise Applications** | SQLite Backend | ACID transactions, tooling ecosystem |
-| **Existing SQLite Integration** | SQLite Backend | Direct compatibility |
-| **Vector Search Workloads** | Native V2 Backend | HNSW integration |
-| **Development/Testing** | Either Backend | Unified API, both support in-memory |
-| **Small Graphs (<2K nodes)** | Either Backend | V2 has node region limit, SQLite scales better |
-
-### Feature Flags
-
-```toml
-# Default - SQLite backend only
-sqlitegraph = "1.6.0"
-
-# Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.6.0", features = ["native-v2"] }
-
-# Development features - I/O tracing
-sqlitegraph = { version = "1.6.0", features = ["trace_v2_io"] }
-```
-
-## CLI Tool
+## CLI
 
 ```bash
-# Basic status
-sqlitegraph --command status --database memory
+cargo install sqlitegraph-cli
 
-# List entities
-sqlitegraph --command list --database mygraph.db
+# Query (read-only by default)
+sqlitegraph --db graph.db query "MATCH (n:User) RETURN n.name"
 
-# Export/import
-sqlitegraph --command dump-graph --output backup.json --database mygraph.db
-sqlitegraph --command load-graph --input backup.json --database mygraph.db
-
-# HNSW vector search
-sqlitegraph --backend sqlite --db mygraph.db hnsw-create --dimension 768 --distance-metric cosine
-sqlitegraph --backend sqlite --db mygraph.db hnsw-insert --index-name vectors --input vectors.json
-sqlitegraph --backend sqlite --db mygraph.db hnsw-search --index-name vectors --input query.json --k 10
-
-# Algorithm commands (with progress bars)
-sqlitegraph --backend sqlite --db mygraph.db pagerank --progress
-sqlitegraph --backend sqlite --db mygraph.db betweenness --progress
-sqlitegraph --backend sqlite --db mygraph.db louvain --progress
+# Algorithms
+sqlitegraph --db graph.db bfs --start 1 --max-depth 3
+sqlitegraph --db graph.db pagerank --iterations 100
 ```
 
-## Graph Algorithms
+## Ecosystem
 
-```rust
-use sqlitegraph::algo;
+Tools built on SQLiteGraph:
 
-// PageRank - importance ranking
-let scores = algo::pagerank(&graph, 0.85, 50)?;
-
-// Betweenness Centrality - node importance via shortest paths
-let centrality = algo::betweenness_centrality(&graph)?;
-
-// Label Propagation - fast community detection
-let communities = algo::label_propagation(&graph)?;
-
-// Louvain - modularity-based clustering
-let partition = algo::louvain_communities(&graph, 0.01)?;
-
-// With progress tracking
-use sqlitegraph::progress::ConsoleProgress;
-let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new())?;
-```
-
-## Testing
-
-**Test Coverage (v1.4.2):**
-- 59 pubsub tests passing (event emission, filtering, multiple subscribers)
-- 42 WAL tests passing (recovery, corruption, checkpoints)
-- 53 concurrent MVCC tests passing (snapshots, stress testing)
-- 180+ algorithm tests passing (35 algorithms across 13 categories)
-- 134 HNSW tests passing
-- 65 MVCC lifecycle tests passing
-
-```bash
-# Run all tests
-cargo test --workspace
-
-# With Native V2 backend
-cargo test --workspace --features native-v2
-
-# Run benchmarks
-cargo bench
-
-# Documentation tests
-cargo test --doc
-```
-
-## Grounded Tool Scripts
-
-Keep every change truth-based by running the Magellan stack before touching files:
-
-- `scripts/watch-magellan.sh` — starts `magellan watch --root sqlitegraph/src` with `.codemcp/codegraph.db` scoped to the Rust sources.
-- `scripts/toolchain-ready.sh [symbol]` — runs `magellan status` + `llmgrep search` (defaults to `ToolRegistry`) so you can verify tool readiness and capture execution IDs before editing.
-
-Run these before any reading/editing steps so the CLI and LLM focus on deterministic spans instead of guessing through `rg`.
+| Tool | Purpose | Repository | crates.io |
+|------|---------|------------|-----------|
+| **Magellan** | Code graph indexing, symbol navigation | [github.com/oldnordic/magellan](https://github.com/oldnordic/magellan) | [crates.io/crates/magellan](https://crates.io/crates/magellan) |
+| **llmgrep** | Semantic code search | [github.com/oldnordic/llmgrep](https://github.com/oldnordic/llmgrep) | [crates.io/crates/llmgrep](https://crates.io/crates/llmgrep) |
+| **Mirage** | CFG analysis, path enumeration | [github.com/oldnordic/mirage](https://github.com/oldnordic/mirage) | [crates.io/crates/mirage-analyzer](https://crates.io/crates/mirage-analyzer) |
+| **splice** | Precision code editing | [github.com/oldnordic/splice](https://github.com/oldnordic/splice) | [crates.io/crates/splice](https://crates.io/crates/splice) |
 
 ## Documentation
 
-### User Documentation
-- **[Operator Manual](MANUAL.md)** - Comprehensive usage guide (14 sections)
-- **[API Docs](API.md)** - Quick API reference
-- **[CHANGELOG](CHANGELOG.md)** - Version history
-- **[Migration Guide](docs/MIGRATION.md)** - SQLite to Native V2 migration
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
-- **[Design Philosophy](docs/PHILOSOPHY.md)** - Principles and trade-offs
-
-### Developer Documentation
-- **[Documentation Index](docs/INDEX.md)** - Navigation for all docs
-- **[Architecture](docs/ARCHITECTURE.md)** - System architecture and design
-- **[Testing Guide](docs/TESTING.md)** - Testing patterns and utilities
-- **[Debugging Guide](docs/DEBUGGING.md)** - Debugging and profiling
-- **[Contributing](docs/CONTRIBUTING.md)** - Contribution guidelines
-
-### Development Guides
-- **[Adding a Graph Algorithm](docs/DEVELOPMENT_GUIDES/adding-a-graph-algorithm.md)**
-- **[Adding a Distance Metric](docs/DEVELOPMENT_GUIDES/adding-a-distance-metric.md)**
-- **[Adding a CLI Command](docs/DEVELOPMENT_GUIDES/adding-a-cli-command.md)**
-
-## Architecture
-
-### Design Principles
-- **300 LOC Module Limit**: Maintainable boundaries
-- **TDD Methodology**: Test-driven development
-- **Performance Benchmarks**: Criterion-based regression gates
-
-### Module Organization
-- Core graph operations with dual backend support
-- Graph algorithms (centrality, community detection)
-- HNSW vector search with persistence
-- MVCC snapshots for read isolation
-- Introspection and debugging tools
-
-## Compiler Warnings
-
-SQLiteGraph compiles with **zero warnings** as of v1.4.2:
-- All test modules properly gated with `#[cfg(test)]`
-- Unused imports cleaned up
-- Clean compilation output for better developer experience
-
-### Grounded Development Workflow
-
-SQLiteGraph uses a **grounded tool workflow** to prevent guessing and ensure code changes are truth-based:
-
-1. **Magellan** - Code graph indexing and symbol discovery
-   ```bash
-   magellan watch --root sqlitegraph/src --db .codemcp/codegraph.db --debounce-ms 500
-   ```
-
-2. **llmgrep** - Semantic code search with span references
-   ```bash
-   llmgrep search --db .codemcp/codegraph.db --query "symbolName" --output json
-   ```
-
-3. **Splice / llm-transform** - Span-safe code editing
-   ```bash
-   splice edit --span-id <id> --execution-id <exec_id> ...
-   ```
-
-This workflow ensures every code change is grounded in actual code graph data rather than assumptions.
-
-## Built With
-
-SQLiteGraph was developed using the following grounded development tools:
-
-| Tool | Description |
-|------|-------------|
-| **[Magellan](https://github.com/oldnordic/magellan)** ([crates.io](https://crates.io/crates/magellan)) | Code graph navigation and symbol analysis |
-| **[Splice](https://github.com/oldnordic/splice)** ([crates.io](https://crates.io/crates/splice)) | Safe code editing with span-based operations |
-| **[llmgrep](https://github.com/oldnordic/llmgrep)** ([crates.io](https://crates.io/crates/llmgrep)) | Semantic code search powered by embeddings |
+- [Architecture](docs/ARCHITECTURE.md) - System design
+- [Manual](MANUAL.md) - API guide
+- [Algorithms](docs/GRAPH_ALGORITHMS_GUIDE.md) - 35 graph algorithms
+- [Changelog](CHANGELOG.md) - Version history
 
 ## License
 
-GPL-3.0-or-later - see [LICENSE](LICENSE) for details.
-
-## Contributing
-
-Contributions welcome. Please:
-1. Read the [Contributing Guide](docs/CONTRIBUTING.md)
-2. Read the [Architecture](docs/ARCHITECTURE.md) for system understanding
-3. Run tests to verify setup
-4. Follow TDD methodology
-5. Keep modules under 300 LOC
-6. Add tests for new features
+GPL-3.0-or-later

@@ -58,7 +58,7 @@ SQLiteGraph tackles hard problems:
 - **MVCC from scratch** - True snapshot isolation without relying on SQLite
 - **Custom binary format** - Clustered edge storage for I/O locality
 - **Zero-copy reads** - Snapshot-based data access
-- **Comprehensive algorithms** - 35+ graph algorithms in a single crate
+- **Algorithm library** - 35+ graph algorithms in a single crate
 
 ### 2. Grounded Development Workflow
 

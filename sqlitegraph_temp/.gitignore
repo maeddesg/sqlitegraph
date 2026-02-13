@@ -1,0 +1,94 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database files
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+
+# Cache directories
+.fastembed_cache/
+.cargo-cache/
+.cargo/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Coverage reports
+tarpaulin-report.html
+cobertura.xml
+
+# Benchmark outputs
+*.json.bak
+benchmark_results/
+
+# Claude and internal development files
+.claude/
+results/
+AGENTS.md
+.mcp.json
+.splice/
+.splice-backup/
+
+# Temporary benchmark scripts and results
+quick_comparison_results.json
+scripts/
+
+# Internal documentation and reports (development artifacts)
+# Note: Internal docs are now tracked in docs/internal/
+V1_LEGACY_PURGE_MISSION_REPORT.md
+V2_REGRESSION_GATES_*.md
+Archive.zip
+
+# Project development files (internal use)
+CLAUDE.md
+.planning/
+.codemcp/
+.splice/
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+
+# Development and build artifacts (messy files)
+build.txt
+compilation_output.txt
+perf.data
+perf.data.*
+memory
+memory.checkpoint
+memory.wal
+test_instrumentation.sh
+test_wal_api
+main
+test_*_api
+*.sqlitegraph-*insert_bench_fixed.txt
+
+# Internal development docs (kept for reference but not in git)
+docs/internal/

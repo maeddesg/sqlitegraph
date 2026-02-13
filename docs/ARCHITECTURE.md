@@ -1,7 +1,7 @@
 # SQLiteGraph Architecture
 
-**Last Updated:** 2026-02-03
-**Version:** v1.4.2
+**Last Updated:** 2026-02-12
+**Version:** v1.6.0
 
 This document describes the architecture of SQLiteGraph from a developer's perspective. For user-facing documentation, see [README.md](../README.md) and [MANUAL.md](../MANUAL.md).
 
@@ -21,40 +21,48 @@ This document describes the architecture of SQLiteGraph from a developer's persp
 
 ## High-Level Overview
 
-SQLiteGraph is an embedded graph database with dual storage backends:
+SQLiteGraph is an embedded graph database with **three** storage backends:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     User Application                        │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   SqliteGraph (Unified API)                 │
-│  - GraphEntity, GraphEdge, NodeSpec, EdgeSpec               │
-│  - insert_entity, insert_edge, neighbors, traversal         │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-          ┌───────────────┴───────────────┐
-          ▼                               ▼
-┌─────────────────────┐         ┌─────────────────────┐
-│  SQLite Backend     │         │  Native V2 Backend  │
-│  (ACID, Ecosystem)  │         │  (Performance)      │
-├─────────────────────┤         ├─────────────────────┤
-│ - SQL storage       │         │ - Binary file format│
-│ - Full transactions │         │ - Clustered edges   │
-│ - Raw SQL access    │         │ - WAL logging       │
-└─────────────────────┘         │ - Memory-mapped I/O │
-                                └─────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        User Application                             │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    GraphBackend Trait (Unified API)                 │
+│     - insert_node, insert_edge, neighbors, subscribe, etc.          │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │
+           ┌────────────────────┼────────────────────┐
+           │                    │                    │
+           ▼                    ▼                    ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│  SQLite Backend  │  │   Native V3      │  │  Native V2       │
+│  (Stable)        │  │   (Production)   │  │  (Deprecated)    │
+├──────────────────┤  ├──────────────────┤  ├──────────────────┤
+│ - SQL storage    │  │ - Binary format  │  │ - Binary format  │
+│ - ACID via SQL   │  │ - B+Tree index   │  │ - Clustered      │
+│ - Debuggable     │  │ - Unlimited      │  │ - 2048 limit     │
+│                  │  │   capacity       │  │                  │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
+
+### Backend Status
+
+| Backend | Status | Use Case |
+|---------|--------|----------|
+| **SQLite** | ✅ Stable | Debuggable, familiar SQL ecosystem |
+| **Native V3** | ✅ Production | High performance, unlimited scale |
+| **Native V2** | ⚠️ Deprecated | Being removed in v1.7.0 |
 
 ### Key Architectural Principles
 
-1. **Dual Backend Strategy**: SQLite for features, Native V2 for performance
-2. **Unified API**: Same interface regardless of backend choice
-3. **MVCC Isolation**: Snapshot-based reads without blocking writers
-4. **Clustered Storage**: V2 stores edges in clusters for I/O locality
-5. **Pluggable Algorithms**: Graph algorithms, HNSW vector search
+1. **Unified Backend Trait**: Same API works with all backends
+2. **Lazy Initialization**: V3 backend doesn't allocate until features are used
+3. **Honest Engineering**: Document limitations, deprecate when better alternatives exist
+4. **MVCC Isolation**: Snapshot-based reads without blocking writers
+5. **Pluggable Components**: Algorithms, storage, and indexing are decoupled
 
 ---
 
@@ -66,36 +74,28 @@ sqlitegraph/
 ├── src/
 │   ├── lib.rs                 # Public API exports
 │   ├── error.rs               # Error types
-│   ├── graph/                 # Core graph database
 │   ├── backend/               # Storage abstraction
-│   │   ├── mod.rs             # GraphBackend trait
-│   │   ├── sqlite/            # SQLite backend implementation
-│   │   └── native/            # Native backend
-│   │       ├── v1/            # Legacy V1 format
-│   │       └── v2/            # Current V2 format
-│   │           ├── wal/       # Write-Ahead Logging
-│   │           ├── node/      # Node storage
-│   │           ├── edge/      # Edge storage (clustered)
-│   │           ├── kv/        # Transactional KV store
-│   │           └── pubsub/    # Pub/Sub event system
-│   ├── algo/                  # Graph algorithms
+│   │   ├── mod.rs             # GraphBackend trait + generic types
+│   │   ├── sqlite/            # SQLite backend (stable)
+│   │   │   ├── impl_.rs       # SqliteGraphBackend
+│   │   │   └── pubsub_tests.rs
+│   │   └── native/            # Native backends
+│   │       ├── v3/            # V3 backend (production)
+│   │       │   ├── backend.rs # V3Backend implementation
+│   │       │   ├── btree/     # B+Tree index
+│   │       │   ├── kv_store/  # Lazy KV storage
+│   │       │   ├── pubsub/    # Publisher implementation
+│   │       │   └── wal/       # Write-ahead logging
+│   │       └── v2/            # V2 backend (deprecated)
+│   ├── algo/                  # Graph algorithms (backend-agnostic)
+│   │   ├── backend/           # Generic algorithms for &dyn GraphBackend
+│   │   └── ...                # 35+ algorithms
 │   ├── hnsw/                  # Vector similarity search
-│   ├── pattern_engine/        # Triple pattern matching
-│   ├── mvcc.rs                # MVCC snapshot system
-│   ├── query/                 # High-level query interface
-│   ├── introspection/         # Debug/introspection APIs
-│   ├── cache/                 # LRU-K adjacency cache
-│   ├── config.rs              # Configuration types
-│   └── debug.rs               # Debug logging (feature-gated)
-├── tests/                     # Integration tests
-│   └── helpers/               # Test utilities
-└── benches/                   # Criterion benchmarks
-
-sqlitegraph-cli/
-├── src/
-│   ├── main.rs                # CLI entry point
-│   └── client.rs              # Backend wrapper
-└── Cargo.toml                 # CLI manifest
+│   │   ├── storage.rs         # VectorStorage trait + SQLite implementation
+│   │   ├── v3_storage.rs      # V3 vector storage
+│   │   └── ...
+│   └── ...
+└── docs/
 ```
 
 ---
@@ -104,75 +104,72 @@ sqlitegraph-cli/
 
 ### 1. GraphBackend Trait
 
-The `GraphBackend` trait defines the abstraction layer between the unified API and storage backends.
+The `GraphBackend` trait is the core abstraction. All backends implement this trait.
 
 **Location:** `src/backend/mod.rs`
 
 ```rust
 pub trait GraphBackend: Send + Sync {
-    // Node operations
-    fn insert_node(&self, spec: NodeSpec) -> Result<u64, SqliteGraphError>;
-    fn get_node(&self, id: u64) -> Result<NodeData, SqliteGraphError>;
-    fn update_node(&self, spec: NodeSpec) -> Result<(), SqliteGraphError>;
-    fn delete_node(&self, id: u64) -> Result<(), SqliteGraphError>;
-
-    // Edge operations
-    fn insert_edge(&self, edge: EdgeSpec) -> Result<u64, SqliteGraphError>;
-    fn get_edge(&self, id: u64) -> Result<EdgeData, SqliteGraphError>;
-    fn delete_edge(&self, id: u64) -> Result<(), SqliteGraphError>;
-
-    // Traversal
-    fn neighbors(&self, query: NeighborQuery) -> Result<Vec<Neighbor>, SqliteGraphError>;
-
-    // Snapshots
-    fn snapshot(&self) -> Result<Box<dyn GraphSnapshot>, SqliteGraphError>;
-
-    // Pub/Sub (Native V2 only)
-    fn subscribe(&self, filter: SubscriptionFilter)
-        -> Result<(SubscriberId, Receiver<PubSubEvent>), SqliteGraphError>;
-    fn unsubscribe(&self, id: SubscriberId) -> Result<(), SqliteGraphError>;
+    // Core graph operations
+    fn insert_node(&self, node: NodeSpec) -> Result<i64, SqliteGraphError>;
+    fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError>;
+    fn neighbors(&self, snapshot_id: SnapshotId, node: i64, query: NeighborQuery) 
+        -> Result<Vec<i64>, SqliteGraphError>;
+    
+    // Key-Value operations (optional - backends return error if unsupported)
+    fn kv_get(&self, snapshot_id: SnapshotId, key: &[u8]) -> Result<Option<KvValue>, SqliteGraphError>;
+    fn kv_set(&self, key: Vec<u8>, value: KvValue, ttl_seconds: Option<u64>) -> Result<(), SqliteGraphError>;
+    
+    // Pub/Sub (works on all backends now)
+    fn subscribe(&self, filter: SubscriptionFilter) 
+        -> Result<(u64, Receiver<PubSubEvent>), SqliteGraphError>;
+    fn unsubscribe(&self, subscriber_id: u64) -> Result<bool, SqliteGraphError>;
 }
 ```
 
-### 2. MVCC Snapshot System
+**Generic Pub/Sub Types:** The trait includes generic `PubSubEvent` and `SubscriptionFilter` types that work across all backends.
 
-**Location:** `src/mvcc.rs`
+### 2. Backend Algorithms
 
-Provides multi-version concurrency control for read isolation.
+**Location:** `src/algo/backend/`
+
+Generic algorithm implementations that work with any `GraphBackend`:
 
 ```rust
-pub struct SnapshotManager {
-    inner: Arc<SnapshotState>,
-}
+// centrality.rs
+pub fn pagerank(graph: &dyn GraphBackend, damping: f64, iterations: usize) 
+    -> Result<Vec<(i64, f64)>, SqliteGraphError>;
 
-pub struct SnapshotState {
-    current: ArcSwap<SnapshotData>,  // Lock-free atomic update
-}
+pub fn betweenness_centrality(graph: &dyn GraphBackend) 
+    -> Result<Vec<(i64, f64)>, SqliteGraphError>;
 
-pub trait GraphSnapshot {
-    fn get_node(&self, id: u64) -> Result<NodeData, SqliteGraphError>;
-    fn neighbors(&self, query: NeighborQuery) -> Result<Vec<Neighbor>, SqliteGraphError>;
-}
+// graph_ops.rs  
+pub fn strongly_connected_components(graph: &dyn GraphBackend) 
+    -> Result<SccResult, SqliteGraphError>;
+
+pub fn shortest_path(graph: &dyn GraphBackend, start: i64, end: i64) 
+    -> Result<Option<Vec<i64>>, SqliteGraphError>;
 ```
 
-**Guarantees:**
-- Readers never block writers
-- Writers never block readers
-- Each snapshot sees a consistent, isolated view
-- No dirty reads within snapshots
+All 35+ algorithms are backend-agnostic.
 
-### 3. Cache Layer
+### 3. Vector Storage Abstraction
 
-**Location:** `src/cache/`
-
-LRU-K cache for adjacency lists to reduce I/O.
+**Location:** `src/hnsw/storage.rs`
 
 ```rust
-pub struct AdjacencyCache {
-    // LRU-K caching with configurable K (default: 2)
-    // Separate caches for incoming/outgoing edges
+pub trait VectorStorage {
+    fn store_vector(&mut self, vector: &[f32], metadata: Option<Value>) -> Result<u64, HnswError>;
+    fn get_vector(&self, id: u64) -> Result<Option<Vec<f32>>, HnswError>;
+    fn delete_vector(&mut self, id: u64) -> Result<(), HnswError>;
+    fn vector_count(&self) -> Result<usize, HnswError>;
 }
 ```
+
+**Implementations:**
+- `SQLiteVectorStorage` - SQL table storage
+- `V3VectorStorage` - KV store storage (new)
+- `InMemoryVectorStorage` - RAM only
 
 ---
 
@@ -182,412 +179,213 @@ pub struct AdjacencyCache {
 
 **Location:** `src/backend/sqlite/`
 
+**Status:** Stable, mature, debuggable
+
 | Aspect | Implementation |
 |--------|----------------|
 | **Storage** | SQLite database file |
-| **Schema** | `entities` table, `edges` table |
+| **Schema** | `entities`, `edges`, `kv_store`, `hnsw_vectors` tables |
 | **Transactions** | Full ACID via SQLite |
 | **Concurrency** | Database-level locks |
-| **Raw SQL** | Available via `conn()` method |
+| **Pub/Sub** | In-memory publisher with event emission |
 
-**Schema:**
-```sql
-CREATE TABLE entities (
-    id INTEGER PRIMARY KEY,
-    kind TEXT NOT NULL,
-    name TEXT NOT NULL,
-    file_path TEXT,
-    data JSON
-);
+**Key Features:**
+- SQL-accessible for debugging
+- Mature, well-tested
+- Creates tables on-demand
+- No node limits
 
-CREATE TABLE edges (
-    id INTEGER PRIMARY KEY,
-    from_id INTEGER NOT NULL,
-    to_id INTEGER NOT NULL,
-    edge_type TEXT NOT NULL,
-    data JSON,
-    FOREIGN KEY (from_id) REFERENCES entities(id),
-    FOREIGN KEY (to_id) REFERENCES entities(id)
-);
-```
+### Native V3 Backend (Production)
 
-### Native V2 Backend
+**Location:** `src/backend/native/v3/`
 
-**Location:** `src/backend/native/v2/`
+**Status:** Mature, recommended for new projects
 
-The Native V2 backend is a custom file format optimized for graph workloads.
+| Aspect | Implementation |
+|--------|----------------|
+| **Storage** | Binary file (.graph) |
+| **Index** | B+Tree for O(log n) node lookups |
+| **Max Nodes** | Unlimited |
+| **KV Store** | Lazy-initialized in-memory HashMap |
+| **Pub/Sub** | Lazy-initialized Publisher |
+| **WAL** | Optional for durability |
 
 #### File Format
 
 ```
-graph.db (main file)
-├── Header (512 bytes)
-│   ├── Magic number: "SQLGv2"
-│   ├── Version: 2
-│   ├── Node region offset
-│   ├── Edge cluster region offset
-│   ├── WAL region offset
-│   └── Checkpoint state
-├── Node Region (max 8MB, ~2048 nodes)
-│   ├── Node slots (256 bytes each)
-│   └── Node data (kind, name, JSON)
-├── Edge Cluster Region
-│   ├── Clusters (64KB each)
-│   │   ├── Cluster header
-│   │   └── Sequential edge records
-│   └── Free block bitmap
-└── WAL Region
-    ├── WAL header
-    └── WAL records (variable size)
-
-graph.db.wal (write-ahead log)
-├── WAL header
-└── WAL records (append-only)
+db.graph
+├── Header (1KB)
+│   ├── Magic: "SQLGV3"
+│   ├── Version: 3
+│   ├── Root index page
+│   └── Node count
+├── B+Tree Index
+│   ├── Internal nodes (keys → page_ids)
+│   └── Leaf nodes (node_id → page_id)
+├── Node Pages
+│   └── Variable-size node records
+├── Edge Clusters
+│   └── Edge adjacency data
+└── Free space bitmap
 ```
 
-#### Key Components
+#### Lazy Initialization
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| **V2GraphFile** | `graph_file.rs` | Memory-mapped file operations |
-| **V2NodeStore** | `node/` | Node storage with slot allocation |
-| **V2EdgeStore** | `edge/` | Clustered edge storage |
-| **V2WALManager** | `wal/manager.rs` | Transaction logging and recovery |
-| **V2KVStore** | `kv/` | Transactional key-value storage |
-| **Publisher** | `pubsub/publisher.rs` | Event broadcasting |
-| **TransactionCoordinator** | `transaction/` | MVCC transaction management |
+V3 uses `Option<T>` for optional features:
 
-#### Clustered Edge Storage
-
-Edges are stored in clusters (64KB blocks) for I/O locality:
-
-```
-Cluster Layout:
-┌─────────────────────────────────────┐
-│ Cluster Header (64 bytes)           │
-│ - cluster_id: u64                   │
-│ - edge_count: u32                   │
-│ - next_cluster: Option<u64>         │
-├─────────────────────────────────────┤
-│ Edge Record 1 (variable)            │
-│ - from_id: u64                      │
-│ - to_id: u64                        │
-│ - edge_type: string                 │
-│ - data: JSON                        │
-├─────────────────────────────────────┤
-│ Edge Record 2 (variable)            │
-├─────────────────────────────────────┤
-│ ...                                 │
-└─────────────────────────────────────┘
+```rust
+pub struct V3Backend {
+    // Core (always present)
+    btree: RwLock<BTreeManager>,
+    node_store: RwLock<NodeStore>,
+    edge_store: RwLock<V3EdgeStore>,
+    
+    // Optional (lazy initialized)
+    kv_store: RwLock<Option<KvStore>>,      // Created on first kv_get/set
+    publisher: RwLock<Option<Publisher>>,   // Created on first subscribe
+}
 ```
 
 **Benefits:**
-- Sequential writes within cluster
-- Better cache locality
-- Reduced random I/O
+- Zero overhead if KV/PubSub not used
+- Memory efficient for simple graph workloads
+- Full features available when needed
 
-#### WAL (Write-Ahead Logging)
-
-**Location:** `src/backend/native/v2/wal/`
+#### Pub/Sub Implementation
 
 ```rust
-pub enum V2WALRecord {
-    InsertNode { node_id: u64, spec: NodeSpec },
-    UpdateNode { node_id: u64, spec: NodeSpec },
-    DeleteNode { node_id: u64 },
-    InsertEdge { edge_id: u64, spec: EdgeSpec },
-    DeleteEdge { edge_id: u64 },
-    KVPut { key_hash: u64, value: Vec<u8> },
-    KVDelete { key_hash: u64 },
-    BeginCheckpoint,
-    EndCheckpoint,
+impl GraphBackend for V3Backend {
+    fn subscribe(&self, filter: SubscriptionFilter) -> Result<...> {
+        // Lazy initialize publisher
+        if self.publisher.read().is_none() {
+            *self.publisher.write() = Some(Publisher::new());
+        }
+        // ... subscribe logic
+    }
 }
 ```
 
-**Recovery Process:**
-1. Open main file and WAL
-2. Read WAL from beginning
-3. Reapply committed transactions
-4. Discard uncommitted transactions
-5. Trigger checkpoint if needed
+### Native V2 Backend (Deprecated)
 
-#### Pub/Sub Events
+**Location:** `src/backend/native/v2/`
 
-**Location:** `src/backend/native/v2/pubsub/`
+**Status:** Deprecated, will be removed in v1.7.0
 
-Events emitted on commit only (not rollback):
+| Aspect | Implementation |
+|--------|----------------|
+| **Max Nodes** | ~2048 (8MB region limit) |
+| **Status** | Do not use for new projects |
 
-```rust
-pub enum PubSubEvent {
-    NodeChanged { node_id: u64, snapshot_id: u64 },
-    EdgeChanged { edge_id: u64, snapshot_id: u64 },
-    KVChanged { key_hash: u64, snapshot_id: u64 },
-    SnapshotCommitted { snapshot_id: u64 },
-}
-```
-
-**Design:** ID-only events — consumers read actual data from snapshot APIs.
-
----
-
-## Data Flow
-
-### Read Path (Node Query)
-
-```
-User Code
-    │
-    ▼
-graph.get_node(id)
-    │
-    ▼
-GraphBackend::get_node(id)
-    │
-    ├─────────────────┐
-    ▼                 ▼
-SQLite Backend    Native V2 Backend
-    │                 │
-    ▼                 ▼
-SELECT * FROM      V2NodeStore::get()
-entities           │
-WHERE id = ?        ▼
-    │           Check node slot
-    ▼                 │
-Return entity      ├────────────┐
-                    ▼            ▼
-                Cache hit?    Read from
-                    │           graph.db
-                    ▼
-                Return node
-```
-
-### Write Path (Insert Edge)
-
-```
-User Code
-    │
-    ▼
-graph.insert_edge(spec)
-    │
-    ▼
-Begin Transaction
-    │
-    ▼
-GraphBackend::insert_edge(spec)
-    │
-    ├─────────────────┐
-    ▼                 ▼
-SQLite Backend    Native V2 Backend
-    │                 │
-    ▼                 ▼
-BEGIN              V2WALManager::begin()
-    │                 │
-INSERT INTO edges   │
-VALUES (...)        ▼
-    │           Write WAL record
-    │                 │
-    │                 ▼
-COMMIT            V2WALManager::commit()
-    │                 │
-    │                 ├──────────────┐
-    │                 ▼              ▼
-    │            Append to       Emit events
-    │            graph.db.wal     (pubsub)
-    │                 │
-    ▼                 ▼
-Return             Return
-```
-
-### Traversal Path (BFS)
-
-```
-User Code
-    │
-    ▼
-algo::bfs(&graph, start, max_depth)
-    │
-    ▼
-For each level:
-    │
-    ▼
-graph.neighbors(node_id, query)
-    │
-    ├─────────────────┐
-    ▼                 ▼
-SQLite Backend    Native V2 Backend
-    │                 │
-    ▼                 ▼
-SELECT to_id       V2EdgeStore::get_cluster()
-FROM edges         │
-WHERE from_id = ?  ▼
-    │           Read cluster (64KB)
-    │                 │
-    ▼                 ▼
-Return list       Iterate cluster
-                    (sequential I/O)
-                        │
-                        ▼
-                    Return list
-```
+**Migration Path:**
+- V2 → SQLite: Export/import via JSON
+- V2 → V3: Direct migration tools (planned)
 
 ---
 
 ## Key Design Decisions
 
-### 1. Dual Backend Architecture
+### 1. Why Lazy Initialization in V3?
 
-**Decision:** Support both SQLite and Native V2 backends.
+**Problem:** V2 always allocated KV store and Publisher even when unused.
 
-**Rationale:**
-- SQLite: Proven reliability, ecosystem tools, ACID guarantees
-- Native V2: Optimized for graph workloads, clustered edges, WAL
+**Solution:** V3 uses `Option<T>` with lazy initialization.
 
 **Trade-offs:**
-- Complexity: Must maintain two storage engines
-- Testing: Double the test surface
-- Benefit: Users choose based on workload
+- ✅ Zero memory overhead for unused features
+- ✅ Slightly more complex code (Option handling)
+- ✅ First access has initialization cost
 
-### 2. Clustered Edge Storage
+### 2. Why Generic Pub/Sub Types?
 
-**Decision:** Store edges in 64KB clusters instead of individual records.
+**Problem:** Pub/Sub types were tied to `native-v2` feature, breaking compilation without it.
 
-**Rationale:**
-- Graph traversals follow adjacency lists
-- Sequential I/O is 10-100x faster than random I/O
-- Clusters keep related edges together
+**Solution:** Moved generic `PubSubEvent` and `SubscriptionFilter` to `backend/mod.rs`.
 
-**Trade-offs:**
-- Fragmentation: Clusters can become partially full
-- Rebalancing: May need to move edges between clusters
-- Benefit: 1.6-10x faster for star patterns
+**Result:** All backends can implement Pub/Sub with same types.
 
-### 3. ID-Only Pub/Sub Events
+### 3. Why Backend-Agnostic Algorithms?
 
-**Decision:** Events carry only IDs, not full entity data.
+**Problem:** Old algorithms used `&SqliteGraph`, requiring SQLite backend.
 
-**Rationale:**
-- Decouples event schema from entity schema
-- Reduces event overhead (no JSON serialization)
-- Consumers read from snapshot for consistency
+**Solution:** New algorithms use `&dyn GraphBackend`.
 
-**Trade-offs:**
-- Extra read: Consumers must query graph for data
-- Complexity: Consumers need snapshot handling
-- Benefit: No event breaking on schema changes
+**Result:** Same algorithms work with SQLite, V2, and V3 backends.
 
-### 4. MVCC-Lite
+### 4. Why Deprecate V2?
 
-**Decision:** Snapshot-based reads without full transaction isolation.
+**Reasons:**
+- Hard 2048 node limit (architectural constraint)
+- V3 has same features with unlimited capacity
+- Maintenance burden of two native backends
+- V3 has cleaner architecture (B+Tree vs clustered)
 
-**Rationale:**
-- Full MVCC is complex (locking, validation, conflict resolution)
-- SQLite handles transactions internally
-- Readers need consistent views, not write conflicts
-
-**Trade-offs:**
-- Write-write conflicts: Not handled at application level
-- Stale reads: Snapshots may be behind current state
-- Benefit: Simpler implementation, sufficient for embedded use
-
-### 5. 8MB Node Region Limit
-
-**Decision:** Reserve 8MB for node storage (~2048 nodes max).
-
-**Rationale:**
-- Fixed offset in header allows direct seeking
-- 256 bytes per node slot (generous for names + JSON)
-- Keeps header simple
-
-**Trade-offs:**
-- Scalability: Limited to ~2K nodes
-- Fragmentation: Large slots waste space
-- Benefit: Simple format, fast lookup
-- **Note:** This is a known limitation; future versions may address this.
+**Timeline:**
+- v1.6.0: V2 deprecated but still available
+- v1.7.0: V2 removed, V3 becomes primary native backend
 
 ---
 
 ## Module Reference
 
-### Graph Algorithms (`src/algo/`)
+### Backend Modules
 
-| Algorithm | Complexity | File | Description |
-|-----------|------------|------|-------------|
-| PageRank | O(k × \|E\|) | `pagerank.rs` | Importance ranking |
-| Betweenness | O(\|V\| × \|E\|) | `betweenness.rs` | Bridge nodes |
-| Label Propagation | O(k × \|E\|) | `label_prop.rs` | Fast clustering |
-| Louvain | O(\|E\| log \|V\|) | `louvain.rs` | Modularity optimization |
-| BFS | O(\|V\| + \|E\|) | `bfs.rs` | Breadth-first search |
-| Connected Components | O(\|V\| + \|E\|) | `components.rs` | Weak connectivity |
+| Module | Path | Purpose |
+|--------|------|---------|
+| `GraphBackend` | `src/backend/mod.rs` | Core trait definition |
+| `SqliteGraphBackend` | `src/backend/sqlite/impl_.rs` | SQLite implementation |
+| `V3Backend` | `src/backend/native/v3/backend.rs` | V3 implementation |
+| `PubSubEvent` | `src/backend/mod.rs` | Generic event types |
 
-### HNSW Vector Search (`src/hnsw/`)
+### Algorithm Modules
 
-| Component | File | Description |
-|-----------|------|-------------|
-| Index | `index.rs` | Main HNSW index |
-| Config | `config.rs` | Builder for HNSW parameters |
-| Distance | `distance.rs` | Distance metric implementations |
-| Storage | `storage.rs` | SQLite-backed vector storage |
-| Search | `search.rs` | ANN search algorithm |
+| Module | Path | Algorithms |
+|--------|------|------------|
+| `centrality` | `src/algo/backend/centrality.rs` | PageRank, Betweenness |
+| `graph_ops` | `src/algo/backend/graph_ops.rs` | SCC, Shortest Path, Topological Sort |
+| `traversal` | `src/algo/backend/traversal.rs` | BFS, DFS, k-hop |
 
-### Introspection (`src/introspection/`)
+### HNSW Modules
 
-| API | Purpose |
-|-----|---------|
-| `GraphIntrospection::node_count()` | Exact node count |
-| `GraphIntrospection::edge_count_estimate()` | Min/max edge estimate |
-| `GraphIntrospection::backend_info()` | Backend-specific stats |
-| `GraphIntrospection::to_json()` | Full state export |
+| Module | Path | Purpose |
+|--------|------|---------|
+| `SQLiteVectorStorage` | `src/hnsw/storage.rs` | SQL-backed vector storage |
+| `V3VectorStorage` | `src/hnsw/v3_storage.rs` | KV-backed vector storage |
 
 ---
 
-## Performance Characteristics
+## Testing Strategy
 
-### Backend Comparison
+Each backend has comprehensive tests:
 
-| Operation | SQLite | Native V2 | Ratio |
-|-----------|--------|-----------|-------|
-| Node Insert (100) | 3.63 ms | 1.14 ms | 3.2x faster |
-| Edge Insert (star) | 7.18 ms | 3.85 ms | 1.9x faster |
-| BFS Star (100) | 7.28 ms | 4.68 ms | 1.6x faster |
-| BFS Chain (500) | 24.98 ms | 266.50 ms | 10.7x **slower** |
-| 1-Hop Query (100) | 6.93 ms | 3.87 ms | 1.8x faster |
+```bash
+# SQLite backend
+cargo test --lib backend::sqlite
 
-**Key Finding:** Native V2 excels at star patterns but has chain traversal regression due to cluster lookup overhead.
+# V3 backend  
+cargo test --features native-v3 --lib backend::native::v3
 
-### Memory Usage
+# Backend-agnostic algorithms
+cargo test --features native-v3 --lib algo::backend
 
-| Component | Approx. Size |
-|-----------|--------------|
-| V2NodeStore | ~2048 nodes × 256 bytes = 512 KB (max) |
-| Edge cluster | 64 KB |
-| WAL record | 40-100 bytes |
-| Publisher | ~200 bytes base + ~100 bytes per subscriber |
+# HNSW storage
+cargo test --features native-v3 --lib hnsw::v3_storage
+```
 
----
-
-## Extending SQLiteGraph
-
-### Adding a New Graph Algorithm
-
-1. Create file in `src/algo/`
-2. Accept `&dyn GraphBackend` trait object
-3. Return `HashMap<u64, T>` for node-scoped results
-4. Add tests in `tests/algo_tests.rs`
-5. Add CLI command in `sqlitegraph-cli/src/main.rs`
-
-### Adding a New Distance Metric
-
-1. Implement `DistanceMetric` trait in `src/hnsw/distance.rs`
-2. Add variant to `DistanceMetric` enum
-3. Implement SIMD-optimized computation
-4. Add tests in `tests/hnsw_tests.rs`
+**Test Philosophy:**
+- TDD for all new features
+- No stubs or mocks - test real implementations
+- Integration tests for backend switching
 
 ---
 
-## Further Reading
+## Future Directions
 
-- [TESTING.md](TESTING.md) - Testing patterns and utilities
-- [DEBUGGING.md](DEBUGGING.md) - Debugging and profiling guide
-- [README.md](../README.md) - User-facing documentation
-- [MANUAL.md](../MANUAL.md) - Operator manual
-- [API.md](../API.md) - Quick API reference
+1. **V3 becomes primary native backend** (v1.7.0)
+2. **V2 removal** - Simplifies codebase
+3. **Migration tools** - V2 → V3 direct conversion
+4. **Performance benchmarks** - Comprehensive V3 vs SQLite comparison
+5. **Distributed features** - Optional clustering layer
+
+---
+
+**Note:** This architecture document is honest about limitations and deprecation. We don't hide technical debt or pretend all backends are equal. Choose based on your needs.

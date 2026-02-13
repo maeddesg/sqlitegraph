@@ -15,6 +15,7 @@ SQLiteGraph v1.5 Code Quality & Features milestone resolves technical debt, comp
 - ✅ **v1.13 Pub/Sub** - Phases 49-57 (shipped 2026-01-26)
 - ✅ **v1.3.0 Graph Algorithms Library** - Phases 45-57 (shipped 2026-02-03)
 - ✅ **v1.5 Code Quality & Features** - Phases 58-62 (shipped 2026-02-12)
+- ✅ **v1.6.0 V3 Features & V2 Deprecation** - Phase 68 (shipped 2026-02-12)
 
 See [v1.5 milestone archive](.planning/milestones/v1.5-ROADMAP.md) for details.
 
@@ -127,6 +128,8 @@ See [v1.5 ROADMAP archive](.planning/milestones/v1.5-ROADMAP.md) for full detail
 | 63a-63b | V3 Storage Foundation | 8 | ✅ Complete |
 | 64 | Page Allocator | 4 | ✅ Complete |
 | 65 | V3 WAL Integration | 4 | ✅ Complete |
+| 66 | NodeStore V3 | 8 | ✅ Complete (100%)
+| 67 | V3 KV Store & Pub/Sub | 3 | ✅ Complete (100%)
 
 **Phase 65 Summary:**
 - V3WALRecord enum with 8 variants (page ops + transaction control)
@@ -146,11 +149,94 @@ See [v1.5 ROADMAP archive](.planning/milestones/v1.5-ROADMAP.md) for full detail
 3. O(log n) lookup complexity
 4. Per-traversal cache support
 
+**Phase 66 Summary:**
+- BTreeManager: Created (677 LOC, 12 tests)
+- NodeStore: Complete read/write/delete operations
+- TraversalCache: LRU implementation with stats
+- V3 Edge Compat: V2 format in V3 pages
+- V3Backend: Full GraphBackend impl (935 LOC, 34 methods)
+- Test Results: 4/4 V3Backend tests passing
+
 **Plans**:
-- [ ] 66-01: B+Tree lookup integration (~150 LOC)
-- [ ] 66-02: NodePage loading and caching (~200 LOC)
-- [ ] 66-03: Traversal cache implementation (~100 LOC)
-- [ ] 66-04: NodeStore V3 tests (~150 LOC)
+- [x] 66-01: BTreeManager creation (~677 LOC)
+- [x] 66-02: NodePage loading and caching (~200 LOC)
+- [x] 66-03: Traversal cache implementation (~100 LOC)
+- [x] 66-04: NodeStore V3 tests (~150 LOC)
+- [x] 66-05: V3 Edge Compat Layer (~400 LOC)
+- [x] 66-06: V3Backend GraphBackend implementation (~935 LOC)
+- [x] 66-07: Edge operations integration
+- [x] 66-08: Integration tests (4/4 passing)
+
+#### Phase 67: V3 KV Store & Pub/Sub
+**Goal:** Implement native V3 Key-Value store and Pub/Sub system with full GraphBackend trait support
+**Depends on**: Phase 66
+**Requirements**: FR-KV-1, FR-KV-2, FR-PS-1, FR-PS-2
+**Success Criteria**:
+1. V3 KV Store with MVCC snapshot isolation and TTL support
+2. V3 Pub/Sub with channel-based event delivery
+3. All 6 missing GraphBackend methods implemented (kv_get, kv_set, kv_delete, kv_prefix_scan, subscribe, unsubscribe)
+4. 248 V3 tests passing
+
+**Phase 67 Summary:**
+- KvStore: In-memory HashMap with MVCC (526 LOC, 24 tests)
+- Pub/Sub: Channel-based delivery (431 LOC, 10 tests)
+- V3Backend: Full trait implementation with V2→V3 conversions
+- WAL: 3 new record types (KvSet, KvDelete, KvTombstone)
+- Test Results: 248/248 V3 tests passing (100%)
+
+**Plans**:
+- [x] 67-01: Native KV Store implementation (~526 LOC)
+  - KvValue enum with 7 types and serialization
+  - MVCC snapshot isolation with binary search
+  - Lazy TTL cleanup and tombstone deletion
+  - Prefix scan support
+- [x] 67-02: Native Pub/Sub implementation (~431 LOC)
+  - Publisher with mpsc channels
+  - Best-effort delivery semantics
+  - Event types and subscription filtering
+- [x] 67-03: V3Backend GraphBackend integration
+  - kv_get, kv_set, kv_delete, kv_prefix_scan methods
+  - subscribe, unsubscribe methods
+  - V2→V3 type conversions
+  - WAL integration for durability
+
+#### Phase 68: Lazy Initialization & Feature Completion (v1.6.0)
+**Goal:** Optimize V3Backend with lazy initialization, add HNSW vector storage, enable SQLite Pub/Sub, deprecate V2
+**Depends on**: Phase 67
+**Requirements**: PERF-1, FEAT-HNSW-1, FEAT-PS-3
+**Success Criteria**:
+1. V3Backend lazily initializes KV and Pub/Sub (zero overhead for unused features)
+2. V3 HNSW vector storage using KV store
+3. SQLite backend supports Pub/Sub via in-memory Publisher
+4. V2 backend deprecated with clear migration path
+
+**Phase 68 Summary (v1.6.0):**
+- Lazy Initialization: KV/PubSub initialized on first use (8 tests passing)
+- V3 HNSW: VectorStorage trait impl using KV store (9 tests passing)
+- SQLite Pub/Sub: In-memory Publisher support (6 tests passing)
+- V2 Deprecation: Marked deprecated, removal target v1.7.0
+- All user-facing documentation updated
+
+**Plans**:
+- [x] 68-01: V3Backend lazy initialization
+  - `kv_store: RwLock<Option<KvStore>>` - None until first write
+  - `publisher: RwLock<Option<Publisher>>` - None until first subscribe
+  - `get_or_init_kv()` / `get_or_init_publisher()` helpers
+  - 8 tests passing
+- [x] 68-02: V3 HNSW vector storage
+  - `V3VectorStorage` implements `VectorStorage` trait
+  - Keys: `hnsw:{index}:vector:{id}` in KV store
+  - Factory: `backend.create_hnsw_storage("index")`
+  - 9 tests passing
+- [x] 68-03: SQLite Pub/Sub support
+  - `publisher: RwLock<Option<Publisher>>` in SqliteGraphBackend
+  - Events emitted after successful writes (NodeChanged, EdgeChanged)
+  - Best-effort delivery, in-memory only
+  - 6 tests passing
+- [x] 68-04: V2 deprecation
+  - V2 marked deprecated in all documentation
+  - Removal target: v1.7.0
+  - Migration paths: V2→V3 or V2→SQLite
 
 ## Progress
 
@@ -161,48 +247,23 @@ Phases execute in numeric order: 58 → 59 → 60 → 61 → 62
 |-------|-----------|----------------|--------|-----------|
 | 45-57 | v1.3.0 Graph Algorithms Library | 36/36 | Complete | 2026-02-03 |
 | 58-62 | v1.5 Code Quality & Features | 14/14 | Complete | 2026-02-12 |
+| 68 | v1.6.0 V3 Features & V2 Deprecation | 4/4 | Complete | 2026-02-12 |
 
-### Phase 63: 66 --status READY TO PLAN --name NodeStore V3 --goal Implement page-based node access with B+Tree lookup, O(log n) lookup complexity, per-traversal cache support
+### v2.0 Native-V3 Backend: Phases 63-68 COMPLETE
 
-**Goal:** [To be planned]
-**Depends on:** Phase 62
-**Plans:** 0 plans
+All V3 backend development phases are complete. The V3 backend is now the recommended native backend with:
+- B+Tree-based storage with unlimited node capacity
+- Full GraphBackend trait support (34 methods)
+- Lazy-initialized KV store and Pub/Sub
+- HNSW vector storage via KV store
+- 256+ tests passing (100%)
 
-Plans:
-- [ ] TBD (run /gsd:plan-phase 63 to break down)
+### Next Milestone: v1.7.0 V2 Removal & Polish
 
-### Phase 67: 66.1 --status READY TO PLAN --name BTree Lookup Integration --goal Integrate BTreeManager with NodeStore for node_id to page_id lookups --loc 150
-
-**Goal:** [To be planned]
-**Depends on:** Phase 66
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 67 to break down)
-
-### Phase 68: 66.2 --status READY TO PLAN --name NodePage Loading --goal Implement NodePage loading with decompression support --loc 200
-
-**Goal:** [To be planned]
-**Depends on:** Phase 67
-**Plans:** 0 plans
+**Goal:** Remove deprecated V2 backend, complete remaining features
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 68 to break down)
-
-### Phase 69: 66.3 --status READY TO PLAN --name Traversal Cache --goal Implement LRU cache for per-traversal page caching --loc 100
-
-**Goal:** [To be planned]
-**Depends on:** Phase 68
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 69 to break down)
-
-### Phase 70: 66.4 --status READY TO PLAN --name NodeStore V3 Tests --goal Create comprehensive unit tests for NodeStore V3 --loc 150
-
-**Goal:** [To be planned]
-**Depends on:** Phase 69
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 70 to break down)
+- [ ] Remove V2 backend code
+- [ ] Add deprecation warnings
+- [ ] Complete HNSW prefix scan implementation
+- [ ] Performance benchmarks

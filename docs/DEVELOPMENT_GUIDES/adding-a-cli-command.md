@@ -1,7 +1,7 @@
 # Adding a CLI Command
 
-**Last Updated:** 2026-02-03
-**Version:** v1.4.2
+**Last Updated:** 2026-02-12  
+**Version:** v1.6.0
 
 This guide explains how to add a new command to the SQLiteGraph CLI.
 
@@ -10,6 +10,14 @@ This guide explains how to add a new command to the SQLiteGraph CLI.
 ## Overview
 
 The SQLiteGraph CLI (`sqlitegraph-cli`) uses the `clap` crate for argument parsing. Commands are defined in `sqlitegraph-cli/src/main.rs`.
+
+### Backend Support
+
+| Backend | CLI Flag | Status |
+|---------|----------|--------|
+| SQLite | `--backend sqlite` | Stable, recommended for production |
+| Native V3 | `--backend native` | New in v1.6.0, recommended for development |
+| Native V2 | `--backend v2` | Deprecated, removal in v1.7.0 |
 
 ---
 
@@ -24,7 +32,7 @@ Add to the `Command` enum in `sqlitegraph-cli/src/main.rs`:
 #[command(name = "sqlitegraph")]
 #[command(about = "SQLiteGraph - Embedded Graph Database", long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "sqlite")]
+    #[arg(short, long, default_value = "native")]
     backend: String,
 
     #[arg(short, long, default_value = "memory")]
@@ -71,8 +79,8 @@ fn handle_your_command(args: &Args, cmd: &YourCommand) -> Result<()> {
     // Your command logic here
     let result = execute_your_command(&client, cmd.param1.clone(), cmd.param2.clone())?;
 
-    // Output results
-    println!("{:?}", result);
+    // Output results as JSON for easy parsing
+    println!("{}", serde_json::to_string_pretty(&result)?);
 
     Ok(())
 }
@@ -115,9 +123,13 @@ impl BackendClient {
                 // SQLite-specific implementation
                 Ok(format!("SQLite result: {}", param))
             }
-            BackendInner::Native(graph) => {
-                // Native-specific implementation
-                Ok(format!("Native result: {}", param))
+            BackendInner::NativeV3(graph) => {
+                // V3 backend implementation
+                Ok(format!("V3 result: {}", param))
+            }
+            BackendInner::NativeV2(graph) => {
+                // V2 backend - deprecated
+                Ok(format!("V2 result: {}", param))
             }
         }
     }
@@ -150,6 +162,23 @@ fn test_your_command_basic() {
 }
 
 #[test]
+fn test_your_command_v3_backend() {
+    let temp = TempDir::new().unwrap();
+    let db_path = temp.path().join("test.graph");
+
+    Command::cargo_bin("sqlitegraph-cli")
+        .unwrap()
+        .args([
+            "--backend", "native",
+            "--db", &db_path.to_string_lossy(),
+            "your-command",
+            "--param1", "test_value",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
 fn test_your_command_with_verbose() {
     let temp = TempDir::new().unwrap();
     let db_path = temp.path().join("test.db");
@@ -164,7 +193,8 @@ fn test_your_command_with_verbose() {
             "--verbose",
         ])
         .assert()
-        .success();
+        .success()
+        .stderr(predicates::str::contains("Executing YourCommand"));
 }
 ```
 
@@ -173,6 +203,7 @@ Update `sqlitegraph-cli/Cargo.toml` for test dependencies:
 ```toml
 [dev-dependencies]
 assert_cmd = "2"
+predicates = "3"
 tempfile = "3"
 ```
 
@@ -186,7 +217,7 @@ Add to `MANUAL.md` Section 11 (CLI Usage):
 Execute your custom operation.
 
 ```bash
-sqlitegraph --backend sqlite --db mygraph.db your-command --param1 value
+sqlitegraph --backend native --db mygraph.graph your-command --param1 value
 ```
 
 **Options:**
@@ -197,14 +228,17 @@ sqlitegraph --backend sqlite --db mygraph.db your-command --param1 value
 **Examples:**
 
 ```bash
-# Basic usage
-sqlitegraph --db mygraph.db your-command --param1 "test"
+# Basic usage with V3 backend
+sqlitegraph --db mygraph.graph your-command --param1 "test"
 
 # With verbose output
-sqlitegraph --db mygraph.db your-command --param1 "test" --verbose
+sqlitegraph --db mygraph.graph your-command --param1 "test" --verbose
 
 # With custom param2
-sqlitegraph --db mygraph.db your-command --param1 "test" --param2 "custom"
+sqlitegraph --db mygraph.graph your-command --param1 "test" --param2 "custom"
+
+# Using SQLite backend
+sqlitegraph --backend sqlite --db mygraph.db your-command --param1 "test"
 ```
 ```
 
@@ -247,36 +281,27 @@ fn handle_bulk_command(args: &Args, input: &str) -> Result<()> {
         progress.inc(1);
     }
 
-    progress.finish();
-
+    progress.finish_with_message("Done");
     Ok(())
 }
 ```
 
-### Algorithm Command
+### Interactive Command
 
-For commands that run graph algorithms:
+For commands that need user interaction:
 
 ```rust
-fn handle_algorithm_command(args: &Args, algorithm: AlgorithmType) -> Result<()> {
+use dialoguer::Input;
+
+fn handle_interactive_command(args: &Args) -> Result<()> {
     let client = BackendClient::new(args.backend.clone(), args.db.clone())?;
 
-    use sqlitegraph::algo;
+    let name: String = Input::new()
+        .with_prompt("Enter name")
+        .interact_text()?;
 
-    let results = match algorithm {
-        AlgorithmType::PageRank { damping, iterations } => {
-            algo::pagerank(&client, damping, iterations)?
-        }
-        AlgorithmType::YourAlgorithm { param } => {
-            algo::your_algorithm(&client, param)?
-        }
-    };
-
-    // Output as CSV
-    println!("node_id,score");
-    for (node_id, score) in results {
-        println!("{},{}", node_id, score);
-    }
+    let result = client.create_named_item(&name)?;
+    println!("Created: {:?}", result);
 
     Ok(())
 }
@@ -284,149 +309,81 @@ fn handle_algorithm_command(args: &Args, algorithm: AlgorithmType) -> Result<()>
 
 ---
 
-## Command Guidelines
-
-### DO:
-
-1. **Support both backends** when possible
-2. **Provide clear error messages** for common issues
-3. **Use structured output** (JSON/CSV) for data commands
-4. **Show progress** for long-running operations
-5. **Validate arguments** before executing
-
-### DON'T:
-
-1. **Print directly to stdout** for data (use structured output)
-2. **Ignore errors** - propagate them properly
-3. **Hardcode paths** - accept from arguments
-4. **Assume backend** - check and handle both
-
----
-
-## Common Patterns
-
-### Reading from File
+## Complete Example: Adding `stats` Command
 
 ```rust
+// In sqlitegraph-cli/src/main.rs
+
 #[derive(Subcommand, Debug)]
 enum Command {
-    Import {
-        /// Input JSON file
+    // ... existing commands
+
+    /// Display database statistics
+    Stats {
+        /// Include detailed table statistics
         #[arg(long)]
-        input: PathBuf,
+        detailed: bool,
     },
 }
 
-fn handle_import(args: &Args, input: &Path) -> Result<()> {
+fn handle_stats(args: &Args, detailed: bool) -> Result<()> {
     let client = BackendClient::new(args.backend.clone(), args.db.clone())?;
 
-    let data = fs::read_to_string(input)
-        .map_err(|e| anyhow!("Failed to read {}: {}", input.display(), e))?;
+    let stats = client.get_statistics()?;
 
-    let items: Vec<InputItem> = serde_json::from_str(&data)
-        .map_err(|e| anyhow!("Failed to parse JSON: {}", e))?;
+    println!("Database Statistics:");
+    println!("  Backend: {}", stats.backend);
+    println!("  Nodes: {}", stats.node_count);
+    println!("  Edges: {}", stats.edge_count);
+    println!("  Size: {} bytes", stats.total_size);
 
-    for item in items {
-        client.import_item(item)?;
-    }
-
-    Ok(())
-}
-```
-
-### Writing to File
-
-```rust
-#[derive(Subcommand, Debug)]
-enum Command {
-    Export {
-        /// Output file path
-        #[arg(long)]
-        output: PathBuf,
-
-        /// Output format (json, jsonl)
-        #[arg(long, default_value = "json")]
-        format: String,
-    },
-}
-
-fn handle_export(args: &Args, output: &Path, format: &str) -> Result<()> {
-    let client = BackendClient::new(args.backend.clone(), args.db.clone())?;
-
-    let data = client.export_data()?;
-
-    let output_data = match format {
-        "json" => serde_json::to_string_pretty(&data)?,
-        "jsonl" => {
-            data.iter()
-                .map(|item| serde_json::to_string(item))
-                .collect::<Result<Vec<_>, _>>()?
-                .join("\n")
+    if detailed {
+        println!("\nDetailed Breakdown:");
+        for (kind, count) in stats.kind_counts {
+            println!("  {}: {}", kind, count);
         }
-        _ => return Err(anyhow!("Unknown format: {}", format)),
-    };
-
-    fs::write(output, output_data)?;
-
-    Ok(())
-}
-```
-
-### Progress Bars
-
-```rust
-use indicatif::{ProgressBar, ProgressStyle};
-
-fn handle_long_operation(args: &Args) -> Result<()> {
-    let client = BackendClient::new(args.backend.clone(), args.db.clone())?;
-
-    let progress = ProgressBar::new(100);
-    progress.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
-            .unwrap()
-    );
-
-    for i in 0..100 {
-        // Do work
-        client.process_step(i)?;
-        progress.inc(1);
     }
 
-    progress.finish_with_message("Done!");
-
     Ok(())
 }
+
+// In main() match:
+Command::Stats { detailed } => handle_stats(&args, *detailed),
 ```
 
 ---
 
-## Testing Checklist
+## Testing Commands
 
-- [ ] Command defined in enum
-- [ ] Handler function implemented
-- [ ] Command wired in main()
-- [ ] Tests added
-- [ ] Error handling tested
-- [ ] Documentation updated
-- [ ] Help text works (`--help`)
+```bash
+# Build and test CLI
+cd sqlitegraph-cli
+cargo build
+cargo test
+
+# Test your specific command
+cargo run -- --backend native --db /tmp/test.graph your-command --param1 test
+
+# Test with SQLite backend
+cargo run -- --backend sqlite --db /tmp/test.db your-command --param1 test
+```
 
 ---
 
-## Common Issues
+## Best Practices
 
-### Issue: Command not showing in --help
+1. **Use JSON output** - Makes output parseable by scripts
+2. **Support both backends** - Test with SQLite and V3
+3. **Add --verbose flag** - Helps with debugging
+4. **Validate inputs** - Return clear error messages
+5. **Document in MANUAL.md** - Users need to know about new commands
+6. **Add integration tests** - Use assert_cmd for CLI testing
+7. **Handle errors gracefully** - Use `anyhow` for error handling
 
-**Solution:** Ensure command is added to the enum and derives `Subcommand`.
+---
 
-### Issue: Backend client methods not available
+## See Also
 
-**Solution:** Add method to `BackendClient` in `client.rs`.
-
-### Issue: Tests fail with "command not found"
-
-**Solution:** Ensure binary name matches `Cargo.toml` package name.
-
-### Issue: JSON output invalid
-
-**Solution:** Use `serde_json::to_string_pretty()` for formatted output or validate before printing.
+- [MANUAL.md](../../MANUAL.md) - CLI documentation
+- [Backend Architecture](../../ARCHITECTURE.md) - Backend details
+- Source: `sqlitegraph-cli/src/main.rs`
