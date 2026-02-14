@@ -132,7 +132,7 @@ impl BTreeManager {
 
     /// Check if tree is empty (no root page)
     pub fn is_empty(&self) -> bool {
-        self.root_page_id == EMPTY_TREE_ROOT
+        self.root_page_id == EMPTY_TREE_ROOT || self.root_page_id == 0
     }
 
     /// Lookup page containing key (node_id -> page_id)
@@ -150,7 +150,9 @@ impl BTreeManager {
     /// * `Ok(None)` - Key not found in tree
     /// * `Err(...)` - Error during lookup
     pub fn lookup(&self, key: i64) -> NativeResult<Option<u64>> {
-        if self.root_page_id == EMPTY_TREE_ROOT {
+        // Empty tree: root_page_id is EMPTY_TREE_ROOT (u64::MAX) for new trees,
+        // or 0 for databases that haven't created any index pages yet
+        if self.root_page_id == EMPTY_TREE_ROOT || self.root_page_id == 0 {
             return Ok(None);
         }
 
@@ -227,8 +229,8 @@ impl BTreeManager {
     /// * `Ok(())` - Insert successful
     /// * `Err(...)` - Error during insert
     pub fn insert(&mut self, key: i64, value: u64) -> NativeResult<()> {
-        // Handle empty tree case
-        if self.root_page_id == EMPTY_TREE_ROOT {
+        // Handle empty tree case (EMPTY_TREE_ROOT or 0 for uninitialized)
+        if self.root_page_id == EMPTY_TREE_ROOT || self.root_page_id == 0 {
             return self.insert_into_empty_tree(key, value);
         }
 
@@ -515,7 +517,7 @@ impl BTreeManager {
     /// * `Ok(false)` - Key was not found
     /// * `Err(...)` - Error during delete
     pub fn delete(&mut self, key: i64) -> NativeResult<bool> {
-        if self.root_page_id == EMPTY_TREE_ROOT {
+        if self.root_page_id == EMPTY_TREE_ROOT || self.root_page_id == 0 {
             return Ok(false);
         }
 
@@ -1008,8 +1010,8 @@ impl BTreeManager {
     /// * `Ok(true)` - Insert staged successfully
     /// * `Err(...)` - Error (including non-empty tree)
     pub fn insert_simple_to_batch(&mut self, batch: &mut WriteBatch, key: i64, value: u64) -> NativeResult<bool> {
-        // Only handle empty tree case for this demo
-        if self.root_page_id == EMPTY_TREE_ROOT {
+        // Only handle empty tree case for this demo (EMPTY_TREE_ROOT or uninitialized 0)
+        if self.root_page_id == EMPTY_TREE_ROOT || self.root_page_id == 0 {
             // Create new tree with single leaf
             let page_id = self.allocator.write().allocate()?;
             let mut leaf = IndexPage::new_leaf(page_id);
