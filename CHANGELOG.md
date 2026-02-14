@@ -1,5 +1,17 @@
 # SQLiteGraph Changelog
 
+## [2.0.1] - 2026-02-13
+
+### Bug Fixes
+- **Fixed V3 backend panic with large node data (>64 bytes)**
+  - Root cause: `page_offset()` calculation was inconsistent between `V3Backend` and `NodeStore`
+  - Both were allocating the same physical file offsets, causing external data to be overwritten by node pages
+  - Fixed by making both use the same formula: `V3_HEADER_SIZE + (page_id - 1) * PAGE_SIZE`
+  - External data storage now correctly stores kind+name+JSON data in dedicated pages
+  - Updated `NodeRecordV3::serialize()` to include 8-byte external offset for external nodes
+  - Updated `NodePage::pack_nodes()` and `unpack_nodes()` to handle external offset
+  - Fixed `get_node()` to mask out external flag when reading data length
+
 ## [2.0.0] - 2026-02-13
 
 ### V3 Backend Feature Completion + SQLite Pub/Sub

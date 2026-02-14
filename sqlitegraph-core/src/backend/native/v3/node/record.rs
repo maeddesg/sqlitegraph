@@ -236,8 +236,10 @@ impl NodeRecordV3 {
         let mut size = FIXED_METADATA_SIZE;
         if self.is_inline() {
             size += self.data_inline.as_ref().map(|d| d.len()).unwrap_or(0);
+        } else if self.is_external() {
+            // External data: store 8-byte offset
+            size += 8;
         }
-        // External data doesn't add to record size (stored separately)
         size
     }
 
@@ -294,9 +296,11 @@ impl NodeRecordV3 {
             FIXED_METADATA_SIZE
         );
 
-        // Serialize inline data if present
+        // Serialize inline data if present, or external offset if external
         if let Some(ref data) = self.data_inline {
             buffer.extend_from_slice(data);
+        } else if let Some(offset) = self.data_external_offset {
+            buffer.extend_from_slice(&offset.to_be_bytes());
         }
 
         Ok(buffer)
@@ -610,7 +614,8 @@ mod tests {
         );
 
         let serialized = node.serialize().unwrap();
-        assert_eq!(serialized.len(), FIXED_METADATA_SIZE);
+        // External nodes include the 8-byte external offset after metadata
+        assert_eq!(serialized.len(), FIXED_METADATA_SIZE + 8);
     }
 
     #[test]

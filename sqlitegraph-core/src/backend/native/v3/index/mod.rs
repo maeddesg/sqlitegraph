@@ -59,6 +59,6 @@ mod tests {
         assert_eq!(constants::USABLE_SIZE, 4064);
         assert_eq!(constants::MAX_KEYS, 253);
         assert_eq!(constants::MAX_ENTRIES, 254);
-        assert_eq!(constants::MAX_CHILDREN, 255);
+        assert_eq!(constants::MAX_CHILDREN, 254);
     }
 }

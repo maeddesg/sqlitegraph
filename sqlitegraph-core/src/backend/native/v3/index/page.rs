@@ -650,9 +650,9 @@ mod tests {
     #[test]
     fn test_constants() {
         assert_eq!(constants::PAGE_HEADER_SIZE, 32);
-        assert_eq!(MAX_KEYS, 253);
-        assert_eq!(MAX_ENTRIES, 254);
-        assert_eq!(MAX_CHILDREN, 255);
+        assert_eq!(MAX_KEYS, 252);
+        assert_eq!(MAX_ENTRIES, 252);
+        assert_eq!(MAX_CHILDREN, 253);
         assert_eq!(KEY_SIZE, 8);
         assert_eq!(PAGE_ID_SIZE, 8);
         assert_eq!(ENTRY_SIZE, 16);

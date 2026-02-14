@@ -210,6 +210,36 @@ fn map_v3_error(err: NativeBackendError) -> SqliteGraphError {
 }
 
 impl V3Backend {
+    /// Parse node data from compact format: [kind_len: u8][kind bytes][name_len: u8][name bytes][json data]
+    fn parse_node_data(data: &[u8], id: i64) -> (String, String, serde_json::Value) {
+        if data.len() < 2 {
+            return ("Node".to_string(), format!("node_{}", id), serde_json::json!({}));
+        }
+        
+        let kind_len = data[0] as usize;
+        if data.len() < 1 + kind_len + 1 {
+            return ("Node".to_string(), format!("node_{}", id), serde_json::json!({}));
+        }
+        let kind = String::from_utf8_lossy(&data[1..1+kind_len]).to_string();
+        
+        let name_len_pos = 1 + kind_len;
+        let name_len = data[name_len_pos] as usize;
+        if data.len() < name_len_pos + 1 + name_len {
+            return (kind, format!("node_{}", id), serde_json::json!({}));
+        }
+        let name_start = name_len_pos + 1;
+        let name = String::from_utf8_lossy(&data[name_start..name_start+name_len]).to_string();
+        
+        let data_start = name_start + name_len;
+        let json_data = if data_start < data.len() {
+            serde_json::from_slice(&data[data_start..]).unwrap_or_else(|_| serde_json::json!({}))
+        } else {
+            serde_json::json!({})
+        };
+        
+        (kind, name, json_data)
+    }
+
     /// Create a new V3 database at the specified path
     ///
     /// # Arguments
@@ -590,19 +620,76 @@ impl V3Backend {
         let data_bytes = serde_json::to_vec(&node.data).unwrap_or_default();
         
         let total_len = 2 + kind_bytes.len() + name_bytes.len() + data_bytes.len();
-        let mut inline_data = Vec::with_capacity(total_len);
         
-        inline_data.push(kind_bytes.len() as u8);
-        inline_data.extend_from_slice(kind_bytes);
-        inline_data.push(name_bytes.len() as u8);
-        inline_data.extend_from_slice(name_bytes);
-        inline_data.extend_from_slice(&data_bytes);
+        // Check if data fits inline (MAX_INLINE_DATA = 64 bytes)
+        const MAX_INLINE_DATA: usize = 64;
         
-        let node_record = NodeRecordV3::new_inline(
-            0,
-            crate::backend::native::types::NodeFlags::empty(),
-            0, 0, inline_data, 0, 0, 0, 0,
-        );
+        let node_record = if total_len <= MAX_INLINE_DATA {
+            // Small data: store inline
+            let mut inline_data = Vec::with_capacity(total_len);
+            inline_data.push(kind_bytes.len() as u8);
+            inline_data.extend_from_slice(kind_bytes);
+            inline_data.push(name_bytes.len() as u8);
+            inline_data.extend_from_slice(name_bytes);
+            inline_data.extend_from_slice(&data_bytes);
+            
+            NodeRecordV3::new_inline(
+                0,
+                crate::backend::native::types::NodeFlags::empty(),
+                0, 0, inline_data, 0, 0, 0, 0,
+            )
+        } else {
+            // Large data: store externally
+            // Format: [kind_len:1][kind][name_len:1][name][data...]
+            let mut external_data = Vec::with_capacity(total_len);
+            external_data.push(kind_bytes.len() as u8);
+            external_data.extend_from_slice(kind_bytes);
+            external_data.push(name_bytes.len() as u8);
+            external_data.extend_from_slice(name_bytes);
+            external_data.extend_from_slice(&data_bytes);
+            
+            // Allocate page(s) for external data
+            let data_len = external_data.len();
+            let page_size = crate::backend::native::v3::constants::DEFAULT_PAGE_SIZE as usize;
+            let pages_needed = (data_len + page_size - 1) / page_size; // Ceiling division
+            
+            let mut allocator = self.allocator.write();
+            let start_page_id = allocator.allocate()
+                .map_err(|e| SqliteGraphError::NativeError(e))?;
+            
+            // Allocate additional pages if needed
+            for _ in 1..pages_needed {
+                allocator.allocate()
+                    .map_err(|e| SqliteGraphError::NativeError(e))?;
+            }
+            
+            // Write external data to file
+            let offset = Self::page_offset(start_page_id);
+            
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(&self.db_path)
+                .map_err(|e| SqliteGraphError::ConnectionError(format!("Failed to open file: {}", e)))?;
+            
+            file.seek(SeekFrom::Start(offset))
+                .map_err(|e| SqliteGraphError::ConnectionError(format!("Failed to seek: {}", e)))?;
+            file.write_all(&external_data)
+                .map_err(|e| SqliteGraphError::ConnectionError(format!("Failed to write: {}", e)))?;
+            file.sync_all()
+                .map_err(|e| SqliteGraphError::ConnectionError(format!("Failed to sync external data: {}", e)))?;
+            
+            // Create external node record
+            // Use offset as the external data reference
+            NodeRecordV3::new_external(
+                0,
+                crate::backend::native::types::NodeFlags::empty(),
+                0, 0,
+                offset,  // External data offset
+                data_len as u16,
+                0, 0, 0, 0,
+            )
+        };
         
         let mut node_store = self.node_store.write();
         let node_id = node_store.insert_node(node_record)
@@ -613,6 +700,18 @@ impl V3Backend {
         header.node_count += 1;
         
         Ok(node_id)
+    }
+    
+    /// Calculate file offset for a given page ID
+    /// 
+    /// Page 0 is the header at offset 0.
+    /// Data pages start at page 1, which maps to offset V3_HEADER_SIZE.
+    fn page_offset(page_id: u64) -> u64 {
+        if page_id == 0 {
+            return 0;
+        }
+        let data_page_index = page_id.saturating_sub(1);
+        crate::backend::native::v3::constants::V3_HEADER_SIZE + data_page_index * crate::backend::native::v3::constants::DEFAULT_PAGE_SIZE
     }
     
     /// Insert edge without syncing (internal use only)
@@ -711,35 +810,28 @@ impl GraphBackend for V3Backend {
         match self.get_node_internal(id)? {
             Some(record) => {
                 // Parse compact format: [kind_len: u8][kind bytes][name_len: u8][name bytes][json data]
-                let (kind, name, data) = record.data_inline
-                    .and_then(|d| {
-                        if d.len() < 2 {
-                            return None;
-                        }
-                        let kind_len = d[0] as usize;
-                        if d.len() < 1 + kind_len + 1 {
-                            return None;
-                        }
-                        let kind = String::from_utf8_lossy(&d[1..1+kind_len]).to_string();
-                        
-                        let name_len_pos = 1 + kind_len;
-                        let name_len = d[name_len_pos] as usize;
-                        if d.len() < name_len_pos + 1 + name_len {
-                            return None;
-                        }
-                        let name_start = name_len_pos + 1;
-                        let name = String::from_utf8_lossy(&d[name_start..name_start+name_len]).to_string();
-                        
-                        let data_start = name_start + name_len;
-                        let data = if data_start < d.len() {
-                            serde_json::from_slice(&d[data_start..]).unwrap_or_else(|_| serde_json::json!({}))
-                        } else {
-                            serde_json::json!({})
-                        };
-                        
-                        Some((kind, name, data))
-                    })
-                    .unwrap_or_else(|| ("Node".to_string(), format!("node_{}", id), serde_json::json!({})));
+                let data_bytes = if let Some(inline) = record.data_inline {
+                    inline
+                } else if let Some(offset) = record.data_external_offset {
+                    // Read external data from file
+                    // Mask out the external flag to get actual data length
+                    let actual_data_len = record.data_len & crate::backend::native::v3::node::record::constants::MAX_DATA_LEN;
+                    let mut file = OpenOptions::new()
+                        .read(true)
+                        .open(&self.db_path)
+                        .map_err(|e| SqliteGraphError::connection(format!("Failed to open file: {}", e)))?;
+                    
+                    let mut buffer = vec![0u8; actual_data_len as usize];
+                    file.seek(SeekFrom::Start(offset))
+                        .map_err(|e| SqliteGraphError::connection(format!("Failed to seek: {}", e)))?;
+                    file.read_exact(&mut buffer)
+                        .map_err(|e| SqliteGraphError::connection(format!("Failed to read: {}", e)))?;
+                    buffer
+                } else {
+                    Vec::new()
+                };
+                
+                let (kind, name, data) = Self::parse_node_data(&data_bytes, id);
                 
                 Ok(GraphEntity {
                     id,
@@ -1447,6 +1539,52 @@ mod tests {
         // Verify entity count
         let ids = backend.entity_ids().unwrap();
         assert_eq!(ids.len(), 1);
+    }
+
+    /// Test inserting a node with large data (>64 bytes) that requires external storage
+    /// This test verifies the fix for the bug where large node data would panic
+    #[test]
+    fn test_v3_backend_insert_node_with_large_data() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_large.graph");
+        
+        let backend = V3Backend::create(&db_path).unwrap();
+        
+        // Create node data that exceeds MAX_INLINE_DATA (64 bytes)
+        // The inline buffer format is: [kind_len:1][kind][name_len:1][name][data]
+        // So we need data that pushes total over 64 bytes
+        let large_data = serde_json::json!({
+            "path": "src/components/user/authentication/handlers/login.rs",
+            "hash": "abcdef1234567890abcdef1234567890abcdef1234567890",
+            "last_indexed_at": 1234567890_i64,
+            "last_modified": 1234567890_i64,
+            "metadata": {
+                "language": "rust",
+                "lines": 150,
+                "size_bytes": 4096
+            }
+        });
+        
+        // This should NOT panic - it should use external storage
+        let node_id = backend.insert_node(NodeSpec {
+            kind: "File".to_string(),
+            name: "login.rs".to_string(),
+            file_path: Some("src/components/user/authentication/handlers/login.rs".to_string()),
+            data: large_data,
+        }).unwrap();
+        
+        assert_eq!(node_id, 1);
+        
+        // Verify entity count
+        let ids = backend.entity_ids().unwrap();
+        assert_eq!(ids.len(), 1);
+        
+        // Verify we can retrieve the node
+        use crate::SnapshotId;
+        let snapshot = SnapshotId::current();
+        let node = backend.get_node(snapshot, node_id).unwrap();
+        assert_eq!(node.kind, "File");
+        assert_eq!(node.name, "login.rs");
     }
     
     #[test]

@@ -370,9 +370,11 @@ impl NodePage {
             // Encode incoming_edge_count as varint
             buffer.extend_from_slice(&encode_varint(node.incoming_edge_count as u64));
 
-            // Append inline data if present
+            // Append inline data if present, or external offset if external
             if let Some(ref data) = node.data_inline {
                 buffer.extend_from_slice(data);
+            } else if let Some(offset) = node.data_external_offset {
+                buffer.extend_from_slice(&offset.to_be_bytes());
             }
         }
 
@@ -477,8 +479,18 @@ impl NodePage {
 
             // Handle inline vs external data
             let (data_inline, data_external_offset) = if is_external {
-                // External data - offset would be stored separately if needed
-                (None, None)
+                // External data - read 8-byte offset
+                if offset + 8 > data.len() {
+                    return Err(NativeBackendError::InvalidHeader {
+                        field: "node.data_external_offset".to_string(),
+                        reason: format!("insufficient bytes for external offset: need 8, have {}", data.len().saturating_sub(offset)),
+                    });
+                }
+                let ext_offset = u64::from_be_bytes(
+                    data[offset..offset + 8].try_into().unwrap()
+                );
+                offset += 8;
+                (None, Some(ext_offset))
             } else {
                 // Inline data - copy remaining bytes
                 let data_end = offset + data_len as usize;
