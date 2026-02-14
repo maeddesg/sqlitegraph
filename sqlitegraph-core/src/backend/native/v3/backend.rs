@@ -165,6 +165,17 @@ impl<'a> Drop for WriteBatchGuard<'a> {
     }
 }
 
+impl Drop for V3Backend {
+    fn drop(&mut self) {
+        // Flush any pending data to disk
+        // This ensures data is persisted when the backend is dropped
+        let _ = self.flush_to_disk();
+        
+        // Sync header to ensure all metadata is written
+        let _ = self.sync_header();
+    }
+}
+
 /// Map NativeBackendError to SqliteGraphError
 fn map_v3_error(err: NativeBackendError) -> SqliteGraphError {
     match err {
@@ -721,9 +732,17 @@ impl V3Backend {
         let node_id = node_store.insert_node(node_record)
             .map_err(map_v3_error)?;
         
-        // Update header node count (but don't sync yet)
+        // Update header node count and B+Tree root info (but don't sync yet)
         let mut header = self.header.write();
         header.node_count += 1;
+        
+        // Sync B+Tree root page ID and height from NodeStore's BTreeManager
+        if let Some(root_page) = node_store.btree_root_page_id() {
+            header.root_index_page = root_page;
+        }
+        if let Some(tree_height) = node_store.btree_height() {
+            header.btree_height = tree_height;
+        }
         
         Ok(node_id)
     }

@@ -704,6 +704,32 @@ impl NodeStore {
     pub fn tree_height_pub(&self) -> u32 {
         self.tree_height
     }
+    
+    /// Get the B+Tree root page ID from the BTreeManager
+    /// This reflects the actual root after inserts, which may differ from header's root_index_page
+    pub fn btree_root_page_id(&self) -> Option<u64> {
+        self.btree_manager.as_ref().and_then(|btree| {
+            let root = btree.root_page_id();
+            // Only return valid root pages (not 0 or EMPTY_TREE_ROOT)
+            if root != 0 && root != u64::MAX {
+                Some(root)
+            } else {
+                None
+            }
+        })
+    }
+    
+    /// Get the B+Tree height from the BTreeManager
+    pub fn btree_height(&self) -> Option<u32> {
+        self.btree_manager.as_ref().and_then(|btree| {
+            let height = btree.tree_height();
+            if height > 0 {
+                Some(height)
+            } else {
+                None
+            }
+        })
+    }
 
     pub fn lookup_page(&mut self, node_id: i64) -> NativeResult<Option<u64>> {
         // Use BTreeManager for lookup if available

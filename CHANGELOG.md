@@ -1,5 +1,16 @@
 # SQLiteGraph Changelog
 
+## [2.0.4] - 2026-02-14
+
+### Fixed
+- **V3 Backend Data Persistence**
+  - Added `Drop` implementation for `V3Backend` to flush data on drop
+  - Fixed header sync to persist node count and B+Tree root page ID
+  - Added `btree_root_page_id()` and `btree_height()` methods to `NodeStore`
+  - Fixed `insert_node_inner` to update header with B+Tree metadata after insert
+  - Added `count_chunks()` to `SideTables` trait for V3 backend support
+  - Fixed magellan's double-open issue causing data loss on reopen
+
 ## [2.0.3] - 2026-02-14
 
 ### Added
