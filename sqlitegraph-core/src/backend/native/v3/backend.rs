@@ -529,6 +529,32 @@ impl V3Backend {
         kv_guard.as_ref().unwrap().delete(key, version);
     }
     
+    /// Prefix scan for keys in the KV store using V3 types
+    ///
+    /// Returns all key-value pairs where the key starts with the given prefix.
+    /// This method works directly with V3 KvValue types and does not require
+    /// the native-v2 feature to be enabled.
+    ///
+    /// # Arguments
+    ///
+    /// * `snapshot_id` - The snapshot to read from
+    /// * `prefix` - The prefix to match
+    ///
+    /// # Returns
+    ///
+    /// A vector of (key, value) pairs where keys match the prefix
+    pub fn kv_prefix_scan_v3(
+        &self,
+        snapshot_id: SnapshotId,
+        prefix: &[u8],
+    ) -> Vec<(Vec<u8>, KvValue)> {
+        let kv_guard = self.kv_store.read();
+        kv_guard
+            .as_ref()
+            .map(|kv| kv.prefix_scan(prefix, snapshot_id))
+            .unwrap_or_default()
+    }
+    
     /// Get node by ID (internal method)
     ///
     /// Looks up a node record by its ID using the B+Tree index.
