@@ -1,5 +1,16 @@
 # SQLiteGraph Changelog
 
+## [2.0.3] - 2026-02-14
+
+### Added
+- **Exposed `kv_prefix_scan_v3` method on V3Backend**
+  - Added public method `kv_prefix_scan_v3(&self, snapshot_id: SnapshotId, prefix: &[u8]) -> Vec<(Vec<u8>, KvValue)>`
+  - Enables prefix-based key scanning for KV store operations
+  - Works directly with V3 KvValue types without requiring native-v2 feature
+  - Essential for implementing side table queries (AST nodes, metrics) on V3 backend
+  - Returns all key-value pairs where keys start with the given prefix
+  - Results are sorted by key for deterministic output
+
 ## [2.0.2] - 2026-02-14
 
 ### Added
