@@ -1,5 +1,16 @@
 # SQLiteGraph Changelog
 
+## [2.0.5] - 2026-02-16
+
+### Fixed
+- **V3 Backend Node Reload After Reopen**
+  - Fixed critical bug where V3 backend couldn't reload nodes after database reopen
+  - Root cause: `NodeStore` maintained stale `root_page_id` after B-tree inserts
+  - `BTreeManager.insert()` correctly updated internal root, but `NodeStore` wasn't synchronized
+  - On close, header was written with stale root_page_id causing lookup failures on reopen
+  - Fix: Sync `NodeStore.root_page_id` and `tree_height` from `BTreeManager` after each insert
+  - Location: `sqlitegraph-core/src/backend/native/v3/node/store.rs` in `insert_node()`
+
 ## [2.0.4] - 2026-02-14
 
 ### Fixed

@@ -406,6 +406,15 @@ impl NodeStore {
         // 6. Update B+Tree index (node_id -> page_id)
         let btree = self.btree_manager_mut()?;
         btree.insert(node_id, page_id)?;
+        
+        // 6b. Sync NodeStore's root_page_id and tree_height from BTreeManager
+        // This ensures lookups work correctly after the tree structure changes
+        // Need to read values before dropping the borrow
+        let new_root = btree.root_page_id();
+        let new_height = btree.tree_height();
+        drop(btree);
+        self.root_page_id = new_root;
+        self.tree_height = new_height;
 
         // 7. Log to WAL if configured (skip in batch mode - will be handled at commit)
         if !self.batch_mode {
