@@ -896,9 +896,10 @@ impl GraphBackend for V3Backend {
         node: i64,
         query: NeighborQuery,
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        let mut edge_store = self.edge_store.write();
-        
-        let neighbors = match query.direction {
+        // Use read() instead of write() - outgoing() and incoming() take &self
+        let edge_store = self.edge_store.read();
+
+        let neighbors_arc = match query.direction {
             BackendDirection::Outgoing => {
                 edge_store.outgoing(node)
                     .map_err(map_v3_error)?
@@ -908,8 +909,10 @@ impl GraphBackend for V3Backend {
                     .map_err(map_v3_error)?
             }
         };
-        
-        Ok(neighbors)
+
+        // Convert Arc<[i64]> to Vec<i64> for the API
+        // This is a single allocation instead of copying each element
+        Ok(neighbors_arc.to_vec())
     }
     
     fn bfs(
@@ -939,9 +942,9 @@ impl GraphBackend for V3Backend {
                 let neighbors = edge_store.outgoing(node_id)
                     .map_err(map_v3_error)?;
                 
-                for neighbor in neighbors {
-                    if visited.insert(neighbor) {
-                        queue.push_back((neighbor, current_depth + 1));
+                for neighbor in neighbors.iter() {
+                    if visited.insert(*neighbor) {
+                        queue.push_back((*neighbor, current_depth + 1));
                     }
                 }
             }
@@ -973,11 +976,11 @@ impl GraphBackend for V3Backend {
             let neighbors = edge_store.outgoing(node_id)
                 .map_err(map_v3_error)?;
             
-            for neighbor in neighbors {
-                if !visited.contains_key(&neighbor) {
-                    visited.insert(neighbor, Some(node_id));
-                    
-                    if neighbor == end {
+            for neighbor in neighbors.iter() {
+                if !visited.contains_key(neighbor) {
+                    visited.insert(*neighbor, Some(node_id));
+
+                    if *neighbor == end {
                         // Reconstruct path
                         let mut path = vec![end];
                         let mut current = node_id;
@@ -994,7 +997,7 @@ impl GraphBackend for V3Backend {
                         return Ok(Some(path));
                     }
                     
-                    queue.push_back(neighbor);
+                    queue.push_back(*neighbor);
                 }
             }
         }
@@ -1059,9 +1062,9 @@ impl GraphBackend for V3Backend {
                     }
                 };
                 
-                for neighbor in neighbors {
-                    if visited.insert(neighbor) {
-                        queue.push_back((neighbor, current_depth + 1));
+                for neighbor in neighbors.iter() {
+                    if visited.insert(*neighbor) {
+                        queue.push_back((*neighbor, current_depth + 1));
                     }
                 }
             }
@@ -1108,9 +1111,9 @@ impl GraphBackend for V3Backend {
                     }
                 };
                 
-                for neighbor in neighbors {
+                for neighbor in neighbors.iter() {
                     // TODO: Apply kind filter from step.target_kind
-                    next_nodes.push(neighbor);
+                    next_nodes.push(*neighbor);
                 }
             }
             

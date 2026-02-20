@@ -1,5 +1,18 @@
 # SQLiteGraph Changelog
 
+## [2.0.6] - 2026-02-20
+
+### Fixed
+- **V3 Edge Store Durability (Critical Production Fix)**
+  - Fixed 4 critical TODOs in `edge_compat.rs` that caused data loss on crash
+  - **WAL Record for Edge Insert**: `insert_edge()` now writes WAL records for durability
+  - **Dirty Cluster Flush**: `flush()` now writes dirty clusters to disk pages with proper sync
+  - **B+Tree Index Update**: Flush updates B+Tree index with `(src, dir) -> page_id` mappings
+  - **WAL Checkpoint**: `flush()` writes checkpoint records after persisting data
+  - **Edge Recovery**: Added `load_neighbors_from_disk()` to recover edges after reopening
+  - Added 12 TDD tests verifying durability guarantees
+  - Location: `sqlitegraph-core/src/backend/native/v3/edge_compat.rs`
+
 ## [2.0.5] - 2026-02-16
 
 ### Fixed
