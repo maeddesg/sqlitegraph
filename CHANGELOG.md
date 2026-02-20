@@ -1,5 +1,14 @@
 # SQLiteGraph Changelog
 
+## [2.0.7] - 2026-02-20
+
+### Changed
+- **Updated crates.io README**
+  - Added benchmark section with honest performance summary
+  - Removed outdated "10-20× faster" claims without context
+  - Added links to reproducible benchmark examples
+  - Matches GitHub README for consistency
+
 ## [2.0.6] - 2026-02-20
 
 ### Fixed

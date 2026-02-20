@@ -7,42 +7,38 @@ Embedded graph database with dual backend architecture.
 
 **Positioning:** Single-binary embedded database (no server). Persistent storage with
 atomic batch commits. Graph algorithms + HNSW vector search in one engine.
-SQLite backend: best for point lookups. Native V3: 10-20× faster for traversals.
-
-## What's New in v2.0.0
-
-**Native V3 Backend** - Production-ready high-performance backend
-- B+Tree-based storage with unlimited node capacity (no 2048 limit)
-- 10-20× faster traversals compared to SQLite backend
-- Full feature parity: graph algorithms, HNSW vectors, Pub/Sub, KV store
-- WAL integration for durability and crash recovery
-
-**SQLite Backend Pub/Sub** - Now fully supported
-- In-process event notification for graph changes
-- Multiple subscriber support with filtered events
-- Works across all backends
-
-**HNSW Vector Storage for V3** - Vector search with V3 backend
-- `V3VectorStorage` - stores vectors in V3's KV store
-- Same HNSW algorithm, different persistence layer
-- Unified API across backends
-
-**Reshaped CLI** (`sqlitegraph-cli` crate)
-- Read-only by default (`--write` flag for modifications)
-- Cypher-like query support: `MATCH (n:User) RETURN n.name`
-- Dual backend support (`--backend sqlite|v3`)
+SQLite: stable, mature, excellent for adjacency queries. V3: high-performance, 
+unlimited scale, faster for bulk traversals. See benchmarks below.
 
 ## Backends
 
 | Feature | SQLite | Native V3 |
 |---------|--------|-----------|
-| Status | Stable | Production |
+| Status | Stable | Beta |
 | Storage | `.db` file | `.graph` file |
 | Max nodes | Unlimited | Unlimited |
 | Graph algorithms | 35+ | 35+ |
 | HNSW vectors | Yes | Yes |
 | Pub/Sub | Yes | Yes |
-| KV Store | Yes | Yes (lazy init) |
+
+## Benchmarks
+
+See [BENCHMARK_REPORT.md](https://github.com/oldnordic/sqlitegraph/blob/main/docs/BENCHMARK_REPORT.md) for detailed comparisons.
+
+**Quick Summary:**
+- **Point lookup**: V3 ~3-4× faster
+- **Adjacency fetch**: SQLite ~20× faster (optimized prepared statements)
+- **Bulk traversal**: V3 10-20× faster (contiguous storage)
+
+**Run benchmarks yourself:**
+```bash
+git clone https://github.com/oldnordic/sqlitegraph.git
+cd sqlitegraph/sqlitegraph-core
+cargo run --example test_performance_comparison --features native-v3
+cargo bench --features native-v3 -- backend_comparison
+```
+
+See [examples/](https://github.com/oldnordic/sqlitegraph/tree/main/sqlitegraph-core/examples) for reproducible performance tests.
 
 ## Quick Start
 
@@ -74,30 +70,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Features
+## CLI
 
-- **Dual Backend Architecture**: SQLite (stable, debuggable) or Native V3 (high performance)
-- **Graph Algorithms**: 35+ algorithms including BFS, DFS, PageRank, community detection
-- **HNSW Vector Search**: Approximate nearest neighbor search with multiple distance metrics
-- **ACID Transactions**: Full durability with WAL support
-- **Pub/Sub Events**: Real-time notifications for graph changes
-- **KV Store**: Key-value storage with TTL and MVCC
+```bash
+cargo install sqlitegraph-cli
+
+# Query (read-only by default)
+sqlitegraph --db graph.db query "MATCH (n:User) RETURN n.name"
+
+# Algorithms
+sqlitegraph --db graph.db bfs --start 1 --max-depth 3
+sqlitegraph --db graph.db pagerank --iterations 100
+```
 
 ## Ecosystem
 
+Tools built on SQLiteGraph:
+
 | Tool | Purpose | Repository | crates.io |
 |------|---------|------------|-----------|
-| **Magellan** | Code graph indexing | [github.com/oldnordic/magellan](https://github.com/oldnordic/magellan) | [crates.io/crates/magellan](https://crates.io/crates/magellan) |
+| **Magellan** | Code graph indexing, symbol navigation | [github.com/oldnordic/magellan](https://github.com/oldnordic/magellan) | [crates.io/crates/magellan](https://crates.io/crates/magellan) |
 | **llmgrep** | Semantic code search | [github.com/oldnordic/llmgrep](https://github.com/oldnordic/llmgrep) | [crates.io/crates/llmgrep](https://crates.io/crates/llmgrep) |
-| **Mirage** | CFG analysis | [github.com/oldnordic/mirage](https://github.com/oldnordic/mirage) | [crates.io/crates/mirage-analyzer](https://crates.io/crates/mirage-analyzer) |
+| **Mirage** | CFG analysis, path enumeration | [github.com/oldnordic/mirage](https://github.com/oldnordic/mirage) | [crates.io/crates/mirage-analyzer](https://crates.io/crates/mirage-analyzer) |
 | **splice** | Precision code editing | [github.com/oldnordic/splice](https://github.com/oldnordic/splice) | [crates.io/crates/splice](https://crates.io/crates/splice) |
 
 ## Documentation
 
-- [API Documentation](https://docs.rs/sqlitegraph)
-- [Architecture Guide](../docs/ARCHITECTURE.md)
-- [Graph Algorithms](../docs/GRAPH_ALGORITHMS_GUIDE.md)
-- [Changelog](../CHANGELOG.md)
+- [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) - System design
+- [Manual](https://github.com/oldnordic/sqlitegraph/blob/main/MANUAL.md) - API guide
+- [Algorithms](https://github.com/oldnordic/sqlitegraph/blob/main/docs/GRAPH_ALGORITHMS_GUIDE.md) - 35 graph algorithms
+- [Changelog](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) - Version history
 
 ## License
 
