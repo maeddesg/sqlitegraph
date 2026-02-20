@@ -13,6 +13,17 @@
   - Added 12 TDD tests verifying durability guarantees
   - Location: `sqlitegraph-core/src/backend/native/v3/edge_compat.rs`
 
+### Changed
+- **Benchmark Transparency Update**
+  - Added reproducible performance comparison examples
+  - `test_performance_comparison.rs`: Honest 3-way comparison (point lookup, adjacency, traversal)
+  - `test_v3_neighbors_perf.rs`: Cold vs hot path timing for V3
+  - `test_sqlite_neighbors_perf.rs`: Cold vs hot path timing for SQLite
+  - `test_direct_edgestore.rs`: Raw cache performance (bypassing Graph API)
+  - Key finding: SQLite ~20× faster for adjacency fetch via Graph API, but raw V3 cache (~240 ns) is competitive with SQLite (~191 ns)
+  - The gap is API overhead, not storage engine performance
+  - Updated README with benchmark section linking to full report and reproduction instructions
+
 ## [2.0.5] - 2026-02-16
 
 ### Fixed

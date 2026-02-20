@@ -7,7 +7,8 @@ Embedded graph database with dual backend architecture.
 
 **Positioning:** Single-binary embedded database (no server). Persistent storage with
 atomic batch commits. Graph algorithms + HNSW vector search in one engine.
-SQLite backend: best for point lookups. Native V3: 10-20× faster for traversals.
+SQLite: stable, mature, excellent for adjacency queries. V3: high-performance, 
+unlimited scale, faster for bulk traversals. See benchmarks below.
 
 ## Backends
 
@@ -19,6 +20,25 @@ SQLite backend: best for point lookups. Native V3: 10-20× faster for traversals
 | Graph algorithms | 35+ | 35+ |
 | HNSW vectors | Yes | Yes |
 | Pub/Sub | Yes | Yes |
+
+## Benchmarks
+
+See [BENCHMARK_REPORT.md](docs/BENCHMARK_REPORT.md) for detailed comparisons.
+
+**Quick Summary:**
+- **Point lookup**: V3 ~3-4× faster
+- **Adjacency fetch**: SQLite ~20× faster (optimized prepared statements)
+- **Bulk traversal**: V3 10-20× faster (contiguous storage)
+
+**Run benchmarks yourself:**
+```bash
+git clone https://github.com/oldnordic/sqlitegraph.git
+cd sqlitegraph/sqlitegraph-core
+cargo run --example test_performance_comparison --features native-v3
+cargo bench --features native-v3 -- backend_comparison
+```
+
+See [examples/](sqlitegraph-core/examples/) for reproducible performance tests.
 
 ## Quick Start
 
