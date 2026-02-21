@@ -162,12 +162,6 @@ pub fn map_to_graph_error(err: NativeBackendError) -> SqliteGraphError {
         NativeBackendError::WalContiguityViolation(msg) => {
             SqliteGraphError::connection(format!("WAL contiguity violation: {}", msg))
         }
-        NativeBackendError::SerializationError { context } => {
-            SqliteGraphError::connection(format!("Serialization error: {}", context))
-        }
-        NativeBackendError::DeserializationError { context } => {
-            SqliteGraphError::connection(format!("Deserialization error: {}", context))
-        }
         NativeBackendError::LockError { context } => {
             SqliteGraphError::connection(format!("Lock error: {}", context))
         }
@@ -324,7 +318,7 @@ pub fn check_file_consistency(
     let header = graph_file.persistent_header();
 
     // Basic header validation
-    #[allow(clippy::absurd_extreme_comparisons)]
+    #[allow(unused_comparisons)]
     if header.node_count < 0 || header.edge_count < 0 {
         return Err(NativeBackendError::CorruptNodeRecord {
             node_id: 0,

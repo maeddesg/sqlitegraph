@@ -5,13 +5,18 @@
 
 use super::manager::MemoryResourceManager;
 
-#[cfg(any(feature = "v2_io_exclusive_mmap", feature = "v2_io_exclusive_std"))]
-use super::types::MemoryIOMode;
 use crate::backend::native::{
     graph_file::buffers::ReadBuffer,
     graph_file::file_ops::FileOperations,
-    types::{NativeBackendError, NativeResult},
+    types::NativeResult,
 };
+
+#[cfg(any(feature = "native-v2", feature = "v2_io_exclusive_mmap", feature = "v2_io_exclusive_std"))]
+use crate::backend::native::types::NativeBackendError;
+
+#[cfg(any(feature = "v2_io_exclusive_mmap", feature = "v2_io_exclusive_std"))]
+use super::types::MemoryIOMode;
+
 use std::io::{Read, Seek, SeekFrom};
 
 impl<'a> MemoryResourceManager<'a> {

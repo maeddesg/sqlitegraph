@@ -16,14 +16,14 @@ impl super::DefaultReplayOperations {
     pub fn handle_node_insert(
         &self,
         node_id: u64,
-        slot_offset: u64,
+        _slot_offset: u64,
         node_data: &[u8],
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
         debug_log!(
             "Replaying node insert: node_id={}, slot_offset={}, data_size={}",
             node_id,
-            slot_offset,
+            _slot_offset,
             node_data.len()
         );
 
@@ -277,7 +277,7 @@ impl super::DefaultReplayOperations {
                         .iter_edges_with_ids(node_id as NativeNodeId, Direction::Outgoing)
                         .collect();
 
-                    let outgoing_count = outgoing_edges.len();
+                    let _outgoing_count = outgoing_edges.len();
                     for (edge_id, neighbor_id) in outgoing_edges {
                         // Mark edge as deleted (soft deletion)
                         if let Err(e) = edge_store.delete_edge(edge_id) {
@@ -300,7 +300,7 @@ impl super::DefaultReplayOperations {
 
                     debug_log!(
                         "Deleted {} outgoing edges for node {}",
-                        outgoing_count,
+                        _outgoing_count,
                         node_id
                     );
                 }
@@ -311,7 +311,7 @@ impl super::DefaultReplayOperations {
                         .iter_edges_with_ids(node_id as NativeNodeId, Direction::Incoming)
                         .collect();
 
-                    let incoming_count = incoming_edges.len();
+                    let _incoming_count = incoming_edges.len();
                     for (edge_id, neighbor_id) in incoming_edges {
                         // Mark edge as deleted (soft deletion)
                         if let Err(e) = edge_store.delete_edge(edge_id) {
@@ -334,7 +334,7 @@ impl super::DefaultReplayOperations {
 
                     debug_log!(
                         "Deleted {} incoming edges for node {}",
-                        incoming_count,
+                        _incoming_count,
                         node_id
                     );
                 }

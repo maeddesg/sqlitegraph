@@ -73,13 +73,13 @@ pub enum ConsistencySeverity {
 
 /// Checkpoint consistency validator
 pub struct CheckpointConsistencyValidator {
-    config: V2WALConfig,
+    _config: V2WALConfig,
 }
 
 impl CheckpointConsistencyValidator {
     /// Create a new checkpoint consistency validator
     pub fn new(config: V2WALConfig) -> Self {
-        Self { config }
+        Self { _config: config }
     }
 
     /// Validate checkpoint consistency with WAL state

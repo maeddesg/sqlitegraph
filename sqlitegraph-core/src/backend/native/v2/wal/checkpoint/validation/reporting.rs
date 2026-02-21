@@ -96,13 +96,13 @@ pub struct ValidationSummary {
 
 /// Checkpoint validation report generator
 pub struct CheckpointValidationReporter {
-    config: V2WALConfig,
+    _config: V2WALConfig,
 }
 
 impl CheckpointValidationReporter {
     /// Create a new checkpoint validation reporter
     pub fn new(config: V2WALConfig) -> Self {
-        Self { config }
+        Self { _config: config }
     }
 
     /// Generate comprehensive validation report

@@ -990,7 +990,7 @@ pub fn min_vertex_cut(
     }
 
     // Run max-flow on transformed graph
-    let (max_flow, residual_network) = edmonds_karp(network, source_out, target_in);
+    let (_max_flow, residual_network) = edmonds_karp(network, source_out, target_in);
 
     // Extract separator: vertices where internal edge is saturated
     let mut separator = AHashSet::new();

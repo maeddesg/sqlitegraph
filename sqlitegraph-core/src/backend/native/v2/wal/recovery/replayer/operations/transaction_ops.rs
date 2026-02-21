@@ -234,14 +234,14 @@ impl super::DefaultReplayOperations {
     /// Handle free space allocation during replay
     pub fn handle_free_space_allocate(
         &self,
-        block_offset: u64,
+        _block_offset: u64,
         block_size: u64,
         block_type: u8,
         rollback_data: &mut Vec<RollbackOperation>,
     ) -> Result<(), RecoveryError> {
         debug_log!(
             "Replaying free space allocate: block_offset={}, block_size={}, block_type={}",
-            block_offset,
+            _block_offset,
             block_size,
             block_type
         );

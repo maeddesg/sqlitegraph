@@ -68,13 +68,13 @@ pub enum V2InvariantViolationType {
 
 /// V2 invariant validator for checkpoint operations
 pub struct V2InvariantValidator {
-    config: V2WALConfig,
+    _config: V2WALConfig,
 }
 
 impl V2InvariantValidator {
     /// Create a new V2 invariant validator
     pub fn new(config: V2WALConfig) -> Self {
-        Self { config }
+        Self { _config: config }
     }
 
     /// Validate V2-specific metadata in checkpoint file

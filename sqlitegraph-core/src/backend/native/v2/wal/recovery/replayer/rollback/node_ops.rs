@@ -109,12 +109,12 @@ pub fn rollback_node_insert(
 /// Rollback node update by restoring old data
 pub fn rollback_node_update(
     system: &RollbackSystem,
-    node_id: NativeNodeId,
+    _node_id: NativeNodeId,
     old_data: &[u8],
 ) -> Result<(), RecoveryError> {
     debug_log!(
         "Rolling back node update: node_id={}, data_size={}",
-        node_id,
+        _node_id,
         old_data.len()
     );
 
@@ -151,7 +151,7 @@ pub fn rollback_node_update(
         })?;
     }
 
-    debug_log!("Successfully rolled back node update: node_id={}", node_id);
+    debug_log!("Successfully rolled back node update: node_id={}", _node_id);
     Ok(())
 }
 

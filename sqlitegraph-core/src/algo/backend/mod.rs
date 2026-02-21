@@ -31,9 +31,6 @@
 //! }
 //! ```
 
-use crate::backend::GraphBackend;
-use crate::errors::SqliteGraphError;
-
 pub mod centrality;
 pub mod graph_ops;
 pub mod traversal;

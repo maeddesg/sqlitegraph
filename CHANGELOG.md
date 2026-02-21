@@ -1,5 +1,16 @@
 # SQLiteGraph Changelog
 
+## [2.0.8] - 2026-02-21
+
+### Fixed
+- **Compiler warnings cleanup**
+  - Fixed 31 compiler warnings across the codebase
+  - 14 unused variable warnings - prefixed with underscore where used only in cfg-gated code (debug_log! macros)
+  - 10 useless comparison warnings - changed from `clippy::absurd_extreme_comparisons` to `unused_comparisons`
+  - 2 unreachable pattern warnings - removed duplicate match arms in graph_validation.rs
+  - 5 unused field warnings - prefixed genuinely unused struct fields with underscore
+  - Remaining 61 warnings are intentional dead code (API completeness, feature-gated functionality, future use)
+
 ## [2.0.7] - 2026-02-20
 
 ### Changed

@@ -84,7 +84,7 @@ pub struct V2Importer {
     manifest: ExportManifest,
 
     /// WAL configuration for target
-    wal_config: V2WALConfig,
+    _wal_config: V2WALConfig,
 }
 
 impl V2Importer {
@@ -127,7 +127,7 @@ impl V2Importer {
         Ok(V2Importer {
             config: import_config,
             manifest,
-            wal_config,
+            _wal_config: wal_config,
         })
     }
 

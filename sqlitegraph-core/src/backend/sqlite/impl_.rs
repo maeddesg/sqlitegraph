@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use crate::{
     SqliteGraphError,
     backend::sqlite::types::{BackendDirection, EdgeSpec, NeighborQuery, NodeSpec},
-    backend::{PubSubEvent, SubscriptionFilter, PubSubEventType},
+    backend::{PubSubEvent, SubscriptionFilter},
     bfs::{bfs_neighbors, shortest_path},
     graph::{GraphEdge, GraphEntity, SqliteGraph},
     multi_hop,
@@ -126,12 +126,7 @@ impl SqliteGraphBackend {
     /// let storage = backend.create_hnsw_storage("my_index").unwrap();
     /// ```
     pub fn create_hnsw_storage(&self, _index_name: impl Into<String>) -> Option<Box<dyn crate::hnsw::storage::VectorStorage>> {
-        use crate::hnsw::storage::SQLiteVectorStorage;
-        
-        // Get a clone of the connection (SQLiteVectorStorage needs its own connection)
-        // For now, we need to get the connection from the pool
-        let conn = self.graph.connection();
-        
+
         // SQLiteVectorStorage requires an owned Connection, but we only have a reference
         // This is a limitation - we can't easily create a storage from &self
         // The caller should use SQLiteVectorStorage::new() directly with a connection

@@ -343,7 +343,7 @@ fn maximum_common_subgraph(
     g2: &PgDiGraph,
     bounds: &SimilarityBounds,
 ) -> usize {
-    let start_time = Instant::now();
+    let _start_time = Instant::now();
 
     // Determine which graph is smaller (use as pattern)
     let (pattern, target) = if g1.node_count() <= g2.node_count() {
@@ -387,7 +387,7 @@ fn maximum_common_subgraph(
     }
 
     // Bounded enumeration for MCS
-    let timeout = bounds.timeout_ms.map(|ms| std::time::Duration::from_millis(ms));
+    let _timeout = bounds.timeout_ms.map(|ms| std::time::Duration::from_millis(ms));
     let mut max_size = 0usize;
     let mut matches_checked = 0usize;
 
