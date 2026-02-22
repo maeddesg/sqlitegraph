@@ -14,6 +14,7 @@ use crate::backend::{
 };
 use crate::graph::GraphEntity;
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 // V2 WAL integration (always available when native-v2 feature is enabled)
 #[cfg(feature = "native-v2")]
@@ -254,7 +255,7 @@ impl GraphBackend for NativeGraphBackend {
         })
     }
 
-    fn update_node(&self, _node_id: i64, _node: NodeSpec) -> Result<i64, SqliteGraphError> {
+    fn update_node(&self, node_id: i64, node: NodeSpec) -> Result<i64, SqliteGraphError> {
         #[cfg(feature = "native-v2")]
         {
             if let Some(ref integrator) = self.wal_integrator {
