@@ -103,6 +103,21 @@ pub enum IndexPage {
     },
 }
 
+/// Helper function to extract a fixed-size byte array from a slice
+/// Returns an error if the slice is too small
+fn extract_array<const N: usize>(bytes: &[u8], offset: usize, field: &str) -> NativeResult<[u8; N]> {
+    let end = offset + N;
+    if end > bytes.len() {
+        return Err(NativeBackendError::InvalidHeader {
+            field: field.to_string(),
+            reason: format!("insufficient bytes at offset {}: need {}, have {}", offset, N, bytes.len()),
+        });
+    }
+    let mut arr = [0u8; N];
+    arr.copy_from_slice(&bytes[offset..end]);
+    Ok(arr)
+}
+
 impl IndexPage {
     /// Get the page ID for this page
     pub fn page_id(&self) -> u64 {
@@ -229,12 +244,21 @@ impl IndexPage {
     #[cfg(debug_assertions)]
     pub fn verify_invariants(&self) -> NativeResult<()> {
         match self {
-            IndexPage::Internal { keys, children, is_root, .. } => {
+            IndexPage::Internal {
+                keys,
+                children,
+                is_root,
+                ..
+            } => {
                 // 1. Key count valid
                 if keys.len() > MAX_KEYS {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "btree_verify".to_string(),
-                        reason: format!("internal node has {} keys, max is {}", keys.len(), MAX_KEYS),
+                        reason: format!(
+                            "internal node has {} keys, max is {}",
+                            keys.len(),
+                            MAX_KEYS
+                        ),
                     });
                 }
 
@@ -242,16 +266,20 @@ impl IndexPage {
                 if !is_root && !keys.is_empty() && keys.len() < MIN_KEYS {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "btree_verify".to_string(),
-                        reason: format!("non-root internal node has {} keys, min is {}", keys.len(), MIN_KEYS),
+                        reason: format!(
+                            "non-root internal node has {} keys, min is {}",
+                            keys.len(),
+                            MIN_KEYS
+                        ),
                     });
                 }
 
                 // 3. Keys strictly ordered
                 for i in 1..keys.len() {
-                    if keys[i-1] >= keys[i] {
+                    if keys[i - 1] >= keys[i] {
                         return Err(NativeBackendError::InvalidHeader {
                             field: "btree_verify".to_string(),
-                            reason: format!("keys out of order: {} >= {}", keys[i-1], keys[i]),
+                            reason: format!("keys out of order: {} >= {}", keys[i - 1], keys[i]),
                         });
                     }
                 }
@@ -260,16 +288,26 @@ impl IndexPage {
                 if !keys.is_empty() && children.len() != keys.len() + 1 {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "btree_verify".to_string(),
-                        reason: format!("children count ({}) != keys count ({}) + 1", children.len(), keys.len()),
+                        reason: format!(
+                            "children count ({}) != keys count ({}) + 1",
+                            children.len(),
+                            keys.len()
+                        ),
                     });
                 }
             }
-            IndexPage::Leaf { entries, is_root, .. } => {
+            IndexPage::Leaf {
+                entries, is_root, ..
+            } => {
                 // 1. Entry count valid
                 if entries.len() > MAX_ENTRIES {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "btree_verify".to_string(),
-                        reason: format!("leaf node has {} entries, max is {}", entries.len(), MAX_ENTRIES),
+                        reason: format!(
+                            "leaf node has {} entries, max is {}",
+                            entries.len(),
+                            MAX_ENTRIES
+                        ),
                     });
                 }
 
@@ -277,16 +315,24 @@ impl IndexPage {
                 if !is_root && !entries.is_empty() && entries.len() < MIN_ENTRIES {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "btree_verify".to_string(),
-                        reason: format!("non-root leaf node has {} entries, min is {}", entries.len(), MIN_ENTRIES),
+                        reason: format!(
+                            "non-root leaf node has {} entries, min is {}",
+                            entries.len(),
+                            MIN_ENTRIES
+                        ),
                     });
                 }
 
                 // 3. Entries strictly ordered by key
                 for i in 1..entries.len() {
-                    if entries[i-1].0 >= entries[i].0 {
+                    if entries[i - 1].0 >= entries[i].0 {
                         return Err(NativeBackendError::InvalidHeader {
                             field: "btree_verify".to_string(),
-                            reason: format!("entries out of order: {} >= {}", entries[i-1].0, entries[i].0),
+                            reason: format!(
+                                "entries out of order: {} >= {}",
+                                entries[i - 1].0,
+                                entries[i].0
+                            ),
                         });
                     }
                 }
@@ -348,10 +394,7 @@ impl IndexPage {
                 if keys.is_empty() && children.len() > 1 {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "internal_page".to_string(),
-                        reason: format!(
-                            "empty page has too many children: {}",
-                            children.len()
-                        ),
+                        reason: format!("empty page has too many children: {}", children.len()),
                     });
                 }
 
@@ -387,7 +430,9 @@ impl IndexPage {
                     data_offset += PAGE_ID_SIZE;
                 }
             }
-            IndexPage::Leaf { entries, next_leaf, .. } => {
+            IndexPage::Leaf {
+                entries, next_leaf, ..
+            } => {
                 if entries.len() > MAX_ENTRIES {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "leaf_page".to_string(),
@@ -407,7 +452,8 @@ impl IndexPage {
                             reason: "page overflow writing entries".to_string(),
                         });
                     }
-                    bytes[data_offset..data_offset + KEY_SIZE].copy_from_slice(&node_id.to_be_bytes());
+                    bytes[data_offset..data_offset + KEY_SIZE]
+                        .copy_from_slice(&node_id.to_be_bytes());
                     data_offset += KEY_SIZE;
                     bytes[data_offset..data_offset + PAGE_ID_SIZE]
                         .copy_from_slice(&page_id.to_be_bytes());
@@ -421,7 +467,8 @@ impl IndexPage {
                         reason: "page overflow writing next_leaf".to_string(),
                     });
                 }
-                bytes[data_offset..data_offset + PAGE_ID_SIZE].copy_from_slice(&next_leaf.to_be_bytes());
+                bytes[data_offset..data_offset + PAGE_ID_SIZE]
+                    .copy_from_slice(&next_leaf.to_be_bytes());
                 data_offset += PAGE_ID_SIZE;
             }
         }
@@ -445,27 +492,15 @@ impl IndexPage {
         }
 
         // Read page header
-        let page_id = u64::from_be_bytes(
-            bytes[constants::PAGE_ID_OFFSET..constants::PAGE_ID_OFFSET + 8]
-                .try_into()
-                .unwrap(),
-        );
+        let page_id = u64::from_be_bytes(extract_array(bytes, constants::PAGE_ID_OFFSET, "page_id")?);
 
         let is_leaf = bytes[constants::IS_LEAF_OFFSET] == 1;
 
         let is_root = bytes[constants::IS_ROOT_OFFSET] == 1;
 
-        let count = u16::from_be_bytes(
-            bytes[constants::COUNT_OFFSET..constants::COUNT_OFFSET + 2]
-                .try_into()
-                .unwrap(),
-        ) as usize;
+        let count = u16::from_be_bytes(extract_array(bytes, constants::COUNT_OFFSET, "count")?) as usize;
 
-        let checksum = u32::from_be_bytes(
-            bytes[constants::CHECKSUM_OFFSET..constants::CHECKSUM_OFFSET + 4]
-                .try_into()
-                .unwrap(),
-        );
+        let checksum = u32::from_be_bytes(extract_array(bytes, constants::CHECKSUM_OFFSET, "checksum")?);
 
         // Read data based on page type
         let mut data_offset = constants::DATA_START_OFFSET;
@@ -480,26 +515,16 @@ impl IndexPage {
                         reason: "page overflow reading entries".to_string(),
                     });
                 }
-                let node_id = u64::from_be_bytes(
-                    bytes[data_offset..data_offset + KEY_SIZE].try_into().unwrap(),
-                );
+                let node_id = u64::from_be_bytes(extract_array(bytes, data_offset, "node_id")?);
                 data_offset += KEY_SIZE;
-                let page_id = u64::from_be_bytes(
-                    bytes[data_offset..data_offset + PAGE_ID_SIZE]
-                        .try_into()
-                        .unwrap(),
-                );
+                let page_id = u64::from_be_bytes(extract_array(bytes, data_offset, "page_id")?);
                 data_offset += PAGE_ID_SIZE;
                 entries.push((node_id, page_id));
             }
 
             // Read next_leaf pointer
             let next_leaf = if data_offset + PAGE_ID_SIZE <= 4096 {
-                let ptr = u64::from_be_bytes(
-                    bytes[data_offset..data_offset + PAGE_ID_SIZE]
-                        .try_into()
-                        .unwrap(),
-                );
+                let ptr = u64::from_be_bytes(extract_array(bytes, data_offset, "next_leaf")?);
                 data_offset += PAGE_ID_SIZE;
                 ptr
             } else {
@@ -510,7 +535,8 @@ impl IndexPage {
             };
 
             // Verify checksum
-            let calculated_checksum = Self::calculate_checksum_leaf(page_id, &entries, next_leaf, is_root);
+            let calculated_checksum =
+                Self::calculate_checksum_leaf(page_id, &entries, next_leaf, is_root);
             if calculated_checksum != checksum {
                 return Err(NativeBackendError::InvalidHeader {
                     field: "leaf_checksum".to_string(),
@@ -538,9 +564,7 @@ impl IndexPage {
                         reason: "page overflow reading keys".to_string(),
                     });
                 }
-                let key = u64::from_be_bytes(
-                    bytes[data_offset..data_offset + KEY_SIZE].try_into().unwrap(),
-                );
+                let key = u64::from_be_bytes(extract_array(bytes, data_offset, "key")?);
                 data_offset += KEY_SIZE;
                 keys.push(key);
             }
@@ -555,17 +579,14 @@ impl IndexPage {
                         reason: "page overflow reading children".to_string(),
                     });
                 }
-                let child = u64::from_be_bytes(
-                    bytes[data_offset..data_offset + PAGE_ID_SIZE]
-                        .try_into()
-                        .unwrap(),
-                );
+                let child = u64::from_be_bytes(extract_array(bytes, data_offset, "child")?);
                 data_offset += PAGE_ID_SIZE;
                 children.push(child);
             }
 
             // Verify checksum
-            let calculated_checksum = Self::calculate_checksum_internal(page_id, &keys, &children, is_root);
+            let calculated_checksum =
+                Self::calculate_checksum_internal(page_id, &keys, &children, is_root);
             if calculated_checksum != checksum {
                 return Err(NativeBackendError::InvalidHeader {
                     field: "internal_checksum".to_string(),
@@ -587,7 +608,12 @@ impl IndexPage {
     }
 
     /// Calculate checksum for leaf page
-    fn calculate_checksum_leaf(page_id: u64, entries: &[(u64, u64)], next_leaf: u64, is_root: bool) -> u32 {
+    fn calculate_checksum_leaf(
+        page_id: u64,
+        entries: &[(u64, u64)],
+        next_leaf: u64,
+        is_root: bool,
+    ) -> u32 {
         let mut data = Vec::with_capacity(4096);
         data.extend_from_slice(&page_id.to_be_bytes());
         data.push(1); // is_leaf
@@ -606,7 +632,12 @@ impl IndexPage {
     }
 
     /// Calculate checksum for internal page
-    fn calculate_checksum_internal(page_id: u64, keys: &[u64], children: &[u64], is_root: bool) -> u32 {
+    fn calculate_checksum_internal(
+        page_id: u64,
+        keys: &[u64],
+        children: &[u64],
+        is_root: bool,
+    ) -> u32 {
         let mut data = Vec::with_capacity(4096);
         data.extend_from_slice(&page_id.to_be_bytes());
         data.push(0); // is_leaf (internal)
@@ -691,7 +722,12 @@ mod tests {
 
         // Compare fields that should be preserved
         match restored {
-            IndexPage::Internal { page_id, keys, children, .. } => {
+            IndexPage::Internal {
+                page_id,
+                keys,
+                children,
+                ..
+            } => {
                 assert_eq!(page_id, 1);
                 assert_eq!(keys, vec![100, 200, 300]);
                 assert_eq!(children, vec![10, 11, 12, 13]);
@@ -715,7 +751,12 @@ mod tests {
 
         // Compare fields that should be preserved
         match restored {
-            IndexPage::Leaf { page_id, entries, next_leaf, .. } => {
+            IndexPage::Leaf {
+                page_id,
+                entries,
+                next_leaf,
+                ..
+            } => {
                 assert_eq!(page_id, 2);
                 assert_eq!(entries, vec![(1, 10), (5, 11), (9, 12)]);
                 assert_eq!(next_leaf, 3);
@@ -751,7 +792,11 @@ mod tests {
 
         assert_eq!(restored.count(), MAX_KEYS);
         match restored {
-            IndexPage::Internal { keys: k, children: c, .. } => {
+            IndexPage::Internal {
+                keys: k,
+                children: c,
+                ..
+            } => {
                 assert_eq!(k.len(), MAX_KEYS);
                 assert_eq!(c.len(), MAX_KEYS + 1);
             }

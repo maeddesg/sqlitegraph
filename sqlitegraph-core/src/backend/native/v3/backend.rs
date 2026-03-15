@@ -300,8 +300,9 @@ impl V3Backend {
         let edge_store = V3EdgeStore::new(
             btree.clone(),
             None,
+            Arc::clone(&allocator),
         );
-        
+
         Ok(Self {
             db_path,
             btree: RwLock::new(btree),
@@ -314,7 +315,7 @@ impl V3Backend {
             publisher: RwLock::new(None), // Lazy initialized
         })
     }
-    
+
     /// Create a new V3 database with WAL enabled
     ///
     /// # Arguments
@@ -413,6 +414,7 @@ impl V3Backend {
                 db_path.clone(),
             ),
             None,
+            Arc::clone(&allocator),
         );
         
         // Check for existing WAL
@@ -516,10 +518,9 @@ impl V3Backend {
         };
         
         let mut kv_guard = self.kv_store.write();
-        if kv_guard.is_none() {
-            *kv_guard = Some(KvStore::new());
-        }
-        kv_guard.as_ref().unwrap().set(key, value, ttl_seconds, version);
+        kv_guard
+            .get_or_insert_with(KvStore::new)
+            .set(key, value, ttl_seconds, version);
     }
     
     /// Delete a key from the KV store
@@ -534,10 +535,9 @@ impl V3Backend {
         };
         
         let mut kv_guard = self.kv_store.write();
-        if kv_guard.is_none() {
-            *kv_guard = Some(KvStore::new());
-        }
-        kv_guard.as_ref().unwrap().delete(key, version);
+        kv_guard
+            .get_or_insert_with(KvStore::new)
+            .delete(key, version);
     }
     
     /// Prefix scan for keys in the KV store using V3 types
@@ -765,9 +765,9 @@ impl V3Backend {
     fn insert_edge_inner(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
         let mut edge_store = self.edge_store.write();
         
-        edge_store.insert_edge(edge.from, edge.to, EdgeDirection::Outgoing)
+        edge_store.insert_edge(edge.from, edge.to, EdgeDirection::Outgoing, None)
             .map_err(map_v3_error)?;
-        edge_store.insert_edge(edge.to, edge.from, EdgeDirection::Incoming)
+        edge_store.insert_edge(edge.to, edge.from, EdgeDirection::Incoming, None)
             .map_err(map_v3_error)?;
         
         // Update header edge count (but don't sync yet)
@@ -1274,8 +1274,8 @@ impl GraphBackend for V3Backend {
         &self,
         snapshot_id: SnapshotId,
         key: &[u8],
-    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, SqliteGraphError> {
-        use crate::backend::native::v2::kv_store::types::KvValue as V2KvValue;
+    ) -> Result<Option<crate::backend::native::types::KvValue>, SqliteGraphError> {
+        use crate::backend::native::types::KvValue as V2KvValue;
         
         // If KV store not initialized, key doesn't exist
         let kv_guard = self.kv_store.read();
@@ -1299,10 +1299,10 @@ impl GraphBackend for V3Backend {
     fn kv_set(
         &self,
         key: Vec<u8>,
-        value: crate::backend::native::v2::kv_store::types::KvValue,
+        value: crate::backend::native::types::KvValue,
         ttl_seconds: Option<u64>,
     ) -> Result<(), SqliteGraphError> {
-        use crate::backend::native::v2::kv_store::types::KvValue as V2KvValue;
+        use crate::backend::native::types::KvValue as V2KvValue;
         
         // Convert V2 KvValue to V3 KvValue (V2 doesn't have Null)
         let v3_value = match &value {
@@ -1328,10 +1328,9 @@ impl GraphBackend for V3Backend {
         // Lazy initialize KV store and set value
         {
             let mut kv_guard = self.kv_store.write();
-            if kv_guard.is_none() {
-                *kv_guard = Some(KvStore::new());
-            }
-            kv_guard.as_ref().unwrap().set(key.clone(), v3_value, ttl_seconds, version);
+            kv_guard
+                .get_or_insert_with(KvStore::new)
+                .set(key.clone(), v3_value, ttl_seconds, version);
         }
         
         // Write to WAL if enabled
@@ -1372,13 +1371,12 @@ impl GraphBackend for V3Backend {
         // Emit event (lazy initialize publisher)
         {
             let mut pub_guard = self.publisher.write();
-            if pub_guard.is_none() {
-                *pub_guard = Some(Publisher::new());
-            }
-            pub_guard.as_ref().unwrap().emit(crate::backend::native::v3::pubsub::types::PubSubEvent::KvChanged {
-                key_hash,
-                snapshot_id: version,
-            });
+            pub_guard.get_or_insert_with(Publisher::new).emit(
+                crate::backend::native::v3::pubsub::types::PubSubEvent::KvChanged {
+                    key_hash,
+                    snapshot_id: version,
+                },
+            );
         }
         
         Ok(())
@@ -1397,10 +1395,9 @@ impl GraphBackend for V3Backend {
         // Lazy initialize KV store and delete
         {
             let mut kv_guard = self.kv_store.write();
-            if kv_guard.is_none() {
-                *kv_guard = Some(KvStore::new());
-            }
-            kv_guard.as_ref().unwrap().delete(key, version);
+            kv_guard
+                .get_or_insert_with(KvStore::new)
+                .delete(key, version);
         }
         
         // Write to WAL if enabled
@@ -1421,13 +1418,12 @@ impl GraphBackend for V3Backend {
         // Emit event (lazy initialize publisher)
         {
             let mut pub_guard = self.publisher.write();
-            if pub_guard.is_none() {
-                *pub_guard = Some(Publisher::new());
-            }
-            pub_guard.as_ref().unwrap().emit(crate::backend::native::v3::pubsub::types::PubSubEvent::KvChanged {
-                key_hash: crate::backend::native::v3::kv_store::types::hash_key(key),
-                snapshot_id: version,
-            });
+            pub_guard.get_or_insert_with(Publisher::new).emit(
+                crate::backend::native::v3::pubsub::types::PubSubEvent::KvChanged {
+                    key_hash: crate::backend::native::v3::kv_store::types::hash_key(key),
+                    snapshot_id: version,
+                },
+            );
         }
         
         Ok(())
@@ -1452,10 +1448,7 @@ impl GraphBackend for V3Backend {
         // Lazy initialize publisher and subscribe
         let (sub_id, v3_rx) = {
             let mut pub_guard = self.publisher.write();
-            if pub_guard.is_none() {
-                *pub_guard = Some(Publisher::new());
-            }
-            pub_guard.as_ref().unwrap().subscribe(v3_filter)
+            pub_guard.get_or_insert_with(Publisher::new).subscribe(v3_filter)
         };
         
         // Create a channel adapter that converts V3 events to generic events
@@ -1468,11 +1461,11 @@ impl GraphBackend for V3Backend {
                     V3Event::NodeChanged { node_id, snapshot_id } => {
                         PubSubEvent::NodeChanged { node_id, snapshot_id }
                     }
-                    V3Event::EdgeChanged { edge_id, from_node: _, to_node: _, snapshot_id } => {
-                        PubSubEvent::EdgeChanged { edge_id, snapshot_id }
+                    V3Event::EdgeChanged { edge_id, from_node, to_node, snapshot_id } => {
+                        PubSubEvent::EdgeChanged { edge_id, from_node, to_node, snapshot_id }
                     }
                     V3Event::KvChanged { key_hash, snapshot_id } => {
-                        PubSubEvent::KVChanged { key_hash, snapshot_id }
+                        PubSubEvent::KvChanged { key_hash, snapshot_id }
                     }
                     V3Event::SnapshotCommitted { snapshot_id } => {
                         PubSubEvent::SnapshotCommitted { snapshot_id }
@@ -1492,10 +1485,10 @@ impl GraphBackend for V3Backend {
         
         // If publisher not initialized, nothing to unsubscribe
         let pub_guard = self.publisher.read();
-        if pub_guard.is_none() {
-            return Ok(false);
-        }
-        let removed = pub_guard.as_ref().unwrap().unsubscribe(SubscriberId::from_raw(subscriber_id));
+        let removed = pub_guard
+            .as_ref()
+            .map(|p| p.unsubscribe(SubscriberId::from_raw(subscriber_id)))
+            .unwrap_or(false);
         Ok(removed)
     }
 
@@ -1504,8 +1497,8 @@ impl GraphBackend for V3Backend {
         &self,
         snapshot_id: SnapshotId,
         prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, crate::backend::native::v2::kv_store::types::KvValue)>, SqliteGraphError> {
-        use crate::backend::native::v2::kv_store::types::KvValue as V2KvValue;
+    ) -> Result<Vec<(Vec<u8>, crate::backend::native::types::KvValue)>, SqliteGraphError> {
+        use crate::backend::native::types::KvValue as V2KvValue;
         
         // If KV not initialized, return empty results
         let kv_guard = self.kv_store.read();
