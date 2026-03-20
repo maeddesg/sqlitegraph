@@ -144,7 +144,6 @@ impl<'a> NodeStore<'a> {
             });
         }
 
-
         // Read V2 header to determine record size
         let mut header_buffer = vec![0u8; 21];
         #[cfg(feature = "v2_experimental")]

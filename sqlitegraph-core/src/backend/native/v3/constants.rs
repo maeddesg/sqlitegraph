@@ -111,7 +111,11 @@ mod tests {
         assert_eq!(V3_MAGIC[7], 3, "V3 magic should have 3 at position 7");
 
         // Ensure other bytes match
-        assert_eq!(V3_MAGIC[0..7], v2_magic[0..7], "V3 should preserve V2 magic prefix");
+        assert_eq!(
+            V3_MAGIC[0..7],
+            v2_magic[0..7],
+            "V3 should preserve V2 magic prefix"
+        );
     }
 
     #[test]
@@ -133,7 +137,11 @@ mod tests {
 
         // V3 header should be 112 bytes (80 + 32)
         assert_eq!(V3_HEADER_SIZE, 112, "V3 header should be 112 bytes");
-        assert_eq!(V3_HEADER_SIZE, v2_header_size + 32, "V3 should extend V2 by 32 bytes");
+        assert_eq!(
+            V3_HEADER_SIZE,
+            v2_header_size + 32,
+            "V3 should extend V2 by 32 bytes"
+        );
     }
 
     #[test]
@@ -151,7 +159,10 @@ mod tests {
         // Verify B+Tree can handle 4 billion nodes with height 4
         // 128-ary tree with height 4: 128^4 = 268,435,456 nodes per leaf
         // This is more than sufficient for 4 billion nodes
-        assert!(MAX_BTREE_HEIGHT >= 4, "Max B+Tree height should be at least 4");
+        assert!(
+            MAX_BTREE_HEIGHT >= 4,
+            "Max B+Tree height should be at least 4"
+        );
 
         // 254 keys allows for efficient branching factor
         assert!(MAX_KEYS_PER_PAGE == 254, "Max keys per page should be 254");
@@ -170,6 +181,9 @@ mod tests {
 
         let different_data = b"Hello, V2!";
         let checksum3 = checksum::xor_checksum(different_data);
-        assert_ne!(checksum1, checksum3, "Different data should produce different checksums");
+        assert_ne!(
+            checksum1, checksum3,
+            "Different data should produce different checksums"
+        );
     }
 }

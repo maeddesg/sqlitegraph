@@ -69,7 +69,7 @@ use std::fmt;
 use ahash::{AHashMap, AHashSet};
 use serde_json::Value;
 
-use crate::algo::topological_sort::{topological_sort, TopoError};
+use crate::algo::topological_sort::{TopoError, topological_sort};
 use crate::graph::SqliteGraph;
 use crate::progress::ProgressCallback;
 
@@ -113,11 +113,7 @@ impl fmt::Display for CriticalPathError {
                 )
             }
             CriticalPathError::InvalidWeight { from, to, reason } => {
-                write!(
-                    f,
-                    "Invalid weight for edge {} -> {}: {}",
-                    from, to, reason
-                )
+                write!(f, "Invalid weight for edge {} -> {}: {}", from, to, reason)
             }
         }
     }
@@ -604,7 +600,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create test graph with linear chain: A --5--> B --3--> C --2--> D
     fn create_linear_weighted_dag() -> SqliteGraph {
@@ -619,7 +615,9 @@ mod tests {
                 file_path: Some(format!("task_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -662,7 +660,9 @@ mod tests {
                 file_path: Some(format!("task_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -721,7 +721,9 @@ mod tests {
                 file_path: Some(format!("cycle_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -763,7 +765,9 @@ mod tests {
                 file_path: Some(format!("task_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -776,7 +780,9 @@ mod tests {
             edge_type: "depends".to_string(),
             data: serde_json::json!({"duration": 3.0}),
         };
-        graph.insert_edge(&start_to_a).expect("Failed to insert edge");
+        graph
+            .insert_edge(&start_to_a)
+            .expect("Failed to insert edge");
 
         let start_to_b = GraphEdge {
             id: 0,
@@ -785,7 +791,9 @@ mod tests {
             edge_type: "depends".to_string(),
             data: serde_json::json!({"duration": 5.0}),
         };
-        graph.insert_edge(&start_to_b).expect("Failed to insert edge");
+        graph
+            .insert_edge(&start_to_b)
+            .expect("Failed to insert edge");
 
         let start_to_c = GraphEdge {
             id: 0,
@@ -794,7 +802,9 @@ mod tests {
             edge_type: "depends".to_string(),
             data: serde_json::json!({"duration": 2.0}),
         };
-        graph.insert_edge(&start_to_c).expect("Failed to insert edge");
+        graph
+            .insert_edge(&start_to_c)
+            .expect("Failed to insert edge");
 
         // A -> End (1), B -> End (3), C -> End (2)
         let a_to_end = GraphEdge {
@@ -846,7 +856,10 @@ mod tests {
             .expect("Critical path should succeed on DAG");
 
         assert_eq!(result.path.len(), 4, "Path should have 4 nodes");
-        assert_eq!(result.path, entity_ids, "Path should contain all nodes in order");
+        assert_eq!(
+            result.path, entity_ids,
+            "Path should contain all nodes in order"
+        );
         // Distance depends on actual algorithm computation
         assert!(result.distance > 0.0, "Distance should be positive");
     }
@@ -868,7 +881,10 @@ mod tests {
         assert_eq!(result.path[0], entity_ids[0], "Path should start at A");
         assert_eq!(result.path[2], entity_ids[3], "Path should end at D");
         // Distance uses default weight (1.0 per edge) since edge_data is empty
-        assert_eq!(result.distance, 2.0, "Distance should be 2 with default weight");
+        assert_eq!(
+            result.distance, 2.0,
+            "Distance should be 2 with default weight"
+        );
     }
 
     #[test]
@@ -885,12 +901,15 @@ mod tests {
                 .unwrap_or(999.0) // Default when duration not present
         };
 
-        let result = critical_path(&graph, &custom_weight_fn)
-            .expect("Critical path should succeed");
+        let result =
+            critical_path(&graph, &custom_weight_fn).expect("Critical path should succeed");
 
         // With empty edge_data, weight_fn returns default (999.0)
         // 3 edges * 999 = 2997
-        assert_eq!(result.distance, 2997.0, "With empty edge_data, should use default weight");
+        assert_eq!(
+            result.distance, 2997.0,
+            "With empty edge_data, should use default weight"
+        );
     }
 
     #[test]
@@ -908,7 +927,9 @@ mod tests {
                 file_path: Some(format!("task_{}.rs", i)),
                 data: serde_json::json!({}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -924,8 +945,8 @@ mod tests {
             graph.insert_edge(&edge).expect("Failed to insert edge");
         }
 
-        let result = critical_path(&graph, &default_weight_fn)
-            .expect("Critical path should succeed");
+        let result =
+            critical_path(&graph, &default_weight_fn).expect("Critical path should succeed");
 
         // 3 edges, each with some weight - verify path has 4 nodes and positive distance
         assert_eq!(result.path.len(), 4, "Path should have 4 nodes");
@@ -942,8 +963,8 @@ mod tests {
         let graph = create_parallel_dag();
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
-        let result = critical_path(&graph, &duration_weight_fn)
-            .expect("Critical path should succeed");
+        let result =
+            critical_path(&graph, &duration_weight_fn).expect("Critical path should succeed");
 
         assert_eq!(result.path.len(), 3, "Path should have 3 nodes");
         assert_eq!(result.path[0], entity_ids[0], "Path should start at Start");
@@ -965,10 +986,7 @@ mod tests {
         match err {
             CriticalPathError::NotADag { cycle } => {
                 assert!(!cycle.is_empty(), "Cycle should not be empty");
-                assert!(
-                    cycle.len() >= 3,
-                    "Cycle should have at least 3 nodes"
-                );
+                assert!(cycle.len() >= 3, "Cycle should have at least 3 nodes");
             }
             _ => panic!("Expected NotADag error"),
         }
@@ -1001,7 +1019,9 @@ mod tests {
             file_path: Some("single.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let result = critical_path(&graph, &default_weight_fn)
             .expect("Critical path should succeed on single node");
@@ -1017,16 +1037,28 @@ mod tests {
         let graph = create_diamond_weighted_dag();
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
-        let result = critical_path(&graph, &duration_weight_fn)
-            .expect("Critical path should succeed");
+        let result =
+            critical_path(&graph, &duration_weight_fn).expect("Critical path should succeed");
 
         let bottlenecks = result.bottlenecks();
 
         assert_eq!(bottlenecks.len(), 3, "Should have 3 bottlenecks");
-        assert!(bottlenecks.contains(&entity_ids[0]), "A should be a bottleneck");
-        assert!(bottlenecks.contains(&entity_ids[1]), "B should be a bottleneck");
-        assert!(bottlenecks.contains(&entity_ids[3]), "D should be a bottleneck");
-        assert!(!bottlenecks.contains(&entity_ids[2]), "C should NOT be a bottleneck");
+        assert!(
+            bottlenecks.contains(&entity_ids[0]),
+            "A should be a bottleneck"
+        );
+        assert!(
+            bottlenecks.contains(&entity_ids[1]),
+            "B should be a bottleneck"
+        );
+        assert!(
+            bottlenecks.contains(&entity_ids[3]),
+            "D should be a bottleneck"
+        );
+        assert!(
+            !bottlenecks.contains(&entity_ids[2]),
+            "C should NOT be a bottleneck"
+        );
     }
 
     #[test]
@@ -1037,17 +1069,29 @@ mod tests {
         let graph = create_diamond_weighted_dag();
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
-        let result = critical_path(&graph, &duration_weight_fn)
-            .expect("Critical path should succeed");
+        let result =
+            critical_path(&graph, &duration_weight_fn).expect("Critical path should succeed");
 
         let slack = result.slack();
 
         // Verify slack computation returns values for all nodes
-        assert!(slack.contains_key(&entity_ids[0]), "A should have slack entry");
-        assert!(slack.contains_key(&entity_ids[1]), "B should have slack entry");
-        assert!(slack.contains_key(&entity_ids[2]), "C should have slack entry");
-        assert!(slack.contains_key(&entity_ids[3]), "D should have slack entry");
-        
+        assert!(
+            slack.contains_key(&entity_ids[0]),
+            "A should have slack entry"
+        );
+        assert!(
+            slack.contains_key(&entity_ids[1]),
+            "B should have slack entry"
+        );
+        assert!(
+            slack.contains_key(&entity_ids[2]),
+            "C should have slack entry"
+        );
+        assert!(
+            slack.contains_key(&entity_ids[3]),
+            "D should have slack entry"
+        );
+
         // Slack values should be non-negative
         for (node, s) in &slack {
             assert!(*s >= 0.0, "Node {} should have non-negative slack", node);
@@ -1061,8 +1105,8 @@ mod tests {
         let graph = create_diamond_weighted_dag();
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
-        let result = critical_path(&graph, &duration_weight_fn)
-            .expect("Critical path should succeed");
+        let result =
+            critical_path(&graph, &duration_weight_fn).expect("Critical path should succeed");
 
         assert!(
             result.is_bottleneck(entity_ids[0]),
@@ -1093,15 +1137,18 @@ mod tests {
 
         impl ProgressCallback for TestProgress {
             fn on_progress(&self, _current: usize, _total: Option<usize>, _message: &str) {
-                self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                self.call_count
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
 
             fn on_complete(&self) {
-                self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                self.call_count
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
 
             fn on_error(&self, _error: &dyn std::error::Error) {
-                self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                self.call_count
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
         }
 
@@ -1113,10 +1160,16 @@ mod tests {
             .expect("Critical path with progress should succeed");
 
         assert_eq!(result.path.len(), 4, "Path should have 4 nodes");
-        assert!(result.distance > 0.0, "Distance should be positive, got {}", result.distance);
+        assert!(
+            result.distance > 0.0,
+            "Distance should be positive, got {}",
+            result.distance
+        );
 
         // Progress should have been called
-        let call_count = progress.call_count.load(std::sync::atomic::Ordering::SeqCst);
+        let call_count = progress
+            .call_count
+            .load(std::sync::atomic::Ordering::SeqCst);
         assert!(call_count > 0, "Progress should have been called");
     }
 }

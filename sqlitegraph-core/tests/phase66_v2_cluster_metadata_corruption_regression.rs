@@ -8,7 +8,9 @@
 //! - size: 58 = estimated cluster size being used incorrectly
 //! - min_size: 8774 = actual cluster size needed for deserialization
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 
 /// Regression test for Phase 66 V2 node record cluster metadata corruption
 ///
@@ -104,7 +106,14 @@ fn test_phase66_v2_node_record_cluster_metadata_corruption()
     // Step 6: Attempt neighbor query (this is where the original BufferTooSmall error occurred)
     println!("STEP 6: Testing neighbor query with verified cluster metadata...");
 
-    match graph_reopened.neighbors(SnapshotId::current(), node1, NeighborQuery { direction: BackendDirection::Outgoing, edge_type: None }) {
+    match graph_reopened.neighbors(
+        SnapshotId::current(),
+        node1,
+        NeighborQuery {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        },
+    ) {
         Ok(neighbors) => {
             println!(
                 "✅ Neighbor query successful: {} neighbors found",
@@ -197,7 +206,14 @@ fn test_phase66_detect_estimated_cluster_size_corruption() -> Result<(), Box<dyn
     let graph_reopened = open_graph(&db_path, &reopen_config)?;
 
     // Test neighbor query - this should work with actual cluster sizes
-    let neighbors = graph_reopened.neighbors(SnapshotId::current(), node1, NeighborQuery { direction: BackendDirection::Outgoing, edge_type: None })?;
+    let neighbors = graph_reopened.neighbors(
+        SnapshotId::current(),
+        node1,
+        NeighborQuery {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        },
+    )?;
     assert!(
         neighbors.contains(&node2),
         "Node2 should be neighbor of Node1"

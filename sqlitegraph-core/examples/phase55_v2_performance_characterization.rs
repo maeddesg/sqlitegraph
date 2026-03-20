@@ -5,7 +5,9 @@
 //!
 //! This is a MEASUREMENT phase. NOT optimization. NOT marketing.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 use std::time::Instant;
 
 /// Dataset specification for performance characterization

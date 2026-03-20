@@ -55,14 +55,10 @@ pub enum VarintError {
     },
 
     /// Varint exceeds maximum allowed length (10 bytes)
-    TooLong {
-        actual_length: usize,
-    },
+    TooLong { actual_length: usize },
 
     /// Malformed varint (last byte has continuation bit set)
-    Malformed {
-        position: usize,
-    },
+    Malformed { position: usize },
 }
 
 impl std::fmt::Display for VarintError {
@@ -80,8 +76,7 @@ impl std::fmt::Display for VarintError {
             Self::TooLong { actual_length } => write!(
                 f,
                 "Varint too long: maximum {} bytes, found {}",
-                MAX_VARINT_BYTES,
-                actual_length
+                MAX_VARINT_BYTES, actual_length
             ),
             Self::Malformed { position } => write!(
                 f,
@@ -203,7 +198,8 @@ pub fn decode_varint(bytes: &[u8]) -> NativeResult<(u64, usize)> {
                 field: "varint".to_string(),
                 reason: VarintError::TooLong {
                     actual_length: i + 1,
-                }.to_string(),
+                }
+                .to_string(),
             });
         }
 
@@ -234,7 +230,8 @@ pub fn decode_varint(bytes: &[u8]) -> NativeResult<(u64, usize)> {
         reason: VarintError::IncompleteData {
             expected_bytes: bytes_read + 1,
             actual_bytes: bytes_read,
-        }.to_string(),
+        }
+        .to_string(),
     })
 }
 
@@ -383,9 +380,17 @@ mod tests {
         // Verify MSB pattern: first 9 bytes have MSB set, last byte doesn't
         for (i, &byte) in encoded.iter().enumerate() {
             if i < 9 {
-                assert!(byte & CONTINUATION_BIT != 0, "Byte {} should have MSB set", i);
+                assert!(
+                    byte & CONTINUATION_BIT != 0,
+                    "Byte {} should have MSB set",
+                    i
+                );
             } else {
-                assert!(byte & CONTINUATION_BIT == 0, "Byte {} should not have MSB set", i);
+                assert!(
+                    byte & CONTINUATION_BIT == 0,
+                    "Byte {} should not have MSB set",
+                    i
+                );
             }
         }
     }
@@ -449,7 +454,10 @@ mod tests {
         // Two-byte value (255)
         assert_eq!(decode_varint_u16(&[0xFF, 0x01]).unwrap(), (255, 2));
         // Max u16
-        assert_eq!(decode_varint_u16(&[0xFF, 0xFF, 0x03]).unwrap(), (u16::MAX, 3));
+        assert_eq!(
+            decode_varint_u16(&[0xFF, 0xFF, 0x03]).unwrap(),
+            (u16::MAX, 3)
+        );
     }
 
     #[test]
@@ -531,7 +539,12 @@ mod tests {
             let (decoded, bytes_read) = decode_varint(&encoded).unwrap();
 
             assert_eq!(decoded, value, "Round-trip failed for {}", value);
-            assert_eq!(bytes_read, encoded.len(), "Byte count mismatch for {}", value);
+            assert_eq!(
+                bytes_read,
+                encoded.len(),
+                "Byte count mismatch for {}",
+                value
+            );
         }
     }
 

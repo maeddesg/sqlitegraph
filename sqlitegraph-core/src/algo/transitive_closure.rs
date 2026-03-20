@@ -349,7 +349,11 @@ where
         progress.on_progress(
             source_idx + 1,
             Some(sources.len()),
-            &format!("Transitive closure: source {}/{}", source_idx + 1, sources.len()),
+            &format!(
+                "Transitive closure: source {}/{}",
+                source_idx + 1,
+                sources.len()
+            ),
         );
 
         // Self-reachability: every node can reach itself
@@ -400,7 +404,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create test graph with linear chain: 0 -> 1 -> 2 -> 3
     fn create_linear_graph() -> SqliteGraph {
@@ -415,7 +419,9 @@ mod tests {
                 file_path: Some(format!("test_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -448,7 +454,9 @@ mod tests {
                 file_path: Some(format!("test_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -495,7 +503,9 @@ mod tests {
             file_path: Some("test.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
         let node_id = entity_ids[0];
@@ -505,7 +515,11 @@ mod tests {
 
         let closure = result.unwrap();
         assert_eq!(closure.len(), 1, "Expected 1 reachable pair");
-        assert_eq!(closure.get(&(node_id, node_id)), Some(&true), "Node should reach itself");
+        assert_eq!(
+            closure.get(&(node_id, node_id)),
+            Some(&true),
+            "Node should reach itself"
+        );
     }
 
     #[test]
@@ -528,7 +542,15 @@ mod tests {
                     can_reach,
                     i <= j,
                     "Node {} ({}) should {} reach node {} ({})",
-                    i, from, if i <= j { "be able to" } else { "NOT be able to" }, j, to
+                    i,
+                    from,
+                    if i <= j {
+                        "be able to"
+                    } else {
+                        "NOT be able to"
+                    },
+                    j,
+                    to
                 );
             }
         }
@@ -560,19 +582,55 @@ mod tests {
         let closure = result.unwrap();
 
         // Node 0 can reach all nodes
-        assert_eq!(closure.get(&(node_0, node_0)), Some(&true), "Node 0 should reach itself");
-        assert_eq!(closure.get(&(node_0, node_1)), Some(&true), "Node 0 should reach node 1");
-        assert_eq!(closure.get(&(node_0, node_2)), Some(&true), "Node 0 should reach node 2");
+        assert_eq!(
+            closure.get(&(node_0, node_0)),
+            Some(&true),
+            "Node 0 should reach itself"
+        );
+        assert_eq!(
+            closure.get(&(node_0, node_1)),
+            Some(&true),
+            "Node 0 should reach node 1"
+        );
+        assert_eq!(
+            closure.get(&(node_0, node_2)),
+            Some(&true),
+            "Node 0 should reach node 2"
+        );
 
         // Nodes 1 and 2 form an SCC (mutually reachable)
-        assert_eq!(closure.get(&(node_1, node_1)), Some(&true), "Node 1 should reach itself");
-        assert_eq!(closure.get(&(node_1, node_2)), Some(&true), "Node 1 should reach node 2");
-        assert_eq!(closure.get(&(node_2, node_1)), Some(&true), "Node 2 should reach node 1");
-        assert_eq!(closure.get(&(node_2, node_2)), Some(&true), "Node 2 should reach itself");
+        assert_eq!(
+            closure.get(&(node_1, node_1)),
+            Some(&true),
+            "Node 1 should reach itself"
+        );
+        assert_eq!(
+            closure.get(&(node_1, node_2)),
+            Some(&true),
+            "Node 1 should reach node 2"
+        );
+        assert_eq!(
+            closure.get(&(node_2, node_1)),
+            Some(&true),
+            "Node 2 should reach node 1"
+        );
+        assert_eq!(
+            closure.get(&(node_2, node_2)),
+            Some(&true),
+            "Node 2 should reach itself"
+        );
 
         // Node 1 and 2 cannot reach node 0
-        assert_eq!(closure.get(&(node_1, node_0)), None, "Node 1 should NOT reach node 0");
-        assert_eq!(closure.get(&(node_2, node_0)), None, "Node 2 should NOT reach node 0");
+        assert_eq!(
+            closure.get(&(node_1, node_0)),
+            None,
+            "Node 1 should NOT reach node 0"
+        );
+        assert_eq!(
+            closure.get(&(node_2, node_0)),
+            None,
+            "Node 2 should NOT reach node 0"
+        );
     }
 
     #[test]
@@ -598,12 +656,28 @@ mod tests {
         let closure = result.unwrap();
 
         // Node 0 can reach: 0 (self), 1 (depth 1), 2 (depth 2)
-        assert_eq!(closure.get(&(node_0, node_0)), Some(&true), "Node 0 should reach itself");
-        assert_eq!(closure.get(&(node_0, node_1)), Some(&true), "Node 0 should reach node 1");
-        assert_eq!(closure.get(&(node_0, node_2)), Some(&true), "Node 0 should reach node 2");
+        assert_eq!(
+            closure.get(&(node_0, node_0)),
+            Some(&true),
+            "Node 0 should reach itself"
+        );
+        assert_eq!(
+            closure.get(&(node_0, node_1)),
+            Some(&true),
+            "Node 0 should reach node 1"
+        );
+        assert_eq!(
+            closure.get(&(node_0, node_2)),
+            Some(&true),
+            "Node 0 should reach node 2"
+        );
 
         // Node 0 cannot reach node 3 (depth 3 exceeds limit)
-        assert_eq!(closure.get(&(node_0, node_3)), None, "Node 0 should NOT reach node 3 (depth limit)");
+        assert_eq!(
+            closure.get(&(node_0, node_3)),
+            None,
+            "Node 0 should NOT reach node 3 (depth limit)"
+        );
     }
 
     #[test]
@@ -623,7 +697,11 @@ mod tests {
 
         let closure = result.unwrap();
         // max_pairs is a limit - algorithm may exceed slightly during batch processing
-        assert!(closure.len() <= 6, "Should stop at approximately 5 pairs, got {}", closure.len());
+        assert!(
+            closure.len() <= 6,
+            "Should stop at approximately 5 pairs, got {}",
+            closure.len()
+        );
     }
 
     #[test]
@@ -676,12 +754,19 @@ mod tests {
         let result_default = transitive_closure(&graph, Some(TransitiveClosureBounds::default()));
 
         assert!(result_none.is_ok(), "transitive_closure with None failed");
-        assert!(result_default.is_ok(), "transitive_closure with default failed");
+        assert!(
+            result_default.is_ok(),
+            "transitive_closure with default failed"
+        );
 
         let closure_none = result_none.unwrap();
         let closure_default = result_default.unwrap();
 
-        assert_eq!(closure_none.len(), closure_default.len(), "Default bounds should match None");
+        assert_eq!(
+            closure_none.len(),
+            closure_default.len(),
+            "Default bounds should match None"
+        );
     }
 
     #[test]

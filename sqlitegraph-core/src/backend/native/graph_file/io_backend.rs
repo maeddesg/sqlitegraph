@@ -3,13 +3,11 @@
 //! This module provides I/O backend selection and routing logic,
 //! handling different I/O modes (standard vs mmap) and exclusive access patterns.
 
-use crate::backend::native::{
-    graph_file::buffers::WriteBuffer,
-    graph_file::file_ops::IOMode,
-    types::NativeResult,
-};
 #[cfg(feature = "v2_experimental")]
 use crate::backend::native::NativeBackendError;
+use crate::backend::native::{
+    graph_file::buffers::WriteBuffer, graph_file::file_ops::IOMode, types::NativeResult,
+};
 
 #[cfg(feature = "v2_experimental")]
 use memmap2::MmapMut;

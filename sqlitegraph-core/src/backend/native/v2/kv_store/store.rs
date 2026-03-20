@@ -368,9 +368,7 @@ pub fn recover_from_wal<P: AsRef<std::path::Path>>(wal_path: P) -> Result<KvStor
                     crate::backend::native::v2::wal::V2WALRecord::KvDelete { key, .. } => {
                         // Delete from store (ignore if not found)
                         let _ = crate::backend::native::v2::kv_store::wal::apply_delete(
-                            &mut store,
-                            key,
-                            0, // old_version not needed for recovery
+                            &mut store, key, 0, // old_version not needed for recovery
                         );
                     }
                     _ => {

@@ -3,13 +3,11 @@
 //! This module provides file-level management operations including file growth,
 //! size validation, memory mapping management, and cleanup operations.
 
-use crate::backend::native::{
-    graph_file::buffers::ReadBuffer,
-    graph_file::buffers::WriteBuffer,
-    types::NativeResult,
-};
 #[cfg(feature = "v2_experimental")]
 use crate::backend::native::NativeBackendError;
+use crate::backend::native::{
+    graph_file::buffers::ReadBuffer, graph_file::buffers::WriteBuffer, types::NativeResult,
+};
 
 #[cfg(feature = "v2_experimental")]
 use memmap2::{MmapMut, MmapOptions};

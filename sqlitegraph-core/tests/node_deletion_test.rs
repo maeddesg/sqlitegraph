@@ -222,7 +222,10 @@ fn test_slot_reuse_after_deletion() {
         serde_json::json!({}),
     );
     let result = node_store.write_node_v2(&node5);
-    assert!(result.is_ok(), "Should be able to create new node after deletion");
+    assert!(
+        result.is_ok(),
+        "Should be able to create new node after deletion"
+    );
 }
 
 #[test]

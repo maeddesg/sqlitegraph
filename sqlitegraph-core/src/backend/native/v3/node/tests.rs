@@ -10,14 +10,14 @@
 //! - Test helpers for NodeRecordV3 creation
 //! - Integration-style tests for end-to-end flows
 
-use std::sync::Arc;
-use crate::backend::native::types::NodeFlags;
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
-use crate::backend::native::v3::node::record::NodeRecordV3;
-use crate::backend::native::v3::node::page::NodePage;
-use crate::backend::native::v3::node::store::TraversalCache;
+use crate::backend::native::types::NodeFlags;
 use crate::backend::native::v3::index::{IndexPage, IndexPageType};
+use crate::backend::native::v3::node::page::NodePage;
+use crate::backend::native::v3::node::record::NodeRecordV3;
+use crate::backend::native::v3::node::store::TraversalCache;
+use std::sync::Arc;
 
 /// Test node ID range for scalability tests
 pub const TEST_NODE_COUNT: usize = 100;
@@ -170,10 +170,13 @@ fn test_page_not_found_error() {
     let short_data = vec![0u8; 100];
     let result = NodePage::unpack(&short_data);
     assert!(result.is_err(), "Short page data should return error");
-    
+
     // Verify it's the right error type
     if let Err(NativeBackendError::InvalidHeader { field, .. }) = result {
-        assert!(field.contains("node_page"), "Expected node_page error for short data");
+        assert!(
+            field.contains("node_page"),
+            "Expected node_page error for short data"
+        );
     }
 }
 
@@ -208,7 +211,11 @@ fn test_page_overflow_handling() {
     }
 
     // Should fit at least 20 nodes
-    assert!(added_count >= 20, "Should fit at least 20 nodes, got {}", added_count);
+    assert!(
+        added_count >= 20,
+        "Should fit at least 20 nodes, got {}",
+        added_count
+    );
 
     // Verify round-trip works
     let bytes = page.pack().unwrap();
@@ -221,17 +228,7 @@ fn test_page_empty_data() {
     // Test loading page with minimal node data
     let mut page = NodePage::new(1);
 
-    let node = NodeRecordV3::new_inline(
-        1,
-        NodeFlags::empty(),
-        0,
-        0,
-        vec![],
-        0,
-        0,
-        0,
-        0,
-    );
+    let node = NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, vec![], 0, 0, 0, 0);
     page.add_node(node).unwrap();
 
     let bytes = page.pack().unwrap();
@@ -246,18 +243,7 @@ fn test_page_with_external_data() {
     // Test nodes with external data references
     let mut page = NodePage::new(1);
 
-    let node = NodeRecordV3::new_external(
-        1,
-        NodeFlags::empty(),
-        100,
-        200,
-        5000,
-        200,
-        0,
-        5,
-        0,
-        3,
-    );
+    let node = NodeRecordV3::new_external(1, NodeFlags::empty(), 100, 200, 5000, 200, 0, 5, 0, 3);
     page.add_node(node).unwrap();
 
     let bytes = page.pack().unwrap();
@@ -374,7 +360,11 @@ fn test_cache_hit_rate_calculation() {
 
     // 10 hits, 2 misses = 10/12 ≈ 0.833
     let hit_rate = cache.hit_ratio();
-    assert!(hit_rate > 0.8 && hit_rate < 0.9, "Expected hit rate ~0.833, got {}", hit_rate);
+    assert!(
+        hit_rate > 0.8 && hit_rate < 0.9,
+        "Expected hit rate ~0.833, got {}",
+        hit_rate
+    );
 }
 
 #[test]
@@ -422,17 +412,7 @@ fn test_compression_error_handling() {
     let mut page = NodePage::new(1);
 
     // Add a valid node
-    let node = NodeRecordV3::new_inline(
-        1,
-        NodeFlags::empty(),
-        0,
-        0,
-        vec![1, 2, 3, 4],
-        0,
-        0,
-        0,
-        0,
-    );
+    let node = NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, vec![1, 2, 3, 4], 0, 0, 0, 0);
     page.add_node(node).unwrap();
 
     let bytes = page.pack().unwrap();
@@ -473,7 +453,10 @@ fn test_corruption_recovery() {
 
     let valid_bytes = page.pack().unwrap();
     let valid_checksum = u32::from_be_bytes([
-        valid_bytes[28], valid_bytes[29], valid_bytes[30], valid_bytes[31]
+        valid_bytes[28],
+        valid_bytes[29],
+        valid_bytes[30],
+        valid_bytes[31],
     ]);
 
     // Corrupt data
@@ -491,31 +474,11 @@ fn test_invalid_node_id() {
     let mut page = NodePage::new(1);
 
     // Test with i64::MIN (should work)
-    let node = NodeRecordV3::new_inline(
-        i64::MIN,
-        NodeFlags::empty(),
-        0,
-        0,
-        vec![],
-        0,
-        0,
-        0,
-        0,
-    );
+    let node = NodeRecordV3::new_inline(i64::MIN, NodeFlags::empty(), 0, 0, vec![], 0, 0, 0, 0);
     assert!(page.add_node(node).is_ok());
 
     // Test with i64::MAX (should work)
-    let node2 = NodeRecordV3::new_inline(
-        i64::MAX,
-        NodeFlags::empty(),
-        0,
-        0,
-        vec![],
-        0,
-        0,
-        0,
-        0,
-    );
+    let node2 = NodeRecordV3::new_inline(i64::MAX, NodeFlags::empty(), 0, 0, vec![], 0, 0, 0, 0);
     assert!(page.add_node(node2).is_ok());
 }
 
@@ -642,25 +605,11 @@ fn test_multiple_pages_round_trip() {
 #[test]
 fn test_node_flags_preservation() {
     // Test that all node flags are preserved through round-trip
-    let flags_to_test = vec![
-        NodeFlags::empty(),
-        NodeFlags::DELETED,
-        NodeFlags::NONE,
-    ];
+    let flags_to_test = vec![NodeFlags::empty(), NodeFlags::DELETED, NodeFlags::NONE];
 
     for flags in flags_to_test {
         let mut page = NodePage::new(1);
-        let node = NodeRecordV3::new_inline(
-            1,
-            flags,
-            10,
-            20,
-            vec![],
-            0,
-            0,
-            0,
-            0,
-        );
+        let node = NodeRecordV3::new_inline(1, flags, 10, 20, vec![], 0, 0, 0, 0);
         page.add_node(node).unwrap();
 
         let bytes = page.pack().unwrap();
@@ -751,9 +700,7 @@ fn test_cache_with_various_page_ids() {
 fn test_large_scale_page_operations() {
     // Test scalability with many pages
     let page_count = 50;
-    let pages: Vec<NodePage> = (0..page_count)
-        .map(|i| create_test_page(i, 10))
-        .collect();
+    let pages: Vec<NodePage> = (0..page_count).map(|i| create_test_page(i, 10)).collect();
 
     // Verify all pages can round-trip
     for page in &pages {

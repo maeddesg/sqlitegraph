@@ -54,9 +54,9 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 // Import petgraph types - use fully qualified paths to avoid ambiguity
+use petgraph::Directed;
 use petgraph::algo::isomorphism;
 use petgraph::graph::{DefaultIx, Graph, NodeIndex};
-use petgraph::Directed;
 
 use crate::{errors::SqliteGraphError, graph::SqliteGraph, progress::ProgressCallback};
 
@@ -133,9 +133,7 @@ impl SubgraphPatternBounds {
     /// Returns true if any bound is set.
     #[inline]
     pub fn is_bounded(&self) -> bool {
-        self.max_matches.is_some()
-            || self.timeout_ms.is_some()
-            || self.max_pattern_nodes.is_some()
+        self.max_matches.is_some() || self.timeout_ms.is_some() || self.max_pattern_nodes.is_some()
     }
 }
 
@@ -371,7 +369,9 @@ pub fn find_subgraph_patterns(
     let mut matches = Vec::new();
     let mut bounded_hit = false;
 
-    let timeout = bounds.timeout_ms.map(|ms| std::time::Duration::from_millis(ms));
+    let timeout = bounds
+        .timeout_ms
+        .map(|ms| std::time::Duration::from_millis(ms));
 
     // petgraph's subgraph_isomorphisms_iter requires double references (&&Graph)
     // because IntoEdgesDirected is implemented for &Graph, not Graph itself
@@ -506,7 +506,9 @@ where
     );
 
     let start_time = Instant::now();
-    let timeout = bounds.timeout_ms.map(|ms| std::time::Duration::from_millis(ms));
+    let timeout = bounds
+        .timeout_ms
+        .map(|ms| std::time::Duration::from_millis(ms));
 
     let mut matches = Vec::new();
     let mut bounded_hit = false;
@@ -593,7 +595,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper to create a test graph with numbered entities
     fn create_test_graph_with_nodes(count: usize) -> SqliteGraph {
@@ -651,7 +653,9 @@ mod tests {
                 file_path: None,
                 data: serde_json::json!({}),
             };
-            pattern.insert_entity(&entity).expect("Failed to insert entity");
+            pattern
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let ids: Vec<i64> = pattern.all_entity_ids().expect("Failed to get IDs");
@@ -679,7 +683,9 @@ mod tests {
                 file_path: None,
                 data: serde_json::json!({}),
             };
-            pattern.insert_entity(&entity).expect("Failed to insert entity");
+            pattern
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let ids: Vec<i64> = pattern.all_entity_ids().expect("Failed to get IDs");
@@ -747,7 +753,11 @@ mod tests {
         // Algorithm finds all isomorphisms (including rotations).
         // For 2 triangles with 3 rotations each = 6 matches.
         // We verify at least 2 matches (the two triangles).
-        assert!(result.patterns_found >= 2, "Should find at least 2 triangle matches, found {}", result.patterns_found);
+        assert!(
+            result.patterns_found >= 2,
+            "Should find at least 2 triangle matches, found {}",
+            result.patterns_found
+        );
         assert!(!result.is_empty());
         assert!(!result.bounded_hit);
     }
@@ -916,7 +926,9 @@ mod tests {
             file_path: None,
             data: serde_json::json!({}),
         };
-        pattern.insert_entity(&entity).expect("Failed to insert entity");
+        pattern
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let bounds = SubgraphPatternBounds::default();
         let result = find_subgraph_patterns(&graph, &pattern, bounds).unwrap();

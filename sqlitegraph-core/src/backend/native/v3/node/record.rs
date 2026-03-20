@@ -3,9 +3,9 @@
 //! This module defines the V3 node record format using full ID encoding.
 //! Delta/varint compression is deferred to Phase 63b.
 
-use crate::backend::native::types::NodeFlags;
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
+use crate::backend::native::types::NodeFlags;
 
 /// Record layout constants
 pub mod constants {
@@ -275,15 +275,13 @@ impl NodeRecordV3 {
         buffer.extend_from_slice(&[0u8; 2]);
 
         // Outgoing cluster offset: u64
-        buffer
-            .extend_from_slice(&self.outgoing_cluster_offset.to_be_bytes());
+        buffer.extend_from_slice(&self.outgoing_cluster_offset.to_be_bytes());
 
         // Outgoing edge count: u32
         buffer.extend_from_slice(&self.outgoing_edge_count.to_be_bytes());
 
         // Incoming cluster offset: u64
-        buffer
-            .extend_from_slice(&self.incoming_cluster_offset.to_be_bytes());
+        buffer.extend_from_slice(&self.incoming_cluster_offset.to_be_bytes());
 
         // Incoming edge count: u32
         buffer.extend_from_slice(&self.incoming_edge_count.to_be_bytes());
@@ -431,8 +429,7 @@ impl NodeRecordV3 {
 
         // Verify we're at expected position
         assert_eq!(
-            offset,
-            FIXED_METADATA_SIZE,
+            offset, FIXED_METADATA_SIZE,
             "Offset should be at end of fixed metadata"
         );
 
@@ -441,11 +438,8 @@ impl NodeRecordV3 {
             // External data: data_len is the length, offset is stored separately
             // For V3 minimal, we'll parse external offset if bytes extend beyond metadata
             let external_offset = if bytes.len() > offset {
-                let ext_offset = u64::from_be_bytes(
-                    bytes[offset..offset + 8]
-                        .try_into()
-                        .unwrap_or([0u8; 8]),
-                );
+                let ext_offset =
+                    u64::from_be_bytes(bytes[offset..offset + 8].try_into().unwrap_or([0u8; 8]));
                 Some(ext_offset)
             } else {
                 // External offset not embedded (deferred to page handling)
@@ -529,10 +523,10 @@ mod tests {
             200,
             5000,
             100,
-            0,    // outgoing_cluster_offset
-            5,    // outgoing_edge_count
-            0,    // incoming_cluster_offset
-            3,    // incoming_edge_count
+            0, // outgoing_cluster_offset
+            5, // outgoing_edge_count
+            0, // incoming_cluster_offset
+            3, // incoming_edge_count
         );
 
         assert_eq!(node.id(), 12345);
@@ -545,17 +539,8 @@ mod tests {
     fn test_inline_data_max_size() {
         // Test max inline data
         let max_data = vec![0xFFu8; MAX_INLINE_DATA];
-        let node = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            max_data.clone(),
-            0,
-            0,
-            0,
-            0,
-        );
+        let node =
+            NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, max_data.clone(), 0, 0, 0, 0);
         assert!(node.is_inline());
         assert_eq!(node.data_len(), MAX_INLINE_DATA as u16);
     }
@@ -564,17 +549,7 @@ mod tests {
     #[should_panic(expected = "Inline data exceeds MAX_INLINE_DATA")]
     fn test_inline_data_too_large_panics() {
         let too_large = vec![0xFFu8; MAX_INLINE_DATA + 1];
-        let _ = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            too_large,
-            0,
-            0,
-            0,
-            0,
-        );
+        let _ = NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, too_large, 0, 0, 0, 0);
     }
 
     #[test]
@@ -592,10 +567,7 @@ mod tests {
         );
 
         let serialized = node.serialize().unwrap();
-        assert_eq!(
-            serialized.len(),
-            FIXED_METADATA_SIZE + "Hello, V3!".len()
-        );
+        assert_eq!(serialized.len(), FIXED_METADATA_SIZE + "Hello, V3!".len());
     }
 
     #[test]
@@ -607,10 +579,10 @@ mod tests {
             200,
             5000,
             100,
-            0,    // outgoing_cluster_offset
-            5,    // outgoing_edge_count
-            0,    // incoming_cluster_offset
-            3,    // incoming_edge_count
+            0, // outgoing_cluster_offset
+            5, // outgoing_edge_count
+            0, // incoming_cluster_offset
+            3, // incoming_edge_count
         );
 
         let serialized = node.serialize().unwrap();
@@ -641,9 +613,15 @@ mod tests {
         assert_eq!(restored.name_offset, original.name_offset);
         assert_eq!(restored.data_len(), original.data_len());
         assert_eq!(restored.data_inline, original.data_inline);
-        assert_eq!(restored.outgoing_cluster_offset, original.outgoing_cluster_offset);
+        assert_eq!(
+            restored.outgoing_cluster_offset,
+            original.outgoing_cluster_offset
+        );
         assert_eq!(restored.outgoing_edge_count, original.outgoing_edge_count);
-        assert_eq!(restored.incoming_cluster_offset, original.incoming_cluster_offset);
+        assert_eq!(
+            restored.incoming_cluster_offset,
+            original.incoming_cluster_offset
+        );
         assert_eq!(restored.incoming_edge_count, original.incoming_edge_count);
     }
 
@@ -656,10 +634,10 @@ mod tests {
             20,
             7777,
             200,
-            0,    // outgoing_cluster_offset
-            15,    // outgoing_edge_count
-            0,    // incoming_cluster_offset
-            25,    // incoming_edge_count
+            0,  // outgoing_cluster_offset
+            15, // outgoing_edge_count
+            0,  // incoming_cluster_offset
+            25, // incoming_edge_count
         );
 
         let serialized = original.serialize().unwrap();
@@ -679,17 +657,7 @@ mod tests {
         let test_ids = vec![0, 1, -1, 1000000, -1000000, i64::MAX, i64::MIN];
 
         for id in test_ids {
-            let node = NodeRecordV3::new_inline(
-                id,
-                NodeFlags::empty(),
-                0,
-                0,
-                vec![],
-                0,
-                0,
-                0,
-                0,
-            );
+            let node = NodeRecordV3::new_inline(id, NodeFlags::empty(), 0, 0, vec![], 0, 0, 0, 0);
 
             let serialized = node.serialize().unwrap();
             let restored = NodeRecordV3::deserialize(&serialized).unwrap();
@@ -709,47 +677,16 @@ mod tests {
         let small_data = vec![1u8; 10];
         let max_inline = vec![2u8; MAX_INLINE_DATA];
 
-        let empty = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            empty_data,
-            0,
-            0,
-            0,
-            0,
-        );
+        let empty = NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, empty_data, 0, 0, 0, 0);
         assert_eq!(empty.serialized_size(), FIXED_METADATA_SIZE);
 
-        let small = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            small_data.clone(),
-            0,
-            0,
-            0,
-            0,
-        );
+        let small =
+            NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, small_data.clone(), 0, 0, 0, 0);
         assert_eq!(small.serialized_size(), FIXED_METADATA_SIZE + 10);
 
-        let max = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            max_inline.clone(),
-            0,
-            0,
-            0,
-            0,
-        );
-        assert_eq!(
-            max.serialized_size(),
-            FIXED_METADATA_SIZE + MAX_INLINE_DATA
-        );
+        let max =
+            NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, max_inline.clone(), 0, 0, 0, 0);
+        assert_eq!(max.serialized_size(), FIXED_METADATA_SIZE + MAX_INLINE_DATA);
     }
 
     #[test]
@@ -769,15 +706,9 @@ mod tests {
         let serialized = node.serialize().unwrap();
         let restored = NodeRecordV3::deserialize(&serialized).unwrap();
 
-        assert_eq!(
-            restored.outgoing_cluster_offset,
-            0x123456789ABCDEF0
-        );
+        assert_eq!(restored.outgoing_cluster_offset, 0x123456789ABCDEF0);
         assert_eq!(restored.outgoing_edge_count, 42);
-        assert_eq!(
-            restored.incoming_cluster_offset,
-            0xFEDCBA9876543210
-        );
+        assert_eq!(restored.incoming_cluster_offset, 0xFEDCBA9876543210);
         assert_eq!(restored.incoming_edge_count, 99);
     }
 
@@ -791,17 +722,7 @@ mod tests {
     #[test]
     fn test_flags_encoding() {
         let flags = NodeFlags::DELETED;
-        let node = NodeRecordV3::new_inline(
-            1,
-            flags,
-            0,
-            0,
-            vec![],
-            0,
-            0,
-            0,
-            0,
-        );
+        let node = NodeRecordV3::new_inline(1, flags, 0, 0, vec![], 0, 0, 0, 0);
 
         let serialized = node.serialize().unwrap();
         let restored = NodeRecordV3::deserialize(&serialized).unwrap();

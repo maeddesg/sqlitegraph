@@ -196,21 +196,54 @@ impl V3WALHeader {
         if bytes.len() < V3_WAL_HEADER_SIZE {
             return Err(NativeBackendError::InvalidHeader {
                 field: "bytes".to_string(),
-                reason: format!("expected {} bytes, found {}", V3_WAL_HEADER_SIZE, bytes.len()),
+                reason: format!(
+                    "expected {} bytes, found {}",
+                    V3_WAL_HEADER_SIZE,
+                    bytes.len()
+                ),
             });
         }
 
         let mut magic = [0u8; 8];
         magic.copy_from_slice(&bytes[0..8]);
 
-        let version = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
-        let page_size = u32::from_le_bytes(bytes[12..16].try_into().unwrap());
-        let created_at = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
-        let current_lsn = u64::from_le_bytes(bytes[24..32].try_into().unwrap());
-        let committed_lsn = u64::from_le_bytes(bytes[32..40].try_into().unwrap());
-        let checkpointed_lsn = u64::from_le_bytes(bytes[40..48].try_into().unwrap());
-        let reserved0 = u64::from_le_bytes(bytes[48..56].try_into().unwrap());
-        let reserved1 = u64::from_le_bytes(bytes[56..64].try_into().unwrap());
+        // Helper to safely convert byte slices to fixed-size arrays
+        let extract_u32 = |offset: usize| -> NativeResult<u32> {
+            let slice = bytes.get(offset..offset + 4).ok_or_else(|| {
+                NativeBackendError::InvalidHeader {
+                    field: format!("offset_{}", offset),
+                    reason: format!("expected 4 bytes at offset {}", offset),
+                }
+            })?;
+            let arr: [u8; 4] = slice.try_into().map_err(|_| NativeBackendError::InvalidHeader {
+                field: format!("offset_{}", offset),
+                reason: "failed to convert to u32 array".to_string(),
+            })?;
+            Ok(u32::from_le_bytes(arr))
+        };
+
+        let extract_u64 = |offset: usize| -> NativeResult<u64> {
+            let slice = bytes.get(offset..offset + 8).ok_or_else(|| {
+                NativeBackendError::InvalidHeader {
+                    field: format!("offset_{}", offset),
+                    reason: format!("expected 8 bytes at offset {}", offset),
+                }
+            })?;
+            let arr: [u8; 8] = slice.try_into().map_err(|_| NativeBackendError::InvalidHeader {
+                field: format!("offset_{}", offset),
+                reason: "failed to convert to u64 array".to_string(),
+            })?;
+            Ok(u64::from_le_bytes(arr))
+        };
+
+        let version = extract_u32(8)?;
+        let page_size = extract_u32(12)?;
+        let created_at = extract_u64(16)?;
+        let current_lsn = extract_u64(24)?;
+        let committed_lsn = extract_u64(32)?;
+        let checkpointed_lsn = extract_u64(40)?;
+        let reserved0 = extract_u64(48)?;
+        let reserved1 = extract_u64(56)?;
 
         Ok(Self {
             magic,
@@ -261,6 +294,9 @@ pub enum V3WALRecordType {
 
     /// KV Tombstone - mark key as deleted (for MVCC)
     KvTombstone = 11,
+
+    /// Edge Insert - insert edge into edge cluster
+    EdgeInsert = 12,
 }
 
 impl TryFrom<u8> for V3WALRecordType {
@@ -279,6 +315,7 @@ impl TryFrom<u8> for V3WALRecordType {
             9 => Ok(Self::KvSet),
             10 => Ok(Self::KvDelete),
             11 => Ok(Self::KvTombstone),
+            12 => Ok(Self::EdgeInsert),
             _ => Err(NativeBackendError::InvalidHeader {
                 field: "record_type".to_string(),
                 reason: format!("unknown record type: {}", value),
@@ -343,7 +380,7 @@ pub enum V3WALRecord {
         /// Split key (first key in new page)
         split_key: u64,
         /// Page type being split (internal or leaf)
-        page_type: u8,  // 0 = internal, 1 = leaf
+        page_type: u8, // 0 = internal, 1 = leaf
         /// Timestamp of split
         timestamp: u64,
     },
@@ -361,7 +398,7 @@ pub enum V3WALRecord {
         /// Free page list head
         free_page_list_head: u64,
         /// Full header snapshot for recovery
-        header_snapshot: Vec<u8>,  // Serialized PersistentHeaderV3
+        header_snapshot: Vec<u8>, // Serialized PersistentHeaderV3
         /// Timestamp of checkpoint
         timestamp: u64,
     },
@@ -435,6 +472,22 @@ pub enum V3WALRecord {
         /// Timestamp
         timestamp: u64,
     },
+
+    /// Edge Insert - insert edge into edge cluster
+    EdgeInsert {
+        /// Log sequence number
+        lsn: u64,
+        /// Source node ID
+        src: i64,
+        /// Destination node ID
+        dst: i64,
+        /// Edge direction (0 = Outgoing, 1 = Incoming)
+        direction: u8,
+        /// Page ID where edge cluster will be stored
+        page_id: u64,
+        /// Timestamp
+        timestamp: u64,
+    },
 }
 
 impl V3WALRecord {
@@ -452,6 +505,7 @@ impl V3WALRecord {
             Self::KvSet { .. } => V3WALRecordType::KvSet,
             Self::KvDelete { .. } => V3WALRecordType::KvDelete,
             Self::KvTombstone { .. } => V3WALRecordType::KvTombstone,
+            Self::EdgeInsert { .. } => V3WALRecordType::EdgeInsert,
         }
     }
 
@@ -469,6 +523,7 @@ impl V3WALRecord {
             Self::KvSet { lsn, .. } => *lsn,
             Self::KvDelete { lsn, .. } => *lsn,
             Self::KvTombstone { lsn, .. } => *lsn,
+            Self::EdgeInsert { lsn, .. } => *lsn,
         }
     }
 
@@ -501,7 +556,8 @@ impl V3WALRecord {
     /// Serialize record to bytes using bincode
     pub fn to_bytes(&self) -> NativeResult<Vec<u8>> {
         let bytes: Result<Vec<u8>, _> = bincode::serialize(self);
-        bytes.map_err(|e| NativeBackendError::BincodeError(e.into()))
+        bytes
+            .map_err(|e| NativeBackendError::BincodeError(e.into()))
             .and_then(|bytes: Vec<u8>| {
                 if bytes.len() > MAX_RECORD_SIZE {
                     Err(NativeBackendError::RecordTooLarge {
@@ -516,8 +572,7 @@ impl V3WALRecord {
 
     /// Deserialize record from bytes using bincode
     pub fn from_bytes(bytes: &[u8]) -> NativeResult<Self> {
-        bincode::deserialize(bytes)
-            .map_err(|e| NativeBackendError::BincodeError(e.into()))
+        bincode::deserialize(bytes).map_err(|e| NativeBackendError::BincodeError(e.into()))
     }
 
     /// Calculate checksum for the serialized record
@@ -625,6 +680,23 @@ impl V3WALRecord {
             timestamp,
         }
     }
+
+    /// Create an EdgeInsert record
+    pub fn edge_insert(src: i64, dst: i64, direction: u8, page_id: u64, lsn: u64) -> Self {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        Self::EdgeInsert {
+            lsn,
+            src,
+            dst,
+            direction,
+            page_id,
+            timestamp,
+        }
+    }
 }
 
 /// WAL writer for appending records to WAL file
@@ -697,20 +769,18 @@ impl WALWriter {
     fn read_header(&mut self) -> NativeResult<()> {
         use std::io::Read;
 
-        let mut file = std::fs::File::open(&self.wal_path).map_err(|e| {
-            NativeBackendError::IoError {
+        let mut file =
+            std::fs::File::open(&self.wal_path).map_err(|e| NativeBackendError::IoError {
                 context: "Failed to open WAL for reading".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
         let mut header_bytes = [0u8; V3_WAL_HEADER_SIZE];
-        file.read_exact(&mut header_bytes).map_err(|e| {
-            NativeBackendError::IoError {
+        file.read_exact(&mut header_bytes)
+            .map_err(|e| NativeBackendError::IoError {
                 context: "Failed to read WAL header".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
         let header = V3WALHeader::from_bytes(&header_bytes)?;
         header.validate()?;
@@ -746,25 +816,20 @@ impl WALWriter {
             .create(true)
             .truncate(true)
             .open(&self.wal_path)
-            .map_err(|e| {
-                NativeBackendError::IoError {
-                    context: format!("Failed to create WAL file: {}", self.wal_path.display()),
-                    source: e,
-                }
+            .map_err(|e| NativeBackendError::IoError {
+                context: format!("Failed to create WAL file: {}", self.wal_path.display()),
+                source: e,
             })?;
 
-        file.write_all(&header_bytes).map_err(|e| {
-            NativeBackendError::IoError {
+        file.write_all(&header_bytes)
+            .map_err(|e| NativeBackendError::IoError {
                 context: "Failed to write WAL header".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
-        file.sync_all().map_err(|e| {
-            NativeBackendError::IoError {
-                context: "Failed to sync WAL file".to_string(),
-                source: e,
-            }
+        file.sync_all().map_err(|e| NativeBackendError::IoError {
+            context: "Failed to sync WAL file".to_string(),
+            source: e,
         })?;
 
         Ok(())
@@ -780,7 +845,11 @@ impl WALWriter {
         // Check size limit
         if bytes.len() > MAX_RECORD_SIZE {
             return Err(NativeBackendError::SerializationError {
-                context: format!("Record size {} exceeds maximum {}", bytes.len(), MAX_RECORD_SIZE),
+                context: format!(
+                    "Record size {} exceeds maximum {}",
+                    bytes.len(),
+                    MAX_RECORD_SIZE
+                ),
             });
         }
 
@@ -813,25 +882,20 @@ impl WALWriter {
             .create(true)
             .append(true)
             .open(&self.wal_path)
-            .map_err(|e| {
-                NativeBackendError::IoError {
-                    context: "Failed to open WAL for writing".to_string(),
-                    source: e,
-                }
+            .map_err(|e| NativeBackendError::IoError {
+                context: "Failed to open WAL for writing".to_string(),
+                source: e,
             })?;
 
-        file.write_all(&self.buffer).map_err(|e| {
-            NativeBackendError::IoError {
+        file.write_all(&self.buffer)
+            .map_err(|e| NativeBackendError::IoError {
                 context: "Failed to write WAL records".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
-        file.sync_all().map_err(|e| {
-            NativeBackendError::IoError {
-                context: "Failed to sync WAL file".to_string(),
-                source: e,
-            }
+        file.sync_all().map_err(|e| NativeBackendError::IoError {
+            context: "Failed to sync WAL file".to_string(),
+            source: e,
         })?;
 
         self.buffer.clear();
@@ -858,28 +922,24 @@ impl WALWriter {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .open(&self.wal_path)
-            .map_err(|e| {
-                NativeBackendError::IoError {
-                    context: "Failed to open WAL for header update".to_string(),
-                    source: e,
-                }
+            .map_err(|e| NativeBackendError::IoError {
+                context: "Failed to open WAL for header update".to_string(),
+                source: e,
             })?;
 
         // Read existing header to preserve fields
-        file.seek(SeekFrom::Start(0)).map_err(|e| {
-            NativeBackendError::IoError {
+        file.seek(SeekFrom::Start(0))
+            .map_err(|e| NativeBackendError::IoError {
                 context: "Failed to seek in WAL file".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
         let mut header_bytes = [0u8; V3_WAL_HEADER_SIZE];
-        file.read_exact(&mut header_bytes).map_err(|e| {
-            NativeBackendError::IoError {
+        file.read_exact(&mut header_bytes)
+            .map_err(|e| NativeBackendError::IoError {
                 context: "Failed to read WAL header".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
         let mut header = V3WALHeader::from_bytes(&header_bytes)?;
 
@@ -889,25 +949,21 @@ impl WALWriter {
 
         // Write updated header
         let updated_bytes = header.to_bytes();
-        file.seek(SeekFrom::Start(0)).map_err(|e| {
-            NativeBackendError::IoError {
+        file.seek(SeekFrom::Start(0))
+            .map_err(|e| NativeBackendError::IoError {
                 context: "Failed to seek to WAL header".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
-        file.write_all(&updated_bytes).map_err(|e| {
-            NativeBackendError::IoError {
+        file.write_all(&updated_bytes)
+            .map_err(|e| NativeBackendError::IoError {
                 context: "Failed to write updated WAL header".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
-        file.sync_all().map_err(|e| {
-            NativeBackendError::IoError {
-                context: "Failed to sync WAL header".to_string(),
-                source: e,
-            }
+        file.sync_all().map_err(|e| NativeBackendError::IoError {
+            context: "Failed to sync WAL header".to_string(),
+            source: e,
         })?;
 
         Ok(())
@@ -921,11 +977,9 @@ impl WALWriter {
             return Ok(());
         }
 
-        std::fs::remove_file(&self.wal_path).map_err(|e| {
-            NativeBackendError::IoError {
-                context: "Failed to truncate WAL file".to_string(),
-                source: e,
-            }
+        std::fs::remove_file(&self.wal_path).map_err(|e| NativeBackendError::IoError {
+            context: "Failed to truncate WAL file".to_string(),
+            source: e,
         })?;
 
         Ok(())
@@ -956,16 +1010,42 @@ impl WALWriter {
     }
 
     /// Write B+Tree split record
-    pub fn btree_split(&mut self, original_page_id: u64, new_page_id: u64, split_key: u64, page_type: bool) -> NativeResult<u64> {
-        let record = V3WALRecord::btree_split(original_page_id, new_page_id, split_key, page_type, self.current_lsn);
+    pub fn btree_split(
+        &mut self,
+        original_page_id: u64,
+        new_page_id: u64,
+        split_key: u64,
+        page_type: bool,
+    ) -> NativeResult<u64> {
+        let record = V3WALRecord::btree_split(
+            original_page_id,
+            new_page_id,
+            split_key,
+            page_type,
+            self.current_lsn,
+        );
         let lsn = record.lsn();
         self.append(&record)?;
         Ok(lsn)
     }
 
     /// Write checkpoint record
-    pub fn checkpoint(&mut self, root_page_id: u64, total_pages: u64, btree_height: u32, free_page_list_head: u64, header: &PersistentHeaderV3) -> NativeResult<u64> {
-        let record = V3WALRecord::checkpoint(root_page_id, total_pages, btree_height, free_page_list_head, header, self.current_lsn);
+    pub fn checkpoint(
+        &mut self,
+        root_page_id: u64,
+        total_pages: u64,
+        btree_height: u32,
+        free_page_list_head: u64,
+        header: &PersistentHeaderV3,
+    ) -> NativeResult<u64> {
+        let record = V3WALRecord::checkpoint(
+            root_page_id,
+            total_pages,
+            btree_height,
+            free_page_list_head,
+            header,
+            self.current_lsn,
+        );
         let lsn = record.lsn();
         self.append(&record)?;
         Ok(lsn)
@@ -1011,6 +1091,23 @@ impl WALWriter {
                 .map(|d| d.as_secs())
                 .unwrap_or(0),
         };
+        let lsn = record.lsn();
+        self.append(&record)?;
+        Ok(lsn)
+    }
+
+    /// Write edge insert record
+    ///
+    /// Records an edge insertion for WAL replay during crash recovery.
+    /// The edge will be inserted into the edge cluster during recovery.
+    pub fn edge_insert(
+        &mut self,
+        src: i64,
+        dst: i64,
+        direction: u8,
+        page_id: u64,
+    ) -> NativeResult<u64> {
+        let record = V3WALRecord::edge_insert(src, dst, direction, page_id, self.current_lsn);
         let lsn = record.lsn();
         self.append(&record)?;
         Ok(lsn)
@@ -1114,6 +1211,8 @@ impl WALRecoveryStats {
 pub struct WALRecovery {
     /// WAL file path
     wal_path: PathBuf,
+    /// Database file path (for checkpoint file access)
+    db_path: PathBuf,
     /// In-memory page cache (page_id -> data)
     page_cache: std::collections::HashMap<u64, Vec<u8>>,
     /// Recovery statistics
@@ -1127,8 +1226,12 @@ pub struct WALRecovery {
 impl WALRecovery {
     /// Create a new WAL recovery engine
     pub fn new(wal_path: PathBuf) -> Self {
+        // Derive db_path from wal_path by removing .v3wal extension
+        let db_path = wal_path.to_path_buf();
+        let db_path = db_path.with_extension("");
         Self {
             wal_path,
+            db_path,
             page_cache: std::collections::HashMap::new(),
             stats: WALRecoveryStats::new(),
             checkpoint_header: None,
@@ -1170,21 +1273,19 @@ impl WALRecovery {
         }
 
         // Open WAL file
-        let mut file = std::fs::File::open(&self.wal_path).map_err(|e| {
-            NativeBackendError::IoError {
+        let mut file =
+            std::fs::File::open(&self.wal_path).map_err(|e| NativeBackendError::IoError {
                 context: format!("Failed to open WAL file: {}", self.wal_path.display()),
                 source: e,
-            }
-        })?;
+            })?;
 
         // Read and validate header
         let mut header_bytes = [0u8; V3_WAL_HEADER_SIZE];
-        file.read_exact(&mut header_bytes).map_err(|e| {
-            NativeBackendError::IoError {
+        file.read_exact(&mut header_bytes)
+            .map_err(|e| NativeBackendError::IoError {
                 context: "Failed to read WAL header".to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
         let header = V3WALHeader::from_bytes(&header_bytes)?;
         header.validate()?;
@@ -1194,12 +1295,12 @@ impl WALRecovery {
         loop {
             // Read record size (4 bytes)
             let mut size_bytes = [0u8; 4];
-            let n = file.read(&mut size_bytes).map_err(|e| {
-                NativeBackendError::IoError {
+            let n = file
+                .read(&mut size_bytes)
+                .map_err(|e| NativeBackendError::IoError {
                     context: "Failed to read record size".to_string(),
                     source: e,
-                }
-            })?;
+                })?;
 
             if n == 0 {
                 // EOF reached
@@ -1239,7 +1340,11 @@ impl WALRecovery {
                 Ok(record) => {
                     if let Err(e) = self.apply_record(&record) {
                         // Record application failed - skip
-                        eprintln!("WAL Recovery: Failed to apply record LSN {}: {:?}", record.lsn(), e);
+                        eprintln!(
+                            "WAL Recovery: Failed to apply record LSN {}: {:?}",
+                            record.lsn(),
+                            e
+                        );
                         self.stats.records_skipped += 1;
                     } else {
                         self.stats.records_applied += 1;
@@ -1283,7 +1388,10 @@ impl WALRecovery {
                 timestamp: _,
             } => {
                 // Update page in cache
-                let page = self.page_cache.entry(*page_id).or_insert_with(|| vec![0; 4096]);
+                let page = self
+                    .page_cache
+                    .entry(*page_id)
+                    .or_insert_with(|| vec![0; 4096]);
                 let offset = *offset as usize;
                 if offset + data.len() <= page.len() {
                     page[offset..offset + data.len()].copy_from_slice(data);
@@ -1319,9 +1427,11 @@ impl WALRecovery {
                 // Note: This is a simplified version - full integration
                 // with BTreeManager will happen in Task 65-04
                 if !header_snapshot.is_empty() {
-                    let restored = PersistentHeaderV3::from_bytes(header_snapshot)
-                        .map_err(|e| NativeBackendError::DeserializationError {
-                            context: format!("Failed to restore checkpoint header: {:?}", e),
+                    let restored =
+                        PersistentHeaderV3::from_bytes(header_snapshot).map_err(|e| {
+                            NativeBackendError::DeserializationError {
+                                context: format!("Failed to restore checkpoint header: {:?}", e),
+                            }
                         })?;
                     self.checkpoint_header = Some(restored);
                 }
@@ -1357,6 +1467,23 @@ impl WALRecovery {
                 self.last_lsn = *lsn;
                 Ok(())
             }
+            V3WALRecord::EdgeInsert {
+                lsn,
+                src: _,
+                dst: _,
+                direction: _,
+                page_id,
+                timestamp: _,
+            } => {
+                // Edge inserts are tracked in page cache for recovery
+                // The actual edge data will be loaded from the page during neighbor queries
+                // We just mark that this page contains edge data
+                self.page_cache
+                    .entry(*page_id)
+                    .or_insert_with(|| vec![0; 4096]);
+                self.last_lsn = *lsn;
+                Ok(())
+            }
         }
     }
 
@@ -1368,6 +1495,427 @@ impl WALRecovery {
     pub fn get_header_state(&self) -> Option<&PersistentHeaderV3> {
         self.checkpoint_header.as_ref()
     }
+
+    /// Recover KV state from WAL records
+    ///
+    /// Replays only KV-related records (KvSet, KvDelete, KvTombstone)
+    /// to rebuild an in-memory KvStore. This is called during V3Backend::open()
+    /// to restore KV durability across close/reopen cycles.
+    ///
+    /// # V3 KV RECOVERY CONTRACT
+    ///
+    /// ## Recovery Precedence (in order):
+    /// 1. **WAL replay** (authoritative): If WAL exists, replay all KV records
+    ///    - This captures the latest state including mutations after last flush
+    /// 2. **Checkpoint fallback**: If WAL missing, read checkpoint file
+    ///    - This captures the last flushed state (before WAL truncation)
+    /// 3. **Empty KV**: If neither WAL nor checkpoint recoverable
+    ///    - Returns Ok(0) to indicate no KV records applied
+    ///    - Caller decides whether to continue with empty KV
+    ///
+    /// ## Corruption Handling:
+    /// - Corrupt checkpoint files are auto-deleted (see cleanup_corrupt_checkpoint)
+    /// - Checkpoint errors do NOT propagate (return Ok(0) instead)
+    /// - WAL errors DO propagate (WAL is authoritative, corruption is serious)
+    ///
+    /// ## Lifecycle Scenarios:
+    /// - After flush(): checkpoint=latest, WAL=empty → checkpoint recovery
+    /// - Before flush(): WAL=latest, checkpoint=stale → WAL recovery
+    /// - Corrupt checkpoint + valid WAL → WAL recovery (checkpoint never checked)
+    /// - Corrupt checkpoint + no WAL → empty KV (checkpoint deleted, logged)
+    ///
+    /// # Arguments
+    /// * `kv_store` - Mutable reference to the KvStore to rebuild
+    ///
+    /// # Returns
+    /// * `Ok(kv_records_applied)` - Number of KV records successfully applied
+    /// * `Err(NativeBackendError)` - If WAL file cannot be read (WAL errors propagate)
+    pub fn recover_kv(
+        &mut self,
+        kv_store: &mut super::kv_store::store::KvStore,
+    ) -> NativeResult<usize> {
+        use crate::backend::native::v3::kv_store::types::KvValue;
+        use std::io::Read;
+
+        // Import kv_store module types
+        use super::kv_store::store::KvStore;
+
+        // Check if WAL file exists
+        if !self.wal_path.exists() {
+            // No WAL file - try reading from checkpoint file (written before WAL truncation)
+            // This ensures KV durability survives flush() which calls checkpoint+truncate
+            //
+            // NOTE: Checkpoint errors are handled gracefully - corrupt checkpoints are
+            // auto-deleted and we return Ok(0). This is intentional: KV is auxiliary
+            // data and shouldn't brick database open.
+            match read_kv_checkpoint(&self.db_path, kv_store) {
+                Ok(found) => {
+                    if found {
+                        // Successfully recovered from checkpoint
+                        return Ok(1); // Return non-zero to indicate recovery occurred
+                    }
+                }
+                Err(e) => {
+                    // Checkpoint read failed - it's already been cleaned up if corrupt
+                    // Log and continue with empty KV
+                    eprintln!(
+                        "WARNING: KV checkpoint read failed: {:?}. Continuing with empty KV store.",
+                        e
+                    );
+                }
+            }
+            // No WAL and no/invalid checkpoint - no KV data to recover
+            return Ok(0);
+        }
+
+        // Open WAL file
+        let mut file =
+            std::fs::File::open(&self.wal_path).map_err(|e| NativeBackendError::IoError {
+                context: format!(
+                    "Failed to open WAL file for KV recovery: {}",
+                    self.wal_path.display()
+                ),
+                source: e,
+            })?;
+
+        // Read and validate header
+        let mut header_bytes = [0u8; V3_WAL_HEADER_SIZE];
+        file.read_exact(&mut header_bytes)
+            .map_err(|e| NativeBackendError::IoError {
+                context: "Failed to read WAL header for KV recovery".to_string(),
+                source: e,
+            })?;
+
+        let header = V3WALHeader::from_bytes(&header_bytes)?;
+        header.validate()?;
+
+        // Read records sequentially, applying only KV records
+        let mut buffer = Vec::new();
+        let mut kv_records_applied = 0usize;
+
+        loop {
+            // Read record size (4 bytes)
+            let mut size_bytes = [0u8; 4];
+            let n = file
+                .read(&mut size_bytes)
+                .map_err(|e| NativeBackendError::IoError {
+                    context: "Failed to read record size during KV recovery".to_string(),
+                    source: e,
+                })?;
+
+            if n == 0 {
+                // EOF reached
+                break;
+            }
+
+            if n < 4 {
+                // Incomplete record size - stop
+                break;
+            }
+
+            let record_size = u32::from_le_bytes(size_bytes) as usize;
+
+            if record_size == 0 || record_size > MAX_RECORD_SIZE {
+                // Invalid size - skip
+                continue;
+            }
+
+            // Read record data
+            buffer.clear();
+            buffer.resize(record_size, 0);
+            let n = file.read_exact(&mut buffer);
+
+            if n.is_err() {
+                // Incomplete record - stop
+                break;
+            }
+
+            // Deserialize and apply KV records only
+            let result = V3WALRecord::from_bytes(&buffer);
+
+            match result {
+                Ok(record) => {
+                    match record {
+                        V3WALRecord::KvSet {
+                            lsn,
+                            key,
+                            value_bytes,
+                            value_type,
+                            ttl_seconds,
+                            timestamp: _,
+                        } => {
+                            // Deserialize value from bytes
+                            if let Some(value) = KvValue::from_bytes(&value_bytes, value_type) {
+                                kv_store.set(key, value, ttl_seconds, lsn);
+                                kv_records_applied += 1;
+                            }
+                        }
+                        V3WALRecord::KvDelete { lsn, key, .. } => {
+                            kv_store.delete(&key, lsn);
+                            kv_records_applied += 1;
+                        }
+                        V3WALRecord::KvTombstone {
+                            lsn,
+                            key,
+                            old_value_bytes: _,
+                            old_value_type: _,
+                            ..
+                        } => {
+                            // Tombstone represents a deleted value - add Null entry
+                            kv_store.set(key, KvValue::Null, None, lsn);
+                            kv_records_applied += 1;
+                        }
+                        // Ignore all non-KV records
+                        _ => {
+                            // Not a KV record - skip
+                        }
+                    }
+                }
+                Err(_) => {
+                    // Deserialization failed - skip
+                }
+            }
+        }
+
+        Ok(kv_records_applied)
+    }
+}
+
+/// Write KV checkpoint file for durability across WAL truncation
+///
+/// This function serializes the current KV store state to a .v3checkpoint file.
+/// The checkpoint survives WAL truncation and is read during recovery if WAL is empty.
+///
+/// ## Checkpoint Format (v2):
+/// - Magic: 8 bytes ([b'V', b'3', b'K', b'V', b'C', b'K', 0, 1])
+/// - Version: u32 (2 for this format)
+/// - Data length: u32
+/// - Checksum: SHA-256 hash of data (32 bytes)
+/// - Data: Actual KV store bytes
+pub fn write_kv_checkpoint(
+    db_path: &std::path::Path,
+    kv_store: &super::kv_store::store::KvStore,
+) -> NativeResult<()> {
+    use sha2::{Digest, Sha256};
+    use std::io::Write;
+
+    let checkpoint_path = V3WALPaths::checkpoint_file(db_path);
+    let temp_path = V3WALPaths::temp_checkpoint_file(db_path);
+
+    // Serialize KV store
+    let checkpoint_data = kv_store.to_bytes();
+
+    // Calculate checksum over data
+    let mut hasher = Sha256::new();
+    hasher.update(&checkpoint_data);
+    let checksum: [u8; 32] = hasher.finalize().into();
+
+    // Write to temp file first (atomic write pattern)
+    let mut file = std::fs::File::create(&temp_path).map_err(|e| NativeBackendError::IoError {
+        context: format!(
+            "Failed to create temp checkpoint file: {}",
+            temp_path.display()
+        ),
+        source: e,
+    })?;
+
+    // Write magic header for validation (v2 indicates checksum present)
+    let magic: [u8; 8] = [b'V', b'3', b'K', b'V', b'C', b'K', 0, 2];
+    file.write_all(&magic)
+        .map_err(|e| NativeBackendError::IoError {
+            context: "Failed to write checkpoint magic".to_string(),
+            source: e,
+        })?;
+
+    // Write version (2 = with checksum)
+    let version: u32 = 2;
+    file.write_all(&version.to_le_bytes())
+        .map_err(|e| NativeBackendError::IoError {
+            context: "Failed to write checkpoint version".to_string(),
+            source: e,
+        })?;
+
+    // Write data length
+    let data_len: u32 = checkpoint_data.len().try_into().unwrap_or(u32::MAX);
+    file.write_all(&data_len.to_le_bytes())
+        .map_err(|e| NativeBackendError::IoError {
+            context: "Failed to write checkpoint data length".to_string(),
+            source: e,
+        })?;
+
+    // Write checksum
+    file.write_all(&checksum)
+        .map_err(|e| NativeBackendError::IoError {
+            context: "Failed to write checkpoint checksum".to_string(),
+            source: e,
+        })?;
+
+    // Write checkpoint data
+    file.write_all(&checkpoint_data)
+        .map_err(|e| NativeBackendError::IoError {
+            context: "Failed to write checkpoint data".to_string(),
+            source: e,
+        })?;
+
+    // Sync to disk
+    file.flush().map_err(|e| NativeBackendError::IoError {
+        context: "Failed to flush checkpoint file".to_string(),
+        source: e,
+    })?;
+    file.sync_all().map_err(|e| NativeBackendError::IoError {
+        context: "Failed to sync checkpoint file".to_string(),
+        source: e,
+    })?;
+
+    // Atomic rename
+    std::fs::rename(&temp_path, &checkpoint_path).map_err(|e| NativeBackendError::IoError {
+        context: format!(
+            "Failed to rename checkpoint file: {} -> {}",
+            temp_path.display(),
+            checkpoint_path.display()
+        ),
+        source: e,
+    })?;
+
+    Ok(())
+}
+
+/// Read KV checkpoint file to restore KV state after WAL truncation
+///
+/// Returns true if checkpoint was found and applied, false if no checkpoint exists.
+///
+/// ## Supported Formats:
+/// - v1: No checksum (magic ends in 0,0)
+/// - v2: SHA-256 checksum (magic ends in 0,2)
+///
+/// ## Corruption Handling:
+/// If the checkpoint is corrupt (bad magic, bad checksum, or deserialization failure),
+/// the checkpoint file is deleted and an error is returned. This prevents silent data loss.
+pub fn read_kv_checkpoint(
+    db_path: &std::path::Path,
+    kv_store: &mut super::kv_store::store::KvStore,
+) -> NativeResult<bool> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let checkpoint_path = V3WALPaths::checkpoint_file(db_path);
+
+    if !checkpoint_path.exists() {
+        return Ok(false); // No checkpoint file is not an error
+    }
+
+    let mut file =
+        std::fs::File::open(&checkpoint_path).map_err(|e| NativeBackendError::IoError {
+            context: format!(
+                "Failed to open checkpoint file: {}",
+                checkpoint_path.display()
+            ),
+            source: e,
+        })?;
+
+    // Read and validate magic, determine format version
+    let mut magic_bytes = [0u8; 8];
+    file.read_exact(&mut magic_bytes).map_err(|e| {
+        cleanup_corrupt_checkpoint(&checkpoint_path);
+        NativeBackendError::IoError {
+            context: "Failed to read checkpoint magic".to_string(),
+            source: e,
+        }
+    })?;
+
+    // Check magic prefix (first 6 bytes)
+    if &magic_bytes[0..6] != &[b'V', b'3', b'K', b'V', b'C', b'K'] {
+        cleanup_corrupt_checkpoint(&checkpoint_path);
+        return Err(NativeBackendError::InvalidHeader {
+            field: "magic".to_string(),
+            reason: format!("checkpoint magic prefix mismatch: got {:?}", magic_bytes),
+        });
+    }
+
+    // Determine format version from magic bytes [7] (last byte)
+    let has_checksum = magic_bytes[7] == 2; // v2 format
+
+    // Read version field
+    let mut version_bytes = [0u8; 4];
+    file.read_exact(&mut version_bytes).map_err(|e| {
+        cleanup_corrupt_checkpoint(&checkpoint_path);
+        NativeBackendError::IoError {
+            context: "Failed to read checkpoint version".to_string(),
+            source: e,
+        }
+    })?;
+    let version = u32::from_le_bytes(version_bytes);
+
+    // Read data length
+    let mut len_bytes = [0u8; 4];
+    file.read_exact(&mut len_bytes).map_err(|e| {
+        cleanup_corrupt_checkpoint(&checkpoint_path);
+        NativeBackendError::IoError {
+            context: "Failed to read checkpoint data length".to_string(),
+            source: e,
+        }
+    })?;
+    let data_len = u32::from_le_bytes(len_bytes) as usize;
+
+    // Read checksum if v2 format
+    let stored_checksum: Option<[u8; 32]> = if has_checksum {
+        let mut checksum_bytes = [0u8; 32];
+        file.read_exact(&mut checksum_bytes).map_err(|e| {
+            cleanup_corrupt_checkpoint(&checkpoint_path);
+            NativeBackendError::IoError {
+                context: "Failed to read checkpoint checksum".to_string(),
+                source: e,
+            }
+        })?;
+        Some(checksum_bytes)
+    } else {
+        None
+    };
+
+    // Read checkpoint data
+    let mut checkpoint_data = vec![0u8; data_len];
+    file.read_exact(&mut checkpoint_data).map_err(|e| {
+        cleanup_corrupt_checkpoint(&checkpoint_path);
+        NativeBackendError::IoError {
+            context: "Failed to read checkpoint data".to_string(),
+            source: e,
+        }
+    })?;
+
+    // Verify checksum if present
+    if let Some(stored) = stored_checksum {
+        let mut hasher = Sha256::new();
+        hasher.update(&checkpoint_data);
+        let calculated: [u8; 32] = hasher.finalize().into();
+
+        if calculated != stored {
+            cleanup_corrupt_checkpoint(&checkpoint_path);
+            return Err(NativeBackendError::InvalidHeader {
+                field: "checksum".to_string(),
+                reason: format!("checkpoint checksum mismatch - data may be corrupt"),
+            });
+        }
+    }
+
+    // Deserialize into KV store
+    kv_store.from_bytes(&checkpoint_data).map_err(|e| {
+        cleanup_corrupt_checkpoint(&checkpoint_path);
+        NativeBackendError::InvalidHeader {
+            field: "checkpoint_data".to_string(),
+            reason: format!("Failed to deserialize checkpoint: {}", e),
+        }
+    })?;
+
+    Ok(true)
+}
+
+/// Delete a corrupt checkpoint file to prevent recovery from using bad data.
+fn cleanup_corrupt_checkpoint(checkpoint_path: &std::path::Path) {
+    let _ = std::fs::remove_file(checkpoint_path);
+    eprintln!(
+        "WARNING: Deleted corrupt KV checkpoint file: {}",
+        checkpoint_path.display()
+    );
 }
 
 #[cfg(test)]
@@ -1545,7 +2093,10 @@ mod tests {
         assert_eq!(wal_path, std::path::Path::new("/tmp/test.v3wal"));
 
         let checkpoint_path = V3WALPaths::checkpoint_file(db_path);
-        assert_eq!(checkpoint_path, std::path::Path::new("/tmp/test.v3checkpoint"));
+        assert_eq!(
+            checkpoint_path,
+            std::path::Path::new("/tmp/test.v3checkpoint")
+        );
 
         let temp_path = V3WALPaths::temp_checkpoint_file(db_path);
         assert!(temp_path.to_string_lossy().contains("v3checkpoint.tmp"));

@@ -3,12 +3,9 @@
 //! This module provides core I/O operations including byte-level reading/writing,
 //! buffer management, and file size operations for GraphFile instances.
 
-use crate::backend::native::{
-    graph_file::buffers::WriteBuffer,
-    types::NativeResult,
-};
 #[cfg(feature = "v2_experimental")]
 use crate::backend::native::NativeBackendError;
+use crate::backend::native::{graph_file::buffers::WriteBuffer, types::NativeResult};
 
 #[cfg(feature = "v2_experimental")]
 use memmap2::{MmapMut, MmapOptions};

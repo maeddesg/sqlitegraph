@@ -41,9 +41,8 @@ fn test_recovery_clean_shutdown_no_replay() -> NativeResult<()> {
     let manager = V2WALManager::create(config)?;
 
     // Write and commit a transaction cleanly
-    let tx_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
-    )?;
+    let tx_id = manager
+        .begin_transaction(sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -95,9 +94,8 @@ fn test_recovery_dirty_wal_replay() -> NativeResult<()> {
     let manager = V2WALManager::create(config)?;
 
     // Write transaction but DO NOT commit (simulates crash)
-    let tx_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
-    )?;
+    let tx_id = manager
+        .begin_transaction(sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {
@@ -149,9 +147,8 @@ fn test_recovery_partial_checkpoint_resume() -> NativeResult<()> {
     let manager = V2WALManager::create(config)?;
 
     // Write and commit transactions
-    let tx1_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
-    )?;
+    let tx1_id = manager
+        .begin_transaction(sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx1_id,
         V2WALRecord::NodeInsert {
@@ -163,9 +160,8 @@ fn test_recovery_partial_checkpoint_resume() -> NativeResult<()> {
     manager.commit_transaction(tx1_id)?;
 
     // Write second transaction but don't checkpoint
-    let tx2_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
-    )?;
+    let tx2_id = manager
+        .begin_transaction(sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx2_id,
         V2WALRecord::NodeInsert {
@@ -222,9 +218,8 @@ fn test_recovery_uncommitted_transaction_rollback() -> NativeResult<()> {
     let manager = V2WALManager::create(config)?;
 
     // Begin transaction and write records but ROLLBACK
-    let tx_id = manager.begin_transaction(
-        sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted,
-    )?;
+    let tx_id = manager
+        .begin_transaction(sqlitegraph::backend::native::v2::wal::IsolationLevel::ReadCommitted)?;
     manager.write_transaction_record(
         tx_id,
         V2WALRecord::NodeInsert {

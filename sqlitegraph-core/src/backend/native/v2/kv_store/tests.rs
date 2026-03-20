@@ -1,6 +1,6 @@
 //! Unit tests for KV store operations
 
-use super::{KvStore, KvValue, KvStoreError};
+use super::{KvStore, KvStoreError, KvValue};
 
 #[test]
 fn test_new_store() {

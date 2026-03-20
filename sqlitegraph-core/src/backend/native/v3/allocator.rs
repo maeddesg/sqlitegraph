@@ -18,9 +18,9 @@
 
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
-use crate::backend::native::v3::constants::{
-    DEFAULT_PAGE_SIZE, V3_HEADER_SIZE,
-};
+use crate::backend::native::v3::constants::{DEFAULT_PAGE_SIZE, V3_HEADER_SIZE};
+#[cfg(feature = "v3-forensics")]
+use crate::backend::native::v3::forensics::FORENSIC_COUNTERS;
 use crate::backend::native::v3::header::PersistentHeaderV3;
 
 /// Page size in bytes (4KB default)
@@ -65,27 +65,31 @@ impl PageAllocator {
     ///
     /// # Returns
     ///
-    /// Initialized PageAllocator with bitmap sized to total_pages
+    /// Initialized PageAllocator with sparse bitmap for O(1) initialization
+    ///
+    /// ## Optimization
+    ///
+    /// The bitmap is SPARSE: only pages 0 and 1 (reserved) are pre-initialized.
+    /// Pages 2+ are "implicitly free" until actually allocated.
+    /// This eliminates the O(N) bitmap initialization on open.
+    ///
+    /// See `get_page_state()` for how pages beyond bitmap.len() are handled.
     pub fn new(header: &PersistentHeaderV3) -> Self {
-        let total_pages = header.total_pages as usize;
-        let mut bitmap = Vec::with_capacity(total_pages.max(INITIAL_BITMAP_PAGES));
+        // OPTIMIZATION: Sparse bitmap initialization
+        // Only allocate bitmap entries for pages 0 and 1 (reserved pages).
+        // Pages 2+ are implicitly free until allocated (handled by get_page_state).
+        // This eliminates O(N) startup cost for large databases.
+        let mut bitmap = Vec::with_capacity(INITIAL_BITMAP_PAGES);
 
-        // Initialize bitmap: pages 0 and 1 are reserved (header and first data page)
-        // Page 0: Header (112 bytes, rest unused)
-        // Page 1: First data page (node index root)
-        bitmap.resize(total_pages.max(2), true); // true = allocated/reserved
-        if total_pages >= 1 {
-            bitmap[0] = true; // Header page always allocated
-        }
-        if total_pages >= 2 {
-            bitmap[1] = true; // First data page initially allocated
-        }
+        // Page 0: Header page (always allocated/reserved)
+        bitmap.push(true);
 
-        // Remaining pages based on free list (reverse engineering from free_list_head)
-        // For now, all pages beyond 1 are considered free unless on free list
-        for page_id in 2..total_pages {
-            bitmap[page_id as usize] = false; // Initially mark as free
-        }
+        // Page 1: First data page (allocated during database creation)
+        bitmap.push(true);
+
+        // Pages 2+ are NOT pre-initialized.
+        // They are implicitly free until actually allocated.
+        // The allocate() method will extend the bitmap as needed.
 
         Self {
             bitmap,
@@ -107,6 +111,11 @@ impl PageAllocator {
     ///
     /// Allocated page_id
     pub fn allocate(&mut self) -> NativeResult<u64> {
+        #[cfg(feature = "v3-forensics")]
+        FORENSIC_COUNTERS
+            .page_allocate_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         // Strategy 1: Try to reuse from free list
         if self.free_list_head != 0 {
             let page_id = self.free_list_head;
@@ -427,15 +436,25 @@ mod tests {
         let (allocated, free, total) = allocator.stats();
         // With total_pages=0, allocator still reserves pages 0 (header) and 1 (data)
         // in the bitmap for immediate use
-        assert_eq!(total, 0, "New allocator should have 0 total pages from header");
-        assert_eq!(allocated, 2, "Pages 0 (header) and 1 (data) should be reserved");
+        assert_eq!(
+            total, 0,
+            "New allocator should have 0 total pages from header"
+        );
+        assert_eq!(
+            allocated, 2,
+            "Pages 0 (header) and 1 (data) should be reserved"
+        );
         assert_eq!(free, 0, "Should have 0 free pages initially (all reserved)");
     }
 
     #[test]
     fn test_page_offset_calculation() {
         // Header page
-        assert_eq!(PageAllocator::page_offset(0).unwrap(), 0, "Page 0 should be at offset 0");
+        assert_eq!(
+            PageAllocator::page_offset(0).unwrap(),
+            0,
+            "Page 0 should be at offset 0"
+        );
 
         // First data page
         let first_data = V3_HEADER_SIZE;
@@ -462,7 +481,10 @@ mod tests {
         // Pages 0 and 1 are reserved (header + first data page)
         // First allocation should return page 2
         let page1 = allocator.allocate().unwrap();
-        assert_eq!(page1, 2, "First allocation should be page 2 (pages 0,1 reserved)");
+        assert_eq!(
+            page1, 2,
+            "First allocation should be page 2 (pages 0,1 reserved)"
+        );
 
         let state1 = allocator.get_page_state(page1).unwrap();
         assert_eq!(state1, PageState::Allocated);
@@ -481,10 +503,10 @@ mod tests {
         // First allocation returns page 2
         let page1 = allocator.allocate().unwrap();
         assert_eq!(page1, 2, "First allocation returns page 2");
-        
+
         let page2 = allocator.allocate().unwrap();
         assert_eq!(page2, 3, "Second allocation returns page 3");
-        
+
         // Deallocate page 3
         allocator.deallocate(page2).unwrap();
 
@@ -502,10 +524,10 @@ mod tests {
         // Allocate two pages: 2 and 3
         let page0 = allocator.allocate().unwrap();
         assert_eq!(page0, 2);
-        
+
         let page1 = allocator.allocate().unwrap();
         assert_eq!(page1, 3);
-        
+
         // Deallocate page 3
         allocator.deallocate(page1).unwrap();
 

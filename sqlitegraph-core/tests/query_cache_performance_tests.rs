@@ -132,11 +132,23 @@ fn test_query_cache_multiple_operations() -> Result<(), Box<dyn std::error::Erro
     // Test Filtered K-Hop
     {
         let start_time = Instant::now();
-        let result1 = backend.k_hop_filtered(SnapshotId::current(), 1, 2, BackendDirection::Outgoing, &["mesh"])?;
+        let result1 = backend.k_hop_filtered(
+            SnapshotId::current(),
+            1,
+            2,
+            BackendDirection::Outgoing,
+            &["mesh"],
+        )?;
         let first_time = start_time.elapsed();
 
         let start_time = Instant::now();
-        let result2 = backend.k_hop_filtered(SnapshotId::current(), 1, 2, BackendDirection::Outgoing, &["mesh"])?;
+        let result2 = backend.k_hop_filtered(
+            SnapshotId::current(),
+            1,
+            2,
+            BackendDirection::Outgoing,
+            &["mesh"],
+        )?;
         let second_time = start_time.elapsed();
 
         println!(

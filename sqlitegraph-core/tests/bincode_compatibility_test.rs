@@ -73,9 +73,21 @@ fn test_bincode_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_bincode_vec_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     let original = vec![
-        TestStruct { id: 1, name: "first".to_string(), value: 10 },
-        TestStruct { id: 2, name: "second".to_string(), value: 20 },
-        TestStruct { id: 3, name: "third".to_string(), value: 30 },
+        TestStruct {
+            id: 1,
+            name: "first".to_string(),
+            value: 10,
+        },
+        TestStruct {
+            id: 2,
+            name: "second".to_string(),
+            value: 20,
+        },
+        TestStruct {
+            id: 3,
+            name: "third".to_string(),
+            value: 30,
+        },
     ];
 
     let encoded = bincode::serialize(&original)?;
@@ -122,7 +134,11 @@ fn test_bincode_format_size() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verify we get a reasonable encoding size
     // bincode should encode this efficiently, certainly less than 100 bytes
-    assert!(encoded.len() < 100, "Encoded size {} is unexpectedly large", encoded.len());
+    assert!(
+        encoded.len() < 100,
+        "Encoded size {} is unexpectedly large",
+        encoded.len()
+    );
 
     // Should be non-zero
     assert!(!encoded.is_empty());

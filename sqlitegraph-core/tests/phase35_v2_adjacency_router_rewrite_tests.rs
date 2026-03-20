@@ -57,7 +57,10 @@ fn v2_single_outgoing_neighbors_use_clustered_path() {
 
     // Test outgoing neighbors via public API
     let neighbors = graph
-        .neighbors(SnapshotId::current(), node1_id, sqlitegraph::NeighborQuery {
+        .neighbors(
+            SnapshotId::current(),
+            node1_id,
+            sqlitegraph::NeighborQuery {
                 direction: sqlitegraph::BackendDirection::Outgoing,
                 edge_type: None,
             },
@@ -133,7 +136,10 @@ fn v2_single_incoming_neighbors_use_clustered_path() {
 
     // Test incoming neighbors via public API
     let neighbors = graph
-        .neighbors(SnapshotId::current(), node2_id, sqlitegraph::NeighborQuery {
+        .neighbors(
+            SnapshotId::current(),
+            node2_id,
+            sqlitegraph::NeighborQuery {
                 direction: sqlitegraph::BackendDirection::Incoming,
                 edge_type: None,
             },
@@ -214,7 +220,10 @@ fn v2_multi_edge_neighbors_preserve_all_edges() {
 
     // Test outgoing neighbors via public API
     let neighbors = graph
-        .neighbors(SnapshotId::current(), source_id, sqlitegraph::NeighborQuery {
+        .neighbors(
+            SnapshotId::current(),
+            source_id,
+            sqlitegraph::NeighborQuery {
                 direction: sqlitegraph::BackendDirection::Outgoing,
                 edge_type: None,
             },

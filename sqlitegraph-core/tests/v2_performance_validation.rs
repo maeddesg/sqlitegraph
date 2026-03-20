@@ -71,7 +71,9 @@ fn test_v2_performance_validation() -> Result<(), Box<dyn std::error::Error>> {
 
     // Simple read performance test
     for &node_id in node_ids.iter().take(100) {
-        let node = graph.get_node(SnapshotId::current(), node_id).expect("Failed to get node");
+        let node = graph
+            .get_node(SnapshotId::current(), node_id)
+            .expect("Failed to get node");
         assert_eq!(node.id, node_id);
     }
 

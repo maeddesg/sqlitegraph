@@ -6,10 +6,10 @@
 //! KEY FINDING: V3EdgeStore uses RwLock<HashMap<..., Arc<[i64]>>>
 //! The Arc::clone() makes neighbor queries zero-copy after cache hit.
 
-use std::time::Instant;
-use std::sync::Arc;
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
 
 fn main() {
     println!("═══════════════════════════════════════════════════════════════════");
@@ -18,10 +18,12 @@ fn main() {
 
     // Test 1: Raw HashMap lookup (no locking)
     {
-        let cache: HashMap<(i64, u8), Arc<[i64]>> = 
-            [( (1, 0), Arc::from((2..=21).collect::<Vec<i64>>().into_boxed_slice()) )]
-            .into_iter()
-            .collect();
+        let cache: HashMap<(i64, u8), Arc<[i64]>> = [(
+            (1, 0),
+            Arc::from((2..=21).collect::<Vec<i64>>().into_boxed_slice()),
+        )]
+        .into_iter()
+        .collect();
 
         let start = Instant::now();
         for _ in 0..100000 {
@@ -30,16 +32,18 @@ fn main() {
             }
         }
         let avg_ns = start.elapsed().as_nanos() / 100000;
-        println!("1. Raw HashMap (no lock):     {:>6} ns/query  (baseline)", avg_ns);
+        println!(
+            "1. Raw HashMap (no lock):     {:>6} ns/query  (baseline)",
+            avg_ns
+        );
     }
 
     // Test 2: RwLock read guard + HashMap lookup
     {
-        let cache = RwLock::new(
-            HashMap::<(i64, u8), Arc<[i64]>>::from(
-                [( (1, 0), Arc::from((2..=21).collect::<Vec<i64>>().into_boxed_slice()) )]
-            )
-        );
+        let cache = RwLock::new(HashMap::<(i64, u8), Arc<[i64]>>::from([(
+            (1, 0),
+            Arc::from((2..=21).collect::<Vec<i64>>().into_boxed_slice()),
+        )]));
 
         // Warmup
         for _ in 0..1000 {
@@ -51,23 +55,25 @@ fn main() {
 
         let start = Instant::now();
         for _ in 0..100000 {
-            let c = cache.read();  // RwLock read guard
+            let c = cache.read(); // RwLock read guard
             if let Some(neighbors) = c.get(&(1, 0)) {
                 let _ = neighbors.clone(); // Arc::clone
             }
         }
         let avg_ns = start.elapsed().as_nanos() / 100000;
-        println!("2. RwLock<HashMap> (hot):     {:>6} ns/query  (V3EdgeStore cache)", avg_ns);
+        println!(
+            "2. RwLock<HashMap> (hot):     {:>6} ns/query  (V3EdgeStore cache)",
+            avg_ns
+        );
     }
 
     // Test 3: Double RwLock (V3Backend.edge_store pattern)
     {
-        let inner = RwLock::new(
-            HashMap::<(i64, u8), Arc<[i64]>>::from(
-                [( (1, 0), Arc::from((2..=21).collect::<Vec<i64>>().into_boxed_slice()) )]
-            )
-        );
-        let outer = RwLock::new(inner);  // V3Backend.edge_store: RwLock<V3EdgeStore>
+        let inner = RwLock::new(HashMap::<(i64, u8), Arc<[i64]>>::from([(
+            (1, 0),
+            Arc::from((2..=21).collect::<Vec<i64>>().into_boxed_slice()),
+        )]));
+        let outer = RwLock::new(inner); // V3Backend.edge_store: RwLock<V3EdgeStore>
 
         // Warmup
         for _ in 0..1000 {
@@ -80,23 +86,25 @@ fn main() {
 
         let start = Instant::now();
         for _ in 0..100000 {
-            let store = outer.read();  // Outer RwLock (V3Backend.edge_store)
-            let c = store.read();       // Inner RwLock (V3EdgeStore.cache)
+            let store = outer.read(); // Outer RwLock (V3Backend.edge_store)
+            let c = store.read(); // Inner RwLock (V3EdgeStore.cache)
             if let Some(neighbors) = c.get(&(1, 0)) {
                 let _ = neighbors.clone(); // Arc::clone
             }
         }
         let avg_ns = start.elapsed().as_nanos() / 100000;
-        println!("3. RwLock<RwLock<HashMap>>:   {:>6} ns/query  (V3Backend full path)", avg_ns);
+        println!(
+            "3. RwLock<RwLock<HashMap>>:   {:>6} ns/query  (V3Backend full path)",
+            avg_ns
+        );
     }
 
     // Test 4: Compare with Vec clone (what old code did)
     {
-        let cache = RwLock::new(
-            HashMap::<(i64, u8), Vec<i64>>::from(
-                [( (1, 0), (2..=21).collect::<Vec<i64>>() )]
-            )
-        );
+        let cache = RwLock::new(HashMap::<(i64, u8), Vec<i64>>::from([(
+            (1, 0),
+            (2..=21).collect::<Vec<i64>>(),
+        )]));
 
         let start = Instant::now();
         for _ in 0..100000 {
@@ -106,7 +114,10 @@ fn main() {
             }
         }
         let avg_ns = start.elapsed().as_nanos() / 100000;
-        println!("4. Vec::clone (old way):      {:>6} ns/query  (alloc + copy)", avg_ns);
+        println!(
+            "4. Vec::clone (old way):      {:>6} ns/query  (alloc + copy)",
+            avg_ns
+        );
     }
 
     println!("\n═══════════════════════════════════════════════════════════════════");

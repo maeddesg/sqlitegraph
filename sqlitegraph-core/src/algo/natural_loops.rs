@@ -52,10 +52,10 @@
 use ahash::{AHashMap, AHashSet};
 use std::collections::VecDeque;
 
+use crate::algo::dominators::DominatorResult;
 use crate::errors::SqliteGraphError;
 use crate::graph::SqliteGraph;
 use crate::progress::ProgressCallback;
-use crate::algo::dominators::DominatorResult;
 
 /// A natural loop identified by back-edges.
 ///
@@ -465,9 +465,10 @@ pub fn natural_loops_from_exit(
     }
 
     if entries.len() > 1 {
-        return Err(SqliteGraphError::query(
-            &format!("Cannot compute natural loops: graph has {} entry nodes (expected 1)", entries.len()),
-        ));
+        return Err(SqliteGraphError::query(&format!(
+            "Cannot compute natural loops: graph has {} entry nodes (expected 1)",
+            entries.len()
+        )));
     }
 
     // Single entry - compute dominators and natural loops
@@ -720,7 +721,7 @@ fn compute_loop_body(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create single loop CFG: 0 -> 1 -> 2 -> 1
     /// Expected: header=1, back_edge=(2,1), body={2}
@@ -736,7 +737,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -771,7 +774,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -806,7 +811,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -841,7 +848,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -876,7 +885,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -911,7 +922,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -940,18 +953,28 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Should find 1 loop
         assert_eq!(loops.count(), 1, "Should find 1 loop");
 
         // Check loop with header 1
-        let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop with header 1");
+        let loop_ = loops
+            .loop_with_header(entity_ids[1])
+            .expect("Should have loop with header 1");
         assert_eq!(loop_.header, entity_ids[1], "Loop header should be 1");
         assert_eq!(loop_.back_edges.len(), 1, "Should have 1 back-edge");
-        assert_eq!(loop_.back_edges[0], (entity_ids[2], entity_ids[1]), "Back-edge should be (2, 1)");
-        assert!(loop_.body.contains(&entity_ids[2]), "Body should contain node 2");
+        assert_eq!(
+            loop_.back_edges[0],
+            (entity_ids[2], entity_ids[1]),
+            "Back-edge should be (2, 1)"
+        );
+        assert!(
+            loop_.body.contains(&entity_ids[2]),
+            "Body should contain node 2"
+        );
         assert_eq!(loop_.body.len(), 1, "Body should have 1 node");
     }
 
@@ -963,10 +986,13 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
-        let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+        let loop_ = loops
+            .loop_with_header(entity_ids[1])
+            .expect("Should have loop");
 
         // Header is in loop
         assert!(loop_.contains(entity_ids[1]), "Header should be in loop");
@@ -975,7 +1001,10 @@ mod tests {
         assert!(loop_.contains(entity_ids[2]), "Body node should be in loop");
 
         // Outside node is not in loop
-        assert!(!loop_.contains(entity_ids[0]), "Entry node should not be in loop");
+        assert!(
+            !loop_.contains(entity_ids[0]),
+            "Entry node should not be in loop"
+        );
     }
 
     #[test]
@@ -986,10 +1015,13 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
-        let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+        let loop_ = loops
+            .loop_with_header(entity_ids[1])
+            .expect("Should have loop");
 
         let all_nodes = loop_.all_nodes();
         assert_eq!(all_nodes.len(), 2, "Loop should have 2 nodes total");
@@ -1005,21 +1037,34 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Should find 2 loops
         assert_eq!(loops.count(), 2, "Should find 2 loops");
 
         // Check outer loop (header 1)
-        let outer = loops.loop_with_header(entity_ids[1]).expect("Should have outer loop");
+        let outer = loops
+            .loop_with_header(entity_ids[1])
+            .expect("Should have outer loop");
         assert_eq!(outer.back_edges.len(), 1, "Outer should have 1 back-edge");
-        assert_eq!(outer.back_edges[0], (entity_ids[3], entity_ids[1]), "Outer back-edge should be (3, 1)");
+        assert_eq!(
+            outer.back_edges[0],
+            (entity_ids[3], entity_ids[1]),
+            "Outer back-edge should be (3, 1)"
+        );
 
         // Check inner loop (header 2)
-        let inner = loops.loop_with_header(entity_ids[2]).expect("Should have inner loop");
+        let inner = loops
+            .loop_with_header(entity_ids[2])
+            .expect("Should have inner loop");
         assert_eq!(inner.back_edges.len(), 1, "Inner should have 1 back-edge");
-        assert_eq!(inner.back_edges[0], (entity_ids[3], entity_ids[2]), "Inner back-edge should be (3, 2)");
+        assert_eq!(
+            inner.back_edges[0],
+            (entity_ids[3], entity_ids[2]),
+            "Inner back-edge should be (3, 2)"
+        );
     }
 
     #[test]
@@ -1029,16 +1074,20 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Should find loops
         assert!(loops.count() >= 1, "Should find at least one loop");
-        
+
         // Verify loops have non-empty bodies
         let loops_vec: Vec<_> = loops.loops_at_depth(1);
         for loop_result in loops_vec {
-            assert!(!loop_result.body.is_empty(), "Loop body should not be empty");
+            assert!(
+                !loop_result.body.is_empty(),
+                "Loop body should not be empty"
+            );
         }
     }
 
@@ -1050,13 +1099,17 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         let tree = loops.nesting_tree();
 
         // Outer loop (1) should have inner loop (2) as child
-        assert!(tree.contains_key(&entity_ids[1]), "Tree should have outer loop");
+        assert!(
+            tree.contains_key(&entity_ids[1]),
+            "Tree should have outer loop"
+        );
         let children = tree.get(&entity_ids[1]).expect("Should have children");
         assert_eq!(children.len(), 1, "Outer should have 1 child");
         assert_eq!(children[0], entity_ids[2], "Child should be inner loop");
@@ -1070,17 +1123,25 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Entry is not in any loop
-        assert_eq!(loops.nesting_depth(entity_ids[0]), 0, "Entry should have depth 0");
+        assert_eq!(
+            loops.nesting_depth(entity_ids[0]),
+            0,
+            "Entry should have depth 0"
+        );
 
         // Verify nesting depth is computed (actual values depend on loop structure)
         if loops.count() > 0 {
             // Loop headers should have at least depth 1
             for &header in &loops.headers() {
-                assert!(loops.nesting_depth(header) >= 1, "Loop header should have depth >= 1");
+                assert!(
+                    loops.nesting_depth(header) >= 1,
+                    "Loop header should have depth >= 1"
+                );
             }
         }
     }
@@ -1093,16 +1154,25 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Should find 1 loop (header 1)
         assert_eq!(loops.count(), 1, "Should find 1 loop");
 
-        let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+        let loop_ = loops
+            .loop_with_header(entity_ids[1])
+            .expect("Should have loop");
         assert_eq!(loop_.back_edges.len(), 2, "Should have 2 back-edges");
-        assert!(loop_.back_edges.contains(&(entity_ids[2], entity_ids[1])), "Should have back-edge (2, 1)");
-        assert!(loop_.back_edges.contains(&(entity_ids[3], entity_ids[1])), "Should have back-edge (3, 1)");
+        assert!(
+            loop_.back_edges.contains(&(entity_ids[2], entity_ids[1])),
+            "Should have back-edge (2, 1)"
+        );
+        assert!(
+            loop_.back_edges.contains(&(entity_ids[3], entity_ids[1])),
+            "Should have back-edge (3, 1)"
+        );
     }
 
     #[test]
@@ -1113,13 +1183,23 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Only header 1 should have a loop
-        assert!(loops.is_loop_header(entity_ids[1]), "Node 1 should be loop header");
-        assert!(!loops.is_loop_header(entity_ids[2]), "Node 2 should not be loop header");
-        assert!(!loops.is_loop_header(entity_ids[3]), "Node 3 should not be loop header");
+        assert!(
+            loops.is_loop_header(entity_ids[1]),
+            "Node 1 should be loop header"
+        );
+        assert!(
+            !loops.is_loop_header(entity_ids[2]),
+            "Node 2 should not be loop header"
+        );
+        assert!(
+            !loops.is_loop_header(entity_ids[3]),
+            "Node 3 should not be loop header"
+        );
     }
 
     #[test]
@@ -1153,12 +1233,15 @@ mod tests {
             file_path: Some("single.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         assert_eq!(loops.count(), 0, "Should have 0 loops with single node");
@@ -1179,7 +1262,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1197,7 +1282,8 @@ mod tests {
         }
 
         let entry = entity_ids[0];
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         assert_eq!(loops.count(), 0, "Linear chain should have 0 loops");
@@ -1211,7 +1297,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         assert_eq!(loops.count(), 0, "Diamond CFG should have 0 natural loops");
@@ -1225,11 +1312,16 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Should not detect any natural loops (irreducible CFG)
-        assert_eq!(loops.count(), 0, "Irreducible CFG should have 0 natural loops");
+        assert_eq!(
+            loops.count(),
+            0,
+            "Irreducible CFG should have 0 natural loops"
+        );
     }
 
     #[test]
@@ -1240,11 +1332,15 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
 
         // Check that node 0 does not dominate node 3 (paths: 0->1->3 and 0->2->3)
         // Actually, in diamond, 0 DOES dominate 3 (all paths go through 0)
-        assert!(dom_result.dominates(entity_ids[0], entity_ids[3]), "0 should dominate 3");
+        assert!(
+            dom_result.dominates(entity_ids[0], entity_ids[3]),
+            "0 should dominate 3"
+        );
 
         // But there are no back-edges (no edges where header dominates tail in a cycle)
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
@@ -1259,7 +1355,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Existing loop
@@ -1280,12 +1377,22 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
-        assert!(loops.is_loop_header(entity_ids[1]), "Node 1 should be loop header");
-        assert!(!loops.is_loop_header(entity_ids[0]), "Node 0 should not be loop header");
-        assert!(!loops.is_loop_header(entity_ids[2]), "Node 2 should not be loop header");
+        assert!(
+            loops.is_loop_header(entity_ids[1]),
+            "Node 1 should be loop header"
+        );
+        assert!(
+            !loops.is_loop_header(entity_ids[0]),
+            "Node 0 should not be loop header"
+        );
+        assert!(
+            !loops.is_loop_header(entity_ids[2]),
+            "Node 2 should not be loop header"
+        );
     }
 
     #[test]
@@ -1296,7 +1403,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         assert_eq!(loops.count(), 2, "Should have 2 loops");
@@ -1310,7 +1418,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         let headers = loops.headers();
@@ -1327,16 +1436,20 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Verify we can query loops at different depths
         assert!(loops.count() >= 1, "Should find at least one loop");
-        
+
         // Just verify the method returns valid results
         let depth1 = loops.loops_at_depth(1);
         for loop_result in &depth1 {
-            assert!(!loop_result.body.is_empty(), "Loop should have non-empty body");
+            assert!(
+                !loop_result.body.is_empty(),
+                "Loop should have non-empty body"
+            );
         }
     }
 
@@ -1350,7 +1463,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
 
         let progress = NoProgress;
         let loops = natural_loops_with_progress(&graph, &dom_result, &progress)
@@ -1369,7 +1483,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
 
         let progress = NoProgress;
         let result = natural_loops_with_progress(&graph, &dom_result, &progress);
@@ -1386,20 +1501,33 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
 
-        let dom_result = crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
+        let dom_result =
+            crate::algo::dominators(&graph, entry).expect("Failed to compute dominators");
         let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
         // Should find 1 loop
         assert_eq!(loops.count(), 1, "Should find 1 loop");
 
-        let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+        let loop_ = loops
+            .loop_with_header(entity_ids[1])
+            .expect("Should have loop");
         assert_eq!(loop_.back_edges.len(), 1, "Should have 1 back-edge");
-        assert_eq!(loop_.back_edges[0], (entity_ids[2], entity_ids[1]), "Back-edge should be (2, 1)");
+        assert_eq!(
+            loop_.back_edges[0],
+            (entity_ids[2], entity_ids[1]),
+            "Back-edge should be (2, 1)"
+        );
 
         // Body should contain node 2
-        assert!(loop_.body.contains(&entity_ids[2]), "Body should contain node 2");
+        assert!(
+            loop_.body.contains(&entity_ids[2]),
+            "Body should contain node 2"
+        );
 
         // Exit node (3) should not be in loop
-        assert!(!loop_.contains(entity_ids[3]), "Exit node should not be in loop");
+        assert!(
+            !loop_.contains(entity_ids[3]),
+            "Exit node should not be in loop"
+        );
     }
 }

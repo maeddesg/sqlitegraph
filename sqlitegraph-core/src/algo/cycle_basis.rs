@@ -49,7 +49,7 @@ use ahash::{AHashMap, AHashSet};
 
 use crate::{errors::SqliteGraphError, graph::SqliteGraph, progress::ProgressCallback};
 
-use super::scc::{strongly_connected_components, SccResult};
+use super::scc::{SccResult, strongly_connected_components};
 
 /// Bounds for limiting cycle basis computation.
 ///
@@ -119,9 +119,7 @@ impl CycleBasisBounds {
     /// Returns true if any bound is set.
     #[inline]
     pub fn is_bounded(&self) -> bool {
-        self.max_cycles.is_some()
-            || self.max_cycle_length.is_some()
-            || self.max_per_scc.is_some()
+        self.max_cycles.is_some() || self.max_cycle_length.is_some() || self.max_per_scc.is_some()
     }
 }
 
@@ -355,9 +353,7 @@ impl CycleBasisResult {
 ///
 /// Time: O(|V| + |E| + |C|·|V|) where C = number of cycles
 /// Space: O(|V| + |C|·|V|)
-pub fn cycle_basis(
-    graph: &SqliteGraph,
-) -> Result<CycleBasisResult, SqliteGraphError> {
+pub fn cycle_basis(graph: &SqliteGraph) -> Result<CycleBasisResult, SqliteGraphError> {
     cycle_basis_bounded(graph, CycleBasisBounds::default())
 }
 
@@ -410,7 +406,7 @@ pub fn cycle_basis_bounded(
     // Step 2: Filter to non-trivial SCCs (len() > 1) and single-node SCCs with self-loops
     let mut cycles: Vec<Vec<i64>> = Vec::new();
     let mut cycles_skipped = 0usize;
-    
+
     // First, detect self-loops in single-node SCCs
     for component in &scc.components {
         if component.len() == 1 {
@@ -432,7 +428,7 @@ pub fn cycle_basis_bounded(
             }
         }
     }
-    
+
     // Apply max_cycles bound after self-loop detection
     if let Some(max_cycles) = bounds.max_cycles {
         if cycles.len() > max_cycles {
@@ -450,11 +446,8 @@ pub fn cycle_basis_bounded(
     }
 
     // Filter to non-trivial SCCs (len() > 1) for Paton's algorithm
-    let non_trivial_sccs: Vec<&HashSet<i64>> = scc
-        .components
-        .iter()
-        .filter(|c| c.len() > 1)
-        .collect();
+    let non_trivial_sccs: Vec<&HashSet<i64>> =
+        scc.components.iter().filter(|c| c.len() > 1).collect();
 
     if non_trivial_sccs.is_empty() {
         // Only self-loops (if any) - return result
@@ -536,11 +529,8 @@ where
     progress.on_progress(1, Some(4), "SCC decomposition complete");
 
     // Step 2: Filter to non-trivial SCCs
-    let non_trivial_sccs: Vec<&HashSet<i64>> = scc
-        .components
-        .iter()
-        .filter(|c| c.len() > 1)
-        .collect();
+    let non_trivial_sccs: Vec<&HashSet<i64>> =
+        scc.components.iter().filter(|c| c.len() > 1).collect();
 
     let non_trivial_count = non_trivial_sccs.len();
 
@@ -554,7 +544,11 @@ where
         });
     }
 
-    progress.on_progress(2, Some(4), &format!("Finding cycles in {} SCCs", non_trivial_count));
+    progress.on_progress(
+        2,
+        Some(4),
+        &format!("Finding cycles in {} SCCs", non_trivial_count),
+    );
 
     // Step 3: Find cycles within each non-trivial SCC
     let mut all_cycles: Vec<Vec<i64>> = Vec::new();
@@ -861,7 +855,7 @@ fn deduplicate_cycles(cycles: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper to create a test graph with numbered entities
     fn create_test_graph_with_nodes(count: usize) -> SqliteGraph {
@@ -928,13 +922,32 @@ mod tests {
         let result = cycle_basis(&graph).unwrap();
 
         // Should find at least one cycle covering all nodes
-        assert!(result.cycles.len() >= 1, "Expected at least 1 cycle, found {:?}", result.cycles);
-        
+        assert!(
+            result.cycles.len() >= 1,
+            "Expected at least 1 cycle, found {:?}",
+            result.cycles
+        );
+
         // All nodes should be marked as cyclic
         let cyclic = result.cyclic_nodes();
-        assert!(cyclic.contains(&ids[0]), "ids[0]={} not in cyclic {:?}", ids[0], cyclic);
-        assert!(cyclic.contains(&ids[1]), "ids[1]={} not in cyclic {:?}", ids[1], cyclic);
-        assert!(cyclic.contains(&ids[2]), "ids[2]={} not in cyclic {:?}", ids[2], cyclic);
+        assert!(
+            cyclic.contains(&ids[0]),
+            "ids[0]={} not in cyclic {:?}",
+            ids[0],
+            cyclic
+        );
+        assert!(
+            cyclic.contains(&ids[1]),
+            "ids[1]={} not in cyclic {:?}",
+            ids[1],
+            cyclic
+        );
+        assert!(
+            cyclic.contains(&ids[2]),
+            "ids[2]={} not in cyclic {:?}",
+            ids[2],
+            cyclic
+        );
     }
 
     // Test 2: Two cycles sharing edge
@@ -987,11 +1000,23 @@ mod tests {
         let result = cycle_basis(&graph).unwrap();
 
         // Should find at least one cycle
-        assert!(result.cycles.len() >= 1, "Expected at least 1 cycle, found {:?}", result.cycles);
+        assert!(
+            result.cycles.len() >= 1,
+            "Expected at least 1 cycle, found {:?}",
+            result.cycles
+        );
 
         // Both nodes should be cyclic
-        assert!(result.is_cyclic(ids[0]), "ids[0]={} should be cyclic", ids[0]);
-        assert!(result.is_cyclic(ids[1]), "ids[1]={} should be cyclic", ids[1]);
+        assert!(
+            result.is_cyclic(ids[0]),
+            "ids[0]={} should be cyclic",
+            ids[0]
+        );
+        assert!(
+            result.is_cyclic(ids[1]),
+            "ids[1]={} should be cyclic",
+            ids[1]
+        );
     }
 
     // Test 4: Multiple SCCs
@@ -1027,12 +1052,21 @@ mod tests {
         let result = cycle_basis(&graph).unwrap();
 
         // Should find at least one cycle per SCC
-        assert!(result.cycles.len() >= 1, "Expected at least 1 cycle, found {:?}", result.cycles);
+        assert!(
+            result.cycles.len() >= 1,
+            "Expected at least 1 cycle, found {:?}",
+            result.cycles
+        );
         assert_eq!(result.cyclic_scc_count(), 2);
 
         // All 5 nodes should be in cycles
         let cyclic = result.cyclic_nodes();
-        assert_eq!(cyclic.len(), 5, "Expected 5 cyclic nodes, found {:?}", cyclic);
+        assert_eq!(
+            cyclic.len(),
+            5,
+            "Expected 5 cyclic nodes, found {:?}",
+            cyclic
+        );
     }
 
     // Test 5: DAG (no cycles)
@@ -1072,8 +1106,12 @@ mod tests {
         // 0 -> 1 -> 2 -> 0 (main cycle)
         // 0 -> 3 -> 4 -> 1 (adds complexity)
         let edges = [
-            (0, 1), (1, 2), (2, 0), // Main cycle
-            (0, 3), (3, 4), (4, 1), // Additional path
+            (0, 1),
+            (1, 2),
+            (2, 0), // Main cycle
+            (0, 3),
+            (3, 4),
+            (4, 1), // Additional path
         ];
         for (from, to) in &edges {
             let edge = GraphEdge {
@@ -1400,7 +1438,8 @@ mod tests {
         }
 
         let progress = NoProgress;
-        let result = cycle_basis_with_progress(&graph, CycleBasisBounds::default(), &progress).unwrap();
+        let result =
+            cycle_basis_with_progress(&graph, CycleBasisBounds::default(), &progress).unwrap();
 
         assert!(result.has_cycles());
     }

@@ -176,7 +176,10 @@ impl DominatorResult {
     /// # Returns
     /// `true` if node is the entry node, `false` otherwise.
     pub fn is_entry(&self, node: i64) -> bool {
-        self.idom.get(&node).map(|idom| idom.is_none()).unwrap_or(false)
+        self.idom
+            .get(&node)
+            .map(|idom| idom.is_none())
+            .unwrap_or(false)
     }
 }
 
@@ -233,10 +236,7 @@ impl DominatorResult {
 /// // Immediate dominator forms a tree
 /// assert_eq!(result.immediate_dominator(0), None);
 /// ```
-pub fn dominators(
-    graph: &SqliteGraph,
-    entry: i64,
-) -> Result<DominatorResult, SqliteGraphError> {
+pub fn dominators(graph: &SqliteGraph, entry: i64) -> Result<DominatorResult, SqliteGraphError> {
     // Get all nodes in the graph
     let all_nodes = graph.all_entity_ids()?;
 
@@ -432,10 +432,7 @@ fn initialize_dominators(all_nodes: &[i64], entry: i64) -> AHashMap<i64, AHashSe
 /// Nodes not reachable from entry are excluded from the ordering. This is
 /// correct because unreachable nodes have no paths from entry, so their
 /// dominance sets are undefined (they have no predecessors from entry).
-fn reverse_postorder(
-    graph: &SqliteGraph,
-    entry: i64,
-) -> Result<Vec<i64>, SqliteGraphError> {
+fn reverse_postorder(graph: &SqliteGraph, entry: i64) -> Result<Vec<i64>, SqliteGraphError> {
     let mut visited = AHashSet::new();
     let mut postorder = Vec::new();
     let mut stack = vec![(entry, false)]; // (node, visited_children)
@@ -450,7 +447,7 @@ fn reverse_postorder(
                 // Already visited, skip
                 continue;
             }
-            
+
             // Push it back to add after children
             stack.push((node, true));
 
@@ -617,7 +614,7 @@ fn extract_immediate_dominators(
                     immediate_dominator = Some(candidate);
                     break;
                 }
-                
+
                 // Fallback: select candidate with largest dominator set
                 let dom_size = candidate_dom.len();
                 if dom_size > max_dom_size {
@@ -636,7 +633,7 @@ fn extract_immediate_dominators(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create linear chain graph: 0 -> 1 -> 2 -> 3
     fn create_linear_chain() -> SqliteGraph {
@@ -651,7 +648,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -684,7 +683,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -718,7 +719,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -752,7 +755,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -786,7 +791,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -845,7 +852,7 @@ mod tests {
         // Scenario: Diamond CFG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
         // Entity IDs: [1, 2, 3, 4] where 1 is entry, 4 is exit
         // Edges: 1->2, 1->3, 2->4, 3->4
-        // Expected: 
+        // Expected:
         // - Node 1 dominates all (on all paths from entry)
         // - Node 2 dominates only itself (path 1->3->4 doesn't go through 2)
         // - Node 3 dominates only itself (path 1->2->4 doesn't go through 3)
@@ -857,18 +864,40 @@ mod tests {
 
         // Entry dominates all
         for &node in &entity_ids {
-            assert!(result.dominates(entry, node), "Entry should dominate {}", node);
+            assert!(
+                result.dominates(entry, node),
+                "Entry should dominate {}",
+                node
+            );
         }
 
         // Node 2 dominates only itself (not 3 or 4, since there's a path 1->3->4)
-        assert!(result.dominates(entity_ids[1], entity_ids[1]), "Node 2 should dominate itself");
-        assert!(!result.dominates(entity_ids[1], entity_ids[3]), "Node 2 should NOT dominate exit");
-        assert!(!result.dominates(entity_ids[1], entity_ids[2]), "Node 2 should NOT dominate node 3");
+        assert!(
+            result.dominates(entity_ids[1], entity_ids[1]),
+            "Node 2 should dominate itself"
+        );
+        assert!(
+            !result.dominates(entity_ids[1], entity_ids[3]),
+            "Node 2 should NOT dominate exit"
+        );
+        assert!(
+            !result.dominates(entity_ids[1], entity_ids[2]),
+            "Node 2 should NOT dominate node 3"
+        );
 
         // Node 3 dominates only itself (not 2 or 4, since there's a path 1->2->4)
-        assert!(result.dominates(entity_ids[2], entity_ids[2]), "Node 3 should dominate itself");
-        assert!(!result.dominates(entity_ids[2], entity_ids[3]), "Node 3 should NOT dominate exit");
-        assert!(!result.dominates(entity_ids[2], entity_ids[1]), "Node 3 should NOT dominate node 2");
+        assert!(
+            result.dominates(entity_ids[2], entity_ids[2]),
+            "Node 3 should dominate itself"
+        );
+        assert!(
+            !result.dominates(entity_ids[2], entity_ids[3]),
+            "Node 3 should NOT dominate exit"
+        );
+        assert!(
+            !result.dominates(entity_ids[2], entity_ids[1]),
+            "Node 3 should NOT dominate node 2"
+        );
     }
 
     #[test]
@@ -899,7 +928,7 @@ mod tests {
         let entry = entity_ids[0];
 
         let result = dominators(&graph, entry).expect("Failed to compute dominators");
-        
+
         eprintln!("Entity IDs: {:?}", entity_ids);
         eprintln!("Entry: {}", entry);
         eprintln!("Dominators: {:?}", result.dom);
@@ -968,7 +997,9 @@ mod tests {
             file_path: Some("single.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
@@ -1037,8 +1068,7 @@ mod tests {
         let entry = entity_ids[0];
 
         let progress = NoProgress;
-        let result_with =
-            dominators_with_progress(&graph, entry, &progress).expect("Failed");
+        let result_with = dominators_with_progress(&graph, entry, &progress).expect("Failed");
         let result_without = dominators(&graph, entry).expect("Failed");
 
         // Check dominance sets match
@@ -1076,10 +1106,22 @@ mod tests {
 
         let result = dominators(&graph, entry).expect("Failed to compute dominators");
 
-        assert!(result.is_entry(entry), "Entry should be identified as entry");
-        assert!(!result.is_entry(entity_ids[1]), "Non-entry should not be entry");
-        assert!(!result.is_entry(entity_ids[2]), "Non-entry should not be entry");
-        assert!(!result.is_entry(entity_ids[3]), "Non-entry should not be entry");
+        assert!(
+            result.is_entry(entry),
+            "Entry should be identified as entry"
+        );
+        assert!(
+            !result.is_entry(entity_ids[1]),
+            "Non-entry should not be entry"
+        );
+        assert!(
+            !result.is_entry(entity_ids[2]),
+            "Non-entry should not be entry"
+        );
+        assert!(
+            !result.is_entry(entity_ids[3]),
+            "Non-entry should not be entry"
+        );
     }
 
     #[test]
@@ -1094,7 +1136,11 @@ mod tests {
 
         // Entry (0) should dominate all
         for &node in &entity_ids {
-            assert!(result.dominates(entry, node), "Entry should dominate {}", node);
+            assert!(
+                result.dominates(entry, node),
+                "Entry should dominate {}",
+                node
+            );
         }
 
         // Node 1 (outer loop header) should dominate 1, 2, 3
@@ -1123,16 +1169,35 @@ mod tests {
 
         // Entry dominates all nodes (on all paths from entry)
         for &node in &entity_ids {
-            assert!(result.dominates(entry, node), "Entry should dominate {}", node);
+            assert!(
+                result.dominates(entry, node),
+                "Entry should dominate {}",
+                node
+            );
         }
-        
+
         // Node 2 dominates itself and exits (on paths from entry through 2)
-        assert!(result.dominates(entity_ids[1], entity_ids[1]), "Node 2 should dominate itself");
-        assert!(result.dominates(entity_ids[1], entity_ids[2]), "Node 2 should dominate exit 3");
-        assert!(result.dominates(entity_ids[1], entity_ids[3]), "Node 2 should dominate exit 4");
+        assert!(
+            result.dominates(entity_ids[1], entity_ids[1]),
+            "Node 2 should dominate itself"
+        );
+        assert!(
+            result.dominates(entity_ids[1], entity_ids[2]),
+            "Node 2 should dominate exit 3"
+        );
+        assert!(
+            result.dominates(entity_ids[1], entity_ids[3]),
+            "Node 2 should dominate exit 4"
+        );
 
         // Exits don't dominate each other (different paths)
-        assert!(!result.dominates(entity_ids[2], entity_ids[3]), "Exit 3 should NOT dominate exit 4");
-        assert!(!result.dominates(entity_ids[3], entity_ids[2]), "Exit 4 should NOT dominate exit 3");
+        assert!(
+            !result.dominates(entity_ids[2], entity_ids[3]),
+            "Exit 3 should NOT dominate exit 4"
+        );
+        assert!(
+            !result.dominates(entity_ids[3], entity_ids[2]),
+            "Exit 4 should NOT dominate exit 3"
+        );
     }
 }

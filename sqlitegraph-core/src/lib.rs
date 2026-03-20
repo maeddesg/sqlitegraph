@@ -276,24 +276,12 @@ pub use backend::{
 };
 
 // Re-export backup API for convenience
-#[cfg(feature = "native-v2")]
-pub use backend::native::v2::backup::{BackupConfig, create_backup as database_backup};
 
 // Re-export restore API for convenience
-#[cfg(feature = "native-v2")]
-pub use backend::native::v2::restore::{
-    RestoreConfig, RestoreResult, restore_backup as database_restore,
-};
 
 // Re-export WAL functionality for native backend
-#[cfg(feature = "native-v2")]
-pub use backend::native::v2::wal::{IsolationLevel, V2WALConfig, V2WALManager, WALManagerMetrics};
 
 // Re-export WAL integration for advanced usage
-#[cfg(feature = "native-v2")]
-pub use backend::native::v2::wal::{
-    GraphOperationResult, GraphWALIntegrationConfig, OperationMetrics, V2GraphWALIntegrator,
-};
 
 // Re-export configuration and factory
 pub use config::{BackendKind, GraphConfig, NativeConfig, SqliteConfig, open_graph};
@@ -355,76 +343,32 @@ pub mod dependency_monitor;
 // Re-export cache statistics for benchmarking
 pub use cache::CacheStats;
 
-/// Create a backup of a SQLiteGraph Native V2 database
-///
-/// This is a convenience function for creating database backups.
-/// For more control over backup options, use `database_backup` with `BackupConfig`.
-///
-/// # Arguments
-/// * `db_path` - Path to the database file
-/// * `backup_dir` - Directory where backup will be stored
-///
-/// # Example
-/// ```no_run
-/// use sqlitegraph;
-/// use std::path::Path;
-///
-/// let result = sqlitegraph::create_backup(
-///     Path::new("mydb.v2"),
-///     Path::new("backups")
-/// );
-/// # Ok::<(), sqlitegraph::SqliteGraphError>(())
-/// ```
-#[cfg(feature = "native-v2")]
-pub fn create_backup(
-    db_path: &std::path::Path,
-    backup_dir: &std::path::Path,
-) -> Result<BackupResult, SqliteGraphError> {
-    let native_result = database_backup(
-        db_path,
-        crate::backend::native::v2::backup::BackupConfig::new(backup_dir),
-    )
-    .map_err(|e| SqliteGraphError::connection(e.to_string()))?;
-    Ok(BackupResult {
-        snapshot_path: native_result.snapshot_path,
-        manifest_path: native_result.manifest_path,
-        size_bytes: native_result.size_bytes,
-        checksum: native_result.checksum,
-        record_count: native_result.record_count,
-        duration_secs: native_result.duration_secs,
-        timestamp: native_result.timestamp,
-        checkpoint_performed: native_result.checkpoint_performed,
-    })
-}
-
-/// Restore a SQLiteGraph Native V2 database from a backup
-///
-/// This is a convenience function for restoring database backups.
-/// For more control over restore options, use `database_restore` with `RestoreConfig`.
-///
-/// # Arguments
-/// * `backup_dir` - Directory containing backup files (snapshot + manifest)
-/// * `target_path` - Path where database will be restored
-/// * `overwrite` - Whether to overwrite existing file (default: false)
-///
-/// # Example
-/// ```no_run
-/// use sqlitegraph;
-/// use std::path::Path;
-///
-/// let result = sqlitegraph::restore_from_backup(
-///     Path::new("backups/backup_123456"),
-///     Path::new("restored.v2"),
-///     true  // overwrite if exists
-/// );
-/// # Ok::<(), sqlitegraph::SqliteGraphError>(())
-/// ```
 #[cfg(feature = "native-v2")]
 pub fn restore_from_backup(
     backup_dir: &std::path::Path,
     target_path: &std::path::Path,
     overwrite: bool,
 ) -> Result<RestoreResult, SqliteGraphError> {
+    use crate::backend::native::v2::restore::{database_restore, RestoreConfig};
+    let config = RestoreConfig::new(backup_dir, target_path).with_overwrite(overwrite);
+    database_restore(config).map_err(|e| SqliteGraphError::connection(e.to_string()))
+}
+#[cfg(feature = "native-v2")]
+pub fn restore_from_backup(
+    backup_dir: &std::path::Path,
+    target_path: &std::path::Path,
+    overwrite: bool,
+) -> Result<RestoreResult, SqliteGraphError> {
+    let config = RestoreConfig::new(backup_dir, target_path).with_overwrite(overwrite);
+    database_restore(config).map_err(|e| SqliteGraphError::connection(e.to_string()))
+}
+#[cfg(feature = "native-v2")]
+pub fn restore_from_backup(
+    backup_dir: &std::path::Path,
+    target_path: &std::path::Path,
+    overwrite: bool,
+) -> Result<RestoreResult, SqliteGraphError> {
+    use crate::backend::native::v2::restore::{database_restore, RestoreConfig};
     let config = RestoreConfig::new(backup_dir, target_path).with_overwrite(overwrite);
     database_restore(config).map_err(|e| SqliteGraphError::connection(e.to_string()))
 }

@@ -132,9 +132,7 @@ impl SccResult {
 /// - **Disconnected graph**: Multiple components (may all be trivial)
 /// - **Linear chain**: Each node is its own SCC (all trivial)
 /// - **Simple cycle**: One non-trivial SCC containing all nodes
-pub fn strongly_connected_components(
-    graph: &SqliteGraph,
-) -> Result<SccResult, SqliteGraphError> {
+pub fn strongly_connected_components(graph: &SqliteGraph) -> Result<SccResult, SqliteGraphError> {
     let all_ids = graph.all_entity_ids()?;
 
     if all_ids.is_empty() {
@@ -217,10 +215,16 @@ fn strongconnect(
                 components,
                 node_to_component,
             )?;
-            lowlink.insert(v, (*lowlink.get(&v).unwrap()).min(*lowlink.get(&w).unwrap()));
+            lowlink.insert(
+                v,
+                (*lowlink.get(&v).unwrap()).min(*lowlink.get(&w).unwrap()),
+            );
         } else if on_stack.contains(&w) {
             // Successor w is in stack S and hence in the current SCC
-            lowlink.insert(v, (*lowlink.get(&v).unwrap()).min(*indices.get(&w).unwrap()));
+            lowlink.insert(
+                v,
+                (*lowlink.get(&v).unwrap()).min(*indices.get(&w).unwrap()),
+            );
         }
     }
 
@@ -303,9 +307,7 @@ mod tests {
         let graph = create_test_graph();
 
         // Create linear chain: 0 -> 1 -> 2 -> 3 -> ... -> 9
-        let entity_ids = graph
-            .all_entity_ids()
-            .expect("Failed to get IDs");
+        let entity_ids = graph.all_entity_ids().expect("Failed to get IDs");
         for i in 0..entity_ids.len().saturating_sub(1) {
             let edge = crate::GraphEdge {
                 id: 0,
@@ -323,9 +325,7 @@ mod tests {
     fn create_simple_cycle_graph() -> SqliteGraph {
         let graph = create_test_graph();
 
-        let entity_ids = graph
-            .all_entity_ids()
-            .expect("Failed to get IDs");
+        let entity_ids = graph.all_entity_ids().expect("Failed to get IDs");
         // Create cycle: 0 -> 1 -> 2 -> 0
         let cycle = vec![(0, 1), (1, 2), (2, 0)];
         for (from_idx, to_idx) in cycle {
@@ -345,9 +345,7 @@ mod tests {
     fn create_mutual_recursion_graph() -> SqliteGraph {
         let graph = create_test_graph();
 
-        let entity_ids = graph
-            .all_entity_ids()
-            .expect("Failed to get IDs");
+        let entity_ids = graph.all_entity_ids().expect("Failed to get IDs");
         // Create mutual recursion: 0 <-> 1, and 2 -> 3 -> 4 (linear)
         let edges = vec![(0, 1), (1, 0), (2, 3), (3, 4)];
         for (from_idx, to_idx) in edges {
@@ -387,7 +385,9 @@ mod tests {
             file_path: Some("single.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let result = strongly_connected_components(&graph);
         assert!(result.is_ok());
@@ -441,9 +441,7 @@ mod tests {
             .find(|c| c.len() == 3)
             .expect("Should have a 3-node SCC");
 
-        let entity_ids = graph
-            .all_entity_ids()
-            .expect("Failed to get IDs");
+        let entity_ids = graph.all_entity_ids().expect("Failed to get IDs");
         assert!(cycle_component.contains(&entity_ids[0]));
         assert!(cycle_component.contains(&entity_ids[1]));
         assert!(cycle_component.contains(&entity_ids[2]));

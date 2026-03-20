@@ -21,7 +21,7 @@
 
 use std::time::Duration;
 
-use criterion::{black_box, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use rand::Rng;
 use rand::SeedableRng;
 use sqlitegraph::{SqliteGraph, algo::*};
@@ -240,9 +240,8 @@ fn bench_wcc(criterion: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("linear", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_linear_chain(size);
-                let _components = black_box(
-                    weakly_connected_components(&graph).expect("WCC failed"),
-                );
+                let _components =
+                    black_box(weakly_connected_components(&graph).expect("WCC failed"));
             });
         });
 
@@ -252,9 +251,8 @@ fn bench_wcc(criterion: &mut Criterion) {
             |b, &size| {
                 b.iter(|| {
                     let graph = create_bidirectional_random(size, 0.1);
-                    let _components = black_box(
-                        weakly_connected_components(&graph).expect("WCC failed"),
-                    );
+                    let _components =
+                        black_box(weakly_connected_components(&graph).expect("WCC failed"));
                 });
             },
         );
@@ -277,36 +275,28 @@ fn bench_scc(criterion: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("linear", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_linear_chain(size);
-                let _scc = black_box(
-                    strongly_connected_components(&graph).expect("SCC failed"),
-                );
+                let _scc = black_box(strongly_connected_components(&graph).expect("SCC failed"));
             });
         });
 
         group.bench_with_input(BenchmarkId::new("diamond", size), &size, |b, &_size| {
             b.iter(|| {
                 let graph = create_diamond_dag();
-                let _scc = black_box(
-                    strongly_connected_components(&graph).expect("SCC failed"),
-                );
+                let _scc = black_box(strongly_connected_components(&graph).expect("SCC failed"));
             });
         });
 
         group.bench_with_input(BenchmarkId::new("random_dag", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_random_dag(size, 0.1);
-                let _scc = black_box(
-                    strongly_connected_components(&graph).expect("SCC failed"),
-                );
+                let _scc = black_box(strongly_connected_components(&graph).expect("SCC failed"));
             });
         });
 
         group.bench_with_input(BenchmarkId::new("cycle", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_cycle_graph(size);
-                let _scc = black_box(
-                    strongly_connected_components(&graph).expect("SCC failed"),
-                );
+                let _scc = black_box(strongly_connected_components(&graph).expect("SCC failed"));
             });
         });
     }
@@ -328,18 +318,16 @@ fn bench_transitive_closure(criterion: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("linear", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_linear_chain(size);
-                let _closure = black_box(
-                    transitive_closure(&graph, None).expect("Transitive closure failed"),
-                );
+                let _closure =
+                    black_box(transitive_closure(&graph, None).expect("Transitive closure failed"));
             });
         });
 
         group.bench_with_input(BenchmarkId::new("random_dag", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_random_dag(size, 0.1);
-                let _closure = black_box(
-                    transitive_closure(&graph, None).expect("Transitive closure failed"),
-                );
+                let _closure =
+                    black_box(transitive_closure(&graph, None).expect("Transitive closure failed"));
             });
         });
 
@@ -381,18 +369,16 @@ fn bench_transitive_reduction(criterion: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("linear", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_linear_chain(size);
-                let _reduced = black_box(
-                    transitive_reduction(&graph).expect("Transitive reduction failed"),
-                );
+                let _reduced =
+                    black_box(transitive_reduction(&graph).expect("Transitive reduction failed"));
             });
         });
 
         group.bench_with_input(BenchmarkId::new("random_dag", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_random_dag(size, 0.1);
-                let _reduced = black_box(
-                    transitive_reduction(&graph).expect("Transitive reduction failed"),
-                );
+                let _reduced =
+                    black_box(transitive_reduction(&graph).expect("Transitive reduction failed"));
             });
         });
     }
@@ -414,38 +400,39 @@ fn bench_topological_sort(criterion: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("linear", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_linear_chain(size);
-                let _ordering = black_box(
-                    topological_sort(&graph).expect("Topological sort failed"),
-                );
+                let _ordering =
+                    black_box(topological_sort(&graph).expect("Topological sort failed"));
             });
         });
 
         group.bench_with_input(BenchmarkId::new("diamond", size), &size, |b, &_size| {
             b.iter(|| {
                 let graph = create_diamond_dag();
-                let _ordering = black_box(
-                    topological_sort(&graph).expect("Topological sort failed"),
-                );
+                let _ordering =
+                    black_box(topological_sort(&graph).expect("Topological sort failed"));
             });
         });
 
         group.bench_with_input(BenchmarkId::new("random_dag", size), &size, |b, &size| {
             b.iter(|| {
                 let graph = create_random_dag(size, 0.1);
-                let _ordering = black_box(
-                    topological_sort(&graph).expect("Topological sort failed"),
-                );
+                let _ordering =
+                    black_box(topological_sort(&graph).expect("Topological sort failed"));
             });
         });
 
         // Cycle detection benchmark
-        group.bench_with_input(BenchmarkId::new("cycle_detection", size), &size, |b, &size| {
-            b.iter(|| {
-                let graph = create_cycle_graph(size);
-                let _result = black_box(topological_sort(&graph));
-                // Should return CycleDetected error
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("cycle_detection", size),
+            &size,
+            |b, &size| {
+                b.iter(|| {
+                    let graph = create_cycle_graph(size);
+                    let _result = black_box(topological_sort(&graph));
+                    // Should return CycleDetected error
+                });
+            },
+        );
     }
 
     group.finish();
@@ -455,30 +442,15 @@ fn bench_topological_sort(criterion: &mut Criterion) {
 // Benchmark Groups Registration
 // ============================================================================
 
-criterion_group!(
-    wcc_benches,
-    bench_wcc,
-);
+criterion_group!(wcc_benches, bench_wcc,);
 
-criterion_group!(
-    scc_benches,
-    bench_scc,
-);
+criterion_group!(scc_benches, bench_scc,);
 
-criterion_group!(
-    transitive_closure_benches,
-    bench_transitive_closure,
-);
+criterion_group!(transitive_closure_benches, bench_transitive_closure,);
 
-criterion_group!(
-    transitive_reduction_benches,
-    bench_transitive_reduction,
-);
+criterion_group!(transitive_reduction_benches, bench_transitive_reduction,);
 
-criterion_group!(
-    topo_sort_benches,
-    bench_topological_sort,
-);
+criterion_group!(topo_sort_benches, bench_topological_sort,);
 
 criterion_main!(
     wcc_benches,

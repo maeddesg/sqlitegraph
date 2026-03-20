@@ -39,6 +39,7 @@ memmap2 = "0.9"
 log = "0.4"
 rayon = "1.10"
 petgraph = "0.6"
+sha2 = "0.10"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -54,19 +55,15 @@ default = ["sqlite-backend"]
 
 # Backend selection
 sqlite-backend = []          # SQLite backend (mature, ACID transactions)
-native-v2 = ["v2_io_exclusive_std"]  # Native V2 backend (high performance, production ready)
 native-v3 = []                # Native V3 backend (B+Tree index, unlimited capacity - experimental)
 
 # Development/debug features
 debug = []                   # Enable debug/info logging (disabled in release for zero overhead)
-trace_v2_io = []             # Debug V2 I/O operations (development only)
 bench-ci = []                # CI benchmarking
 dependency-monitoring = []   # Enable dependency health monitoring
+v3-forensics = []            # Enable forensic instrumentation for V3 backend performance analysis
 
 # Legacy compatibility
-v2_experimental = ["native-v2"]  # Alias for backwards compatibility
-v2_io_exclusive_mmap = []    # MMAP-based I/O (advanced users)
-v2_io_exclusive_std = []     # std::fs-based I/O (stable)
 
 # Note: Profile configurations moved to workspace root Cargo.toml for proper workspace behavior
 
@@ -125,6 +122,11 @@ name = "backend_comparison"
 harness = false
 [[bench]]
 name = "io12_validation"
+harness = false
+
+# Phase 1: SQLite vs V3 Minimal Benchmark Suite
+[[bench]]
+name = "sqlite_v3_comparison"
 harness = false
 
 # Phase 45: Graph Theory algorithms benchmarks

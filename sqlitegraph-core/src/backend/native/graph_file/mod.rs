@@ -171,7 +171,7 @@ impl GraphFile {
         self.file.seek(SeekFrom::Start(0))?;
         self.file.write_all(&header_bytes)?;
         self.file.flush()?;
-        self.file.sync_all().map_err(NativeBackendError::Io)?;  // CRITICAL: Ensure header reaches disk
+        self.file.sync_all().map_err(NativeBackendError::Io)?; // CRITICAL: Ensure header reaches disk
 
         Ok(())
     }

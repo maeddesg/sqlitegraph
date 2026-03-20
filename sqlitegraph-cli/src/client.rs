@@ -10,10 +10,7 @@ pub enum CliClient {
 
 impl CliClient {
     /// Open database with specified backend
-    pub fn open(
-        backend: super::cli::BackendType,
-        path: &std::path::Path,
-    ) -> anyhow::Result<Self> {
+    pub fn open(backend: super::cli::BackendType, path: &std::path::Path) -> anyhow::Result<Self> {
         match backend {
             super::cli::BackendType::Sqlite => {
                 let graph = sqlitegraph::SqliteGraph::open(path)?;

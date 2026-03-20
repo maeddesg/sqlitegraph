@@ -9,9 +9,7 @@ fn main() -> Result<()> {
     // Check for write operations without --write flag
     if !cli.write {
         match &cli.command {
-            Commands::Import { .. }
-            | Commands::Insert { .. }
-            | Commands::Export { .. } => {
+            Commands::Import { .. } | Commands::Insert { .. } | Commands::Export { .. } => {
                 anyhow::bail!(
                     "This command modifies the database. Use --write flag to enable write mode"
                 );
@@ -64,7 +62,7 @@ fn run_status(client: &sqlitegraph_cli::client::CliClient) -> Result<()> {
 
 fn run_list(client: &sqlitegraph_cli::client::CliClient, kind: Option<String>) -> Result<()> {
     use sqlitegraph::snapshot::SnapshotId;
-    
+
     let backend = client.backend();
     let node_ids = backend.entity_ids()?;
     let snapshot = SnapshotId::current();
@@ -169,46 +167,64 @@ fn run_algo(client: &sqlitegraph_cli::client::CliClient, command: AlgoCommands) 
     use sqlitegraph::algo::*;
     use sqlitegraph::progress::ConsoleProgress;
 
-    let graph = client.sqlite_graph().context("Algorithms require SQLite backend")?;
+    let graph = client
+        .sqlite_graph()
+        .context("Algorithms require SQLite backend")?;
     let progress = ConsoleProgress::new();
 
     match command {
         AlgoCommands::Pagerank { iterations } => {
             let scores = pagerank_with_progress(graph, 0.85, iterations, &progress)?;
-            let top: Vec<_> = scores.iter().take(10).map(|(id, score)| {
-                json!({"id": id, "score": score})
-            }).collect();
-            println!("{}", serde_json::to_string_pretty(&json!({
-                "algorithm": "pagerank",
-                "iterations": iterations,
-                "top_scores": top,
-            }))?);
+            let top: Vec<_> = scores
+                .iter()
+                .take(10)
+                .map(|(id, score)| json!({"id": id, "score": score}))
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "pagerank",
+                    "iterations": iterations,
+                    "top_scores": top,
+                }))?
+            );
         }
         AlgoCommands::Betweenness => {
             let scores = betweenness_centrality_with_progress(graph, &progress)?;
-            let top: Vec<_> = scores.iter().take(10).map(|(id, score)| {
-                json!({"id": id, "score": score})
-            }).collect();
-            println!("{}", serde_json::to_string_pretty(&json!({
-                "algorithm": "betweenness",
-                "top_scores": top,
-            }))?);
+            let top: Vec<_> = scores
+                .iter()
+                .take(10)
+                .map(|(id, score)| json!({"id": id, "score": score}))
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "betweenness",
+                    "top_scores": top,
+                }))?
+            );
         }
         AlgoCommands::Components => {
             let components = weakly_connected_components_with_progress(graph, &progress)?;
-            println!("{}", serde_json::to_string_pretty(&json!({
-                "algorithm": "wcc",
-                "component_count": components.len(),
-                "components": components.iter().take(10).collect::<Vec<_>>(),
-            }))?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "wcc",
+                    "component_count": components.len(),
+                    "components": components.iter().take(10).collect::<Vec<_>>(),
+                }))?
+            );
         }
         AlgoCommands::Topo => {
             let order = topological_sort(graph)?;
-            println!("{}", serde_json::to_string_pretty(&json!({
-                "algorithm": "topological_sort",
-                "node_count": order.len(),
-                "order": order.iter().take(100).collect::<Vec<_>>(),
-            }))?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "topological_sort",
+                    "node_count": order.len(),
+                    "order": order.iter().take(100).collect::<Vec<_>>(),
+                }))?
+            );
         }
     }
 
@@ -223,10 +239,13 @@ fn run_export(client: &sqlitegraph_cli::client::CliClient, output: &std::path::P
         .context("Export requires SQLite backend")?;
 
     dump_graph_to_path(graph, output)?;
-    println!("{}", serde_json::to_string_pretty(&json!({
-        "exported_to": output,
-        "status": "ok",
-    }))?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "exported_to": output,
+            "status": "ok",
+        }))?
+    );
     Ok(())
 }
 
@@ -238,10 +257,13 @@ fn run_import(client: &sqlitegraph_cli::client::CliClient, input: &std::path::Pa
         .context("Import requires SQLite backend")?;
 
     load_graph_from_path(graph, input)?;
-    println!("{}", serde_json::to_string_pretty(&json!({
-        "imported_from": input,
-        "status": "ok",
-    }))?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "imported_from": input,
+            "status": "ok",
+        }))?
+    );
     Ok(())
 }
 
@@ -266,11 +288,14 @@ fn run_insert(
         data: data_json,
     })?;
 
-    println!("{}", serde_json::to_string_pretty(&json!({
-        "id": id,
-        "kind": kind,
-        "name": name,
-        "status": "created",
-    }))?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "id": id,
+            "kind": kind,
+            "name": name,
+            "status": "created",
+        }))?
+    );
     Ok(())
 }

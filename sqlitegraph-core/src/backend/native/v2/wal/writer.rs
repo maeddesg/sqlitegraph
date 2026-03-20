@@ -229,8 +229,7 @@ impl V2WALWriter {
 
         // Read existing header if WAL file exists
         let header = if config.wal_path.exists() {
-            let header_bytes = std::fs::read(&config.wal_path)
-                .map_err(NativeBackendError::Io)?;
+            let header_bytes = std::fs::read(&config.wal_path).map_err(NativeBackendError::Io)?;
 
             if header_bytes.len() < std::mem::size_of::<V2WALHeader>() {
                 return Err(NativeBackendError::InvalidHeader {
@@ -243,9 +242,7 @@ impl V2WALWriter {
                 });
             }
 
-            unsafe {
-                std::ptr::read_unaligned(header_bytes.as_ptr() as *const V2WALHeader)
-            }
+            unsafe { std::ptr::read_unaligned(header_bytes.as_ptr() as *const V2WALHeader) }
         } else {
             // WAL doesn't exist yet, create new header
             V2WALHeader::new()

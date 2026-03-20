@@ -4,7 +4,9 @@
 //! It exposes potential crash-consistency issues where node metadata points to cluster offsets
 //! that may not be properly persisted across file boundaries.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 use std::collections::HashSet;
 use tempfile::TempDir;
 

@@ -12,8 +12,10 @@
 //! - V3 wins on TRAVERSAL (contiguous adjacency storage)
 //! - ADJACENCY FETCH depends on cache state and API overhead
 
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 use std::time::Instant;
-use sqlitegraph::{GraphConfig, NodeSpec, EdgeSpec, open_graph, SnapshotId, NeighborQuery, BackendDirection};
 use tempfile::tempdir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -60,7 +62,7 @@ fn test_point_lookup() -> Result<(), Box<dyn std::error::Error>> {
     {
         let temp_dir = tempdir()?;
         let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
-        
+
         let mut node_ids = Vec::new();
         for i in 0..1000 {
             let id = graph.insert_node(NodeSpec {
@@ -75,10 +77,14 @@ fn test_point_lookup() -> Result<(), Box<dyn std::error::Error>> {
         let snapshot = SnapshotId::current();
         let target = node_ids[500];
 
-        for _ in 0..100 { let _ = graph.get_node(snapshot, target)?; }
+        for _ in 0..100 {
+            let _ = graph.get_node(snapshot, target)?;
+        }
 
         let start = Instant::now();
-        for _ in 0..10000 { let _ = graph.get_node(snapshot, target)?; }
+        for _ in 0..10000 {
+            let _ = graph.get_node(snapshot, target)?;
+        }
         sqlite_time = start.elapsed().as_nanos() / 10000;
         println!("  SQLite:  {} ns/lookup  (B-tree optimized)", sqlite_time);
     }
@@ -87,7 +93,7 @@ fn test_point_lookup() -> Result<(), Box<dyn std::error::Error>> {
     {
         let temp_dir = tempdir()?;
         let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::native())?;
-        
+
         let mut node_ids = Vec::new();
         for i in 0..1000 {
             let id = graph.insert_node(NodeSpec {
@@ -102,16 +108,23 @@ fn test_point_lookup() -> Result<(), Box<dyn std::error::Error>> {
         let snapshot = SnapshotId::current();
         let target = node_ids[500];
 
-        for _ in 0..100 { let _ = graph.get_node(snapshot, target)?; }
+        for _ in 0..100 {
+            let _ = graph.get_node(snapshot, target)?;
+        }
 
         let start = Instant::now();
-        for _ in 0..10000 { let _ = graph.get_node(snapshot, target)?; }
+        for _ in 0..10000 {
+            let _ = graph.get_node(snapshot, target)?;
+        }
         v3_time = start.elapsed().as_nanos() / 10000;
         println!("  V3:      {} ns/lookup  (B+tree + page decode)", v3_time);
     }
-    
+
     let ratio = v3_time as f64 / sqlite_time as f64;
-    println!("\n  Result: SQLite is {:.1}× faster for point lookups", ratio);
+    println!(
+        "\n  Result: SQLite is {:.1}× faster for point lookups",
+        ratio
+    );
     println!("  Why: SQLite's B-tree has decades of optimization\n");
 
     Ok(())
@@ -129,7 +142,7 @@ fn test_adjacency_fetch() -> Result<(), Box<dyn std::error::Error>> {
     {
         let temp_dir = tempdir()?;
         let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
-        
+
         let mut node_ids = Vec::new();
         for i in 0..100 {
             let id = graph.insert_node(NodeSpec {
@@ -151,21 +164,31 @@ fn test_adjacency_fetch() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let snapshot = SnapshotId::current();
-        let query = NeighborQuery { direction: BackendDirection::Outgoing, edge_type: None };
+        let query = NeighborQuery {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        };
 
-        for _ in 0..100 { let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?; }
+        for _ in 0..100 {
+            let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?;
+        }
 
         let start = Instant::now();
-        for _ in 0..10000 { let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?; }
+        for _ in 0..10000 {
+            let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?;
+        }
         sqlite_time = start.elapsed().as_nanos() / 10000;
-        println!("  SQLite:  {} ns/fetch  (prepared statement + index)", sqlite_time);
+        println!(
+            "  SQLite:  {} ns/fetch  (prepared statement + index)",
+            sqlite_time
+        );
     }
 
     // V3
     {
         let temp_dir = tempdir()?;
         let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::native())?;
-        
+
         let mut node_ids = Vec::new();
         for i in 0..100 {
             let id = graph.insert_node(NodeSpec {
@@ -187,21 +210,31 @@ fn test_adjacency_fetch() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let snapshot = SnapshotId::current();
-        let query = NeighborQuery { direction: BackendDirection::Outgoing, edge_type: None };
+        let query = NeighborQuery {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        };
 
-        for _ in 0..100 { let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?; }
+        for _ in 0..100 {
+            let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?;
+        }
 
         let start = Instant::now();
-        for _ in 0..10000 { let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?; }
+        for _ in 0..10000 {
+            let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?;
+        }
         v3_time = start.elapsed().as_nanos() / 10000;
         println!("  V3:      {} ns/fetch  (HashMap + Arc::clone)", v3_time);
     }
-    
+
     let ratio = sqlite_time as f64 / v3_time as f64;
     if ratio > 1.0 {
         println!("\n  Result: V3 is {:.1}× faster for adjacency fetch", ratio);
     } else {
-        println!("\n  Result: SQLite is {:.1}× faster for adjacency fetch", 1.0/ratio);
+        println!(
+            "\n  Result: SQLite is {:.1}× faster for adjacency fetch",
+            1.0 / ratio
+        );
     }
     println!("  Note: Both are fast; difference is in API overhead\n");
 
@@ -221,7 +254,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
     {
         let temp_dir = tempdir()?;
         let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
-        
+
         let mut node_ids = Vec::new();
         for i in 0..100 {
             let id = graph.insert_node(NodeSpec {
@@ -236,7 +269,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..99 {
             graph.insert_edge(EdgeSpec {
                 from: node_ids[i],
-                to: node_ids[i+1],
+                to: node_ids[i + 1],
                 edge_type: "next".to_string(),
                 data: serde_json::Value::Null,
             })?;
@@ -245,7 +278,9 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
         let snapshot = SnapshotId::current();
 
         let start = Instant::now();
-        for _ in 0..1000 { let _ = graph.bfs(snapshot, node_ids[0], 3)?; }
+        for _ in 0..1000 {
+            let _ = graph.bfs(snapshot, node_ids[0], 3)?;
+        }
         sqlite_time = start.elapsed().as_millis() as f64 / 1000.0;
         println!("  SQLite:  {:.3} ms/BFS  (3 hops, 100 nodes)", sqlite_time);
     }
@@ -254,7 +289,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
     {
         let temp_dir = tempdir()?;
         let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::native())?;
-        
+
         let mut node_ids = Vec::new();
         for i in 0..100 {
             let id = graph.insert_node(NodeSpec {
@@ -269,7 +304,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..99 {
             graph.insert_edge(EdgeSpec {
                 from: node_ids[i],
-                to: node_ids[i+1],
+                to: node_ids[i + 1],
                 edge_type: "next".to_string(),
                 data: serde_json::Value::Null,
             })?;
@@ -278,11 +313,13 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
         let snapshot = SnapshotId::current();
 
         let start = Instant::now();
-        for _ in 0..1000 { let _ = graph.bfs(snapshot, node_ids[0], 3)?; }
+        for _ in 0..1000 {
+            let _ = graph.bfs(snapshot, node_ids[0], 3)?;
+        }
         v3_time = start.elapsed().as_millis() as f64 / 1000.0;
         println!("  V3:      {:.3} ms/BFS  (3 hops, 100 nodes)", v3_time);
     }
-    
+
     let ratio = sqlite_time / v3_time;
     println!("\n  Result: V3 is {:.1}× faster for traversal", ratio);
     println!("  Why: Contiguous adjacency storage reduces I/O\n");

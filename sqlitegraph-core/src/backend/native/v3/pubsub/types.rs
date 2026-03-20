@@ -185,17 +185,31 @@ mod tests {
     #[test]
     fn test_subscription_filter_matches() {
         let filter = SubscriptionFilter::nodes_only();
-        assert!(filter.matches(&PubSubEvent::NodeChanged { node_id: 1, snapshot_id: 1 }));
-        assert!(!filter.matches(&PubSubEvent::EdgeChanged { edge_id: 1, from_node: 1, to_node: 2, snapshot_id: 1 }));
+        assert!(filter.matches(&PubSubEvent::NodeChanged {
+            node_id: 1,
+            snapshot_id: 1
+        }));
+        assert!(!filter.matches(&PubSubEvent::EdgeChanged {
+            edge_id: 1,
+            from_node: 1,
+            to_node: 2,
+            snapshot_id: 1
+        }));
     }
 
     #[test]
     fn test_pubsub_event_types() {
-        let node_event = PubSubEvent::NodeChanged { node_id: 1, snapshot_id: 1 };
+        let node_event = PubSubEvent::NodeChanged {
+            node_id: 1,
+            snapshot_id: 1,
+        };
         assert_eq!(node_event.event_type(), PubSubEventType::NodeChanged);
         assert_eq!(node_event.snapshot_id(), 1);
 
-        let kv_event = PubSubEvent::KvChanged { key_hash: 123, snapshot_id: 5 };
+        let kv_event = PubSubEvent::KvChanged {
+            key_hash: 123,
+            snapshot_id: 5,
+        };
         assert_eq!(kv_event.event_type(), PubSubEventType::KvChanged);
         assert_eq!(kv_event.snapshot_id(), 5);
     }

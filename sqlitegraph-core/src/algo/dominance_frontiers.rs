@@ -319,13 +319,13 @@ pub fn dominance_frontiers(
 
             // Get idom of n once before the loop
             let idom_of_n = idom.get(&n).copied().flatten();
-            
+
             loop {
                 // Stop if runner reached idom(n) - we don't add DF for idom(n) itself
                 if Some(runner) == idom_of_n {
                     break;
                 }
-                
+
                 // Also stop if runner is the entry node (idom = None) and idom(n) is also None
                 // This happens when n is a child of the entry node
                 let idom_of_runner = idom.get(&runner).copied().flatten();
@@ -434,7 +434,7 @@ where
 
         // Get idom of n once before the loop
         let idom_of_n = idom.get(&n).copied().flatten();
-        
+
         // For each predecessor p of n
         for &p in &predecessors {
             // Walk up the idom tree from p to idom(n)
@@ -445,7 +445,7 @@ where
                 if Some(runner) == idom_of_n {
                     break;
                 }
-                
+
                 // Also stop if runner is the entry node (idom = None) and idom(n) is also None
                 let idom_of_runner = idom.get(&runner).copied().flatten();
                 if idom_of_runner.is_none() && idom_of_n.is_none() && runner != n {
@@ -561,10 +561,7 @@ pub fn iterated_dominance_frontiers(
         }
 
         // Check if any new nodes
-        let new_nodes: AHashSet<i64> = df_current
-            .difference(&phi_nodes)
-            .copied()
-            .collect();
+        let new_nodes: AHashSet<i64> = df_current.difference(&phi_nodes).copied().collect();
 
         if new_nodes.is_empty() {
             // Fixed point reached
@@ -593,7 +590,7 @@ pub fn iterated_dominance_frontiers(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create linear chain graph: 0 -> 1 -> 2 -> 3
     fn create_linear_chain() -> SqliteGraph {
@@ -608,7 +605,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -641,7 +640,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -675,7 +676,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -709,7 +712,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -743,7 +748,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -806,7 +813,7 @@ mod tests {
         // - Nodes 1 and 2 each dominate predecessor of 3 but not 3 itself
         //   DF(1) = {3}, DF(2) = {3}
         // - Node 3 has no successors, so DF(3) = {}
-        
+
         // Verify node 3 is in DF of nodes 1 and 2 (the predecessors)
         assert!(
             df_result.in_frontier(entity_ids[1], entity_ids[3]),
@@ -816,10 +823,11 @@ mod tests {
             df_result.in_frontier(entity_ids[2], entity_ids[3]),
             "Node 3 should be in DF(2)"
         );
-        
+
         // Entry node and merge node have empty DF
         assert!(
-            df_result.frontier(entity_ids[0]).is_none() || df_result.frontier(entity_ids[0]).unwrap().is_empty(),
+            df_result.frontier(entity_ids[0]).is_none()
+                || df_result.frontier(entity_ids[0]).unwrap().is_empty(),
             "Node 0 should have empty DF"
         );
     }
@@ -887,7 +895,9 @@ mod tests {
             file_path: Some("single.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
         let entry = entity_ids[0];
@@ -947,7 +957,10 @@ mod tests {
 
         // phi_nodes should be valid
         for &node in &idf_result.phi_nodes {
-            assert!(entity_ids.contains(&node), "phi_nodes should contain valid nodes");
+            assert!(
+                entity_ids.contains(&node),
+                "phi_nodes should contain valid nodes"
+            );
         }
     }
 
@@ -1011,8 +1024,10 @@ mod tests {
 
         // Entry node should have DF computed (in diamond, DF(0) = {3})
         let df_entry = df_result.frontier(entry);
-        assert!(df_entry.is_some() || df_entry.is_none(), // Either is valid
-                "Entry node DF should be computed");
+        assert!(
+            df_entry.is_some() || df_entry.is_none(), // Either is valid
+            "Entry node DF should be computed"
+        );
     }
 
     #[test]
@@ -1030,7 +1045,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1056,7 +1073,10 @@ mod tests {
 
         // Algorithm should handle self-loop without errors
         // The specific result depends on dominance structure
-        assert!(df_result.frontiers.len() >= 0, "Should compute DF successfully");
+        assert!(
+            df_result.frontiers.len() >= 0,
+            "Should compute DF successfully"
+        );
     }
 
     #[test]
@@ -1119,7 +1139,10 @@ mod tests {
                 // Should be symmetric with frontier() result
                 if in_frontier {
                     if let Some(frontier) = df_result.frontier(node) {
-                        assert!(frontier.contains(&other), "in_frontier true but not in frontier set");
+                        assert!(
+                            frontier.contains(&other),
+                            "in_frontier true but not in frontier set"
+                        );
                     }
                 }
             }

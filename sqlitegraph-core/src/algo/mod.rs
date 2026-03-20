@@ -348,120 +348,116 @@ pub use community::{label_propagation, louvain_communities, louvain_communities_
 
 // Cycle analysis algorithms
 pub use cycle_basis::{
-    cycle_basis, cycle_basis_bounded, cycle_basis_with_progress, CycleBasisBounds, CycleBasisResult,
+    CycleBasisBounds, CycleBasisResult, cycle_basis, cycle_basis_bounded, cycle_basis_with_progress,
 };
 
 // Structural analysis algorithms
+pub use scc::{SccResult, strongly_connected_components};
 pub use structure::{connected_components, find_cycles_limited, nodes_by_degree};
-pub use scc::{strongly_connected_components, SccResult};
+pub use topological_sort::{TopoError, topological_sort};
 pub use wcc::{weakly_connected_components, weakly_connected_components_with_progress};
-pub use topological_sort::{topological_sort, TopoError};
 
 // Dependency analysis algorithms
 pub use critical_path::{
-    critical_path, critical_path_with_progress, CriticalPathError, CriticalPathResult,
-    default_weight_fn, WeightCallback,
+    CriticalPathError, CriticalPathResult, WeightCallback, critical_path,
+    critical_path_with_progress, default_weight_fn,
 };
 
 // Reachability analysis algorithms
-pub use transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds};
-pub use transitive_reduction::{transitive_reduction, transitive_reduction_with_progress};
 pub use reachability::{
-    can_reach,
-    reachable_from,
-    reachable_from_with_progress,
-    reverse_reachable_from,
-    reverse_reachable_from_with_progress,
-    unreachable_from,
+    can_reach, reachable_from, reachable_from_with_progress, reverse_reachable_from,
+    reverse_reachable_from_with_progress, unreachable_from,
 };
+pub use transitive_closure::{
+    TransitiveClosureBounds, transitive_closure, transitive_closure_with_progress,
+};
+pub use transitive_reduction::{transitive_reduction, transitive_reduction_with_progress};
 
 // Control flow analysis algorithms
-pub use dominance_frontiers::{
-    dominance_frontiers, dominance_frontiers_with_progress, iterated_dominance_frontiers,
-    DominanceFrontierResult, IteratedDominanceFrontierResult,
-};
-pub use dominators::{dominators, dominators_with_progress, DominatorResult};
-pub use natural_loops::{natural_loops, natural_loops_from_exit, natural_loops_with_progress, NaturalLoop, NaturalLoopsResult};
-pub use post_dominators::{
-    post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
-};
 pub use control_dependence::{
-    control_dependence_graph, control_dependence_from_exit, ControlDependenceResult,
+    ControlDependenceResult, control_dependence_from_exit, control_dependence_graph,
+};
+pub use dominance_frontiers::{
+    DominanceFrontierResult, IteratedDominanceFrontierResult, dominance_frontiers,
+    dominance_frontiers_with_progress, iterated_dominance_frontiers,
+};
+pub use dominators::{DominatorResult, dominators, dominators_with_progress};
+pub use natural_loops::{
+    NaturalLoop, NaturalLoopsResult, natural_loops, natural_loops_from_exit,
+    natural_loops_with_progress,
+};
+pub use post_dominators::{
+    PostDominatorResult, post_dominators, post_dominators_auto_exit, post_dominators_with_progress,
 };
 
 // Program analysis algorithms
 pub use program_slicing::{
-    backward_slice, backward_slice_with_progress, forward_slice, forward_slice_with_progress,
-    SliceResult,
+    SliceResult, backward_slice, backward_slice_with_progress, forward_slice,
+    forward_slice_with_progress,
 };
 
 // Call graph analysis algorithms
-pub use call_graph_analysis::{
-    collapse_sccs, collapse_sccs_with_progress, SccCollapseResult,
-};
+pub use call_graph_analysis::{SccCollapseResult, collapse_sccs, collapse_sccs_with_progress};
 
 // Cut and partitioning algorithms
 pub use cut_partition::{
-    min_st_cut, min_st_cut_with_progress, min_vertex_cut, min_vertex_cut_with_progress,
-    MinCutResult, MinVertexCutResult,
-    partition_bfs_level, partition_greedy, partition_kway, partition_kway_with_progress,
-    PartitionConfig, PartitionResult,
+    MinCutResult, MinVertexCutResult, PartitionConfig, PartitionResult, min_st_cut,
+    min_st_cut_with_progress, min_vertex_cut, min_vertex_cut_with_progress, partition_bfs_level,
+    partition_greedy, partition_kway, partition_kway_with_progress,
 };
 
 // Path analysis algorithms
 pub use path_enumeration::{
-    enumerate_paths, enumerate_paths_with_progress, enumerate_paths_with_dominance,
-    enumerate_paths_with_dominance_progress, EnumeratedPath, PathClassification,
-    PathEnumerationConfig, PathEnumerationDominanceConfig, PathEnumerationPruningStats,
-    PathEnumerationResult,
+    EnumeratedPath, PathClassification, PathEnumerationConfig, PathEnumerationDominanceConfig,
+    PathEnumerationPruningStats, PathEnumerationResult, enumerate_paths,
+    enumerate_paths_with_dominance, enumerate_paths_with_dominance_progress,
+    enumerate_paths_with_progress,
 };
 
 // Observability algorithms
 pub use observability::{
-    happens_before_analysis, impact_radius, impact_radius_with_progress, HappensBeforeResult,
-    ImpactRadiusConfig, ImpactRadiusResult, Operation, TraceEvent, VectorClock,
+    HappensBeforeResult, ImpactRadiusConfig, ImpactRadiusResult, Operation, TraceEvent,
+    VectorClock, happens_before_analysis, impact_radius, impact_radius_with_progress,
 };
 // WeightCallback and default_weight_fn are re-exported from critical_path module
 
 // Subgraph isomorphism algorithms
 pub use subgraph_isomorphism::{
-    find_subgraph_patterns, find_subgraph_patterns_with_progress, SubgraphMatchResult,
-    SubgraphPatternBounds,
+    SubgraphMatchResult, SubgraphPatternBounds, find_subgraph_patterns,
+    find_subgraph_patterns_with_progress,
 };
 
 // Structural similarity algorithms
 pub use graph_similarity::{
-    structural_similarity, structural_similarity_with_progress, SimilarityBounds, SimilarityResult,
+    SimilarityBounds, SimilarityResult, structural_similarity, structural_similarity_with_progress,
 };
 
 // Graph rewriting algorithms
 pub use graph_rewriting::{
-    rewrite_graph_patterns, rewrite_graph_patterns_with_progress, RewriteBounds, RewriteOperation,
-    RewriteResult, RewriteRule,
+    RewriteBounds, RewriteOperation, RewriteResult, RewriteRule, rewrite_graph_patterns,
+    rewrite_graph_patterns_with_progress,
 };
 
 // Graph diff algorithms
 pub use graph_diff::{
-    graph_diff, graph_diff_with_progress, validate_refactor, EdgeDelta, GraphDiffResult, NodeDelta,
-    RefactorValidation,
+    EdgeDelta, GraphDiffResult, NodeDelta, RefactorValidation, graph_diff,
+    graph_diff_with_progress, validate_refactor,
 };
 
 // Security & Compliance algorithms
 pub use taint_analysis::{
-    discover_sources_and_sinks, discover_sources_and_sinks_default, MetadataSinkDetector,
-    MetadataSourceDetector, propagate_taint_backward, propagate_taint_backward_with_progress,
-    propagate_taint_forward, propagate_taint_forward_with_progress, sink_reachability_analysis,
-    sink_reachability_analysis_with_progress, SinkCallback, SourceCallback, TaintResult,
+    MetadataSinkDetector, MetadataSourceDetector, SinkCallback, SourceCallback, TaintResult,
+    discover_sources_and_sinks, discover_sources_and_sinks_default, propagate_taint_backward,
+    propagate_taint_backward_with_progress, propagate_taint_forward,
+    propagate_taint_forward_with_progress, sink_reachability_analysis,
+    sink_reachability_analysis_with_progress,
 };
 
 // Backend-agnostic algorithms (work with any GraphBackend)
 pub use backend::{
-    pagerank as pagerank_backend,
-    betweenness_centrality as betweenness_centrality_backend,
-    strongly_connected_components as scc_backend,
-    shortest_path as shortest_path_backend,
-    topological_sort as topological_sort_backend,
-    bfs_traversal, dfs_traversal, k_hop_neighbors,
+    betweenness_centrality as betweenness_centrality_backend, bfs_traversal, dfs_traversal,
+    k_hop_neighbors, pagerank as pagerank_backend, shortest_path as shortest_path_backend,
+    strongly_connected_components as scc_backend, topological_sort as topological_sort_backend,
 };
 
 // Module declarations
@@ -469,11 +465,14 @@ mod call_graph_analysis;
 mod centrality;
 mod community;
 mod control_dependence;
+mod critical_path;
 mod cut_partition;
 mod cycle_basis;
-mod critical_path;
 mod dominance_frontiers;
 mod dominators;
+mod graph_diff;
+mod graph_rewriting;
+mod graph_similarity;
 mod natural_loops;
 mod observability;
 mod path_enumeration;
@@ -483,9 +482,6 @@ mod reachability;
 mod scc;
 mod structure;
 mod subgraph_isomorphism;
-mod graph_similarity;
-mod graph_rewriting;
-mod graph_diff;
 mod taint_analysis;
 mod topological_sort;
 mod transitive_closure;

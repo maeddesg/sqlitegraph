@@ -3,8 +3,10 @@
 //! This test measures SQLite backend neighbor query performance
 //! for comparison with V3 backend.
 
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 use std::time::Instant;
-use sqlitegraph::{GraphConfig, NodeSpec, EdgeSpec, open_graph, SnapshotId, NeighborQuery, BackendDirection};
 use tempfile::tempdir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -55,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("───────────────────────────────────────────────────────────────────");
     println!("  COLD CACHE (First Query)");
     println!("───────────────────────────────────────────────────────────────────");
-    
+
     // First query (cold cache)
     let start = Instant::now();
     let result = graph.neighbors(snapshot, node_ids[0], query.clone())?;
@@ -89,9 +91,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════════════");
     println!("  Cold path (first query):       {} ns", cold_ns);
     println!("  Hot path  (cached):            {} ns", hot_ns);
-    println!("  Cache warmup benefit:          {}× faster", cold_ns as f64 / hot_ns as f64);
+    println!(
+        "  Cache warmup benefit:          {}× faster",
+        cold_ns as f64 / hot_ns as f64
+    );
     println!("");
-    
+
     if hot_ns < 500 {
         println!("  ✅ EXCELLENT: Hot path < 500 ns (SQLite's B-tree is highly optimized)");
     } else if hot_ns < 1000 {
@@ -99,7 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("  ⚠️  OK: Hot path {} μs", hot_ns / 1000);
     }
-    
+
     println!("\n  NOTE: SQLite's advantage is in mature B-tree + prepared statement cache");
     println!("        Point lookups are SQLite's strength due to decades of optimization");
     println!("═══════════════════════════════════════════════════════════════════");

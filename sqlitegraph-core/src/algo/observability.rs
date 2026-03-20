@@ -469,10 +469,7 @@ pub struct HappensBeforeResult {
 
 impl HappensBeforeResult {
     /// Create a new happens-before result.
-    fn new(
-        concurrent_pairs: Vec<(TraceEvent, TraceEvent)>,
-        total_events: usize,
-    ) -> Self {
+    fn new(concurrent_pairs: Vec<(TraceEvent, TraceEvent)>, total_events: usize) -> Self {
         let conflicts_detected = concurrent_pairs.len();
         Self {
             concurrent_pairs,
@@ -999,7 +996,11 @@ where
             progress.on_progress(
                 nodes_visited,
                 None,
-                &format!("Impact radius: visited {}, blast_zone {}", nodes_visited, blast_zone.len()),
+                &format!(
+                    "Impact radius: visited {}, blast_zone {}",
+                    nodes_visited,
+                    blast_zone.len()
+                ),
             );
         }
 
@@ -1028,7 +1029,10 @@ where
             if !weight.is_finite() {
                 progress.on_error(&std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("Invalid weight for edge {} -> {}: {}", node, neighbor, weight),
+                    format!(
+                        "Invalid weight for edge {} -> {}: {}",
+                        node, neighbor, weight
+                    ),
                 ));
                 return Err(SqliteGraphError::invalid_input(format!(
                     "Invalid weight for edge {} -> {}: weight must be finite, got {}",
@@ -1155,14 +1159,8 @@ mod tests {
         vc_b.increment(1);
         vc_b.increment(1);
 
-        assert!(
-            vc_a.happens_before(&vc_b),
-            "A should happen-before B"
-        );
-        assert!(
-            !vc_b.happens_before(&vc_a),
-            "B should not happen-before A"
-        );
+        assert!(vc_a.happens_before(&vc_b), "A should happen-before B");
+        assert!(!vc_b.happens_before(&vc_a), "B should not happen-before A");
     }
 
     #[test]
@@ -1181,10 +1179,7 @@ mod tests {
             vc_a.happens_before(&vc_b),
             "A should happen-before B (progressed on thread 2)"
         );
-        assert!(
-            !vc_b.happens_before(&vc_a),
-            "B should not happen-before A"
-        );
+        assert!(!vc_b.happens_before(&vc_a), "B should not happen-before A");
     }
 
     #[test]
@@ -1232,14 +1227,8 @@ mod tests {
         let vc_a = VectorClock::new().incremented(1);
         let vc_b = VectorClock::new().incremented(2);
 
-        assert!(
-            vc_a.is_concurrent(&vc_b),
-            "Clocks should be concurrent"
-        );
-        assert!(
-            vc_b.is_concurrent(&vc_a),
-            "Concurrency should be symmetric"
-        );
+        assert!(vc_a.is_concurrent(&vc_b), "Clocks should be concurrent");
+        assert!(vc_b.is_concurrent(&vc_a), "Concurrency should be symmetric");
     }
 
     #[test]
@@ -1375,8 +1364,8 @@ mod tests {
         // Scenario: Empty trace
         // Expected: Empty result, no conflicts
         let events: Vec<TraceEvent> = vec![];
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed on empty trace");
+        let result =
+            happens_before_analysis(&events).expect("Analysis should succeed on empty trace");
 
         assert_eq!(result.total_events, 0);
         assert_eq!(result.conflicts_detected, 0);
@@ -1389,8 +1378,7 @@ mod tests {
         // Scenario: Single event trace
         // Expected: No pairs to compare, no conflicts
         let events = vec![TraceEvent::with_thread(1, 1, Operation::Write, 100)];
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         assert_eq!(result.total_events, 1);
         assert_eq!(result.conflicts_detected, 0);
@@ -1407,8 +1395,7 @@ mod tests {
             make_event(3, 1, Operation::Write, 100, vec![(1, 3)]),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         assert_eq!(result.total_events, 3);
         assert_eq!(result.conflicts_detected, 0);
@@ -1424,8 +1411,7 @@ mod tests {
             TraceEvent::with_thread(2, 2, Operation::Write, 100),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         assert_eq!(result.total_events, 2);
         assert_eq!(result.conflicts_detected, 1);
@@ -1447,8 +1433,7 @@ mod tests {
             TraceEvent::with_thread(2, 2, Operation::Write, 100),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         assert_eq!(result.conflicts_detected, 1);
         assert!(result.has_races());
@@ -1463,8 +1448,7 @@ mod tests {
             TraceEvent::with_thread(2, 2, Operation::Read, 100),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         assert_eq!(result.conflicts_detected, 0);
         assert!(!result.has_races());
@@ -1480,8 +1464,7 @@ mod tests {
             make_event(2, 1, Operation::Write, 100, vec![(1, 2)]),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         assert_eq!(result.conflicts_detected, 0);
         assert!(!result.has_races());
@@ -1496,8 +1479,7 @@ mod tests {
             TraceEvent::with_thread(2, 2, Operation::Write, 200),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         assert_eq!(result.conflicts_detected, 0);
         assert!(!result.has_races());
@@ -1518,11 +1500,13 @@ mod tests {
             make_event(6, 1, Operation::Read, 300, vec![(1, 1)]),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         assert_eq!(result.total_events, 6);
-        assert_eq!(result.conflicts_detected, 1, "Should detect 1 race at location 100");
+        assert_eq!(
+            result.conflicts_detected, 1,
+            "Should detect 1 race at location 100"
+        );
         assert!(result.has_races());
 
         let raced = result.raced_locations();
@@ -1543,10 +1527,12 @@ mod tests {
             make_event(3, 2, Operation::Write, 100, vec![(1, 2), (2, 2)]),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
-        assert_eq!(result.conflicts_detected, 0, "Synchronized access should not race");
+        assert_eq!(
+            result.conflicts_detected, 0,
+            "Synchronized access should not race"
+        );
         assert!(!result.has_races());
     }
 
@@ -1560,8 +1546,7 @@ mod tests {
             TraceEvent::with_thread(3, 3, Operation::Write, 100),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         // All three threads are concurrent with each other
         // Pairs: (1,2), (1,3), (2,3) = 3 pairs
@@ -1582,8 +1567,7 @@ mod tests {
             TraceEvent::with_thread(2, 2, Operation::Write, 300),
         ];
 
-        let result = happens_before_analysis(&events)
-            .expect("Analysis should succeed");
+        let result = happens_before_analysis(&events).expect("Analysis should succeed");
 
         let locations = result.raced_locations();
         assert_eq!(locations.len(), 3);
@@ -1615,7 +1599,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1648,7 +1634,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1681,7 +1669,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1725,9 +1715,19 @@ mod tests {
             .expect("Impact radius should succeed on empty graph");
 
         assert_eq!(result.size, 1, "Empty graph should have blast zone size 1");
-        assert!(result.blast_zone.contains(&999), "Source should be in blast zone");
-        assert_eq!(*result.distances.get(&999).unwrap(), 0.0, "Source distance should be 0");
-        assert!(result.boundary.is_empty(), "Empty graph should have no boundary nodes");
+        assert!(
+            result.blast_zone.contains(&999),
+            "Source should be in blast zone"
+        );
+        assert_eq!(
+            *result.distances.get(&999).unwrap(),
+            0.0,
+            "Source distance should be 0"
+        );
+        assert!(
+            result.boundary.is_empty(),
+            "Empty graph should have no boundary nodes"
+        );
     }
 
     #[test]
@@ -1743,20 +1743,47 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         assert_eq!(result.size, 3, "Should have 3 nodes within 2 hops");
-        assert!(result.blast_zone.contains(&entity_ids[0]), "Node 0 should be in blast zone");
-        assert!(result.blast_zone.contains(&entity_ids[1]), "Node 1 should be in blast zone");
-        assert!(result.blast_zone.contains(&entity_ids[2]), "Node 2 should be in blast zone");
-        assert!(!result.blast_zone.contains(&entity_ids[3]), "Node 3 should NOT be in blast zone");
-        assert!(!result.blast_zone.contains(&entity_ids[4]), "Node 4 should NOT be in blast zone");
+        assert!(
+            result.blast_zone.contains(&entity_ids[0]),
+            "Node 0 should be in blast zone"
+        );
+        assert!(
+            result.blast_zone.contains(&entity_ids[1]),
+            "Node 1 should be in blast zone"
+        );
+        assert!(
+            result.blast_zone.contains(&entity_ids[2]),
+            "Node 2 should be in blast zone"
+        );
+        assert!(
+            !result.blast_zone.contains(&entity_ids[3]),
+            "Node 3 should NOT be in blast zone"
+        );
+        assert!(
+            !result.blast_zone.contains(&entity_ids[4]),
+            "Node 4 should NOT be in blast zone"
+        );
 
         // Check distances
-        assert_eq!(*result.distances.get(&entity_ids[0]).unwrap(), 0.0, "Node 0 distance = 0");
-        assert_eq!(*result.distances.get(&entity_ids[1]).unwrap(), 1.0, "Node 1 distance = 1");
-        assert_eq!(*result.distances.get(&entity_ids[2]).unwrap(), 2.0, "Node 2 distance = 2");
+        assert_eq!(
+            *result.distances.get(&entity_ids[0]).unwrap(),
+            0.0,
+            "Node 0 distance = 0"
+        );
+        assert_eq!(
+            *result.distances.get(&entity_ids[1]).unwrap(),
+            1.0,
+            "Node 1 distance = 1"
+        );
+        assert_eq!(
+            *result.distances.get(&entity_ids[2]).unwrap(),
+            2.0,
+            "Node 2 distance = 2"
+        );
     }
 
     #[test]
@@ -1772,13 +1799,22 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         assert_eq!(result.boundary.len(), 1, "Should have 1 boundary node");
-        assert!(result.boundary.contains(&entity_ids[2]), "Node 2 should be on boundary");
-        assert!(!result.boundary.contains(&entity_ids[0]), "Node 0 should NOT be on boundary");
-        assert!(!result.boundary.contains(&entity_ids[1]), "Node 1 should NOT be on boundary");
+        assert!(
+            result.boundary.contains(&entity_ids[2]),
+            "Node 2 should be on boundary"
+        );
+        assert!(
+            !result.boundary.contains(&entity_ids[0]),
+            "Node 0 should NOT be on boundary"
+        );
+        assert!(
+            !result.boundary.contains(&entity_ids[1]),
+            "Node 1 should NOT be on boundary"
+        );
     }
 
     #[test]
@@ -1794,14 +1830,26 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         assert_eq!(result.size, 3, "Should have 3 nodes due to hop limit");
-        assert!(result.blast_zone.contains(&entity_ids[0]), "Node 0 should be in blast zone");
-        assert!(result.blast_zone.contains(&entity_ids[1]), "Node 1 should be in blast zone");
-        assert!(result.blast_zone.contains(&entity_ids[2]), "Node 2 should be in blast zone");
-        assert!(!result.blast_zone.contains(&entity_ids[3]), "Node 3 should NOT be in blast zone");
+        assert!(
+            result.blast_zone.contains(&entity_ids[0]),
+            "Node 0 should be in blast zone"
+        );
+        assert!(
+            result.blast_zone.contains(&entity_ids[1]),
+            "Node 1 should be in blast zone"
+        );
+        assert!(
+            result.blast_zone.contains(&entity_ids[2]),
+            "Node 2 should be in blast zone"
+        );
+        assert!(
+            !result.blast_zone.contains(&entity_ids[3]),
+            "Node 3 should NOT be in blast zone"
+        );
     }
 
     #[test]
@@ -1812,9 +1860,7 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
         // Custom weight function: weight 2.0 per edge
-        let custom_weight_fn = |_from: i64, _to: i64, _edge_data: &Value| -> f64 {
-            2.0
-        };
+        let custom_weight_fn = |_from: i64, _to: i64, _edge_data: &Value| -> f64 { 2.0 };
 
         let config = ImpactRadiusConfig {
             max_distance: 4.0,
@@ -1822,8 +1868,8 @@ mod tests {
             weight_fn: &custom_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         // With weight 2.0 per edge:
         // Node 0: dist 0
@@ -1831,8 +1877,16 @@ mod tests {
         // Node 2: dist 4 (boundary)
         // Node 3: dist 6 (excluded)
         assert_eq!(result.size, 3, "Should have 3 nodes with custom weights");
-        assert_eq!(*result.distances.get(&entity_ids[1]).unwrap(), 2.0, "Node 1 distance = 2");
-        assert_eq!(*result.distances.get(&entity_ids[2]).unwrap(), 4.0, "Node 2 distance = 4");
+        assert_eq!(
+            *result.distances.get(&entity_ids[1]).unwrap(),
+            2.0,
+            "Node 1 distance = 2"
+        );
+        assert_eq!(
+            *result.distances.get(&entity_ids[2]).unwrap(),
+            4.0,
+            "Node 2 distance = 4"
+        );
     }
 
     #[test]
@@ -1848,13 +1902,17 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         // With default weight 1.0, distance = hop count
         for i in 0..5 {
             let expected_dist = i as f64;
-            let actual_dist = result.distances.get(&entity_ids[i]).copied().unwrap_or(999.0);
+            let actual_dist = result
+                .distances
+                .get(&entity_ids[i])
+                .copied()
+                .unwrap_or(999.0);
             assert_eq!(
                 actual_dist, expected_dist,
                 "Node {} should have distance {}",
@@ -1877,14 +1935,26 @@ mod tests {
         };
 
         // Start from node 0 (component 1: 0 -> 1)
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         assert_eq!(result.size, 2, "Should only reach component 1 (2 nodes)");
-        assert!(result.blast_zone.contains(&entity_ids[0]), "Node 0 should be in blast zone");
-        assert!(result.blast_zone.contains(&entity_ids[1]), "Node 1 should be in blast zone");
-        assert!(!result.blast_zone.contains(&entity_ids[2]), "Node 2 should NOT be in blast zone (different component)");
-        assert!(!result.blast_zone.contains(&entity_ids[3]), "Node 3 should NOT be in blast zone (different component)");
+        assert!(
+            result.blast_zone.contains(&entity_ids[0]),
+            "Node 0 should be in blast zone"
+        );
+        assert!(
+            result.blast_zone.contains(&entity_ids[1]),
+            "Node 1 should be in blast zone"
+        );
+        assert!(
+            !result.blast_zone.contains(&entity_ids[2]),
+            "Node 2 should NOT be in blast zone (different component)"
+        );
+        assert!(
+            !result.blast_zone.contains(&entity_ids[3]),
+            "Node 3 should NOT be in blast zone (different component)"
+        );
     }
 
     #[test]
@@ -1900,8 +1970,8 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         assert_eq!(result.size, 4, "Should reach all 4 nodes");
         for &id in &entity_ids {
@@ -1913,10 +1983,26 @@ mod tests {
         }
 
         // Check distances
-        assert_eq!(*result.distances.get(&entity_ids[0]).unwrap(), 0.0, "Node 0 distance = 0");
-        assert_eq!(*result.distances.get(&entity_ids[1]).unwrap(), 1.0, "Node 1 distance = 1");
-        assert_eq!(*result.distances.get(&entity_ids[2]).unwrap(), 1.0, "Node 2 distance = 1");
-        assert_eq!(*result.distances.get(&entity_ids[3]).unwrap(), 2.0, "Node 3 distance = 2");
+        assert_eq!(
+            *result.distances.get(&entity_ids[0]).unwrap(),
+            0.0,
+            "Node 0 distance = 0"
+        );
+        assert_eq!(
+            *result.distances.get(&entity_ids[1]).unwrap(),
+            1.0,
+            "Node 1 distance = 1"
+        );
+        assert_eq!(
+            *result.distances.get(&entity_ids[2]).unwrap(),
+            1.0,
+            "Node 2 distance = 1"
+        );
+        assert_eq!(
+            *result.distances.get(&entity_ids[3]).unwrap(),
+            2.0,
+            "Node 3 distance = 2"
+        );
     }
 
     #[test]
@@ -1932,14 +2018,29 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
-        assert!(result.is_affected(entity_ids[0]), "Node 0 should be affected");
-        assert!(result.is_affected(entity_ids[1]), "Node 1 should be affected");
-        assert!(result.is_affected(entity_ids[2]), "Node 2 should be affected");
-        assert!(!result.is_affected(entity_ids[3]), "Node 3 should NOT be affected");
-        assert!(!result.is_affected(entity_ids[4]), "Node 4 should NOT be affected");
+        assert!(
+            result.is_affected(entity_ids[0]),
+            "Node 0 should be affected"
+        );
+        assert!(
+            result.is_affected(entity_ids[1]),
+            "Node 1 should be affected"
+        );
+        assert!(
+            result.is_affected(entity_ids[2]),
+            "Node 2 should be affected"
+        );
+        assert!(
+            !result.is_affected(entity_ids[3]),
+            "Node 3 should NOT be affected"
+        );
+        assert!(
+            !result.is_affected(entity_ids[4]),
+            "Node 4 should NOT be affected"
+        );
     }
 
     #[test]
@@ -1955,14 +2056,34 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
-        assert_eq!(result.distance_to(entity_ids[0]), Some(0.0), "Node 0 distance");
-        assert_eq!(result.distance_to(entity_ids[1]), Some(1.0), "Node 1 distance");
-        assert_eq!(result.distance_to(entity_ids[2]), Some(2.0), "Node 2 distance");
-        assert_eq!(result.distance_to(entity_ids[3]), None, "Node 3 should return None");
-        assert_eq!(result.distance_to(999), None, "Non-existent node should return None");
+        assert_eq!(
+            result.distance_to(entity_ids[0]),
+            Some(0.0),
+            "Node 0 distance"
+        );
+        assert_eq!(
+            result.distance_to(entity_ids[1]),
+            Some(1.0),
+            "Node 1 distance"
+        );
+        assert_eq!(
+            result.distance_to(entity_ids[2]),
+            Some(2.0),
+            "Node 2 distance"
+        );
+        assert_eq!(
+            result.distance_to(entity_ids[3]),
+            None,
+            "Node 3 should return None"
+        );
+        assert_eq!(
+            result.distance_to(999),
+            None,
+            "Non-existent node should return None"
+        );
     }
 
     #[test]
@@ -1978,13 +2099,25 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
-        assert!(!result.is_boundary(entity_ids[0]), "Node 0 should NOT be boundary");
-        assert!(!result.is_boundary(entity_ids[1]), "Node 1 should NOT be boundary");
-        assert!(result.is_boundary(entity_ids[2]), "Node 2 should be boundary");
-        assert!(!result.is_boundary(entity_ids[3]), "Node 3 should NOT be boundary");
+        assert!(
+            !result.is_boundary(entity_ids[0]),
+            "Node 0 should NOT be boundary"
+        );
+        assert!(
+            !result.is_boundary(entity_ids[1]),
+            "Node 1 should NOT be boundary"
+        );
+        assert!(
+            result.is_boundary(entity_ids[2]),
+            "Node 2 should be boundary"
+        );
+        assert!(
+            !result.is_boundary(entity_ids[3]),
+            "Node 3 should NOT be boundary"
+        );
     }
 
     #[test]
@@ -2005,22 +2138,19 @@ mod tests {
         let progress = NoProgress;
         let result_with = impact_radius_with_progress(&graph, entity_ids[0], &config, &progress)
             .expect("Impact radius with progress should succeed");
-        let result_without = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result_without =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         assert_eq!(
-            result_with.size,
-            result_without.size,
+            result_with.size, result_without.size,
             "Progress and non-progress results should match"
         );
         assert_eq!(
-            result_with.blast_zone,
-            result_without.blast_zone,
+            result_with.blast_zone, result_without.blast_zone,
             "Blast zones should match"
         );
         assert_eq!(
-            result_with.boundary,
-            result_without.boundary,
+            result_with.boundary, result_without.boundary,
             "Boundaries should match"
         );
     }
@@ -2038,12 +2168,18 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         assert_eq!(result.size, 1, "Should only have source node");
-        assert!(result.blast_zone.contains(&entity_ids[0]), "Source should be in blast zone");
-        assert!(!result.blast_zone.contains(&entity_ids[1]), "Node 1 should NOT be in blast zone");
+        assert!(
+            result.blast_zone.contains(&entity_ids[0]),
+            "Source should be in blast zone"
+        );
+        assert!(
+            !result.blast_zone.contains(&entity_ids[1]),
+            "Node 1 should NOT be in blast zone"
+        );
     }
 
     #[test]
@@ -2061,7 +2197,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2120,10 +2258,14 @@ mod tests {
             weight_fn: &default_weight_fn,
         };
 
-        let result = impact_radius(&graph, entity_ids[0], &config)
-            .expect("Impact radius should succeed");
+        let result =
+            impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         // Node 3 should have distance 1 (shortest path)
-        assert_eq!(*result.distances.get(&entity_ids[3]).unwrap(), 1.0, "Node 3 should have distance 1 via direct edge");
+        assert_eq!(
+            *result.distances.get(&entity_ids[3]).unwrap(),
+            1.0,
+            "Node 3 should have distance 1 via direct edge"
+        );
     }
 }

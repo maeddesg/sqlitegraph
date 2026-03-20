@@ -376,10 +376,7 @@ pub fn control_dependence_graph(
 
     // Handle empty graph
     if all_nodes.is_empty() {
-        return Ok(ControlDependenceResult {
-            cdg,
-            reverse_cdg,
-        });
+        return Ok(ControlDependenceResult { cdg, reverse_cdg });
     }
 
     // Enumerate all edges in the CFG
@@ -401,10 +398,7 @@ pub fn control_dependence_graph(
         }
     }
 
-    Ok(ControlDependenceResult {
-        cdg,
-        reverse_cdg,
-    })
+    Ok(ControlDependenceResult { cdg, reverse_cdg })
 }
 
 /// Computes control dependence with automatic exit detection.
@@ -511,7 +505,7 @@ fn is_control_dependent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create if-then-else CFG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
     /// Expected: Node 3 is control-dependent on node 0 (merge point depends on branch)
@@ -527,7 +521,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -562,7 +558,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -597,7 +595,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -632,7 +632,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -667,7 +669,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -692,35 +696,67 @@ mod tests {
         // Scenario: If-then-else CFG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
         // Entity IDs: [1, 2, 3, 4] where 4 is exit
         // Edges: 1->2, 1->3, 2->4, 3->4
-        // Expected: 
+        // Expected:
         // - Node 1 (branch) controls nodes 2 and 3 (then/else arms)
         // - Nodes 2 and 3 each control node 4 (exit)
         let graph = create_if_then_else_cfg();
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Node 1 (branch point) controls its direct successors (nodes 2 and 3)
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]),
-                "Node 1 should control node 2");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[2]),
-                "Node 1 should control node 3");
-        
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 1 should control node 2"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[2]),
+            "Node 1 should control node 3"
+        );
+
         // Nodes 2 and 3 each control the exit
-        assert!(cdg_result.controls(entity_ids[1], entity_ids[3]),
-                "Node 2 should control exit");
-        assert!(cdg_result.controls(entity_ids[2], entity_ids[3]),
-                "Node 3 should control exit");
+        assert!(
+            cdg_result.controls(entity_ids[1], entity_ids[3]),
+            "Node 2 should control exit"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[2], entity_ids[3]),
+            "Node 3 should control exit"
+        );
 
         // Verify forward and reverse mappings
-        assert!(cdg_result.cdg.get(&entity_ids[0]).map(|s| s.contains(&entity_ids[1])).unwrap_or(false));
-        assert!(cdg_result.cdg.get(&entity_ids[0]).map(|s| s.contains(&entity_ids[2])).unwrap_or(false));
-        assert!(cdg_result.reverse_cdg.get(&entity_ids[3]).map(|s| s.contains(&entity_ids[1])).unwrap_or(false));
-        assert!(cdg_result.reverse_cdg.get(&entity_ids[3]).map(|s| s.contains(&entity_ids[2])).unwrap_or(false));
+        assert!(
+            cdg_result
+                .cdg
+                .get(&entity_ids[0])
+                .map(|s| s.contains(&entity_ids[1]))
+                .unwrap_or(false)
+        );
+        assert!(
+            cdg_result
+                .cdg
+                .get(&entity_ids[0])
+                .map(|s| s.contains(&entity_ids[2]))
+                .unwrap_or(false)
+        );
+        assert!(
+            cdg_result
+                .reverse_cdg
+                .get(&entity_ids[3])
+                .map(|s| s.contains(&entity_ids[1]))
+                .unwrap_or(false)
+        );
+        assert!(
+            cdg_result
+                .reverse_cdg
+                .get(&entity_ids[3])
+                .map(|s| s.contains(&entity_ids[2]))
+                .unwrap_or(false)
+        );
     }
 
     #[test]
@@ -731,16 +767,20 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[2];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Node 2 should be control-dependent on node 1
-        assert!(cdg_result.controls(entity_ids[1], entity_ids[2]),
-                "Node 1 should control node 2");
-        assert!(cdg_result.depends_on(entity_ids[2], entity_ids[1]),
-                "Node 2 should depend on node 1");
+        assert!(
+            cdg_result.controls(entity_ids[1], entity_ids[2]),
+            "Node 1 should control node 2"
+        );
+        assert!(
+            cdg_result.depends_on(entity_ids[2], entity_ids[1]),
+            "Node 2 should depend on node 1"
+        );
 
         // Node 2 should NOT control anything (it's a leaf in CDG)
         assert_eq!(cdg_result.controlled_by(entity_ids[2]), None);
@@ -751,7 +791,7 @@ mod tests {
         // Scenario: Nested if CFG: 0 -> 1, 0 -> 2, 1 -> 3, 1 -> 4, 3 -> 5, 4 -> 5
         // Entity IDs: [1, 2, 3, 4, 5, 6] where 6 is exit
         // Edges: 1->2, 1->3, 2->4, 2->5, 4->6, 5->6
-        // Expected: 
+        // Expected:
         // - Node 0 controls nodes 1 and 2
         // - Node 1 controls nodes 3 and 4
         // - Nodes 3 and 4 control node 5 (exit)
@@ -759,18 +799,21 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[5];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // NOTE: This test reveals a bug in the post-dominator algorithm for nested structures.
         // The post-dominator sets are computed incorrectly, causing wrong control dependence.
         // Skipping detailed assertions until the algorithm is fixed.
-        
+
         // Just verify that CDG was computed and has the expected structure
-        assert!(!cdg_result.cdg.is_empty(), "CDG should not be empty for nested if");
-        
+        assert!(
+            !cdg_result.cdg.is_empty(),
+            "CDG should not be empty for nested if"
+        );
+
         // Verify basic properties
         assert!(cdg_result.is_acyclic(), "CDG should be acyclic");
     }
@@ -785,22 +828,37 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // CDG should have 3 edges (each node controls its successor in the chain)
-        assert_eq!(cdg_result.cdg.len(), 3,
-                   "CDG should have 3 control dependence edges for linear chain");
-        
+        assert_eq!(
+            cdg_result.cdg.len(),
+            3,
+            "CDG should have 3 control dependence edges for linear chain"
+        );
+
         // Check specific control dependence relationships
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]), "Node 0 should control node 1");
-        assert!(cdg_result.controls(entity_ids[1], entity_ids[2]), "Node 1 should control node 2");
-        assert!(cdg_result.controls(entity_ids[2], entity_ids[3]), "Node 2 should control node 3");
-        
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 0 should control node 1"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[1], entity_ids[2]),
+            "Node 1 should control node 2"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[2], entity_ids[3]),
+            "Node 2 should control node 3"
+        );
+
         // Exit node should not control anything
-        assert!(!cdg_result.cdg.contains_key(&entity_ids[3]), "Exit node should not control any node");
+        assert!(
+            !cdg_result.cdg.contains_key(&entity_ids[3]),
+            "Exit node should not control any node"
+        );
     }
 
     #[test]
@@ -816,13 +874,15 @@ mod tests {
             file_path: Some("single.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[0];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
@@ -839,8 +899,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
@@ -879,8 +939,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
@@ -888,11 +948,13 @@ mod tests {
         let deps = cdg_result.dependencies_of(entity_ids[3]);
         assert!(deps.is_some(), "Exit should have dependencies");
         assert!(
-            deps.map(|set| set.contains(&entity_ids[1])).unwrap_or(false),
+            deps.map(|set| set.contains(&entity_ids[1]))
+                .unwrap_or(false),
             "Exit should depend on node 1"
         );
         assert!(
-            deps.map(|set| set.contains(&entity_ids[2])).unwrap_or(false),
+            deps.map(|set| set.contains(&entity_ids[2]))
+                .unwrap_or(false),
             "Exit should depend on node 2"
         );
 
@@ -909,16 +971,23 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Node 0 controls nodes 1, 2, 3 (exit) - so it has dependencies
-        assert!(cdg_result.controlled_by(entity_ids[0]).is_some(), "Node 0 should control some nodes");
-        
+        assert!(
+            cdg_result.controlled_by(entity_ids[0]).is_some(),
+            "Node 0 should control some nodes"
+        );
+
         // Exit node (3) doesn't control anything
-        assert_eq!(cdg_result.controlled_by(entity_ids[3]), None, "Exit should control nothing");
+        assert_eq!(
+            cdg_result.controlled_by(entity_ids[3]),
+            None,
+            "Exit should control nothing"
+        );
     }
 
     #[test]
@@ -927,8 +996,8 @@ mod tests {
         // Expected: Returns empty cdg and reverse_cdg
         let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
-        let post_result =
-            super::super::post_dominators::post_dominators_auto_exit(&graph).expect("Failed on empty graph");
+        let post_result = super::super::post_dominators::post_dominators_auto_exit(&graph)
+            .expect("Failed on empty graph");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
@@ -951,7 +1020,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -966,15 +1037,21 @@ mod tests {
         };
         graph.insert_edge(&edge).expect("Failed to insert edge");
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, entity_ids[1])
-                .expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, entity_ids[1])
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Single edge 0->1 has control dependence (source doesn't post-dominate target)
-        assert_eq!(cdg_result.cdg.len(), 1, "Single edge should have control dependence");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]), "Node 0 should control node 1");
+        assert_eq!(
+            cdg_result.cdg.len(),
+            1,
+            "Single edge should have control dependence"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 0 should control node 1"
+        );
     }
 
     #[test]
@@ -987,18 +1064,30 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Node 0 controls its direct successors (nodes 1 and 2)
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]), "Node 0 should control node 1");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[2]), "Node 0 should control node 2");
-        
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 0 should control node 1"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[2]),
+            "Node 0 should control node 2"
+        );
+
         // Nodes 1 and 2 control node 3 (exit)
-        assert!(cdg_result.controls(entity_ids[1], entity_ids[3]), "Node 1 should control exit");
-        assert!(cdg_result.controls(entity_ids[2], entity_ids[3]), "Node 2 should control exit");
+        assert!(
+            cdg_result.controls(entity_ids[1], entity_ids[3]),
+            "Node 1 should control exit"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[2], entity_ids[3]),
+            "Node 2 should control exit"
+        );
     }
 
     #[test]
@@ -1018,7 +1107,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1036,21 +1127,38 @@ mod tests {
             graph.insert_edge(&edge).expect("Failed to insert edge");
         }
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, entity_ids[4])
-                .expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, entity_ids[4])
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Node 0 controls nodes 1, 2, 3
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]), "Node 0 should control node 1");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[2]), "Node 0 should control node 2");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[3]), "Node 0 should control node 3");
-        
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 0 should control node 1"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[2]),
+            "Node 0 should control node 2"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[3]),
+            "Node 0 should control node 3"
+        );
+
         // Nodes 1, 2, 3 control exit
-        assert!(cdg_result.controls(entity_ids[1], entity_ids[4]), "Node 1 should control exit");
-        assert!(cdg_result.controls(entity_ids[2], entity_ids[4]), "Node 2 should control exit");
-        assert!(cdg_result.controls(entity_ids[3], entity_ids[4]), "Node 3 should control exit");
+        assert!(
+            cdg_result.controls(entity_ids[1], entity_ids[4]),
+            "Node 1 should control exit"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[2], entity_ids[4]),
+            "Node 2 should control exit"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[3], entity_ids[4]),
+            "Node 3 should control exit"
+        );
     }
 
     #[test]
@@ -1062,16 +1170,22 @@ mod tests {
         let exit = entity_ids[3];
 
         // Compute post-dominators
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
 
         // Compute control dependence from post-result
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Should have control dependence (node 0 controls nodes 1 and 2)
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]), "Node 0 should control node 1");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[2]), "Node 0 should control node 2");
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 0 should control node 1"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[2]),
+            "Node 0 should control node 2"
+        );
     }
 
     #[test]
@@ -1086,8 +1200,14 @@ mod tests {
             .expect("Failed to compute control dependence from exit");
 
         // Should have control dependence (node 0 controls nodes 1 and 2)
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]), "Node 0 should control node 1");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[2]), "Node 0 should control node 2");
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 0 should control node 1"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[2]),
+            "Node 0 should control node 2"
+        );
     }
 
     #[test]
@@ -1102,8 +1222,14 @@ mod tests {
             .expect("Failed to compute control dependence with auto exit");
 
         // Should have control dependence (node 0 controls nodes 1 and 2)
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]), "Node 0 should control node 1");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[2]), "Node 0 should control node 2");
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 0 should control node 1"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[2]),
+            "Node 0 should control node 2"
+        );
     }
 
     #[test]
@@ -1114,8 +1240,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
@@ -1143,8 +1269,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[2];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
@@ -1163,8 +1289,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[5];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
@@ -1180,14 +1306,16 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Node 2 (loop body) should depend on node 1 (loop header)
-        assert!(cdg_result.depends_on(entity_ids[2], entity_ids[1]),
-                "Loop body should depend on loop header");
+        assert!(
+            cdg_result.depends_on(entity_ids[2], entity_ids[1]),
+            "Loop body should depend on loop header"
+        );
     }
 
     #[test]
@@ -1198,17 +1326,29 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Test controls() method
         // Node 0 controls nodes 1 and 2, not node 3 (exit)
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[1]), "Node 0 should control node 1");
-        assert!(cdg_result.controls(entity_ids[0], entity_ids[2]), "Node 0 should control node 2");
-        assert!(!cdg_result.controls(entity_ids[0], entity_ids[3]), "Node 0 should NOT control exit");
-        assert!(!cdg_result.controls(entity_ids[3], entity_ids[0]), "Exit should NOT control node 0"); // Not symmetric
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[1]),
+            "Node 0 should control node 1"
+        );
+        assert!(
+            cdg_result.controls(entity_ids[0], entity_ids[2]),
+            "Node 0 should control node 2"
+        );
+        assert!(
+            !cdg_result.controls(entity_ids[0], entity_ids[3]),
+            "Node 0 should NOT control exit"
+        );
+        assert!(
+            !cdg_result.controls(entity_ids[3], entity_ids[0]),
+            "Exit should NOT control node 0"
+        ); // Not symmetric
     }
 
     #[test]
@@ -1219,15 +1359,24 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
 
-        let post_result =
-            super::super::post_dominators::post_dominators(&graph, exit).expect("Failed to compute post-dominators");
+        let post_result = super::super::post_dominators::post_dominators(&graph, exit)
+            .expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
         // Test depends_on() method
         // Nodes 1 and 2 depend on node 0 (they are controlled by it)
-        assert!(cdg_result.depends_on(entity_ids[1], entity_ids[0]), "Node 1 should depend on node 0");
-        assert!(cdg_result.depends_on(entity_ids[2], entity_ids[0]), "Node 2 should depend on node 0");
-        assert!(!cdg_result.depends_on(entity_ids[0], entity_ids[1]), "Node 0 should NOT depend on node 1"); // Not symmetric
+        assert!(
+            cdg_result.depends_on(entity_ids[1], entity_ids[0]),
+            "Node 1 should depend on node 0"
+        );
+        assert!(
+            cdg_result.depends_on(entity_ids[2], entity_ids[0]),
+            "Node 2 should depend on node 0"
+        );
+        assert!(
+            !cdg_result.depends_on(entity_ids[0], entity_ids[1]),
+            "Node 0 should NOT depend on node 1"
+        ); // Not symmetric
     }
 }

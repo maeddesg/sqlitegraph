@@ -167,11 +167,7 @@ pub fn topological_sort(graph: &SqliteGraph) -> Result<Vec<i64>, TopoError> {
     })?;
 
     // Find non-trivial SCCs (cycles)
-    let non_trivial_sccs: Vec<_> = scc
-        .components
-        .into_iter()
-        .filter(|c| c.len() > 1)
-        .collect();
+    let non_trivial_sccs: Vec<_> = scc.components.into_iter().filter(|c| c.len() > 1).collect();
 
     if !non_trivial_sccs.is_empty() {
         // Extract cycle path from first non-trivial SCC
@@ -311,7 +307,7 @@ fn extract_cycle_path(graph: &SqliteGraph, scc: &HashSet<i64>) -> Vec<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create test graph with linear chain: 0 -> 1 -> 2 -> 3
     fn create_linear_chain_graph() -> SqliteGraph {
@@ -326,7 +322,9 @@ mod tests {
                 file_path: Some(format!("test_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -359,7 +357,9 @@ mod tests {
                 file_path: Some(format!("test_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -393,7 +393,9 @@ mod tests {
                 file_path: Some(format!("cycle_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -450,7 +452,10 @@ mod tests {
         assert_eq!(ordering.len(), 1, "Expected single node in ordering");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
-        assert_eq!(ordering[0], entity_ids[0], "Ordering should contain the node");
+        assert_eq!(
+            ordering[0], entity_ids[0],
+            "Ordering should contain the node"
+        );
     }
 
     #[test]
@@ -528,7 +533,10 @@ mod tests {
         let graph = create_cycle_graph();
 
         let result = topological_sort(&graph);
-        assert!(result.is_err(), "Topological sort should fail on cyclic graph");
+        assert!(
+            result.is_err(),
+            "Topological sort should fail on cyclic graph"
+        );
 
         let err = result.unwrap_err();
         match err {
@@ -538,10 +546,7 @@ mod tests {
                     explanation.contains("cycle"),
                     "Explanation should mention cycles"
                 );
-                assert!(
-                    cycle.len() >= 3,
-                    "Cycle should have at least 3 nodes"
-                );
+                assert!(cycle.len() >= 3, "Cycle should have at least 3 nodes");
             }
         }
     }
@@ -565,8 +570,7 @@ mod tests {
                 // First and last nodes should be the same (cycle completes)
                 // or cycle should have a path that forms a loop
                 let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
-                let valid_nodes: std::collections::HashSet<i64> =
-                    entity_ids.into_iter().collect();
+                let valid_nodes: std::collections::HashSet<i64> = entity_ids.into_iter().collect();
 
                 // All nodes in cycle should be valid
                 for node in &cycle {

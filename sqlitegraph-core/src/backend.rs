@@ -21,15 +21,7 @@ pub use crate::multi_hop::ChainStep;
 pub use sqlite::types::{BackendDirection, EdgeSpec, NeighborQuery, NodeSpec};
 
 // KV store types (re-exported for public API)
-#[cfg(feature = "native-v2")]
-pub use crate::backend::native::v2::kv_store::types::{KvStoreError, KvValue};
-
-// Pub/Sub types (re-exported for public API when native-v2 is enabled)
-#[cfg(feature = "native-v2")]
-pub use crate::backend::native::v2::pubsub::{PubSubEvent, SubscriptionFilter};
-
-// Generic Pub/Sub types that work across all backends
-// These are used when native-v2 is not enabled
+pub use crate::backend::native::types::{KvStoreError, KvValue};
 
 /// Types of pub/sub events
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,77 +31,72 @@ pub enum PubSubEventType {
     /// Edge created or modified
     EdgeChanged = 2,
     /// KV entry created, modified, or deleted
-    KVChanged = 3,
+    KvChanged = 3,
     /// Transaction committed
     SnapshotCommitted = 4,
     /// All event types
     All = 255,
 }
 
-// Pub/Sub types: use native-v2's when that feature is enabled,
-// otherwise define simple versions for V3/SQLite backends
+/// Event delivered to subscribers
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PubSubEvent {
+    /// Node created or modified
+    NodeChanged {
+        /// Node ID that changed
+        node_id: i64,
+        /// Snapshot ID when change was committed
+        snapshot_id: u64,
+    },
+    /// Edge created or modified
+    EdgeChanged {
+        /// Edge ID that changed
+        edge_id: i64,
+        /// Source node ID
+        from_node: i64,
+        /// Target node ID
+        to_node: i64,
+        /// Snapshot ID when change was committed
+        snapshot_id: u64,
+    },
+    /// KV entry changed
+    KvChanged {
+        /// Key hash for the KV entry
+        key_hash: u64,
+        /// Snapshot ID when change was committed
+        snapshot_id: u64,
+    },
+    /// Transaction committed
+    SnapshotCommitted {
+        /// Snapshot ID that was committed
+        snapshot_id: u64,
+    },
+}
 
-#[cfg(not(feature = "native-v2"))]
-mod pubsub_types {
-    /// Event delivered to subscribers
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum PubSubEvent {
-        /// Node created or modified
-        NodeChanged {
-            /// Node ID that changed
-            node_id: i64,
-            /// Snapshot ID when change was committed
-            snapshot_id: u64,
-        },
-        /// Edge created or modified
-        EdgeChanged {
-            /// Edge ID that changed
-            edge_id: i64,
-            /// Snapshot ID when change was committed
-            snapshot_id: u64,
-        },
-        /// KV entry changed
-        KVChanged {
-            /// Key hash for the KV entry
-            key_hash: u64,
-            /// Snapshot ID when change was committed
-            snapshot_id: u64,
-        },
-        /// Transaction committed
-        SnapshotCommitted {
-            /// Snapshot ID that was committed
-            snapshot_id: u64,
-        },
-    }
+/// Filter for subscriptions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SubscriptionFilter {
+    /// Subscribe to NodeChanged events
+    pub node_changes: bool,
+    /// Subscribe to EdgeChanged events
+    pub edge_changes: bool,
+    /// Subscribe to KvChanged events
+    pub kv_changes: bool,
+    /// Subscribe to SnapshotCommitted events
+    pub snapshot_commits: bool,
+}
 
-    /// Filter for subscriptions
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-    pub struct SubscriptionFilter {
-        /// Subscribe to NodeChanged events
-        pub node_changes: bool,
-        /// Subscribe to EdgeChanged events
-        pub edge_changes: bool,
-        /// Subscribe to KVChanged events
-        pub kv_changes: bool,
-        /// Subscribe to SnapshotCommitted events
-        pub snapshot_commits: bool,
-    }
-
-    impl SubscriptionFilter {
-        /// Create a filter that receives all event types
-        pub fn all() -> Self {
-            Self {
-                node_changes: true,
-                edge_changes: true,
-                kv_changes: true,
-                snapshot_commits: true,
-            }
+impl SubscriptionFilter {
+    /// Create a filter that receives all event types
+    pub fn all() -> Self {
+        Self {
+            node_changes: true,
+            edge_changes: true,
+            kv_changes: true,
+            snapshot_commits: true,
         }
     }
 }
-
-#[cfg(not(feature = "native-v2"))]
-pub use pubsub_types::{PubSubEvent, SubscriptionFilter};
 
 use crate::{
     SqliteGraphError,
@@ -117,8 +104,6 @@ use crate::{
     pattern::{PatternMatch, PatternQuery},
     snapshot::SnapshotId,
 };
-
-/// Backend trait defining the interface for graph database backends.
 ///
 /// Each trait method delegates to backend-specific primitives while ensuring
 /// deterministic behavior and a single integration surface for consumers.
@@ -354,7 +339,7 @@ pub trait GraphBackend {
         &self,
         snapshot_id: SnapshotId,
         key: &[u8],
-    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, SqliteGraphError>;
+    ) -> Result<Option<crate::backend::native::types::KvValue>, SqliteGraphError>;
 
     /// Set a value in the KV store
     ///
@@ -369,7 +354,7 @@ pub trait GraphBackend {
     fn kv_set(
         &self,
         key: Vec<u8>,
-        value: crate::backend::native::v2::kv_store::types::KvValue,
+        value: crate::backend::native::types::KvValue,
         ttl_seconds: Option<u64>,
     ) -> Result<(), SqliteGraphError>;
 
@@ -395,7 +380,7 @@ pub trait GraphBackend {
     /// Events are emitted ONLY on transaction commit:
     /// - `NodeChanged` - node created or modified
     /// - `EdgeChanged` - edge created or modified
-    /// - `KVChanged` - KV entry created, modified, or deleted
+    /// - `KvChanged` - KV entry created, modified, or deleted
     /// - `SnapshotCommitted` - transaction committed
     ///
     /// # Best-Effort Delivery
@@ -459,7 +444,7 @@ pub trait GraphBackend {
     ) -> Result<
         Vec<(
             Vec<u8>,
-            crate::backend::native::v2::kv_store::types::KvValue,
+            crate::backend::native::types::KvValue,
         )>,
         SqliteGraphError,
     >;
@@ -687,7 +672,7 @@ where
         &self,
         snapshot_id: SnapshotId,
         key: &[u8],
-    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, SqliteGraphError>
+    ) -> Result<Option<crate::backend::native::types::KvValue>, SqliteGraphError>
     {
         (*self).kv_get(snapshot_id, key)
     }
@@ -696,7 +681,7 @@ where
     fn kv_set(
         &self,
         key: Vec<u8>,
-        value: crate::backend::native::v2::kv_store::types::KvValue,
+        value: crate::backend::native::types::KvValue,
         ttl_seconds: Option<u64>,
     ) -> Result<(), SqliteGraphError> {
         (*self).kv_set(key, value, ttl_seconds)
@@ -726,7 +711,7 @@ where
     ) -> Result<
         Vec<(
             Vec<u8>,
-            crate::backend::native::v2::kv_store::types::KvValue,
+            crate::backend::native::types::KvValue,
         )>,
         SqliteGraphError,
     > {

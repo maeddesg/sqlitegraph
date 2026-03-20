@@ -47,13 +47,9 @@
 
 use ahash::AHashSet;
 
-use crate::{
-    errors::SqliteGraphError,
-    graph::SqliteGraph,
-    progress::ProgressCallback,
-};
+use crate::{errors::SqliteGraphError, graph::SqliteGraph, progress::ProgressCallback};
 
-use super::graph_similarity::{structural_similarity, SimilarityBounds};
+use super::graph_similarity::{SimilarityBounds, structural_similarity};
 
 /// Result of computing node delta between two graphs.
 ///
@@ -496,12 +492,8 @@ where
     progress.on_progress(4, Some(5), "Computing structural similarity...");
 
     // Compute similarity metrics
-    let similarity = structural_similarity_with_progress(
-        graph1,
-        graph2,
-        SimilarityBounds::default(),
-        progress,
-    )?;
+    let similarity =
+        structural_similarity_with_progress(graph1, graph2, SimilarityBounds::default(), progress)?;
 
     // Get graph sizes
     let graph1_size = graph1.all_entity_ids()?.len();
@@ -705,9 +697,9 @@ pub fn validate_refactor(diff: &GraphDiffResult) -> RefactorValidation {
 
     // Check 3: Isomorphism (perfect structure preservation)
     if diff.is_isomorphic {
-        validation.warnings.push(
-            "Structure preserved (isomorphic)".to_string()
-        );
+        validation
+            .warnings
+            .push("Structure preserved (isomorphic)".to_string());
     }
 
     // Check 4: Edges removed (may break control flow)
@@ -1195,7 +1187,12 @@ mod tests {
 
         assert!(!validation.is_safe);
         assert!(!validation.breaking_changes.is_empty());
-        assert!(validation.breaking_changes.iter().any(|c| c.contains("Removed") && c.contains("nodes")));
+        assert!(
+            validation
+                .breaking_changes
+                .iter()
+                .any(|c| c.contains("Removed") && c.contains("nodes"))
+        );
     }
 
     // Test 23: Validate refactor with low similarity (unsafe)
@@ -1219,7 +1216,12 @@ mod tests {
         // Should detect low similarity as unsafe
         if diff.similarity_score < 0.5 {
             assert!(!validation.is_safe);
-            assert!(validation.breaking_changes.iter().any(|c| c.contains("similarity")));
+            assert!(
+                validation
+                    .breaking_changes
+                    .iter()
+                    .any(|c| c.contains("similarity"))
+            );
         }
     }
 
@@ -1265,7 +1267,12 @@ mod tests {
 
         // If similarity is moderate (0.5 - 0.8), should have warning
         if diff.similarity_score >= 0.5 && diff.similarity_score < 0.8 {
-            assert!(validation.warnings.iter().any(|w| w.contains("Moderate similarity")));
+            assert!(
+                validation
+                    .warnings
+                    .iter()
+                    .any(|w| w.contains("Moderate similarity"))
+            );
         }
     }
 

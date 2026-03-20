@@ -99,13 +99,12 @@
 //!
 //! [`reachability`]: crate::algo::reachability
 
-
 use ahash::{AHashMap, AHashSet};
 
-use crate::progress::ProgressCallback;
-use crate::{errors::SqliteGraphError, graph::SqliteGraph, GraphEntity};
 #[cfg(test)]
 use crate::GraphEdge;
+use crate::progress::ProgressCallback;
+use crate::{GraphEntity, errors::SqliteGraphError, graph::SqliteGraph};
 
 use super::reachability::{can_reach, reachable_from, reverse_reachable_from};
 
@@ -472,10 +471,7 @@ pub fn propagate_taint_forward(
     }
 
     // Step 2: Find which sinks are reachable (vulnerabilities)
-    let sinks_reached: AHashSet<i64> = sinks_set
-        .intersection(&tainted_nodes)
-        .copied()
-        .collect();
+    let sinks_reached: AHashSet<i64> = sinks_set.intersection(&tainted_nodes).copied().collect();
 
     // Step 3: Build source-sink paths
     let mut source_sink_paths = Vec::new();
@@ -566,10 +562,7 @@ where
     }
 
     // Step 2: Find which sinks are reachable (vulnerabilities)
-    let sinks_reached: AHashSet<i64> = sinks_set
-        .intersection(&tainted_nodes)
-        .copied()
-        .collect();
+    let sinks_reached: AHashSet<i64> = sinks_set.intersection(&tainted_nodes).copied().collect();
 
     // Step 3: Build source-sink paths
     let mut source_sink_paths = Vec::new();
@@ -657,10 +650,7 @@ pub fn propagate_taint_backward(
     let ancestors = reverse_reachable_from(graph, sink)?;
 
     // Step 2: Find which sources can reach the sink
-    let affecting_sources: AHashSet<i64> = sources_set
-        .intersection(&ancestors)
-        .copied()
-        .collect();
+    let affecting_sources: AHashSet<i64> = sources_set.intersection(&ancestors).copied().collect();
 
     // Step 3: Build source-sink paths
     let source_sink_paths: Vec<(i64, i64)> = affecting_sources
@@ -731,10 +721,7 @@ where
     let ancestors = reverse_reachable_from(graph, sink)?;
 
     // Step 2: Find which sources can reach the sink
-    let affecting_sources: AHashSet<i64> = sources_set
-        .intersection(&ancestors)
-        .copied()
-        .collect();
+    let affecting_sources: AHashSet<i64> = sources_set.intersection(&ancestors).copied().collect();
 
     // Report progress
     progress.on_progress(
@@ -1283,7 +1270,15 @@ mod tests {
 
         // Add edges: 1 -> 2 -> 3 -> 4 -> 5
         for i in 1..5 {
-            graph.insert_edge(&GraphEdge { id: 0, from_id: i, to_id: i + 1, edge_type: "data_flow".to_string(), data: json!({}) }).unwrap();
+            graph
+                .insert_edge(&GraphEdge {
+                    id: 0,
+                    from_id: i,
+                    to_id: i + 1,
+                    edge_type: "data_flow".to_string(),
+                    data: json!({}),
+                })
+                .unwrap();
         }
 
         graph
@@ -1325,10 +1320,22 @@ mod tests {
 
         // Add edges: 1 -> 2 -> 3
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: 1, to_id: 2, edge_type: "data_flow".to_string(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: 1,
+                to_id: 2,
+                edge_type: "data_flow".to_string(),
+                data: json!({}),
+            })
             .unwrap();
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: 2, to_id: 3, edge_type: "data_flow".to_string(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: 2,
+                to_id: 3,
+                edge_type: "data_flow".to_string(),
+                data: json!({}),
+            })
             .unwrap();
 
         graph
@@ -1370,7 +1377,13 @@ mod tests {
 
         // Add edges: 1 -> 2 (sanitize), but 2 doesn't reach 3
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: 1, to_id: 2, edge_type: "data_flow".to_string(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: 1,
+                to_id: 2,
+                edge_type: "data_flow".to_string(),
+                data: json!({}),
+            })
             .unwrap();
 
         graph
@@ -1427,13 +1440,31 @@ mod tests {
 
         // Edges: both sources reach intermediate, intermediate reaches sink
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: 1, to_id: 3, edge_type: "data_flow".to_string(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: 1,
+                to_id: 3,
+                edge_type: "data_flow".to_string(),
+                data: json!({}),
+            })
             .unwrap();
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: 2, to_id: 3, edge_type: "data_flow".to_string(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: 2,
+                to_id: 3,
+                edge_type: "data_flow".to_string(),
+                data: json!({}),
+            })
             .unwrap();
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: 3, to_id: 4, edge_type: "data_flow".to_string(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: 3,
+                to_id: 4,
+                edge_type: "data_flow".to_string(),
+                data: json!({}),
+            })
             .unwrap();
 
         graph
@@ -1711,13 +1742,15 @@ mod tests {
 
         let base_result = propagate_taint_forward(&graph, &sources, &sinks).unwrap();
         let progress_result =
-            propagate_taint_forward_with_progress(&graph, &sources, &sinks, &NoProgress)
-                .unwrap();
+            propagate_taint_forward_with_progress(&graph, &sources, &sinks, &NoProgress).unwrap();
 
         assert_eq!(base_result.sources, progress_result.sources);
         assert_eq!(base_result.sinks_reached, progress_result.sinks_reached);
         assert_eq!(base_result.tainted_nodes, progress_result.tainted_nodes);
-        assert_eq!(base_result.source_sink_paths, progress_result.source_sink_paths);
+        assert_eq!(
+            base_result.source_sink_paths,
+            progress_result.source_sink_paths
+        );
         assert_eq!(base_result.size, progress_result.size);
     }
 
@@ -1736,7 +1769,10 @@ mod tests {
         assert_eq!(base_result.sources, progress_result.sources);
         assert_eq!(base_result.sinks_reached, progress_result.sinks_reached);
         assert_eq!(base_result.tainted_nodes, progress_result.tainted_nodes);
-        assert_eq!(base_result.source_sink_paths, progress_result.source_sink_paths);
+        assert_eq!(
+            base_result.source_sink_paths,
+            progress_result.source_sink_paths
+        );
         assert_eq!(base_result.size, progress_result.size);
     }
 

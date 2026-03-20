@@ -3,9 +3,9 @@
 //! This tests the fixed V3EdgeStore which now uses RwLock<HashMap<..., Vec<i64>>>
 //! instead of HashMap<..., V3EdgeCluster>, avoiding the dsts() allocation on every query.
 
-use std::time::Instant;
-use sqlitegraph::backend::native::v3::edge_compat::{V3EdgeStore, Direction};
 use sqlitegraph::backend::native::v3::btree::BTreeManager;
+use sqlitegraph::backend::native::v3::edge_compat::{Direction, V3EdgeStore};
+use std::time::Instant;
 use tempfile::TempDir;
 
 fn main() {
@@ -13,7 +13,12 @@ fn main() {
     let db_path = temp_dir.path().join("test.graph");
 
     // Create minimal V3 components
-    let btree = BTreeManager::create(&db_path).unwrap();
+    let allocator = std::sync::Arc::new(parking_lot::RwLock::new(
+        sqlitegraph::backend::native::v3::PageAllocator::new(
+            &sqlitegraph::backend::native::v3::PersistentHeaderV3::new_v3(),
+        ),
+    ));
+    let btree = BTreeManager::new(allocator, None, db_path.clone());
     let mut store = V3EdgeStore::new(btree, None);
 
     println!("═══════════════════════════════════════════════════════════════");
@@ -23,7 +28,9 @@ fn main() {
     // Insert 20 edges from node 1
     let start = Instant::now();
     for j in 1..=20 {
-        store.insert_edge(1, 1 + j as i64, Direction::Outgoing).unwrap();
+        store
+            .insert_edge(1, 1 + j as i64, Direction::Outgoing, None)
+            .unwrap();
     }
     let insert_time = start.elapsed();
     println!("Inserted 20 edges in {:?}", insert_time);
@@ -33,7 +40,12 @@ fn main() {
     let start = Instant::now();
     let result = store.outgoing(1).unwrap();
     let first_time = start.elapsed();
-    println!("First query: {:?} ({} ns, {} neighbors)", first_time, first_time.as_nanos(), result.len());
+    println!(
+        "First query: {:?} ({} ns, {} neighbors)",
+        first_time,
+        first_time.as_nanos(),
+        result.len()
+    );
 
     // For this test, the insert_edge stores to cache but neighbors() reads from cache
     // Let's verify the insert actually worked by checking cache size

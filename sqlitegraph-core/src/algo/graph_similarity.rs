@@ -65,9 +65,9 @@
 
 use std::time::Instant;
 
+use petgraph::Directed;
 use petgraph::algo::isomorphism;
 use petgraph::graph::{DefaultIx, Graph, NodeIndex};
-use petgraph::Directed;
 
 use crate::{errors::SqliteGraphError, graph::SqliteGraph, progress::ProgressCallback};
 
@@ -157,7 +157,9 @@ impl SimilarityBounds {
     /// Returns true if any bound is set.
     #[inline]
     pub fn is_bounded(&self) -> bool {
-        self.max_matches.is_some() || self.timeout_ms.is_some() || self.similarity_threshold.is_some()
+        self.max_matches.is_some()
+            || self.timeout_ms.is_some()
+            || self.similarity_threshold.is_some()
     }
 }
 
@@ -293,7 +295,8 @@ fn graph_to_petgraph(graph: &SqliteGraph) -> Result<PgDiGraph, SqliteGraphError>
     let mut pg = PgDiGraph::new();
 
     // Map entity IDs to petgraph node indices
-    let mut id_to_index: std::collections::HashMap<i64, NodeIndex> = std::collections::HashMap::new();
+    let mut id_to_index: std::collections::HashMap<i64, NodeIndex> =
+        std::collections::HashMap::new();
 
     for &id in &entity_ids {
         let idx = pg.add_node(id);
@@ -338,11 +341,7 @@ fn graph_to_petgraph(graph: &SqliteGraph) -> Result<PgDiGraph, SqliteGraphError>
 /// # Returns
 ///
 /// Size of the maximum common subgraph (number of nodes)
-fn maximum_common_subgraph(
-    g1: &PgDiGraph,
-    g2: &PgDiGraph,
-    bounds: &SimilarityBounds,
-) -> usize {
+fn maximum_common_subgraph(g1: &PgDiGraph, g2: &PgDiGraph, bounds: &SimilarityBounds) -> usize {
     let _start_time = Instant::now();
 
     // Determine which graph is smaller (use as pattern)
@@ -387,7 +386,9 @@ fn maximum_common_subgraph(
     }
 
     // Bounded enumeration for MCS
-    let _timeout = bounds.timeout_ms.map(|ms| std::time::Duration::from_millis(ms));
+    let _timeout = bounds
+        .timeout_ms
+        .map(|ms| std::time::Duration::from_millis(ms));
     let mut max_size = 0usize;
     let mut matches_checked = 0usize;
 
@@ -522,12 +523,8 @@ pub fn structural_similarity(
     let g1_ref = &g1;
     let g2_ref = &g2;
 
-    let isomorphic = isomorphism::is_isomorphic_matching(
-        &g1_ref,
-        &g2_ref,
-        &mut node_match,
-        &mut edge_match,
-    );
+    let isomorphic =
+        isomorphism::is_isomorphic_matching(&g1_ref, &g2_ref, &mut node_match, &mut edge_match);
 
     // Early exit if isomorphic
     if isomorphic {
@@ -668,12 +665,8 @@ where
     let g1_ref = &g1;
     let g2_ref = &g2;
 
-    let isomorphic = isomorphism::is_isomorphic_matching(
-        &g1_ref,
-        &g2_ref,
-        &mut node_match,
-        &mut edge_match,
-    );
+    let isomorphic =
+        isomorphism::is_isomorphic_matching(&g1_ref, &g2_ref, &mut node_match, &mut edge_match);
 
     // Early exit if isomorphic
     if isomorphic {
@@ -689,16 +682,16 @@ where
         });
     }
 
-    progress.on_progress(3, Some(5), "Not isomorphic - computing maximum common subgraph...");
+    progress.on_progress(
+        3,
+        Some(5),
+        "Not isomorphic - computing maximum common subgraph...",
+    );
 
     // Compute MCS for similarity score
     let mcs_size = maximum_common_subgraph(&g1, &g2, &bounds);
 
-    progress.on_progress(
-        4,
-        Some(5),
-        &format!("Found MCS of size {}", mcs_size),
-    );
+    progress.on_progress(4, Some(5), &format!("Found MCS of size {}", mcs_size));
 
     // Normalize by max size
     let max_size = g1_size.max(g2_size);
@@ -1209,7 +1202,7 @@ mod tests {
         // GED distance is stored in the result and should be consistent with similarity
         let mcs_similarity = 0.7;
         let ged_distance = 1.0 - mcs_similarity; // GED = 1.0 - similarity
-        
+
         let result = SimilarityResult {
             isomorphic: false,
             mcs_similarity,

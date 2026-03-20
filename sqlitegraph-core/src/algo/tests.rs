@@ -8,7 +8,7 @@
 // functions themselves have the right trait bounds.
 //
 
-use crate::{errors::SqliteGraphError, graph::SqliteGraph, GraphEntity, GraphEdge};
+use crate::{GraphEdge, GraphEntity, errors::SqliteGraphError, graph::SqliteGraph};
 use serde_json::json;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
@@ -20,34 +20,37 @@ use super::{
         pagerank_with_progress,
     },
     community::{label_propagation, louvain_communities, louvain_communities_with_progress},
+    control_dependence::{
+        ControlDependenceResult, control_dependence_from_exit, control_dependence_graph,
+    },
+    dominance_frontiers::{
+        DominanceFrontierResult, IteratedDominanceFrontierResult, dominance_frontiers,
+        dominance_frontiers_with_progress, iterated_dominance_frontiers,
+    },
+    dominators::{DominatorResult, dominators, dominators_with_progress},
+    natural_loops::{NaturalLoop, NaturalLoopsResult, natural_loops, natural_loops_with_progress},
+    path_enumeration::{
+        EnumeratedPath, PathClassification, PathEnumerationConfig, PathEnumerationDominanceConfig,
+        PathEnumerationPruningStats, PathEnumerationResult, enumerate_paths,
+        enumerate_paths_with_dominance, enumerate_paths_with_dominance_progress,
+        enumerate_paths_with_progress,
+    },
+    post_dominators::{
+        PostDominatorResult, post_dominators, post_dominators_auto_exit,
+        post_dominators_with_progress,
+    },
     reachability::{can_reach, reachable_from, reverse_reachable_from, unreachable_from},
-    scc::{strongly_connected_components, SccResult},
+    scc::{SccResult, strongly_connected_components},
     structure::{connected_components, find_cycles_limited, nodes_by_degree},
-    transitive_closure::{transitive_closure, transitive_closure_with_progress, TransitiveClosureBounds},
+    subgraph_isomorphism::{
+        SubgraphMatchResult, SubgraphPatternBounds, find_subgraph_patterns,
+        find_subgraph_patterns_with_progress,
+    },
+    transitive_closure::{
+        TransitiveClosureBounds, transitive_closure, transitive_closure_with_progress,
+    },
     transitive_reduction::{transitive_reduction, transitive_reduction_with_progress},
     wcc::{weakly_connected_components, weakly_connected_components_with_progress},
-    dominance_frontiers::{
-        dominance_frontiers, dominance_frontiers_with_progress, iterated_dominance_frontiers,
-        DominanceFrontierResult, IteratedDominanceFrontierResult,
-    },
-    dominators::{dominators, dominators_with_progress, DominatorResult},
-    natural_loops::{natural_loops, natural_loops_with_progress, NaturalLoop, NaturalLoopsResult},
-    post_dominators::{
-        post_dominators, post_dominators_auto_exit, post_dominators_with_progress, PostDominatorResult,
-    },
-    control_dependence::{
-        control_dependence_graph, control_dependence_from_exit, ControlDependenceResult,
-    },
-    path_enumeration::{
-        enumerate_paths, enumerate_paths_with_progress, enumerate_paths_with_dominance,
-        enumerate_paths_with_dominance_progress, EnumeratedPath, PathClassification,
-        PathEnumerationConfig, PathEnumerationDominanceConfig, PathEnumerationPruningStats,
-        PathEnumerationResult,
-    },
-    subgraph_isomorphism::{
-        find_subgraph_patterns, find_subgraph_patterns_with_progress, SubgraphMatchResult,
-        SubgraphPatternBounds,
-    },
 };
 
 #[test]
@@ -429,7 +432,11 @@ fn test_scc_empty_graph() {
     let scc = result.unwrap();
     assert_eq!(scc.components.len(), 0, "Should have no components");
     assert_eq!(scc.node_to_component.len(), 0, "Should have no mappings");
-    assert_eq!(scc.condensed_edges.len(), 0, "Should have no condensed edges");
+    assert_eq!(
+        scc.condensed_edges.len(),
+        0,
+        "Should have no condensed edges"
+    );
 }
 
 #[test]
@@ -443,10 +450,18 @@ fn test_scc_linear_chain() {
 
     let scc = result.unwrap();
     assert_eq!(scc.components.len(), 10, "Each node should be its own SCC");
-    assert_eq!(scc.non_trivial_count(), 0, "Should have no non-trivial SCCs");
+    assert_eq!(
+        scc.non_trivial_count(),
+        0,
+        "Should have no non-trivial SCCs"
+    );
 
     // Condensed DAG should have edges forming a chain
-    assert_eq!(scc.condensed_edges.len(), 9, "Chain of 10 nodes has 9 edges");
+    assert_eq!(
+        scc.condensed_edges.len(),
+        9,
+        "Chain of 10 nodes has 9 edges"
+    );
 }
 
 #[test]
@@ -509,7 +524,10 @@ fn test_scc_mutual_recursion() {
     assert!(recursion_component.contains(&entity_ids[1]));
 
     // Nodes 2, 3, 4 should be in their own SCCs (linear chain)
-    assert_eq!(scc.node_to_component[&entity_ids[2]], scc.node_to_component[&entity_ids[2]]);
+    assert_eq!(
+        scc.node_to_component[&entity_ids[2]],
+        scc.node_to_component[&entity_ids[2]]
+    );
     assert_ne!(
         scc.node_to_component[&entity_ids[2]],
         scc.node_to_component[&entity_ids[0]]
@@ -532,7 +550,11 @@ fn test_scc_deterministic() {
     let scc2 = result2.unwrap();
 
     // Check component count
-    assert_eq!(scc1.components.len(), scc2.components.len(), "Different component counts");
+    assert_eq!(
+        scc1.components.len(),
+        scc2.components.len(),
+        "Different component counts"
+    );
 
     // Check node-to-component mapping
     assert_eq!(scc1.node_to_component.len(), scc2.node_to_component.len());
@@ -575,7 +597,9 @@ fn create_cycle_nodes(graph: &SqliteGraph, count: usize) -> Vec<i64> {
             file_path: Some(format!("cycle_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        let id = graph.insert_entity(&entity).expect("Failed to insert entity");
+        let id = graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
         entity_ids.push(id);
     }
 
@@ -609,7 +633,9 @@ fn create_mutual_recursion_graph(graph: &SqliteGraph) -> Vec<i64> {
             file_path: Some(format!("recursion_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        let id = graph.insert_entity(&entity).expect("Failed to insert entity");
+        let id = graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
         entity_ids.push(id);
     }
 
@@ -721,11 +747,7 @@ fn test_wcc_linear_chain() {
     assert!(result.is_ok(), "WCC failed on linear chain");
 
     let components = result.unwrap();
-    assert_eq!(
-        components.len(),
-        1,
-        "Expected 1 component in linear chain"
-    );
+    assert_eq!(components.len(), 1, "Expected 1 component in linear chain");
     assert_eq!(
         components[0].len(),
         10,
@@ -801,8 +823,16 @@ fn test_wcc_disconnected() {
     );
 
     // Each component should have 3 nodes
-    assert_eq!(components[0].len(), 3, "First component should have 3 nodes");
-    assert_eq!(components[1].len(), 3, "Second component should have 3 nodes");
+    assert_eq!(
+        components[0].len(),
+        3,
+        "First component should have 3 nodes"
+    );
+    assert_eq!(
+        components[1].len(),
+        3,
+        "Second component should have 3 nodes"
+    );
 
     // Verify all nodes appear exactly once across all components
     let all_nodes: i64 = graph.list_entity_ids().expect("Failed to get IDs").len() as i64;
@@ -819,14 +849,17 @@ fn test_wcc_with_progress() {
     let graph = create_test_graph();
 
     let progress = NoProgress;
-    let result =
-        weakly_connected_components_with_progress(&graph, &progress).expect("WCC failed");
+    let result = weakly_connected_components_with_progress(&graph, &progress).expect("WCC failed");
 
     let result_no_progress =
         weakly_connected_components(&graph).expect("WCC without progress failed");
 
     // Results should be identical
-    assert_eq!(result.len(), result_no_progress.len(), "Component count mismatch");
+    assert_eq!(
+        result.len(),
+        result_no_progress.len(),
+        "Component count mismatch"
+    );
     for (comp_with, comp_without) in result.iter().zip(result_no_progress.iter()) {
         assert_eq!(comp_with, comp_without, "Component mismatch");
     }
@@ -893,7 +926,11 @@ fn test_wcc_bidirectional_edges() {
     // Even though edges are only forward, WCC treats them as bidirectional
     // So all nodes should be in one component
     assert_eq!(result.len(), 1, "Expected 1 component");
-    assert_eq!(result[0].len(), 3, "Expected all 3 nodes in single component");
+    assert_eq!(
+        result[0].len(),
+        3,
+        "Expected all 3 nodes in single component"
+    );
 }
 
 #[test]
@@ -926,7 +963,9 @@ fn test_transitive_reduction_linear() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -944,12 +983,19 @@ fn test_transitive_reduction_linear() {
     }
 
     let result = transitive_reduction(&graph);
-    assert!(result.is_ok(), "transitive_reduction failed on linear chain");
+    assert!(
+        result.is_ok(),
+        "transitive_reduction failed on linear chain"
+    );
 
     let essential = result.unwrap();
 
     // Verify computation completed - actual count depends on algorithm
-    assert!(essential.len() <= 3, "Should have at most 3 edges, got {}", essential.len());
+    assert!(
+        essential.len() <= 3,
+        "Should have at most 3 edges, got {}",
+        essential.len()
+    );
 }
 
 #[test]
@@ -969,7 +1015,9 @@ fn test_transitive_reduction_diamond() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -988,12 +1036,19 @@ fn test_transitive_reduction_diamond() {
     }
 
     let result = transitive_reduction(&graph);
-    assert!(result.is_ok(), "transitive_reduction failed on diamond graph");
+    assert!(
+        result.is_ok(),
+        "transitive_reduction failed on diamond graph"
+    );
 
     let essential = result.unwrap();
 
     // Verify computation completed - actual count depends on algorithm
-    assert!(essential.len() <= 5, "Should have at most 5 edges, got {}", essential.len());
+    assert!(
+        essential.len() <= 5,
+        "Should have at most 5 edges, got {}",
+        essential.len()
+    );
 }
 
 #[test]
@@ -1013,7 +1068,9 @@ fn test_transitive_reduction_fully_connected() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1033,21 +1090,28 @@ fn test_transitive_reduction_fully_connected() {
     }
 
     let result = transitive_reduction(&graph);
-    assert!(result.is_ok(), "transitive_reduction failed on complete DAG");
+    assert!(
+        result.is_ok(),
+        "transitive_reduction failed on complete DAG"
+    );
 
     let essential = result.unwrap();
 
     // In complete DAG of 4 nodes: 6 edges total, expected 3 essential
     // Actual count depends on algorithm implementation
-    assert!(essential.len() <= 6, "Should have at most 6 edges, got {}", essential.len());
+    assert!(
+        essential.len() <= 6,
+        "Should have at most 6 edges, got {}",
+        essential.len()
+    );
 }
 
 #[test]
 fn test_transitive_reduction_with_progress() {
     // Scenario: Transitive reduction with progress callback
     // Expected: Results match non-progress version
-    use crate::progress::NoProgress;
     use crate::GraphEntity;
+    use crate::progress::NoProgress;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
@@ -1060,7 +1124,9 @@ fn test_transitive_reduction_with_progress() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1083,12 +1149,20 @@ fn test_transitive_reduction_with_progress() {
     assert!(result.is_ok(), "transitive_reduction_with_progress failed");
 
     let essential = result.unwrap();
-    assert!(essential.len() <= 5, "Should have at most 5 edges, got {}", essential.len());
+    assert!(
+        essential.len() <= 5,
+        "Should have at most 5 edges, got {}",
+        essential.len()
+    );
 
     // Also compare with non-progress version
     let result_no_progress = transitive_reduction(&graph).expect("Non-progress version failed");
     // Both versions should return same count
-    assert_eq!(essential.len(), result_no_progress.len(), "Progress and non-progress results should match");
+    assert_eq!(
+        essential.len(),
+        result_no_progress.len(),
+        "Progress and non-progress results should match"
+    );
 }
 
 #[test]
@@ -1108,7 +1182,9 @@ fn test_transitive_reduction_deterministic() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1128,7 +1204,10 @@ fn test_transitive_reduction_deterministic() {
     let result1 = transitive_reduction(&graph).expect("First reduction failed");
     let result2 = transitive_reduction(&graph).expect("Second reduction failed");
 
-    assert_eq!(result1, result2, "Transitive reduction should be deterministic");
+    assert_eq!(
+        result1, result2,
+        "Transitive reduction should be deterministic"
+    );
 }
 
 // Reachability integration tests
@@ -1151,11 +1230,7 @@ fn test_reachable_from_deterministic() {
             "Reachability results should have same size"
         );
         for &id in &result1 {
-            assert!(
-                result2.contains(&id),
-                "Second result missing node {}",
-                id
-            );
+            assert!(result2.contains(&id), "Second result missing node {}", id);
         }
     }
 }
@@ -1174,7 +1249,8 @@ fn test_reachable_from_with_progress_callback() {
         let progress = NoProgress;
         let result_with = crate::algo::reachable_from_with_progress(&graph, start, &progress)
             .expect("Progress reachability failed");
-        let result_without = reachable_from(&graph, start).expect("Non-progress reachability failed");
+        let result_without =
+            reachable_from(&graph, start).expect("Non-progress reachability failed");
 
         assert_eq!(
             result_with.len(),
@@ -1217,8 +1293,7 @@ fn test_unreachable_from_integration() {
         let unreachable = unreachable_from(&graph, entry).expect("unreachable_from failed");
 
         // Union of reachable and unreachable should be all nodes
-        let all_nodes: std::collections::HashSet<i64> =
-            entity_ids.into_iter().collect();
+        let all_nodes: std::collections::HashSet<i64> = entity_ids.into_iter().collect();
         let mut union = reachable.clone();
         union.extend(unreachable.iter());
 
@@ -1289,8 +1364,8 @@ fn test_dominators_progress_integration() {
         let entry = entity_ids[0];
         let progress = NoProgress;
 
-        let result_with = dominators_with_progress(&graph, entry, &progress)
-            .expect("Progress dominators failed");
+        let result_with =
+            dominators_with_progress(&graph, entry, &progress).expect("Progress dominators failed");
         let result_without = dominators(&graph, entry).expect("Non-progress dominators failed");
 
         // Results should match
@@ -1314,7 +1389,9 @@ fn test_dominators_entry_only_dominates_itself_single_node() {
         file_path: Some("single.rs".to_string()),
         data: serde_json::json!({}),
     };
-    graph.insert_entity(&entity).expect("Failed to insert entity");
+    graph
+        .insert_entity(&entity)
+        .expect("Failed to insert entity");
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
     let entry = entity_ids[0];
@@ -1434,7 +1511,10 @@ fn test_post_dominators_deterministic() {
         }
 
         // Check immediate post-dominators match
-        assert_eq!(result1.ipdom, result2.ipdom, "Immediate post-dominators differ");
+        assert_eq!(
+            result1.ipdom, result2.ipdom,
+            "Immediate post-dominators differ"
+        );
     }
 }
 
@@ -1453,7 +1533,8 @@ fn test_post_dominators_progress_integration() {
 
         let result_with = post_dominators_with_progress(&graph, exit, &progress)
             .expect("Progress post-dominators failed");
-        let result_without = post_dominators(&graph, exit).expect("Non-progress post-dominators failed");
+        let result_without =
+            post_dominators(&graph, exit).expect("Non-progress post-dominators failed");
 
         // Results should match
         assert_eq!(result_with.post_dom.len(), result_without.post_dom.len());
@@ -1478,7 +1559,9 @@ fn test_post_dominators_virtual_exit_consistency() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1522,7 +1605,9 @@ fn test_post_dominators_exit_only_post_dominates_itself_single_node() {
         file_path: Some("single.rs".to_string()),
         data: serde_json::json!({}),
     };
-    graph.insert_entity(&entity).expect("Failed to insert entity");
+    graph
+        .insert_entity(&entity)
+        .expect("Failed to insert entity");
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
     let exit = entity_ids[0];
@@ -1616,7 +1701,8 @@ fn test_control_dependence_deterministic() {
     let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
     if !entity_ids.is_empty() {
-        let post_result = post_dominators_auto_exit(&graph).expect("Failed to compute post-dominators");
+        let post_result =
+            post_dominators_auto_exit(&graph).expect("Failed to compute post-dominators");
 
         let cdg1 = control_dependence_graph(&graph, &post_result)
             .expect("First control dependence failed");
@@ -1666,7 +1752,9 @@ fn test_control_dependence_integration_with_post_dom() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1684,7 +1772,8 @@ fn test_control_dependence_integration_with_post_dom() {
     }
 
     // Compute post-dominators
-    let post_result = post_dominators(&graph, entity_ids[3]).expect("Failed to compute post-dominators");
+    let post_result =
+        post_dominators(&graph, entity_ids[3]).expect("Failed to compute post-dominators");
 
     // Compute control dependence
     let cdg_result = control_dependence_graph(&graph, &post_result)
@@ -1706,7 +1795,8 @@ fn test_control_dependence_reverse_mapping() {
     let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
     if !entity_ids.is_empty() {
-        let post_result = post_dominators_auto_exit(&graph).expect("Failed to compute post-dominators");
+        let post_result =
+            post_dominators_auto_exit(&graph).expect("Failed to compute post-dominators");
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
@@ -1794,7 +1884,9 @@ fn test_control_dependence_linear_chain() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1811,13 +1903,16 @@ fn test_control_dependence_linear_chain() {
         graph.insert_edge(&edge).ok();
     }
 
-    let cdg_result = control_dependence_from_exit(&graph)
-        .expect("Failed to compute control dependence");
+    let cdg_result =
+        control_dependence_from_exit(&graph).expect("Failed to compute control dependence");
 
     // In a linear chain, each edge IS control dependent because the source
     // doesn't post-dominate the target (different nodes)
     // The CDG will have edges reflecting this control dependence structure
-    assert!(cdg_result.cdg.len() >= 0, "CDG should be computed for linear chain");
+    assert!(
+        cdg_result.cdg.len() >= 0,
+        "CDG should be computed for linear chain"
+    );
 }
 
 #[test]
@@ -1837,7 +1932,9 @@ fn test_control_dependence_diamond_cfg() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1854,8 +1951,8 @@ fn test_control_dependence_diamond_cfg() {
         graph.insert_edge(&edge).ok();
     }
 
-    let cdg_result = control_dependence_from_exit(&graph)
-        .expect("Failed to compute control dependence");
+    let cdg_result =
+        control_dependence_from_exit(&graph).expect("Failed to compute control dependence");
 
     // In a diamond CFG, node 3 (merge) is NOT control dependent on node 0 (branch)
     // because node 3 executes regardless of which branch is taken.
@@ -1886,7 +1983,9 @@ fn test_dominance_frontiers_deterministic() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1942,7 +2041,8 @@ fn test_dominance_frontiers_progress_integration() {
         let progress = NoProgress;
         let result_with = dominance_frontiers_with_progress(&graph, &dom_result, &progress)
             .expect("Progress DF failed");
-        let result_without = dominance_frontiers(&graph, &dom_result).expect("Non-progress DF failed");
+        let result_without =
+            dominance_frontiers(&graph, &dom_result).expect("Non-progress DF failed");
 
         // Results should match
         assert_eq!(result_with.frontiers.len(), result_without.frontiers.len());
@@ -1966,7 +2066,9 @@ fn test_dominance_frontiers_with_dominators_integration() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1988,8 +2090,8 @@ fn test_dominance_frontiers_with_dominators_integration() {
     let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
 
     // Compute dominance frontiers from dominators
-    let df_result = dominance_frontiers(&graph, &dom_result)
-        .expect("Failed to compute dominance frontiers");
+    let df_result =
+        dominance_frontiers(&graph, &dom_result).expect("Failed to compute dominance frontiers");
 
     // Node 3 is the merge point. Node 0 dominates predecessors of 3 (nodes 1 and 2),
     // but 0 also strictly dominates 3 itself (since 0 ≠ 3 and 0 dominates 3).
@@ -2024,7 +2126,9 @@ fn test_iterated_dominance_frontiers_ssa_use_case() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2081,14 +2185,16 @@ fn test_dominance_frontiers_empty_after_entry() {
         file_path: Some("entry.rs".to_string()),
         data: serde_json::json!({}),
     };
-    graph.insert_entity(&entity).expect("Failed to insert entity");
+    graph
+        .insert_entity(&entity)
+        .expect("Failed to insert entity");
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
     let entry = entity_ids[0];
 
     let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
-    let df_result = dominance_frontiers(&graph, &dom_result)
-        .expect("Failed to compute dominance frontiers");
+    let df_result =
+        dominance_frontiers(&graph, &dom_result).expect("Failed to compute dominance frontiers");
 
     // Entry should have empty DF
     assert_eq!(
@@ -2125,7 +2231,9 @@ fn test_dominance_frontiers_linear_chain_empty() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2143,8 +2251,8 @@ fn test_dominance_frontiers_linear_chain_empty() {
 
     let entry = entity_ids[0];
     let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
-    let df_result = dominance_frontiers(&graph, &dom_result)
-        .expect("Failed to compute dominance frontiers");
+    let df_result =
+        dominance_frontiers(&graph, &dom_result).expect("Failed to compute dominance frontiers");
 
     // All nodes should have empty DF
     assert_eq!(
@@ -2171,7 +2279,9 @@ fn test_dominance_frontiers_loop_creates_frontier() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2190,8 +2300,8 @@ fn test_dominance_frontiers_loop_creates_frontier() {
 
     let entry = entity_ids[0];
     let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
-    let df_result = dominance_frontiers(&graph, &dom_result)
-        .expect("Failed to compute dominance frontiers");
+    let df_result =
+        dominance_frontiers(&graph, &dom_result).expect("Failed to compute dominance frontiers");
 
     // Loop body (2) should have loop header (1) in its DF
     assert!(
@@ -2241,7 +2351,9 @@ fn test_natural_loops_deterministic() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2277,11 +2389,17 @@ fn test_natural_loops_deterministic() {
         // Compare loop contents, not memory addresses
         if let Some(loop2) = loops2.loops.get(&header) {
             assert_eq!(
-                loop_.body.len(), loop2.body.len(),
-                "Loop sizes differ for header {}", header
+                loop_.body.len(),
+                loop2.body.len(),
+                "Loop sizes differ for header {}",
+                header
             );
             for node in &loop_.body {
-                assert!(loop2.body.contains(node), "Node {} missing in second loop", node);
+                assert!(
+                    loop2.body.contains(node),
+                    "Node {} missing in second loop",
+                    node
+                );
             }
         }
     }
@@ -2291,8 +2409,8 @@ fn test_natural_loops_deterministic() {
 fn test_natural_loops_progress_integration() {
     // Scenario: Progress callback works end-to-end
     // Expected: Progress variant matches non-progress variant
-    use crate::progress::NoProgress;
     use crate::GraphEntity;
+    use crate::progress::NoProgress;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
@@ -2305,7 +2423,9 @@ fn test_natural_loops_progress_integration() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2329,7 +2449,8 @@ fn test_natural_loops_progress_integration() {
     let progress = NoProgress;
     let result_with = natural_loops_with_progress(&graph, &dom_result, &progress)
         .expect("Progress natural loops failed");
-    let result_without = natural_loops(&graph, &dom_result).expect("Non-progress natural loops failed");
+    let result_without =
+        natural_loops(&graph, &dom_result).expect("Non-progress natural loops failed");
 
     // Results should match
     assert_eq!(result_with.count(), result_without.count());
@@ -2352,7 +2473,9 @@ fn test_natural_loops_with_dominators_integration() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2381,10 +2504,17 @@ fn test_natural_loops_with_dominators_integration() {
     assert_eq!(loops.count(), 2, "Should find 2 loops");
 
     // Outer loop (header 1) should contain inner loop header (2)
-    let outer = loops.loop_with_header(entity_ids[1]).expect("Should have outer loop");
-    let inner = loops.loop_with_header(entity_ids[2]).expect("Should have inner loop");
+    let outer = loops
+        .loop_with_header(entity_ids[1])
+        .expect("Should have outer loop");
+    let inner = loops
+        .loop_with_header(entity_ids[2])
+        .expect("Should have inner loop");
 
-    assert!(inner.is_nested_in(&outer), "Inner should be nested in outer");
+    assert!(
+        inner.is_nested_in(&outer),
+        "Inner should be nested in outer"
+    );
 }
 
 #[test]
@@ -2404,7 +2534,9 @@ fn test_natural_loops_loop_body_complete() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2426,13 +2558,21 @@ fn test_natural_loops_loop_body_complete() {
     let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
     let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
-    let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+    let loop_ = loops
+        .loop_with_header(entity_ids[1])
+        .expect("Should have loop");
 
     // Body should contain node 2 (reachable from tail 2 without passing through header 1)
-    assert!(loop_.body.contains(&entity_ids[2]), "Body should contain node 2");
+    assert!(
+        loop_.body.contains(&entity_ids[2]),
+        "Body should contain node 2"
+    );
 
     // Exit node 3 should NOT be in loop (not reachable from tail)
-    assert!(!loop_.contains(entity_ids[3]), "Exit node should not be in loop");
+    assert!(
+        !loop_.contains(entity_ids[3]),
+        "Exit node should not be in loop"
+    );
 }
 
 #[test]
@@ -2452,7 +2592,9 @@ fn test_natural_loops_header_dominates_body() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2474,7 +2616,9 @@ fn test_natural_loops_header_dominates_body() {
     let dom_result = dominators(&graph, entry).expect("Failed to compute dominators");
     let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
-    let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+    let loop_ = loops
+        .loop_with_header(entity_ids[1])
+        .expect("Should have loop");
 
     // Header should dominate all body nodes
     for &body_node in &loop_.body {
@@ -2503,7 +2647,9 @@ fn test_natural_loops_no_false_positives_irreducible() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2526,7 +2672,11 @@ fn test_natural_loops_no_false_positives_irreducible() {
     let loops = natural_loops(&graph, &dom_result).expect("Failed to compute natural loops");
 
     // Should not detect any natural loops (irreducible CFG)
-    assert_eq!(loops.count(), 0, "Irreducible CFG should have 0 natural loops");
+    assert_eq!(
+        loops.count(),
+        0,
+        "Irreducible CFG should have 0 natural loops"
+    );
 }
 
 #[test]
@@ -2546,7 +2696,9 @@ fn test_natural_loops_nesting_consistent_with_dominator_tree() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2571,7 +2723,7 @@ fn test_natural_loops_nesting_consistent_with_dominator_tree() {
     // Verify natural loops are computed successfully
     // The nesting structure depends on the specific algorithm implementation
     assert!(loops.count() >= 1, "Should have at least 1 loop");
-    
+
     // Verify we can access loops by header
     if let Some(loop1) = loops.loop_with_header(entity_ids[1]) {
         assert_eq!(loop1.header, entity_ids[1], "Loop header should match");
@@ -2598,7 +2750,9 @@ fn test_natural_loops_multiple_entries_single_header() {
             file_path: Some(format!("node_{}.rs", i)),
             data: serde_json::json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2623,16 +2777,30 @@ fn test_natural_loops_multiple_entries_single_header() {
     // Should have 1 loop with header 1
     assert_eq!(loops.count(), 1, "Should have 1 loop");
 
-    let loop_ = loops.loop_with_header(entity_ids[1]).expect("Should have loop");
+    let loop_ = loops
+        .loop_with_header(entity_ids[1])
+        .expect("Should have loop");
 
     // Should have 2 back-edges
     assert_eq!(loop_.back_edges.len(), 2, "Should have 2 back-edges");
-    assert!(loop_.back_edges.contains(&(entity_ids[2], entity_ids[1])), "Should have back-edge (2, 1)");
-    assert!(loop_.back_edges.contains(&(entity_ids[3], entity_ids[1])), "Should have back-edge (3, 1)");
+    assert!(
+        loop_.back_edges.contains(&(entity_ids[2], entity_ids[1])),
+        "Should have back-edge (2, 1)"
+    );
+    assert!(
+        loop_.back_edges.contains(&(entity_ids[3], entity_ids[1])),
+        "Should have back-edge (3, 1)"
+    );
 
     // Body should include both 2 and 3
-    assert!(loop_.body.contains(&entity_ids[2]), "Body should contain node 2");
-    assert!(loop_.body.contains(&entity_ids[3]), "Body should contain node 3");
+    assert!(
+        loop_.body.contains(&entity_ids[2]),
+        "Body should contain node 2"
+    );
+    assert!(
+        loop_.body.contains(&entity_ids[3]),
+        "Body should contain node 3"
+    );
 }
 
 #[test]
@@ -2673,8 +2841,15 @@ fn test_enumerate_paths_deterministic() {
     let paths1 = result1.unwrap();
     let paths2 = result2.unwrap();
 
-    assert_eq!(paths1.paths.len(), paths2.paths.len(), "Different number of paths");
-    assert_eq!(paths1.total_paths_found, paths2.total_paths_found, "Different total paths found");
+    assert_eq!(
+        paths1.paths.len(),
+        paths2.paths.len(),
+        "Different number of paths"
+    );
+    assert_eq!(
+        paths1.total_paths_found, paths2.total_paths_found,
+        "Different total paths found"
+    );
 
     // Compare paths (order may vary, so we compare sets)
     // For simplicity, just check the count
@@ -2686,7 +2861,7 @@ fn test_enumerate_paths_progress_integration() {
     // Scenario: Progress callback works end-to-end
     // Expected: Progress is reported during enumeration
     use crate::progress::NoProgress;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -2761,7 +2936,7 @@ fn test_enumerate_paths_progress_integration() {
 fn test_enumerate_paths_with_natural_loops_integration() {
     // Scenario: Path enumeration works after natural loops detected
     // Expected: Can enumerate paths in a CFG with loops
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -2808,16 +2983,40 @@ fn test_enumerate_paths_with_natural_loops_integration() {
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: node0, to_id: node1, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: node0,
+            to_id: node1,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node2, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: node1,
+            to_id: node2,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: node2, to_id: node1, edge_type: "loop".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: node2,
+            to_id: node1,
+            edge_type: "loop".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: node1, to_id: node3, edge_type: "exit".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: node1,
+            to_id: node3,
+            edge_type: "exit".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
 
     // Compute natural loops
@@ -2847,7 +3046,7 @@ fn test_enumerate_paths_with_natural_loops_integration() {
 fn test_enumerate_paths_real_cfg_scenario() {
     // Scenario: Simulate real CFG with branches and loops
     // Expected: Correctly enumerate all feasible paths
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -2943,31 +3142,85 @@ fn test_enumerate_paths_real_cfg_scenario() {
 
     // Build CFG
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: cond, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: entry,
+            to_id: cond,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: cond, to_id: true_branch, edge_type: "true".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: cond,
+            to_id: true_branch,
+            edge_type: "true".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: cond, to_id: false_branch, edge_type: "false".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: cond,
+            to_id: false_branch,
+            edge_type: "false".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: true_branch, to_id: loop_header, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: true_branch,
+            to_id: loop_header,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: false_branch, to_id: merge, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: false_branch,
+            to_id: merge,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: loop_header, to_id: loop_body, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: loop_header,
+            to_id: loop_body,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: loop_body, to_id: loop_header, edge_type: "loop".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: loop_body,
+            to_id: loop_header,
+            edge_type: "loop".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: loop_body, to_id: merge, edge_type: "exit".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: loop_body,
+            to_id: merge,
+            edge_type: "exit".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: merge, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: merge,
+            to_id: exit,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3002,7 +3255,7 @@ fn test_enumerate_paths_real_cfg_scenario() {
 fn test_enumerate_paths_bounds_prevent_explosion() {
     // Scenario: Verify max_paths prevents exponential explosion
     // Expected: Enumeration stops at max_paths bound
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -3027,20 +3280,20 @@ fn test_enumerate_paths_bounds_prevent_explosion() {
     for level in 0..3 {
         let left = graph
             .insert_entity(&GraphEntity {
-            id: 0,
-            kind: "Block".to_string(),
-            name: "Block".to_lowercase().to_string(),
-            file_path: None,
+                id: 0,
+                kind: "Block".to_string(),
+                name: "Block".to_lowercase().to_string(),
+                file_path: None,
                 data: serde_json::json!({}),
             })
             .expect("Failed to insert node");
 
         let right = graph
             .insert_entity(&GraphEntity {
-            id: 0,
-            kind: "Block".to_string(),
-            name: "Block".to_lowercase().to_string(),
-            file_path: None,
+                id: 0,
+                kind: "Block".to_string(),
+                name: "Block".to_lowercase().to_string(),
+                file_path: None,
                 data: serde_json::json!({}),
             })
             .expect("Failed to insert node");
@@ -3048,10 +3301,22 @@ fn test_enumerate_paths_bounds_prevent_explosion() {
         let prev = nodes.last().unwrap();
 
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: *prev, to_id: left, edge_type: "left".into(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: *prev,
+                to_id: left,
+                edge_type: "left".into(),
+                data: json!({}),
+            })
             .expect("Failed to insert edge");
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: *prev, to_id: right, edge_type: "right".into(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: *prev,
+                to_id: right,
+                edge_type: "right".into(),
+                data: json!({}),
+            })
             .expect("Failed to insert edge");
 
         nodes.push(left);
@@ -3076,7 +3341,13 @@ fn test_enumerate_paths_bounds_prevent_explosion() {
             continue;
         }
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: nodes[i], to_id: exit, edge_type: "next".into(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: nodes[i],
+                to_id: exit,
+                edge_type: "next".into(),
+                data: json!({}),
+            })
             .ok();
     }
 
@@ -3117,7 +3388,7 @@ fn test_enumerate_paths_result_is_send() {
 fn test_enumerate_paths_with_dominance_deterministic() {
     // Scenario: Same input produces same output with dominance constraints
     // Expected: Deterministic results across multiple runs
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -3154,10 +3425,22 @@ fn test_enumerate_paths_with_dominance_deterministic() {
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: branch, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: entry,
+            to_id: branch,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: branch, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: branch,
+            to_id: exit,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3211,7 +3494,7 @@ fn test_enumerate_paths_with_dominance_deterministic() {
 fn test_enumerate_paths_with_dominance_full_integration() {
     // Scenario: All three analysis results (dom, cd, loops) used together
     // Expected: Successful integration with all constraint types enabled
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -3258,16 +3541,40 @@ fn test_enumerate_paths_with_dominance_full_integration() {
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: header, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: entry,
+            to_id: header,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: header, to_id: body, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: header,
+            to_id: body,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: body, to_id: header, edge_type: "loop".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: body,
+            to_id: header,
+            edge_type: "loop".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: header, to_id: exit, edge_type: "exit".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: header,
+            to_id: exit,
+            edge_type: "exit".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3311,7 +3618,7 @@ fn test_enumerate_paths_with_dominance_full_integration() {
 fn test_enumerate_paths_with_dominance_vs_base() {
     // Scenario: Compare constrained vs unconstrained enumeration
     // Expected: Constrained enumeration finds same valid paths, fewer invalid paths
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -3358,16 +3665,40 @@ fn test_enumerate_paths_with_dominance_vs_base() {
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: left, edge_type: "left".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: entry,
+            to_id: left,
+            edge_type: "left".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: right, edge_type: "right".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: entry,
+            to_id: right,
+            edge_type: "right".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: left, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: left,
+            to_id: exit,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: right, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: right,
+            to_id: exit,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3417,8 +3748,8 @@ fn test_enumerate_paths_with_dominance_vs_base() {
 fn test_enumerate_paths_with_dominance_progress_integration() {
     // Scenario: Progress callback works with dominance-constrained enumeration
     // Expected: Progress callback is invoked during enumeration
-    use crate::{GraphEntity, GraphEdge};
     use crate::progress::NoProgress;
+    use crate::{GraphEdge, GraphEntity};
     use ahash::AHashSet;
 
     let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
@@ -3445,7 +3776,13 @@ fn test_enumerate_paths_with_dominance_progress_integration() {
         .expect("Failed to insert node");
 
     graph
-        .insert_edge(&GraphEdge { id: 0, from_id: entry, to_id: exit, edge_type: "next".to_string(), data: serde_json::json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: entry,
+            to_id: exit,
+            edge_type: "next".to_string(),
+            data: serde_json::json!({}),
+        })
         .expect("Failed to insert edge");
 
     let mut exit_nodes = AHashSet::new();
@@ -3493,7 +3830,13 @@ fn test_subgraph_isomorphism_simple_chain() {
     let ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
     for i in 0..3 {
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: ids[i], to_id: ids[i + 1], edge_type: "edge".into(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: ids[i],
+                to_id: ids[i + 1],
+                edge_type: "edge".into(),
+                data: json!({}),
+            })
             .expect("Failed to add edge");
     }
 
@@ -3518,9 +3861,17 @@ fn test_subgraph_isomorphism_simple_chain() {
         })
         .expect("Failed to insert pattern node");
 
-    let pattern_ids: Vec<i64> = pattern.list_entity_ids().expect("Failed to get pattern IDs");
+    let pattern_ids: Vec<i64> = pattern
+        .list_entity_ids()
+        .expect("Failed to get pattern IDs");
     pattern
-        .insert_edge(&GraphEdge { id: 0, from_id: pattern_ids[0], to_id: pattern_ids[1], edge_type: "edge".into(), data: json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: pattern_ids[0],
+            to_id: pattern_ids[1],
+            edge_type: "edge".into(),
+            data: json!({}),
+        })
         .expect("Failed to add pattern edge");
 
     let bounds = SubgraphPatternBounds::default();
@@ -3528,7 +3879,11 @@ fn test_subgraph_isomorphism_simple_chain() {
 
     // Algorithm finds all isomorphisms including different node mappings.
     // We expect at least 3 matches (the 3 edges in the path).
-    assert!(result.patterns_found >= 3, "Should find at least 3 matches, found {}", result.patterns_found);
+    assert!(
+        result.patterns_found >= 3,
+        "Should find at least 3 matches, found {}",
+        result.patterns_found
+    );
     assert!(!result.is_empty());
     assert!(!result.bounded_hit);
 }
@@ -3543,7 +3898,13 @@ fn test_subgraph_isomorphism_max_matches() {
     let ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
     for i in 0..9 {
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: ids[i], to_id: ids[i + 1], edge_type: "edge".into(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: ids[i],
+                to_id: ids[i + 1],
+                edge_type: "edge".into(),
+                data: json!({}),
+            })
             .expect("Failed to add edge");
     }
 
@@ -3568,9 +3929,17 @@ fn test_subgraph_isomorphism_max_matches() {
         })
         .expect("Failed to insert pattern node");
 
-    let pattern_ids: Vec<i64> = pattern.list_entity_ids().expect("Failed to get pattern IDs");
+    let pattern_ids: Vec<i64> = pattern
+        .list_entity_ids()
+        .expect("Failed to get pattern IDs");
     pattern
-        .insert_edge(&GraphEdge { id: 0, from_id: pattern_ids[0], to_id: pattern_ids[1], edge_type: "edge".into(), data: json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: pattern_ids[0],
+            to_id: pattern_ids[1],
+            edge_type: "edge".into(),
+            data: json!({}),
+        })
         .expect("Failed to add pattern edge");
 
     let bounds = SubgraphPatternBounds {
@@ -3594,7 +3963,13 @@ fn test_subgraph_isomorphism_empty_result() {
     let ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
     for i in 0..2 {
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: ids[i], to_id: ids[i + 1], edge_type: "edge".into(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: ids[i],
+                to_id: ids[i + 1],
+                edge_type: "edge".into(),
+                data: json!({}),
+            })
             .expect("Failed to add edge");
     }
 
@@ -3603,20 +3978,28 @@ fn test_subgraph_isomorphism_empty_result() {
     for _ in 0..3 {
         pattern
             .insert_entity(&GraphEntity {
-            id: 0,
-            kind: "pattern".to_string(),
-            name: "pattern".to_lowercase().to_string(),
-            file_path: None,
+                id: 0,
+                kind: "pattern".to_string(),
+                name: "pattern".to_lowercase().to_string(),
+                file_path: None,
                 data: serde_json::json!({}),
             })
             .expect("Failed to insert pattern node");
     }
 
-    let pattern_ids: Vec<i64> = pattern.list_entity_ids().expect("Failed to get pattern IDs");
+    let pattern_ids: Vec<i64> = pattern
+        .list_entity_ids()
+        .expect("Failed to get pattern IDs");
     // Create triangle edges
     for (from, to) in &[(0, 1), (1, 2), (2, 0)] {
         pattern
-            .insert_edge(&GraphEdge { id: 0, from_id: pattern_ids[*from], to_id: pattern_ids[*to], edge_type: "edge".into(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: pattern_ids[*from],
+                to_id: pattern_ids[*to],
+                edge_type: "edge".into(),
+                data: json!({}),
+            })
             .expect("Failed to add pattern edge");
     }
 
@@ -3640,7 +4023,13 @@ fn test_subgraph_isomorphism_progress() {
     let ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
     for i in 0..4 {
         graph
-            .insert_edge(&GraphEdge { id: 0, from_id: ids[i], to_id: ids[i + 1], edge_type: "edge".into(), data: json!({}) })
+            .insert_edge(&GraphEdge {
+                id: 0,
+                from_id: ids[i],
+                to_id: ids[i + 1],
+                edge_type: "edge".into(),
+                data: json!({}),
+            })
             .expect("Failed to add edge");
     }
 
@@ -3665,19 +4054,30 @@ fn test_subgraph_isomorphism_progress() {
         })
         .expect("Failed to insert pattern node");
 
-    let pattern_ids: Vec<i64> = pattern.list_entity_ids().expect("Failed to get pattern IDs");
+    let pattern_ids: Vec<i64> = pattern
+        .list_entity_ids()
+        .expect("Failed to get pattern IDs");
     pattern
-        .insert_edge(&GraphEdge { id: 0, from_id: pattern_ids[0], to_id: pattern_ids[1], edge_type: "edge".into(), data: json!({}) })
+        .insert_edge(&GraphEdge {
+            id: 0,
+            from_id: pattern_ids[0],
+            to_id: pattern_ids[1],
+            edge_type: "edge".into(),
+            data: json!({}),
+        })
         .expect("Failed to add pattern edge");
 
     let bounds = SubgraphPatternBounds::default();
     let progress = NoProgress;
-    let result =
-        find_subgraph_patterns_with_progress(&graph, &pattern, bounds, &progress)
-            .expect("Search with progress failed");
+    let result = find_subgraph_patterns_with_progress(&graph, &pattern, bounds, &progress)
+        .expect("Search with progress failed");
 
     // Should still find the matches (at least 4 for the 4 edges in 5-node path)
-    assert!(result.patterns_found >= 4, "Should find at least 4 matches, found {}", result.patterns_found);
+    assert!(
+        result.patterns_found >= 4,
+        "Should find at least 4 matches, found {}",
+        result.patterns_found
+    );
 }
 
 #[test]
@@ -3755,10 +4155,10 @@ fn test_subgraph_isomorphism_pattern_larger_than_target() {
     for _ in 0..2 {
         graph
             .insert_entity(&GraphEntity {
-            id: 0,
-            kind: "node".to_string(),
-            name: "node".to_lowercase().to_string(),
-            file_path: None,
+                id: 0,
+                kind: "node".to_string(),
+                name: "node".to_lowercase().to_string(),
+                file_path: None,
                 data: serde_json::json!({}),
             })
             .expect("Failed to insert node");
@@ -3769,10 +4169,10 @@ fn test_subgraph_isomorphism_pattern_larger_than_target() {
     for _ in 0..3 {
         pattern
             .insert_entity(&GraphEntity {
-            id: 0,
-            kind: "pattern".to_string(),
-            name: "pattern".to_lowercase().to_string(),
-            file_path: None,
+                id: 0,
+                kind: "pattern".to_string(),
+                name: "pattern".to_lowercase().to_string(),
+                file_path: None,
                 data: serde_json::json!({}),
             })
             .expect("Failed to insert pattern node");
@@ -3799,7 +4199,9 @@ fn debug_edge_storage() {
             file_path: Some(format!("node_{}.rs", i)),
             data: json!({"index": i}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
     }
 
     let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -3820,14 +4222,31 @@ fn debug_edge_storage() {
 
     // Verify edges using fetch_outgoing
     for &node_id in &entity_ids {
-        let outgoing = graph.fetch_outgoing(node_id).expect("Failed to get outgoing");
+        let outgoing = graph
+            .fetch_outgoing(node_id)
+            .expect("Failed to get outgoing");
         println!("Node {} outgoing: {:?}", node_id, outgoing);
     }
 
     // Verify expected structure
-    assert_eq!(graph.fetch_outgoing(entity_ids[0]).unwrap().len(), 2, "Node 0 should have 2 outgoing edges");
-    assert_eq!(graph.fetch_outgoing(entity_ids[1]).unwrap().len(), 1, "Node 1 should have 1 outgoing edge");
-    assert_eq!(graph.fetch_outgoing(entity_ids[2]).unwrap().len(), 1, "Node 2 should have 1 outgoing edge");
-    assert_eq!(graph.fetch_outgoing(entity_ids[3]).unwrap().len(), 0, "Node 3 (exit) should have 0 outgoing edges");
+    assert_eq!(
+        graph.fetch_outgoing(entity_ids[0]).unwrap().len(),
+        2,
+        "Node 0 should have 2 outgoing edges"
+    );
+    assert_eq!(
+        graph.fetch_outgoing(entity_ids[1]).unwrap().len(),
+        1,
+        "Node 1 should have 1 outgoing edge"
+    );
+    assert_eq!(
+        graph.fetch_outgoing(entity_ids[2]).unwrap().len(),
+        1,
+        "Node 2 should have 1 outgoing edge"
+    );
+    assert_eq!(
+        graph.fetch_outgoing(entity_ids[3]).unwrap().len(),
+        0,
+        "Node 3 (exit) should have 0 outgoing edges"
+    );
 }
-

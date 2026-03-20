@@ -141,10 +141,7 @@ use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 /// let reachable = reachable_from(&graph, 3)?;
 /// // Returns {3} - only itself (no outgoing edges)
 /// ```
-pub fn reachable_from(
-    graph: &SqliteGraph,
-    start: i64,
-) -> Result<AHashSet<i64>, SqliteGraphError> {
+pub fn reachable_from(graph: &SqliteGraph, start: i64) -> Result<AHashSet<i64>, SqliteGraphError> {
     let mut visited = AHashSet::new();
     let mut queue = VecDeque::new();
 
@@ -445,11 +442,7 @@ where
 /// let reaches = can_reach(&graph, 1, 1)?;
 /// assert_eq!(reaches, true);
 /// ```
-pub fn can_reach(
-    graph: &SqliteGraph,
-    from: i64,
-    to: i64,
-) -> Result<bool, SqliteGraphError> {
+pub fn can_reach(graph: &SqliteGraph, from: i64, to: i64) -> Result<bool, SqliteGraphError> {
     // Self-reachability: every node can reach itself
     if from == to {
         return Ok(true);
@@ -542,7 +535,7 @@ pub fn unreachable_from(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create linear chain graph: 0 -> 1 -> 2 -> 3
     fn create_linear_chain() -> SqliteGraph {
@@ -557,7 +550,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -590,7 +585,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -624,7 +621,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -658,7 +657,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -696,7 +697,11 @@ mod tests {
 
         let reachable = result.unwrap();
         // Start node is included even if not in graph
-        assert_eq!(reachable.len(), 1, "Expected only start node in empty graph");
+        assert_eq!(
+            reachable.len(),
+            1,
+            "Expected only start node in empty graph"
+        );
         assert!(reachable.contains(&999), "Start node should be in result");
     }
 
@@ -713,7 +718,9 @@ mod tests {
             file_path: Some("single_node.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
         let node_id = entity_ids[0];
@@ -741,11 +748,7 @@ mod tests {
             "Node 0 should reach all 4 nodes in chain"
         );
         for &id in &entity_ids {
-            assert!(
-                reachable_0.contains(&id),
-                "Node 0 should reach node {}",
-                id
-            );
+            assert!(reachable_0.contains(&id), "Node 0 should reach node {}", id);
         }
 
         // Node 3 (last) should reach only itself
@@ -771,11 +774,7 @@ mod tests {
             "Node 0 should reach all 4 nodes in diamond"
         );
         for &id in &entity_ids {
-            assert!(
-                reachable_0.contains(&id),
-                "Node 0 should reach node {}",
-                id
-            );
+            assert!(reachable_0.contains(&id), "Node 0 should reach node {}", id);
         }
     }
 
@@ -795,13 +794,21 @@ mod tests {
 
         // Node 1 should reach nodes 1 and 2 (cycle)
         let reachable_1 = reachable_from(&graph, node_1).expect("Failed");
-        assert_eq!(reachable_1.len(), 2, "Node 1 should reach 2 nodes (1 and 2)");
+        assert_eq!(
+            reachable_1.len(),
+            2,
+            "Node 1 should reach 2 nodes (1 and 2)"
+        );
         assert!(reachable_1.contains(&node_1), "Node 1 should reach itself");
         assert!(reachable_1.contains(&node_2), "Node 1 should reach node 2");
 
         // Node 2 should reach nodes 1 and 2 (cycle)
         let reachable_2 = reachable_from(&graph, node_2).expect("Failed");
-        assert_eq!(reachable_2.len(), 2, "Node 2 should reach 2 nodes (1 and 2)");
+        assert_eq!(
+            reachable_2.len(),
+            2,
+            "Node 2 should reach 2 nodes (1 and 2)"
+        );
         assert!(reachable_2.contains(&node_1), "Node 2 should reach node 1");
         assert!(reachable_2.contains(&node_2), "Node 2 should reach itself");
     }
@@ -816,10 +823,22 @@ mod tests {
         // Node 0 should reach only nodes 0 and 1
         let reachable_0 = reachable_from(&graph, entity_ids[0]).expect("Failed");
         assert_eq!(reachable_0.len(), 2, "Node 0 should reach 2 nodes");
-        assert!(reachable_0.contains(&entity_ids[0]), "Node 0 should reach itself");
-        assert!(reachable_0.contains(&entity_ids[1]), "Node 0 should reach node 1");
-        assert!(!reachable_0.contains(&entity_ids[2]), "Node 0 should NOT reach node 2");
-        assert!(!reachable_0.contains(&entity_ids[3]), "Node 0 should NOT reach node 3");
+        assert!(
+            reachable_0.contains(&entity_ids[0]),
+            "Node 0 should reach itself"
+        );
+        assert!(
+            reachable_0.contains(&entity_ids[1]),
+            "Node 0 should reach node 1"
+        );
+        assert!(
+            !reachable_0.contains(&entity_ids[2]),
+            "Node 0 should NOT reach node 2"
+        );
+        assert!(
+            !reachable_0.contains(&entity_ids[3]),
+            "Node 0 should NOT reach node 3"
+        );
     }
 
     #[test]
@@ -858,10 +877,17 @@ mod tests {
         let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
         let result = reverse_reachable_from(&graph, 999);
-        assert!(result.is_ok(), "reverse_reachable_from failed on empty graph");
+        assert!(
+            result.is_ok(),
+            "reverse_reachable_from failed on empty graph"
+        );
 
         let reachable = result.unwrap();
-        assert_eq!(reachable.len(), 1, "Expected only target node in empty graph");
+        assert_eq!(
+            reachable.len(),
+            1,
+            "Expected only target node in empty graph"
+        );
         assert!(reachable.contains(&999), "Target node should be in result");
     }
 
@@ -878,13 +904,18 @@ mod tests {
             file_path: Some("single_node.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
         let node_id = entity_ids[0];
 
         let result = reverse_reachable_from(&graph, node_id);
-        assert!(result.is_ok(), "reverse_reachable_from failed on single node");
+        assert!(
+            result.is_ok(),
+            "reverse_reachable_from failed on single node"
+        );
 
         let reachable = result.unwrap();
         assert_eq!(reachable.len(), 1, "Expected 1 node reachable");
@@ -990,8 +1021,8 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
         let progress = NoProgress;
-        let result_with = reverse_reachable_from_with_progress(&graph, entity_ids[3], &progress)
-            .expect("Failed");
+        let result_with =
+            reverse_reachable_from_with_progress(&graph, entity_ids[3], &progress).expect("Failed");
         let result_without = reverse_reachable_from(&graph, entity_ids[3]).expect("Failed");
 
         assert_eq!(
@@ -1018,11 +1049,7 @@ mod tests {
 
         for &node_id in &entity_ids {
             let result = can_reach(&graph, node_id, node_id).expect("Failed");
-            assert!(
-                result,
-                "Node {} should be able to reach itself",
-                node_id
-            );
+            assert!(result, "Node {} should be able to reach itself", node_id);
         }
     }
 
@@ -1108,8 +1135,14 @@ mod tests {
         let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
         let result = can_reach(&graph, 999, 888);
-        assert!(result.is_ok(), "can_reach should not error on non-existent nodes");
-        assert!(!result.unwrap(), "Non-existent nodes should not reach each other");
+        assert!(
+            result.is_ok(),
+            "can_reach should not error on non-existent nodes"
+        );
+        assert!(
+            !result.unwrap(),
+            "Non-existent nodes should not reach each other"
+        );
     }
 
     // Tests for unreachable_from
@@ -1124,7 +1157,11 @@ mod tests {
         assert!(result.is_ok(), "unreachable_from failed on empty graph");
 
         let unreachable = result.unwrap();
-        assert_eq!(unreachable.len(), 0, "Expected 0 unreachable nodes in empty graph");
+        assert_eq!(
+            unreachable.len(),
+            0,
+            "Expected 0 unreachable nodes in empty graph"
+        );
     }
 
     #[test]

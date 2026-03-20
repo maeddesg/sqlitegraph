@@ -18,10 +18,7 @@ use crate::errors::SqliteGraphError;
 ///
 /// # Returns
 /// Vector of node IDs in BFS order (not including start node).
-pub fn bfs_traversal(
-    graph: &dyn GraphBackend,
-    start: i64,
-) -> Result<Vec<i64>, SqliteGraphError> {
+pub fn bfs_traversal(graph: &dyn GraphBackend, start: i64) -> Result<Vec<i64>, SqliteGraphError> {
     let mut visited = HashSet::new();
     let mut result = Vec::new();
     let mut queue = VecDeque::new();
@@ -52,10 +49,7 @@ pub fn bfs_traversal(
 ///
 /// # Returns
 /// Vector of node IDs in DFS order (not including start node).
-pub fn dfs_traversal(
-    graph: &dyn GraphBackend,
-    start: i64,
-) -> Result<Vec<i64>, SqliteGraphError> {
+pub fn dfs_traversal(graph: &dyn GraphBackend, start: i64) -> Result<Vec<i64>, SqliteGraphError> {
     let mut visited = HashSet::new();
     let mut result = Vec::new();
     let mut stack = vec![start];
@@ -117,11 +111,11 @@ pub fn k_hop_neighbors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::{EdgeSpec, NodeSpec};
     #[cfg(feature = "native-v3")]
     use crate::backend::native::v3::V3Backend;
+    use crate::backend::{EdgeSpec, NodeSpec};
     use tempfile::TempDir;
-    
+
     #[cfg(not(feature = "native-v3"))]
     compile_error!("Tests require native-v3 feature");
 
@@ -133,29 +127,35 @@ mod tests {
     }
 
     fn build_tree(backend: &V3Backend) -> (i64, Vec<i64>) {
-        let root = backend.insert_node(NodeSpec {
-            kind: "Node".to_string(),
-            name: "root".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
+        let root = backend
+            .insert_node(NodeSpec {
+                kind: "Node".to_string(),
+                name: "root".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
 
         let mut children = Vec::new();
         for i in 0..3 {
-            let child = backend.insert_node(NodeSpec {
-                kind: "Node".to_string(),
-                name: format!("child_{}", i),
-                file_path: None,
-                data: serde_json::json!({}),
-            }).unwrap();
-            
-            backend.insert_edge(EdgeSpec {
-                from: root,
-                to: child,
-                edge_type: "links".to_string(),
-                data: serde_json::json!({}),
-            }).unwrap();
-            
+            let child = backend
+                .insert_node(NodeSpec {
+                    kind: "Node".to_string(),
+                    name: format!("child_{}", i),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
+
+            backend
+                .insert_edge(EdgeSpec {
+                    from: root,
+                    to: child,
+                    edge_type: "links".to_string(),
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
+
             children.push(child);
         }
 
@@ -168,7 +168,7 @@ mod tests {
         let (root, children) = build_tree(&backend);
 
         let result = bfs_traversal(&backend, root).unwrap();
-        
+
         assert_eq!(result.len(), 3);
         for child in &children {
             assert!(result.contains(child));
@@ -181,7 +181,7 @@ mod tests {
         let (root, children) = build_tree(&backend);
 
         let result = dfs_traversal(&backend, root).unwrap();
-        
+
         assert_eq!(result.len(), 3);
         for child in &children {
             assert!(result.contains(child));
@@ -204,12 +204,14 @@ mod tests {
     #[test]
     fn test_traversal_isolated_node() {
         let (backend, _temp) = create_backend();
-        let isolated = backend.insert_node(NodeSpec {
-            kind: "Node".to_string(),
-            name: "isolated".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
+        let isolated = backend
+            .insert_node(NodeSpec {
+                kind: "Node".to_string(),
+                name: "isolated".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
 
         let bfs_result = bfs_traversal(&backend, isolated).unwrap();
         assert!(bfs_result.is_empty());

@@ -666,7 +666,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create linear chain CFG: 0 -> 1 -> 2 -> 3 (no control dependence)
     fn create_linear_chain() -> SqliteGraph {
@@ -681,7 +681,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -715,7 +717,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -751,7 +755,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -784,15 +790,21 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = backward_slice(&graph, &cdg, entity_ids[3])
-            .expect("Failed to compute backward slice");
+        let result =
+            backward_slice(&graph, &cdg, entity_ids[3]).expect("Failed to compute backward slice");
 
         // All 4 nodes should be in slice (via data flow)
         assert_eq!(result.size, 4, "Expected 4 nodes in slice");
-        assert_eq!(result.criterion, entity_ids[3], "Criterion should be target");
+        assert_eq!(
+            result.criterion, entity_ids[3],
+            "Criterion should be target"
+        );
 
         // Nodes should be in slice (via data flow and/or control dependence)
-        assert!(result.data_nodes.len() + result.control_nodes.len() >= 3, "Should have nodes in slice");
+        assert!(
+            result.data_nodes.len() + result.control_nodes.len() >= 3,
+            "Should have nodes in slice"
+        );
 
         // Target should be in slice
         assert!(result.contains(entity_ids[3]), "Target should be in slice");
@@ -808,8 +820,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = backward_slice(&graph, &cdg, entity_ids[3])
-            .expect("Failed to compute backward slice");
+        let result =
+            backward_slice(&graph, &cdg, entity_ids[3]).expect("Failed to compute backward slice");
 
         // All nodes should be in slice
         assert_eq!(result.size, 4, "Expected 4 nodes in slice");
@@ -832,10 +844,13 @@ mod tests {
             .expect("Failed to compute CDG");
 
         // Test from node 1
-        let result = backward_slice(&graph, &cdg, entity_ids[1])
-            .expect("Failed to compute backward slice");
+        let result =
+            backward_slice(&graph, &cdg, entity_ids[1]).expect("Failed to compute backward slice");
 
-        assert_eq!(result.criterion, entity_ids[1], "Criterion should be target");
+        assert_eq!(
+            result.criterion, entity_ids[1],
+            "Criterion should be target"
+        );
         assert!(result.contains(entity_ids[1]), "Target should be in slice");
     }
 
@@ -849,8 +864,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = backward_slice(&graph, &cdg, entity_ids[3])
-            .expect("Failed to compute backward slice");
+        let result =
+            backward_slice(&graph, &cdg, entity_ids[3]).expect("Failed to compute backward slice");
 
         // Should have both control and data nodes
         assert!(
@@ -863,8 +878,11 @@ mod tests {
         );
 
         // Union should be slice_nodes
-        let expected_union: AHashSet<i64> =
-            result.control_nodes.union(&result.data_nodes).copied().collect();
+        let expected_union: AHashSet<i64> = result
+            .control_nodes
+            .union(&result.data_nodes)
+            .copied()
+            .collect();
         assert_eq!(
             result.slice_nodes, expected_union,
             "Slice nodes should be union of control + data"
@@ -880,8 +898,7 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = backward_slice(&graph, &cdg, 999)
-            .expect("Failed to compute backward slice");
+        let result = backward_slice(&graph, &cdg, 999).expect("Failed to compute backward slice");
 
         // Should have just the target (self-inclusion)
         assert_eq!(result.size, 1, "Empty graph should have minimal slice");
@@ -900,15 +917,21 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed to compute forward slice");
 
         // All 4 nodes should be in slice (via data flow)
         assert_eq!(result.size, 4, "Expected 4 nodes in slice");
-        assert_eq!(result.criterion, entity_ids[0], "Criterion should be source");
+        assert_eq!(
+            result.criterion, entity_ids[0],
+            "Criterion should be source"
+        );
 
         // Nodes should be in slice (via data flow and/or control dependence)
-        assert!(result.data_nodes.len() + result.control_nodes.len() >= 3, "Should have nodes in slice");
+        assert!(
+            result.data_nodes.len() + result.control_nodes.len() >= 3,
+            "Should have nodes in slice"
+        );
     }
 
     #[test]
@@ -921,8 +944,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed to compute forward slice");
 
         // All nodes should be in slice
         assert_eq!(result.size, 4, "Expected 4 nodes in slice");
@@ -944,10 +967,13 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[1])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[1]).expect("Failed to compute forward slice");
 
-        assert_eq!(result.criterion, entity_ids[1], "Criterion should be source");
+        assert_eq!(
+            result.criterion, entity_ids[1],
+            "Criterion should be source"
+        );
         assert!(result.contains(entity_ids[1]), "Source should be in slice");
     }
 
@@ -961,8 +987,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed to compute forward slice");
 
         // Should have both control and data nodes
         assert!(
@@ -975,8 +1001,11 @@ mod tests {
         );
 
         // Union should be slice_nodes
-        let expected_union: AHashSet<i64> =
-            result.control_nodes.union(&result.data_nodes).copied().collect();
+        let expected_union: AHashSet<i64> = result
+            .control_nodes
+            .union(&result.data_nodes)
+            .copied()
+            .collect();
         assert_eq!(
             result.slice_nodes, expected_union,
             "Slice nodes should be union of control + data"
@@ -995,8 +1024,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed to compute forward slice");
 
         // All nodes should be in slice
         for &node_id in &entity_ids {
@@ -1008,7 +1037,10 @@ mod tests {
         }
 
         // Non-existent node should not be in slice
-        assert!(!result.contains(9999), "Non-existent node should not be in slice");
+        assert!(
+            !result.contains(9999),
+            "Non-existent node should not be in slice"
+        );
     }
 
     #[test]
@@ -1021,8 +1053,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed to compute forward slice");
 
         let sorted = result.sorted_nodes();
 
@@ -1035,7 +1067,11 @@ mod tests {
         }
 
         // All slice nodes should be present
-        assert_eq!(sorted.len(), result.size, "All slice nodes should be in sorted output");
+        assert_eq!(
+            sorted.len(),
+            result.size,
+            "All slice nodes should be in sorted output"
+        );
     }
 
     #[test]
@@ -1048,8 +1084,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed to compute forward slice");
 
         let sorted = result.sorted_control_nodes();
 
@@ -1075,8 +1111,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed to compute forward slice");
 
         let sorted = result.sorted_data_nodes();
 
@@ -1102,8 +1138,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = backward_slice(&graph, &cdg, entity_ids[4])
-            .expect("Failed to compute backward slice");
+        let result =
+            backward_slice(&graph, &cdg, entity_ids[4]).expect("Failed to compute backward slice");
 
         // Node 4 (inner merge) should have control dependencies
         assert!(
@@ -1112,7 +1148,11 @@ mod tests {
         );
 
         // Most nodes should be in slice via data flow
-        assert!(result.size >= 4, "Should have at least 4 nodes in slice, got {}", result.size);
+        assert!(
+            result.size >= 4,
+            "Should have at least 4 nodes in slice, got {}",
+            result.size
+        );
     }
 
     #[test]
@@ -1125,8 +1165,8 @@ mod tests {
         let cdg = super::super::control_dependence::control_dependence_from_exit(&graph)
             .expect("Failed to compute CDG");
 
-        let result = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed to compute forward slice");
+        let result =
+            forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed to compute forward slice");
 
         // All nodes should be in slice
         assert_eq!(result.size, 6, "All 6 nodes should be in slice");
@@ -1153,14 +1193,12 @@ mod tests {
             .expect("Failed to compute CDG");
 
         let progress = NoProgress;
-        let result_with = backward_slice_with_progress(&graph, &cdg, entity_ids[3], &progress)
-            .expect("Failed");
-        let result_without = backward_slice(&graph, &cdg, entity_ids[3])
-            .expect("Failed");
+        let result_with =
+            backward_slice_with_progress(&graph, &cdg, entity_ids[3], &progress).expect("Failed");
+        let result_without = backward_slice(&graph, &cdg, entity_ids[3]).expect("Failed");
 
         assert_eq!(
-            result_with.size,
-            result_without.size,
+            result_with.size, result_without.size,
             "Progress and non-progress results should match"
         );
 
@@ -1185,14 +1223,12 @@ mod tests {
             .expect("Failed to compute CDG");
 
         let progress = NoProgress;
-        let result_with = forward_slice_with_progress(&graph, &cdg, entity_ids[0], &progress)
-            .expect("Failed");
-        let result_without = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed");
+        let result_with =
+            forward_slice_with_progress(&graph, &cdg, entity_ids[0], &progress).expect("Failed");
+        let result_without = forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed");
 
         assert_eq!(
-            result_with.size,
-            result_without.size,
+            result_with.size, result_without.size,
             "Progress and non-progress results should match"
         );
 
@@ -1215,12 +1251,10 @@ mod tests {
             .expect("Failed to compute CDG");
 
         // In linear chain, backward from last node should contain all nodes
-        let backward = backward_slice(&graph, &cdg, entity_ids[3])
-            .expect("Failed");
+        let backward = backward_slice(&graph, &cdg, entity_ids[3]).expect("Failed");
 
         // Forward from first node should also contain all nodes
-        let forward = forward_slice(&graph, &cdg, entity_ids[0])
-            .expect("Failed");
+        let forward = forward_slice(&graph, &cdg, entity_ids[0]).expect("Failed");
 
         // Both should contain all nodes
         assert_eq!(backward.size, 4, "Backward slice should contain all nodes");

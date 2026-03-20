@@ -20,9 +20,14 @@
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
 use crate::backend::native::v3::allocator::PageAllocator;
-use crate::backend::native::v3::constants::{V3_HEADER_SIZE, DEFAULT_PAGE_SIZE};
-use crate::backend::native::v3::index::page::{MAX_ENTRIES, MAX_KEYS};
+use crate::backend::native::v3::constants::{DEFAULT_PAGE_SIZE, V3_HEADER_SIZE};
+use crate::backend::native::v3::file_coordinator::FileCoordinator;
+#[cfg(feature = "v3-forensics")]
+use crate::backend::native::v3::forensics::{
+    FORENSIC_COUNTERS, PAGE_OWNERSHIP, PageType, Subsystem,
+};
 use crate::backend::native::v3::index::IndexPage;
+use crate::backend::native::v3::index::page::{MAX_ENTRIES, MAX_KEYS};
 use crate::backend::native::v3::wal::WALWriter;
 use crate::backend::native::v3::write_batch::WriteBatch;
 use std::collections::HashMap;
@@ -43,6 +48,68 @@ const EMPTY_TREE_ROOT: u64 = u64::MAX;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
+/// Shared page cache for B+Tree index pages
+///
+/// This type allows the cache to be shared across multiple BTreeManager instances,
+/// enabling cache persistence across backend reopen cycles.
+#[derive(Clone)]
+pub struct BTreePageCache {
+    inner: Arc<RwLock<HashMap<u64, IndexPage>>>,
+    capacity: usize,
+}
+
+impl BTreePageCache {
+    /// Create a new shared page cache with the given capacity
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(HashMap::with_capacity(capacity))),
+            capacity,
+        }
+    }
+
+    /// Create a new shared page cache with default capacity (64 pages)
+    pub fn with_default_capacity() -> Self {
+        Self::new(64)
+    }
+
+    /// Get a page from the cache (returns clone if found)
+    pub fn get(&self, page_id: u64) -> Option<IndexPage> {
+        self.inner.read().get(&page_id).cloned()
+    }
+
+    /// Insert a page into the cache, evicting old entries if at capacity
+    pub fn insert(&self, page_id: u64, page: IndexPage) {
+        let mut cache = self.inner.write();
+        if cache.len() >= self.capacity && !cache.contains_key(&page_id) {
+            // Simple FIFO eviction: remove the first key
+            if let Some(&oldest) = cache.keys().next() {
+                cache.remove(&oldest);
+            }
+        }
+        cache.insert(page_id, page);
+    }
+
+    /// Clear all entries from the cache
+    pub fn clear(&self) {
+        self.inner.write().clear();
+    }
+
+    /// Get cache statistics (current size, capacity)
+    pub fn stats(&self) -> (usize, usize) {
+        (self.inner.read().len(), self.capacity)
+    }
+
+    /// Check if cache is empty
+    pub fn is_empty(&self) -> bool {
+        self.inner.read().is_empty()
+    }
+
+    /// Get the number of entries in the cache
+    pub fn len(&self) -> usize {
+        self.inner.read().len()
+    }
+}
+
 #[derive(Clone)]
 pub struct BTreeManager {
     /// Page allocator for page lifecycle management (shared with NodeStore)
@@ -53,14 +120,15 @@ pub struct BTreeManager {
     root_page_id: u64,
     /// Current tree height (0 for empty tree)
     tree_height: u32,
-    /// In-memory page cache for index pages
-    page_cache: HashMap<u64, IndexPage>,
-    /// Cache capacity
-    cache_capacity: usize,
+    /// Shared page cache for index pages (can be shared across instances)
+    page_cache: BTreePageCache,
     /// Database file path for disk I/O (None for in-memory/test mode)
     db_path: Option<PathBuf>,
     /// Page size for disk operations
     page_size: u64,
+    /// Coordinated file handle for all main DB I/O (optional for backward compatibility)
+    /// When set, all file writes go through this coordinator to prevent race conditions
+    file_coordinator: Option<Arc<FileCoordinator>>,
 }
 
 impl BTreeManager {
@@ -74,17 +142,51 @@ impl BTreeManager {
     ///
     /// # Returns
     ///
-    /// New BTreeManager instance with empty tree
-    pub fn new<P: Into<Option<PathBuf>>>(allocator: Arc<RwLock<PageAllocator>>, wal: Option<WALWriter>, db_path: P) -> Self {
+    /// New BTreeManager instance with empty tree and a new page cache
+    pub fn new<P: Into<Option<PathBuf>>>(
+        allocator: Arc<RwLock<PageAllocator>>,
+        wal: Option<WALWriter>,
+        db_path: P,
+    ) -> Self {
         Self {
             allocator,
             wal: wal.map(|w| Arc::new(RwLock::new(w))),
             root_page_id: EMPTY_TREE_ROOT,
             tree_height: 0,
-            page_cache: HashMap::with_capacity(16),
-            cache_capacity: 16,
+            page_cache: BTreePageCache::with_default_capacity(),
             db_path: db_path.into(),
             page_size: DEFAULT_PAGE_SIZE,
+            file_coordinator: None,
+        }
+    }
+
+    /// Create a new BTreeManager with a shared page cache
+    ///
+    /// # Arguments
+    ///
+    /// * `allocator` - Arc<RwLock<PageAllocator>> for shared page management
+    /// * `wal` - Optional WALWriter for durability
+    /// * `db_path` - Optional path to database file for disk I/O (None for in-memory/test mode)
+    /// * `page_cache` - Shared page cache (allows cache persistence across backend reopen cycles)
+    ///
+    /// # Returns
+    ///
+    /// New BTreeManager instance with empty tree, using the provided shared cache
+    pub fn with_cache<P: Into<Option<PathBuf>>>(
+        allocator: Arc<RwLock<PageAllocator>>,
+        wal: Option<WALWriter>,
+        db_path: P,
+        page_cache: BTreePageCache,
+    ) -> Self {
+        Self {
+            allocator,
+            wal: wal.map(|w| Arc::new(RwLock::new(w))),
+            root_page_id: EMPTY_TREE_ROOT,
+            tree_height: 0,
+            page_cache,
+            db_path: db_path.into(),
+            page_size: DEFAULT_PAGE_SIZE,
+            file_coordinator: None,
         }
     }
 
@@ -100,7 +202,7 @@ impl BTreeManager {
     ///
     /// # Returns
     ///
-    /// BTreeManager instance with existing tree state
+    /// BTreeManager instance with existing tree state and a new page cache
     pub fn with_root<P: Into<Option<PathBuf>>>(
         allocator: Arc<RwLock<PageAllocator>>,
         wal: Option<WALWriter>,
@@ -113,11 +215,53 @@ impl BTreeManager {
             wal: wal.map(|w| Arc::new(RwLock::new(w))),
             root_page_id,
             tree_height,
-            page_cache: HashMap::with_capacity(16),
-            cache_capacity: 16,
+            page_cache: BTreePageCache::with_default_capacity(),
             db_path: db_path.into(),
             page_size: DEFAULT_PAGE_SIZE,
+            file_coordinator: None,
         }
+    }
+
+    /// Create a BTreeManager with an existing root page and shared page cache
+    ///
+    /// # Arguments
+    ///
+    /// * `allocator` - Arc<RwLock<PageAllocator>> for shared page management
+    /// * `wal` - Optional WALWriter for durability
+    /// * `root_page_id` - Existing root page ID
+    /// * `tree_height` - Current tree height
+    /// * `db_path` - Optional path to database file for disk I/O (None for in-memory/test mode)
+    /// * `page_cache` - Shared page cache (allows cache persistence across backend reopen cycles)
+    ///
+    /// # Returns
+    ///
+    /// BTreeManager instance with existing tree state, using the provided shared cache
+    pub fn with_root_and_cache<P: Into<Option<PathBuf>>>(
+        allocator: Arc<RwLock<PageAllocator>>,
+        wal: Option<WALWriter>,
+        root_page_id: u64,
+        tree_height: u32,
+        db_path: P,
+        page_cache: BTreePageCache,
+    ) -> Self {
+        Self {
+            allocator,
+            wal: wal.map(|w| Arc::new(RwLock::new(w))),
+            root_page_id,
+            tree_height,
+            page_cache,
+            db_path: db_path.into(),
+            page_size: DEFAULT_PAGE_SIZE,
+            file_coordinator: None,
+        }
+    }
+
+    /// Set the file coordinator for coordinated I/O
+    ///
+    /// When set, all file writes will go through this coordinator to prevent
+    /// race conditions when multiple components write to the same file.
+    pub fn set_file_coordinator(&mut self, coordinator: Arc<FileCoordinator>) {
+        self.file_coordinator = Some(coordinator);
     }
 
     /// Get the root page ID
@@ -128,6 +272,16 @@ impl BTreeManager {
     /// Get the current tree height
     pub fn tree_height(&self) -> u32 {
         self.tree_height
+    }
+
+    /// Set the root page ID (for recovery from metadata)
+    pub fn set_root_page_id(&mut self, page_id: u64) {
+        self.root_page_id = page_id;
+    }
+
+    /// Set the tree height (for recovery from metadata)
+    pub fn set_tree_height(&mut self, height: u32) {
+        self.tree_height = height;
     }
 
     /// Check if tree is empty (no root page)
@@ -150,6 +304,11 @@ impl BTreeManager {
     /// * `Ok(None)` - Key not found in tree
     /// * `Err(...)` - Error during lookup
     pub fn lookup(&self, key: i64) -> NativeResult<Option<u64>> {
+        #[cfg(feature = "v3-forensics")]
+        FORENSIC_COUNTERS
+            .btree_lookup_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         // Empty tree: root_page_id is EMPTY_TREE_ROOT (u64::MAX) for new trees,
         // or 0 for databases that haven't created any index pages yet
         if self.root_page_id == EMPTY_TREE_ROOT || self.root_page_id == 0 {
@@ -165,10 +324,12 @@ impl BTreeManager {
             let index_page = self.load_page(current_page_id)?;
 
             match &index_page {
-                IndexPage::Leaf { entries, next_leaf, .. } => {
+                IndexPage::Leaf {
+                    entries, next_leaf, ..
+                } => {
                     // Binary search for key in leaf entries
                     let result = IndexPage::binary_search_leaf(entries, search_key);
-                    return match result {
+                    let result = match result {
                         Ok(idx) => {
                             if let Some((_, page_id)) = entries.get(idx) {
                                 Ok(Some(*page_id))
@@ -190,6 +351,14 @@ impl BTreeManager {
                             }
                         }
                     };
+
+                    // Record traversal depth before returning
+                    #[cfg(feature = "v3-forensics")]
+                    FORENSIC_COUNTERS
+                        .btree_traversal_depth_total
+                        .fetch_add((depth + 1) as u64, std::sync::atomic::Ordering::Relaxed);
+
+                    return result;
                 }
                 IndexPage::Internal { keys, children, .. } => {
                     // Find child index using binary search
@@ -197,6 +366,11 @@ impl BTreeManager {
                     if child_idx < children.len() {
                         current_page_id = children[child_idx];
                     } else {
+                        #[cfg(feature = "v3-forensics")]
+                        FORENSIC_COUNTERS
+                            .btree_traversal_depth_total
+                            .fetch_add((depth + 1) as u64, std::sync::atomic::Ordering::Relaxed);
+
                         return Err(NativeBackendError::InvalidHeader {
                             field: "btree_internal".to_string(),
                             reason: format!("child index {} out of bounds", child_idx),
@@ -207,6 +381,11 @@ impl BTreeManager {
 
             depth += 1;
         }
+
+        #[cfg(feature = "v3-forensics")]
+        FORENSIC_COUNTERS
+            .btree_traversal_depth_total
+            .fetch_add(depth as u64, std::sync::atomic::Ordering::Relaxed);
 
         Err(NativeBackendError::InvalidHeader {
             field: "btree_depth".to_string(),
@@ -229,6 +408,11 @@ impl BTreeManager {
     /// * `Ok(())` - Insert successful
     /// * `Err(...)` - Error during insert
     pub fn insert(&mut self, key: i64, value: u64) -> NativeResult<()> {
+        #[cfg(feature = "v3-forensics")]
+        FORENSIC_COUNTERS
+            .btree_insert_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         // Handle empty tree case (EMPTY_TREE_ROOT or 0 for uninitialized)
         if self.root_page_id == EMPTY_TREE_ROOT || self.root_page_id == 0 {
             return self.insert_into_empty_tree(key, value);
@@ -254,9 +438,15 @@ impl BTreeManager {
         page.verify_invariants()?;
 
         let is_root = page.is_root();
-        
+
         match page {
-            IndexPage::Leaf { mut entries, page_id: pid, next_leaf, checksum, .. } => {
+            IndexPage::Leaf {
+                mut entries,
+                page_id: pid,
+                next_leaf,
+                checksum,
+                ..
+            } => {
                 // Check if key already exists (update case)
                 match IndexPage::binary_search_leaf(&entries, key) {
                     Ok(idx) => {
@@ -266,7 +456,7 @@ impl BTreeManager {
                         entries.insert(idx, (key, value));
                     }
                 }
-                
+
                 // Reconstruct page and write
                 let updated_page = IndexPage::Leaf {
                     page_id: pid,
@@ -285,22 +475,26 @@ impl BTreeManager {
 
                 // Load the child and check if it needs splitting
                 let child_page = self.load_page(child_id)?;
-                
+
                 if child_page.needs_split_internal() || child_page.needs_split_leaf() {
                     // Split the child
                     let (new_child_id, separator_key) = self.split_child(page_id, child_idx)?;
-                    
+
                     // Reload the parent (it was modified by split_child)
                     let updated_parent = self.load_page(page_id)?;
-                    
+
                     // Determine which child to use after split
                     let new_child_idx = if key >= separator_key {
                         child_idx + 1
                     } else {
                         child_idx
                     };
-                    
-                    if let IndexPage::Internal { children: new_children, .. } = &updated_parent {
+
+                    if let IndexPage::Internal {
+                        children: new_children,
+                        ..
+                    } = &updated_parent
+                    {
                         let next_child_id = new_children[new_child_idx];
                         return self.insert_non_full(next_child_id, key, value);
                     }
@@ -331,7 +525,12 @@ impl BTreeManager {
 
                 // Create the new sibling internal node
                 let mut sibling = IndexPage::new_internal(sibling_id);
-                if let IndexPage::Internal { keys: sib_keys, children: sib_children, .. } = &mut sibling {
+                if let IndexPage::Internal {
+                    keys: sib_keys,
+                    children: sib_children,
+                    ..
+                } = &mut sibling
+                {
                     // Move upper half to sibling (excluding separator)
                     *sib_keys = keys[split_idx + 1..].to_vec();
                     *sib_children = children[split_idx + 1..].to_vec();
@@ -339,13 +538,23 @@ impl BTreeManager {
 
                 // Truncate old root (keep lower half, excluding separator)
                 let mut truncated_old_root = IndexPage::new_internal(old_root_id);
-                if let IndexPage::Internal { keys: old_keys, children: old_children, .. } = &mut truncated_old_root {
+                if let IndexPage::Internal {
+                    keys: old_keys,
+                    children: old_children,
+                    ..
+                } = &mut truncated_old_root
+                {
                     *old_keys = keys[..split_idx].to_vec();
                     *old_children = children[..split_idx + 1].to_vec();
                 }
 
                 // Set up new root
-                if let IndexPage::Internal { keys: root_keys, children: root_children, .. } = &mut new_root {
+                if let IndexPage::Internal {
+                    keys: root_keys,
+                    children: root_children,
+                    ..
+                } = &mut new_root
+                {
                     root_keys.push(separator_key);
                     root_children.push(old_root_id);
                     root_children.push(sibling_id);
@@ -360,26 +569,43 @@ impl BTreeManager {
                 self.root_page_id = new_root_id;
                 self.tree_height += 1;
             }
-            IndexPage::Leaf { entries, next_leaf, .. } => {
+            IndexPage::Leaf {
+                entries, next_leaf, ..
+            } => {
                 let split_idx = entries.len() / 2;
                 let separator_key = entries[split_idx].0;
 
                 // Create the new sibling leaf
                 let mut sibling = IndexPage::new_leaf(sibling_id);
-                if let IndexPage::Leaf { entries: sib_entries, next_leaf: sib_next, .. } = &mut sibling {
+                if let IndexPage::Leaf {
+                    entries: sib_entries,
+                    next_leaf: sib_next,
+                    ..
+                } = &mut sibling
+                {
                     *sib_entries = entries[split_idx..].to_vec();
                     *sib_next = *next_leaf;
                 }
 
                 // Truncate old root
                 let mut truncated_old_root = IndexPage::new_leaf_root(old_root_id);
-                if let IndexPage::Leaf { entries: old_entries, next_leaf: old_next, .. } = &mut truncated_old_root {
+                if let IndexPage::Leaf {
+                    entries: old_entries,
+                    next_leaf: old_next,
+                    ..
+                } = &mut truncated_old_root
+                {
                     *old_entries = entries[..split_idx].to_vec();
                     *old_next = sibling_id;
                 }
 
                 // Set up new root (internal node with one key)
-                if let IndexPage::Internal { keys: root_keys, children: root_children, .. } = &mut new_root {
+                if let IndexPage::Internal {
+                    keys: root_keys,
+                    children: root_children,
+                    ..
+                } = &mut new_root
+                {
                     root_keys.push(separator_key);
                     root_children.push(old_root_id);
                     root_children.push(sibling_id);
@@ -413,10 +639,12 @@ impl BTreeManager {
         let parent = self.load_page(parent_id)?;
         let child_id = match &parent {
             IndexPage::Internal { children, .. } => children[child_idx],
-            _ => return Err(NativeBackendError::InvalidHeader {
-                field: "btree_split_child".to_string(),
-                reason: "parent is not an internal node".to_string(),
-            }),
+            _ => {
+                return Err(NativeBackendError::InvalidHeader {
+                    field: "btree_split_child".to_string(),
+                    reason: "parent is not an internal node".to_string(),
+                });
+            }
         };
 
         let child = self.load_page(child_id)?;
@@ -429,21 +657,36 @@ impl BTreeManager {
 
                 // Create sibling internal node
                 let mut sibling = IndexPage::new_internal(new_page_id);
-                if let IndexPage::Internal { keys: sib_keys, children: sib_children, .. } = &mut sibling {
+                if let IndexPage::Internal {
+                    keys: sib_keys,
+                    children: sib_children,
+                    ..
+                } = &mut sibling
+                {
                     *sib_keys = keys[split_idx + 1..].to_vec();
                     *sib_children = children[split_idx + 1..].to_vec();
                 }
 
                 // Truncate original child (keep lower half)
                 let mut truncated_child = IndexPage::new_internal(child_id);
-                if let IndexPage::Internal { keys: child_keys, children: child_children, .. } = &mut truncated_child {
+                if let IndexPage::Internal {
+                    keys: child_keys,
+                    children: child_children,
+                    ..
+                } = &mut truncated_child
+                {
                     *child_keys = keys[..split_idx].to_vec();
                     *child_children = children[..split_idx + 1].to_vec();
                 }
 
                 // Update parent - insert separator and new child
                 let mut updated_parent = parent.clone();
-                if let IndexPage::Internal { keys: p_keys, children: p_children, .. } = &mut updated_parent {
+                if let IndexPage::Internal {
+                    keys: p_keys,
+                    children: p_children,
+                    ..
+                } = &mut updated_parent
+                {
                     p_keys.insert(child_idx, separator_key);
                     p_children.insert(child_idx + 1, new_page_id);
                 }
@@ -461,27 +704,44 @@ impl BTreeManager {
 
                 Ok((new_page_id, separator_key))
             }
-            IndexPage::Leaf { entries, next_leaf, .. } => {
+            IndexPage::Leaf {
+                entries, next_leaf, ..
+            } => {
                 let split_idx = entries.len() / 2;
                 let separator_key = entries[split_idx].0;
 
                 // Create sibling leaf node
                 let mut sibling = IndexPage::new_leaf(new_page_id);
-                if let IndexPage::Leaf { entries: sib_entries, next_leaf: sib_next, .. } = &mut sibling {
+                if let IndexPage::Leaf {
+                    entries: sib_entries,
+                    next_leaf: sib_next,
+                    ..
+                } = &mut sibling
+                {
                     *sib_entries = entries[split_idx..].to_vec();
                     *sib_next = *next_leaf;
                 }
 
                 // Truncate original child (keep lower half)
                 let mut truncated_child = IndexPage::new_leaf(child_id);
-                if let IndexPage::Leaf { entries: child_entries, next_leaf: child_next, .. } = &mut truncated_child {
+                if let IndexPage::Leaf {
+                    entries: child_entries,
+                    next_leaf: child_next,
+                    ..
+                } = &mut truncated_child
+                {
                     *child_entries = entries[..split_idx].to_vec();
                     *child_next = new_page_id;
                 }
 
                 // Update parent - insert separator and new child
                 let mut updated_parent = parent.clone();
-                if let IndexPage::Internal { keys: p_keys, children: p_children, .. } = &mut updated_parent {
+                if let IndexPage::Internal {
+                    keys: p_keys,
+                    children: p_children,
+                    ..
+                } = &mut updated_parent
+                {
                     p_keys.insert(child_idx, separator_key);
                     p_children.insert(child_idx + 1, new_page_id);
                 }
@@ -584,7 +844,7 @@ impl BTreeManager {
 
         // Create a new leaf page as root
         let mut leaf = IndexPage::new_leaf_root(page_id);
-        
+
         // Add the entry
         if let IndexPage::Leaf { entries, .. } = &mut leaf {
             entries.push((key as u64, value));
@@ -698,19 +958,28 @@ impl BTreeManager {
         let mut new_page = IndexPage::new_leaf(new_page_id);
 
         if let (
-            IndexPage::Leaf { entries: orig_entries, next_leaf: orig_next, .. },
-            IndexPage::Leaf { entries: new_entries, next_leaf: new_next, .. }
-        ) = (&mut original_page, &mut new_page) {
+            IndexPage::Leaf {
+                entries: orig_entries,
+                next_leaf: orig_next,
+                ..
+            },
+            IndexPage::Leaf {
+                entries: new_entries,
+                next_leaf: new_next,
+                ..
+            },
+        ) = (&mut original_page, &mut new_page)
+        {
             // Find split point (middle)
             let split_idx = orig_entries.len() / 2;
-            
+
             // Move second half to new page
             *new_entries = orig_entries.split_off(split_idx);
             *new_next = *orig_next;
 
             // Determine which page gets the new key
             let split_key = new_entries[0].0;
-            
+
             if key < split_key {
                 // Insert into original page
                 let insert_idx = match IndexPage::binary_search_leaf(orig_entries, key) {
@@ -763,9 +1032,18 @@ impl BTreeManager {
         let mut new_page = IndexPage::new_internal(new_page_id);
 
         if let (
-            IndexPage::Internal { keys: orig_keys, children: orig_children, .. },
-            IndexPage::Internal { keys: new_keys, children: new_children, .. }
-        ) = (&mut original_page, &mut new_page) {
+            IndexPage::Internal {
+                keys: orig_keys,
+                children: orig_children,
+                ..
+            },
+            IndexPage::Internal {
+                keys: new_keys,
+                children: new_children,
+                ..
+            },
+        ) = (&mut original_page, &mut new_page)
+        {
             // Find split point
             let split_idx = orig_keys.len() / 2;
             let split_key = orig_keys[split_idx];
@@ -773,7 +1051,7 @@ impl BTreeManager {
             // Move keys and children after split point to new page
             *new_keys = orig_keys.split_off(split_idx + 1);
             *new_children = orig_children.split_off(split_idx + 1);
-            
+
             // The middle key (split_key) is promoted to parent
             // Remove it from original keys
             orig_keys.pop();
@@ -859,18 +1137,34 @@ impl BTreeManager {
 
     /// Load page from cache or disk
     fn load_page(&self, page_id: u64) -> NativeResult<IndexPage> {
+        #[cfg(feature = "v3-forensics")]
+        FORENSIC_COUNTERS
+            .page_read_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         // Try cache first
-        if let Some(page) = self.page_cache.get(&page_id) {
-            return Ok(page.clone());
+        if let Some(page) = self.page_cache.get(page_id) {
+            #[cfg(feature = "v3-forensics")]
+            FORENSIC_COUNTERS
+                .btree_cache_hit_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return Ok(page);
         }
+
+        #[cfg(feature = "v3-forensics")]
+        FORENSIC_COUNTERS
+            .btree_cache_miss_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         // If no db_path, we can't load from disk (in-memory/test mode)
         let db_path = match &self.db_path {
             Some(path) => path,
-            None => return Err(NativeBackendError::InvalidHeader {
-                field: "page_cache".to_string(),
-                reason: format!("page {} not in cache (no disk path configured)", page_id),
-            }),
+            None => {
+                return Err(NativeBackendError::InvalidHeader {
+                    field: "page_cache".to_string(),
+                    reason: format!("page {} not in cache (no disk path configured)", page_id),
+                });
+            }
         };
 
         // Page 0 is the header page, data pages start at 1
@@ -881,36 +1175,75 @@ impl BTreeManager {
             });
         }
 
-        // Load from disk
-        let offset = V3_HEADER_SIZE + (page_id - 1) * self.page_size;
-        let mut file = File::open(db_path).map_err(|e| NativeBackendError::IoError {
-            context: format!("Failed to open db file for page load: {}", page_id),
-            source: e,
-        })?;
-
-        file.seek(SeekFrom::Start(offset)).map_err(|e| NativeBackendError::IoError {
-            context: format!("Failed to seek to page {} at offset {}", page_id, offset),
-            source: e,
-        })?;
-
+        // Use file_coordinator if available (FIXES 10K-node bug)
         let mut buffer = vec![0u8; self.page_size as usize];
-        file.read_exact(&mut buffer).map_err(|e| NativeBackendError::IoError {
-            context: format!("Failed to read page {} from disk", page_id),
-            source: e,
-        })?;
+        if let Some(coordinator) = &self.file_coordinator {
+            coordinator.read_page(page_id, &mut buffer)?;
+        } else {
+            // Fallback to original behavior for backward compatibility
+            // Load from disk
+            let offset = V3_HEADER_SIZE + (page_id - 1) * self.page_size;
+            let mut file = File::open(db_path).map_err(|e| NativeBackendError::IoError {
+                context: format!("Failed to open db file for page load: {}", page_id),
+                source: e,
+            })?;
 
-        IndexPage::unpack(&buffer)
+            file.seek(SeekFrom::Start(offset))
+                .map_err(|e| NativeBackendError::IoError {
+                    context: format!("Failed to seek to page {} at offset {}", page_id, offset),
+                    source: e,
+                })?;
+
+            file.read_exact(&mut buffer)
+                .map_err(|e| NativeBackendError::IoError {
+                    context: format!("Failed to read page {} from disk", page_id),
+                    source: e,
+                })?;
+        }
+
+        let page = IndexPage::unpack(&buffer)?;
+
+        // Cache the page for future accesses
+        self.page_cache.insert(page_id, page.clone());
+
+        Ok(page)
     }
 
     /// Write page to cache and disk (if db_path configured)
     fn write_page(&mut self, page: &IndexPage) -> NativeResult<()> {
         let page_id = page.page_id();
-        
+
+        #[cfg(feature = "v3-forensics")]
+        {
+            FORENSIC_COUNTERS
+                .page_write_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            // Track page ownership for forensics
+            let offset = V3_HEADER_SIZE + (page_id.saturating_sub(1)) * self.page_size;
+
+            // Determine if this is a leaf or internal page for more precise tracking
+            let page_type = match page {
+                IndexPage::Leaf { .. } => PageType::BTree, // Could add Leaf/Internal distinction later
+                IndexPage::Internal { .. } => PageType::BTree,
+            };
+
+            // Register the allocation and write
+            crate::track_page_alloc!(page_id, Subsystem::BTreeManager, page_type);
+            crate::track_page_write!(
+                page_id,
+                Subsystem::BTreeManager,
+                page_type,
+                offset,
+                "BTreeManager::write_page"
+            );
+        }
+
         // Serialize page to bytes
         let page_bytes = page.pack()?;
-        
+
         // Write to disk if db_path is configured
-        if let Some(db_path) = &self.db_path {
+        if self.db_path.is_some() {
             // Page 0 is the header page, data pages start at 1
             // But IndexPages use 1-based IDs, so page_id 1 is first data page
             if page_id == 0 {
@@ -919,39 +1252,70 @@ impl BTreeManager {
                     reason: "Cannot write page 0 (reserved for header)".to_string(),
                 });
             }
-            let offset = V3_HEADER_SIZE + (page_id - 1) * self.page_size;
-            let mut file = OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(db_path)
-                .map_err(|e| NativeBackendError::IoError {
-                    context: format!("Failed to open db file for page write: {}", page_id),
+
+            // Use file_coordinator if available (FIXES 10K-node bug)
+            if let Some(coordinator) = &self.file_coordinator {
+                coordinator.write_page(page_id, &page_bytes)?;
+            } else {
+                // Fallback to original behavior for backward compatibility
+                let offset = V3_HEADER_SIZE + (page_id - 1) * self.page_size;
+                let required_len = offset + page_bytes.len() as u64;
+
+                let db_path = self.db_path.as_ref().unwrap();
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(db_path)
+                    .map_err(|e| NativeBackendError::IoError {
+                        context: format!("Failed to open db file for page write: {}", page_id),
+                        source: e,
+                    })?;
+
+                // CRITICAL: Extend file if needed before writing
+                let current_len = file.metadata().map(|m| m.len()).unwrap_or(0);
+                if required_len > current_len {
+                    file.set_len(required_len)
+                        .map_err(|e| NativeBackendError::IoError {
+                            context: format!(
+                                "Failed to extend file to {} bytes for B+Tree page {}",
+                                required_len, page_id
+                            ),
+                            source: e,
+                        })?;
+                    // CRITICAL: Sync metadata to ensure file size is updated
+                    file.sync_all().map_err(|e| NativeBackendError::IoError {
+                        context: format!(
+                            "Failed to sync file size to {} bytes for B+Tree page {}",
+                            required_len, page_id
+                        ),
+                        source: e,
+                    })?;
+                }
+
+                file.seek(SeekFrom::Start(offset))
+                    .map_err(|e| NativeBackendError::IoError {
+                        context: format!("Failed to seek to page {} at offset {}", page_id, offset),
+                        source: e,
+                    })?;
+
+                file.write_all(&page_bytes)
+                    .map_err(|e| NativeBackendError::IoError {
+                        context: format!("Failed to write page {} to disk", page_id),
+                        source: e,
+                    })?;
+
+                // CRITICAL: Sync to ensure data and metadata are written to disk
+                file.sync_all().map_err(|e| NativeBackendError::IoError {
+                    context: format!("Failed to sync B+Tree page {}", page_id),
                     source: e,
                 })?;
 
-            file.seek(SeekFrom::Start(offset)).map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to seek to page {} at offset {}", page_id, offset),
-                source: e,
-            })?;
-
-            file.write_all(&page_bytes).map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to write page {} to disk", page_id),
-                source: e,
-            })?;
-
-            file.sync_data().map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to sync page {} write", page_id),
-                source: e,
-            })?;
-        }
-
-        // Update cache
-        if self.page_cache.len() >= self.cache_capacity && !self.page_cache.contains_key(&page_id) {
-            if let Some(&oldest) = self.page_cache.keys().next() {
-                self.page_cache.remove(&oldest);
+                // DURABILITY: Index page writes are now flushed to OS buffers.
+                // Full fsync happens at flush_to_disk() boundary.
             }
         }
 
+        // Update cache
         self.page_cache.insert(page_id, page.clone());
         Ok(())
     }
@@ -973,7 +1337,14 @@ impl BTreeManager {
 
     /// Get cache statistics
     pub fn cache_stats(&self) -> (usize, usize) {
-        (self.page_cache.len(), self.cache_capacity)
+        self.page_cache.stats()
+    }
+
+    /// Get a reference to the shared page cache
+    ///
+    /// This allows the cache to be shared across backend reopen cycles
+    pub fn page_cache(&self) -> BTreePageCache {
+        self.page_cache.clone()
     }
 
     /// Create a new write batch for batched page writes
@@ -993,9 +1364,12 @@ impl BTreeManager {
     ///
     /// This is the key performance optimization - one fsync for many pages.
     pub fn commit_batch(&mut self, batch: WriteBatch) -> NativeResult<()> {
-        let db_path = self.db_path.as_ref().ok_or_else(|| NativeBackendError::InvalidOperation {
-            context: "Cannot commit batch: no db_path configured".to_string(),
-        })?;
+        let db_path =
+            self.db_path
+                .as_ref()
+                .ok_or_else(|| NativeBackendError::InvalidOperation {
+                    context: "Cannot commit batch: no db_path configured".to_string(),
+                })?;
 
         batch.commit(db_path)
     }
@@ -1009,27 +1383,32 @@ impl BTreeManager {
     ///
     /// * `Ok(true)` - Insert staged successfully
     /// * `Err(...)` - Error (including non-empty tree)
-    pub fn insert_simple_to_batch(&mut self, batch: &mut WriteBatch, key: i64, value: u64) -> NativeResult<bool> {
+    pub fn insert_simple_to_batch(
+        &mut self,
+        batch: &mut WriteBatch,
+        key: i64,
+        value: u64,
+    ) -> NativeResult<bool> {
         // Only handle empty tree case for this demo (EMPTY_TREE_ROOT or uninitialized 0)
         if self.root_page_id == EMPTY_TREE_ROOT || self.root_page_id == 0 {
             // Create new tree with single leaf
             let page_id = self.allocator.write().allocate()?;
             let mut leaf = IndexPage::new_leaf(page_id);
-            
+
             if let IndexPage::Leaf { entries, .. } = &mut leaf {
                 entries.push((key as u64, value));
             }
-            
+
             // Stage to batch
             batch.stage_page(leaf.clone())?;
-            
+
             // Also update cache so we can read it back
             self.page_cache.insert(page_id, leaf);
-            
+
             // Update root
             self.root_page_id = page_id;
             self.tree_height = 1;
-            
+
             return Ok(true);
         }
 
@@ -1078,7 +1457,7 @@ mod tests {
         // Insert first key
         let result = manager.insert(1, 100);
         assert!(result.is_ok());
-        
+
         assert!(!manager.is_empty());
         assert_eq!(manager.tree_height(), 1);
         assert!(manager.root_page_id() != EMPTY_TREE_ROOT);
@@ -1127,7 +1506,12 @@ mod tests {
         for i in 1..=10 {
             let result = manager.lookup(i);
             assert!(result.is_ok(), "Failed to lookup key {}", i);
-            assert_eq!(result.unwrap(), Some(i as u64 * 100), "Wrong value for key {}", i);
+            assert_eq!(
+                result.unwrap(),
+                Some(i as u64 * 100),
+                "Wrong value for key {}",
+                i
+            );
         }
 
         // Lookup non-existent key
@@ -1161,9 +1545,9 @@ mod tests {
         // Insert and then delete
         manager.insert(1, 100).unwrap();
         let deleted = manager.delete(1).unwrap();
-        
+
         assert!(deleted);
-        
+
         // Lookup should return None
         let result = manager.lookup(1);
         assert!(result.is_ok());
@@ -1206,10 +1590,10 @@ mod tests {
 
         // Insert something to populate cache
         manager.insert(1, 100).unwrap();
-        
+
         // Clear cache
         manager.clear_cache();
-        
+
         let (len, _) = manager.cache_stats();
         assert_eq!(len, 0);
     }
@@ -1223,7 +1607,7 @@ mod tests {
         let mut batch = manager.create_write_batch();
         let page = IndexPage::new_leaf(1);
         manager.stage_page_to_batch(&mut batch, page).unwrap();
-        
+
         assert_eq!(batch.len(), 1);
     }
 
@@ -1235,7 +1619,7 @@ mod tests {
         // Insert into empty tree via batch
         let mut batch = manager.create_write_batch();
         let result = manager.insert_simple_to_batch(&mut batch, 1, 100).unwrap();
-        
+
         assert!(result, "Insert should succeed for empty tree");
         assert_eq!(batch.len(), 1);
         assert!(!manager.is_empty(), "Manager should now have root");
@@ -1250,7 +1634,7 @@ mod tests {
         let mut batch = manager.create_write_batch();
         let result = manager.insert_simple_to_batch(&mut batch, 1, 100).unwrap();
         assert!(result, "Insert should succeed for empty tree");
-        
+
         // Should have 1 page staged
         assert_eq!(batch.len(), 1);
     }

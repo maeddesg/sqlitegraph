@@ -4,7 +4,9 @@
 //! but before commit, the rollback properly clears cluster metadata from ALL nodes
 //! that were modified during the failed transaction.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 
 #[cfg(test)]
 mod rollback_tests {
@@ -109,7 +111,11 @@ mod rollback_tests {
 
         for &target_node_id in &target_nodes {
             // Verify node still exists but adjacency should be empty
-            let neighbors = graph_reopened.neighbors(SnapshotId::current(), target_node_id, Default::default())?;
+            let neighbors = graph_reopened.neighbors(
+                SnapshotId::current(),
+                target_node_id,
+                Default::default(),
+            )?;
             assert_eq!(
                 neighbors.len(),
                 0,
@@ -145,8 +151,11 @@ mod rollback_tests {
 
         // Check a node that wasn't targeted for cluster updates
         let untouched_node_id = node_ids[25]; // Node outside our target range
-        let untouched_neighbors =
-            graph_reopened.neighbors(SnapshotId::current(), untouched_node_id, Default::default())?;
+        let untouched_neighbors = graph_reopened.neighbors(
+            SnapshotId::current(),
+            untouched_node_id,
+            Default::default(),
+        )?;
         let untouched_incoming = graph_reopened.neighbors(
             SnapshotId::current(),
             untouched_node_id,

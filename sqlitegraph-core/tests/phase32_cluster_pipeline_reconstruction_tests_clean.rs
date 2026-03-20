@@ -162,7 +162,8 @@ fn test_single_edge_cluster_clean_creation() {
 
     // Verify neighbors work through public API (Phase 35 routing)
     let neighbors = graph
-        .neighbors(SnapshotId::current(),
+        .neighbors(
+            SnapshotId::current(),
             source_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -175,8 +176,12 @@ fn test_single_edge_cluster_clean_creation() {
     assert_eq!(neighbors[0], target_id as i64, "Neighbor should be target");
 
     // Verify node data integrity through GraphBackend API
-    let source_node_data = graph.get_node(SnapshotId::current(), source_id as i64).unwrap();
-    let target_node_data = graph.get_node(SnapshotId::current(), target_id as i64).unwrap();
+    let source_node_data = graph
+        .get_node(SnapshotId::current(), source_id as i64)
+        .unwrap();
+    let target_node_data = graph
+        .get_node(SnapshotId::current(), target_id as i64)
+        .unwrap();
 
     assert_eq!(
         source_node_data.name, "source",
@@ -197,7 +202,8 @@ fn test_single_edge_cluster_clean_creation() {
 
     // Verify edge direction validation through neighbor queries
     let source_outgoing = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             source_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -207,7 +213,8 @@ fn test_single_edge_cluster_clean_creation() {
         .unwrap();
 
     let target_incoming = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             target_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -243,7 +250,8 @@ fn test_multi_edge_cluster_clean_creation() {
 
     // Verify center node has all outgoing neighbors
     let center_neighbors = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             center_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -280,7 +288,8 @@ fn test_multi_edge_cluster_clean_creation() {
     // Verify each target has exactly one incoming neighbor
     for target_id in &target_ids {
         let incoming_neighbors = graph
-            .neighbors(SnapshotId::current(), 
+            .neighbors(
+                SnapshotId::current(),
                 *target_id as i64,
                 NeighborQuery {
                     direction: BackendDirection::Incoming,
@@ -347,7 +356,8 @@ fn test_cluster_data_consistency() {
 
     // Verify all outgoing neighbors
     let all_outgoing = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             source_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -360,7 +370,8 @@ fn test_cluster_data_consistency() {
 
     // Verify filtered queries work correctly
     let strong_neighbors = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             source_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -380,7 +391,8 @@ fn test_cluster_data_consistency() {
     );
 
     let weak_neighbors = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             source_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -435,7 +447,8 @@ fn test_symmetric_incoming_outgoing_clusters() {
 
     // Verify node1's outgoing and incoming
     let node1_outgoing = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             node1_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -445,7 +458,8 @@ fn test_symmetric_incoming_outgoing_clusters() {
         .unwrap();
 
     let node1_incoming = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             node1_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -475,7 +489,8 @@ fn test_symmetric_incoming_outgoing_clusters() {
 
     // Verify node2's outgoing and incoming
     let node2_outgoing = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             node2_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -485,7 +500,8 @@ fn test_symmetric_incoming_outgoing_clusters() {
         .unwrap();
 
     let node2_incoming = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             node2_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -554,12 +570,15 @@ fn test_cluster_persistence() {
     // Verify all nodes and edges persisted correctly
     for (i, &node_id) in node_ids.iter().enumerate() {
         // Check node exists and has correct data
-        let node = graph.get_node(SnapshotId::current(), node_id as i64).unwrap();
+        let node = graph
+            .get_node(SnapshotId::current(), node_id as i64)
+            .unwrap();
         assert_eq!(node.name, format!("test_node_{}", i + 1));
 
         // Check each node has correct neighbors
         let neighbors = graph
-            .neighbors(SnapshotId::current(), 
+            .neighbors(
+                SnapshotId::current(),
                 node_id as i64,
                 NeighborQuery {
                     direction: BackendDirection::Outgoing,
@@ -581,7 +600,8 @@ fn test_cluster_persistence() {
         let expected_to = node_ids[(i + 1) % 3];
 
         let neighbors = graph
-            .neighbors(SnapshotId::current(), 
+            .neighbors(
+                SnapshotId::current(),
                 from as i64,
                 NeighborQuery {
                     direction: BackendDirection::Outgoing,
@@ -605,7 +625,8 @@ fn v2_cluster_neighbors_match_manual_deserialization() {
 
     // Test 1: Get neighbors via public API (graph.neighbors())
     let public_neighbors = graph
-        .neighbors(SnapshotId::current(), 
+        .neighbors(
+            SnapshotId::current(),
             source_id as i64,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -617,7 +638,9 @@ fn v2_cluster_neighbors_match_manual_deserialization() {
     println!("DEBUG: Public API neighbors: {:?}", public_neighbors);
 
     // Test 2: Get source node details via GraphBackend API
-    let source_node = graph.get_node(SnapshotId::current(), source_id as i64).unwrap();
+    let source_node = graph
+        .get_node(SnapshotId::current(), source_id as i64)
+        .unwrap();
     println!(
         "DEBUG: Source node details: kind={}, name={}",
         source_node.kind, source_node.name
@@ -640,7 +663,9 @@ fn v2_cluster_neighbors_match_manual_deserialization() {
     );
 
     // Test 4: Validate node metadata consistency
-    let target_node = graph.get_node(SnapshotId::current(), target_id as i64).unwrap();
+    let target_node = graph
+        .get_node(SnapshotId::current(), target_id as i64)
+        .unwrap();
     assert_eq!(
         target_node.name, "target",
         "Target node should have correct name"

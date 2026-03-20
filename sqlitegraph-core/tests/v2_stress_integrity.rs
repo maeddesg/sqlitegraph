@@ -328,7 +328,8 @@ mod tests {
 
             // Test outgoing neighbors
             let outgoing = graph
-                .neighbors(SnapshotId::current(), 
+                .neighbors(
+                    SnapshotId::current(),
                     node_id,
                     NeighborQuery {
                         direction: BackendDirection::Outgoing,
@@ -354,7 +355,8 @@ mod tests {
 
             // Test incoming neighbors
             let incoming = graph
-                .neighbors(SnapshotId::current(), 
+                .neighbors(
+                    SnapshotId::current(),
                     node_id,
                     NeighborQuery {
                         direction: BackendDirection::Incoming,

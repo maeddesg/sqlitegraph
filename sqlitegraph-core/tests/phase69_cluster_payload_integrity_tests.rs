@@ -5,7 +5,9 @@
 
 use sqlitegraph::backend::native::constants::FLAG_V2_FRAMED_RECORDS;
 use sqlitegraph::backend::native::graph_file::GraphFile;
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 use std::error::Error;
 
 #[test]
@@ -75,7 +77,8 @@ fn test_reopen_requires_zero_cursor_remainder() -> Result<(), Box<dyn Error>> {
     let mut expected_outgoing = Vec::with_capacity(NUM_NODES);
     let mut expected_incoming = Vec::with_capacity(NUM_NODES);
     for &node_id in &node_ids {
-        let outgoing = graph.neighbors(SnapshotId::current(), 
+        let outgoing = graph.neighbors(
+            SnapshotId::current(),
             node_id,
             NeighborQuery {
                 direction: BackendDirection::Outgoing,
@@ -84,7 +87,8 @@ fn test_reopen_requires_zero_cursor_remainder() -> Result<(), Box<dyn Error>> {
         )?;
         expected_outgoing.push((node_id, outgoing));
 
-        let incoming = graph.neighbors(SnapshotId::current(), 
+        let incoming = graph.neighbors(
+            SnapshotId::current(),
             node_id,
             NeighborQuery {
                 direction: BackendDirection::Incoming,
@@ -122,7 +126,8 @@ fn assert_neighbors_clean(
     direction: BackendDirection,
 ) {
     for (node_id, expected) in cases {
-        let result = graph.neighbors(SnapshotId::current(), 
+        let result = graph.neighbors(
+            SnapshotId::current(),
             *node_id,
             NeighborQuery {
                 direction,

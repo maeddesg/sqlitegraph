@@ -51,9 +51,15 @@ fn test_multi_node_write_corruption() -> Result<(), Box<dyn std::error::Error>> 
 
     // CRITICAL: Read all nodes back IMMEDIATELY after all writes
     println!("Reading all nodes back immediately...");
-    let read_node1 = graph.get_node(SnapshotId::current(), node_id1).expect("Failed to read node 1");
-    let read_node2 = graph.get_node(SnapshotId::current(), node_id2).expect("Failed to read node 2");
-    let read_node3 = graph.get_node(SnapshotId::current(), node_id3).expect("Failed to read node 3");
+    let read_node1 = graph
+        .get_node(SnapshotId::current(), node_id1)
+        .expect("Failed to read node 1");
+    let read_node2 = graph
+        .get_node(SnapshotId::current(), node_id2)
+        .expect("Failed to read node 2");
+    let read_node3 = graph
+        .get_node(SnapshotId::current(), node_id3)
+        .expect("Failed to read node 3");
 
     // Verify node data integrity
     assert_eq!(read_node1.kind, "Function");

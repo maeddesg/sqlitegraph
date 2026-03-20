@@ -1,5 +1,14 @@
 # SQLiteGraph Changelog
 
+## [2.0.9] - 2026-03-15
+
+### Fixed
+- **Error handling in path enumeration**
+  - Replaced `path.last().unwrap()` with safe `if let` pattern in `check_loop_constraints()`
+  - Eliminated potential panic on empty path input
+  - Added defensive handling: empty paths now return `false` (cannot satisfy constraints)
+  - Location: `sqlitegraph-core/src/algo/path_enumeration.rs:785`
+
 ## [2.0.8] - 2026-02-21
 
 ### Fixed

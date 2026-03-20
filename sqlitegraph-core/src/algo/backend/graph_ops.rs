@@ -32,7 +32,7 @@ pub fn strongly_connected_components(
     graph: &dyn GraphBackend,
 ) -> Result<SccResult, SqliteGraphError> {
     let all_ids = graph.all_entity_ids()?;
-    
+
     if all_ids.is_empty() {
         return Ok(SccResult {
             components: Vec::new(),
@@ -68,8 +68,15 @@ pub fn strongly_connected_components(
         for &w in &graph.fetch_outgoing(v)? {
             if !indices.contains_key(&w) {
                 strongconnect(
-                    w, graph, index, stack, on_stack, indices, lowlinks,
-                    components, node_to_component,
+                    w,
+                    graph,
+                    index,
+                    stack,
+                    on_stack,
+                    indices,
+                    lowlinks,
+                    components,
+                    node_to_component,
                 )?;
                 let v_low = lowlinks[&v];
                 let w_low = lowlinks[&w];
@@ -101,8 +108,15 @@ pub fn strongly_connected_components(
     for &v in &all_ids {
         if !indices.contains_key(&v) {
             strongconnect(
-                v, graph, &mut index, &mut stack, &mut on_stack,
-                &mut indices, &mut lowlinks, &mut components, &mut node_to_component,
+                v,
+                graph,
+                &mut index,
+                &mut stack,
+                &mut on_stack,
+                &mut indices,
+                &mut lowlinks,
+                &mut components,
+                &mut node_to_component,
             )?;
         }
     }
@@ -146,7 +160,7 @@ pub fn shortest_path(
         for neighbor in graph.fetch_outgoing(node)? {
             if visited.insert(neighbor) {
                 predecessors.insert(neighbor, node);
-                
+
                 if neighbor == end {
                     // Reconstruct path
                     let mut path = vec![end];
@@ -158,7 +172,7 @@ pub fn shortest_path(
                     path.reverse();
                     return Ok(Some(path));
                 }
-                
+
                 queue.push_back(neighbor);
             }
         }
@@ -177,11 +191,9 @@ pub fn shortest_path(
 ///
 /// # Returns
 /// Sorted vector of node IDs, or error if cycle detected.
-pub fn topological_sort(
-    graph: &dyn GraphBackend,
-) -> Result<Vec<i64>, SqliteGraphError> {
+pub fn topological_sort(graph: &dyn GraphBackend) -> Result<Vec<i64>, SqliteGraphError> {
     let all_ids = graph.all_entity_ids()?;
-    
+
     if all_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -207,7 +219,7 @@ pub fn topological_sort(
         for neighbor in graph.fetch_outgoing(node)? {
             let new_degree = in_degree[&neighbor] - 1;
             in_degree.insert(neighbor, new_degree);
-            
+
             if new_degree == 0 {
                 queue.push_back(neighbor);
             }
@@ -217,7 +229,7 @@ pub fn topological_sort(
     // Check for cycles
     if result.len() != all_ids.len() {
         return Err(SqliteGraphError::validation(
-            "Graph contains cycles, topological sort not possible"
+            "Graph contains cycles, topological sort not possible",
         ));
     }
 
@@ -233,11 +245,7 @@ pub fn topological_sort(
 ///
 /// # Returns
 /// Vector of node IDs at exactly the specified depth.
-pub fn bfs(
-    graph: &dyn GraphBackend,
-    start: i64,
-    depth: u32,
-) -> Result<Vec<i64>, SqliteGraphError> {
+pub fn bfs(graph: &dyn GraphBackend, start: i64, depth: u32) -> Result<Vec<i64>, SqliteGraphError> {
     let mut visited = HashSet::new();
     let mut result = Vec::new();
     let mut queue = VecDeque::new();
@@ -262,18 +270,18 @@ pub fn bfs(
 
     // Remove start node if it was added
     result.retain(|&id| id != start);
-    
+
     Ok(result)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::{EdgeSpec, NodeSpec};
     #[cfg(feature = "native-v3")]
     use crate::backend::native::v3::V3Backend;
+    use crate::backend::{EdgeSpec, NodeSpec};
     use tempfile::TempDir;
-    
+
     #[cfg(not(feature = "native-v3"))]
     compile_error!("Tests require native-v3 feature");
 
@@ -287,31 +295,35 @@ mod tests {
     #[test]
     fn test_scc_cycle() {
         let (backend, _temp) = create_backend();
-        
+
         // Create cycle: 1 -> 2 -> 3 -> 1
         let mut nodes = Vec::new();
         for _ in 0..3 {
-            let id = backend.insert_node(NodeSpec {
-                kind: "Node".to_string(),
-                name: "node".to_string(),
-                file_path: None,
-                data: serde_json::json!({}),
-            }).unwrap();
+            let id = backend
+                .insert_node(NodeSpec {
+                    kind: "Node".to_string(),
+                    name: "node".to_string(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
             nodes.push(id);
         }
-        
+
         for i in 0..nodes.len() {
             let next = (i + 1) % nodes.len();
-            backend.insert_edge(EdgeSpec {
-                from: nodes[i],
-                to: nodes[next],
-                edge_type: "links".to_string(),
-                data: serde_json::json!({}),
-            }).unwrap();
+            backend
+                .insert_edge(EdgeSpec {
+                    from: nodes[i],
+                    to: nodes[next],
+                    edge_type: "links".to_string(),
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
         }
 
         let scc = strongly_connected_components(&backend).unwrap();
-        
+
         assert_eq!(scc.components.len(), 1);
         assert_eq!(scc.components[0].len(), 3);
     }
@@ -319,30 +331,34 @@ mod tests {
     #[test]
     fn test_scc_chain() {
         let (backend, _temp) = create_backend();
-        
+
         // Create chain: 1 -> 2 -> 3
         let mut nodes = Vec::new();
         for _ in 0..3 {
-            let id = backend.insert_node(NodeSpec {
-                kind: "Node".to_string(),
-                name: "node".to_string(),
-                file_path: None,
-                data: serde_json::json!({}),
-            }).unwrap();
+            let id = backend
+                .insert_node(NodeSpec {
+                    kind: "Node".to_string(),
+                    name: "node".to_string(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
             nodes.push(id);
         }
-        
-        for i in 0..nodes.len()-1 {
-            backend.insert_edge(EdgeSpec {
-                from: nodes[i],
-                to: nodes[i+1],
-                edge_type: "links".to_string(),
-                data: serde_json::json!({}),
-            }).unwrap();
+
+        for i in 0..nodes.len() - 1 {
+            backend
+                .insert_edge(EdgeSpec {
+                    from: nodes[i],
+                    to: nodes[i + 1],
+                    edge_type: "links".to_string(),
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
         }
 
         let scc = strongly_connected_components(&backend).unwrap();
-        
+
         // Chain has no cycles, so each node is its own SCC
         assert_eq!(scc.components.len(), 3);
     }
@@ -350,30 +366,34 @@ mod tests {
     #[test]
     fn test_shortest_path_found() {
         let (backend, _temp) = create_backend();
-        
+
         let mut nodes = Vec::new();
         for _ in 0..4 {
-            let id = backend.insert_node(NodeSpec {
-                kind: "Node".to_string(),
-                name: "node".to_string(),
-                file_path: None,
-                data: serde_json::json!({}),
-            }).unwrap();
+            let id = backend
+                .insert_node(NodeSpec {
+                    kind: "Node".to_string(),
+                    name: "node".to_string(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
             nodes.push(id);
         }
-        
+
         // Chain: 1 -> 2 -> 3 -> 4
-        for i in 0..nodes.len()-1 {
-            backend.insert_edge(EdgeSpec {
-                from: nodes[i],
-                to: nodes[i+1],
-                edge_type: "links".to_string(),
-                data: serde_json::json!({}),
-            }).unwrap();
+        for i in 0..nodes.len() - 1 {
+            backend
+                .insert_edge(EdgeSpec {
+                    from: nodes[i],
+                    to: nodes[i + 1],
+                    edge_type: "links".to_string(),
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
         }
 
         let path = shortest_path(&backend, nodes[0], nodes[3]).unwrap();
-        
+
         assert!(path.is_some());
         let path = path.unwrap();
         assert_eq!(path.len(), 4);
@@ -384,58 +404,68 @@ mod tests {
     #[test]
     fn test_shortest_path_not_found() {
         let (backend, _temp) = create_backend();
-        
-        let a = backend.insert_node(NodeSpec {
-            kind: "Node".to_string(),
-            name: "a".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
-        
-        let b = backend.insert_node(NodeSpec {
-            kind: "Node".to_string(),
-            name: "b".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
+
+        let a = backend
+            .insert_node(NodeSpec {
+                kind: "Node".to_string(),
+                name: "a".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+
+        let b = backend
+            .insert_node(NodeSpec {
+                kind: "Node".to_string(),
+                name: "b".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
 
         let path = shortest_path(&backend, a, b).unwrap();
-        
+
         assert!(path.is_none());
     }
 
     #[test]
     fn test_topological_sort_dag() {
         let (backend, _temp) = create_backend();
-        
+
         let mut nodes = Vec::new();
         for _ in 0..3 {
-            let id = backend.insert_node(NodeSpec {
-                kind: "Node".to_string(),
-                name: "node".to_string(),
-                file_path: None,
-                data: serde_json::json!({}),
-            }).unwrap();
+            let id = backend
+                .insert_node(NodeSpec {
+                    kind: "Node".to_string(),
+                    name: "node".to_string(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
             nodes.push(id);
         }
-        
+
         // DAG: 1 -> 2, 1 -> 3
-        backend.insert_edge(EdgeSpec {
-            from: nodes[0],
-            to: nodes[1],
-            edge_type: "links".to_string(),
-            data: serde_json::json!({}),
-        }).unwrap();
-        
-        backend.insert_edge(EdgeSpec {
-            from: nodes[0],
-            to: nodes[2],
-            edge_type: "links".to_string(),
-            data: serde_json::json!({}),
-        }).unwrap();
+        backend
+            .insert_edge(EdgeSpec {
+                from: nodes[0],
+                to: nodes[1],
+                edge_type: "links".to_string(),
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+
+        backend
+            .insert_edge(EdgeSpec {
+                from: nodes[0],
+                to: nodes[2],
+                edge_type: "links".to_string(),
+                data: serde_json::json!({}),
+            })
+            .unwrap();
 
         let sorted = topological_sort(&backend).unwrap();
-        
+
         assert_eq!(sorted.len(), 3);
         // Node 0 should come first (no incoming edges)
         assert_eq!(sorted[0], nodes[0]);
@@ -444,76 +474,90 @@ mod tests {
     #[test]
     fn test_topological_sort_cycle_fails() {
         let (backend, _temp) = create_backend();
-        
+
         let mut nodes = Vec::new();
         for _ in 0..3 {
-            let id = backend.insert_node(NodeSpec {
-                kind: "Node".to_string(),
-                name: "node".to_string(),
-                file_path: None,
-                data: serde_json::json!({}),
-            }).unwrap();
+            let id = backend
+                .insert_node(NodeSpec {
+                    kind: "Node".to_string(),
+                    name: "node".to_string(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
             nodes.push(id);
         }
-        
+
         // Cycle: 1 -> 2 -> 3 -> 1
         for i in 0..nodes.len() {
             let next = (i + 1) % nodes.len();
-            backend.insert_edge(EdgeSpec {
-                from: nodes[i],
-                to: nodes[next],
-                edge_type: "links".to_string(),
-                data: serde_json::json!({}),
-            }).unwrap();
+            backend
+                .insert_edge(EdgeSpec {
+                    from: nodes[i],
+                    to: nodes[next],
+                    edge_type: "links".to_string(),
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
         }
 
         let result = topological_sort(&backend);
-        
+
         assert!(result.is_err());
     }
 
     #[test]
     fn test_bfs_depth() {
         let (backend, _temp) = create_backend();
-        
+
         // Binary tree: root -> left, right
-        let root = backend.insert_node(NodeSpec {
-            kind: "Node".to_string(),
-            name: "root".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
-        
-        let left = backend.insert_node(NodeSpec {
-            kind: "Node".to_string(),
-            name: "left".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
-        
-        let right = backend.insert_node(NodeSpec {
-            kind: "Node".to_string(),
-            name: "right".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
-        
-        backend.insert_edge(EdgeSpec {
-            from: root,
-            to: left,
-            edge_type: "links".to_string(),
-            data: serde_json::json!({}),
-        }).unwrap();
-        
-        backend.insert_edge(EdgeSpec {
-            from: root,
-            to: right,
-            edge_type: "links".to_string(),
-            data: serde_json::json!({}),
-        }).unwrap();
+        let root = backend
+            .insert_node(NodeSpec {
+                kind: "Node".to_string(),
+                name: "root".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+
+        let left = backend
+            .insert_node(NodeSpec {
+                kind: "Node".to_string(),
+                name: "left".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+
+        let right = backend
+            .insert_node(NodeSpec {
+                kind: "Node".to_string(),
+                name: "right".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+
+        backend
+            .insert_edge(EdgeSpec {
+                from: root,
+                to: left,
+                edge_type: "links".to_string(),
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+
+        backend
+            .insert_edge(EdgeSpec {
+                from: root,
+                to: right,
+                edge_type: "links".to_string(),
+                data: serde_json::json!({}),
+            })
+            .unwrap();
 
         let depth1 = bfs(&backend, root, 1).unwrap();
-        
+
         assert_eq!(depth1.len(), 2);
         assert!(depth1.contains(&left));
         assert!(depth1.contains(&right));

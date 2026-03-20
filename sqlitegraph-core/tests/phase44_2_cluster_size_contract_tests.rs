@@ -3,8 +3,8 @@
 //! Micro regression test to verify cluster size contract is correct
 
 use sqlitegraph::{
-    BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, SnapshotId, SqliteGraphError,
-    config::GraphConfig, open_graph,
+    BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, SnapshotId,
+    SqliteGraphError, config::GraphConfig, open_graph,
 };
 use tempfile::TempDir;
 

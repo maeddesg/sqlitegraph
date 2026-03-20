@@ -9,14 +9,16 @@
 //! - Field counts/lengths use varint encoding (saves ~1-3 bytes per field)
 //! - Nodes are packed contiguously without fixed slot boundaries
 
+use super::record::NodeRecordV3;
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
-use crate::backend::native::v3::constants as v3_constants;
-use crate::backend::native::v3::compression;
-use crate::backend::native::v3::compression::delta::{encode_id_delta, decode_id_delta};
-use crate::backend::native::v3::compression::varint::{encode_varint, decode_varint, encode_varint_u16, decode_varint_u16};
 use crate::backend::native::types::NodeFlags;
-use super::record::NodeRecordV3;
+use crate::backend::native::v3::compression;
+use crate::backend::native::v3::compression::delta::{decode_id_delta, encode_id_delta};
+use crate::backend::native::v3::compression::varint::{
+    decode_varint, decode_varint_u16, encode_varint, encode_varint_u16,
+};
+use crate::backend::native::v3::constants as v3_constants;
 
 /// NodePage header and layout constants
 pub mod constants {
@@ -98,15 +100,21 @@ pub mod constants {
 
 /// Re-export constants for convenience
 pub use constants::{
-    PAGE_HEADER_SIZE, MAX_PAGE_SIZE, USABLE_SIZE,
-    MAX_NODE_CAPACITY, ESTIMATED_NODE_SLOT_SIZE,
-    USED_BYTES_OFFSET, BASE_ID_OFFSET, MIN_COMPRESSED_RECORD_SIZE
+    BASE_ID_OFFSET, ESTIMATED_NODE_SLOT_SIZE, MAX_NODE_CAPACITY, MAX_PAGE_SIZE,
+    MIN_COMPRESSED_RECORD_SIZE, PAGE_HEADER_SIZE, USABLE_SIZE, USED_BYTES_OFFSET,
 };
 
 /// NodePage for storing variable-size NodeRecordV3 records
 ///
 /// Pages store nodes with delta/varint compression for space efficiency.
 /// Overflow pages are linked via next_page_id for large nodes.
+///
+/// # Block Locality (PROTOTYPE)
+///
+/// The `block_id` field is computed from `base_id` for block-aware caching:
+/// - `block_id = (base_id - 1) / BLOCK_SIZE` where `BLOCK_SIZE = 128`
+/// - This is in-memory metadata only, not persisted
+/// - Used for block-aware cache eviction decisions
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodePage {
     /// Page ID for this page
@@ -126,6 +134,28 @@ pub struct NodePage {
 
     /// Page checksum for validation
     pub checksum: u32,
+
+    /// Block ID for locality-aware caching (PROTOTYPE: computed, not persisted)
+    ///
+    /// This field is computed from `base_id` after unpacking the page.
+    /// It allows the cache to make block-aware retention decisions.
+    /// NOT persisted to disk - recomputed on each page load.
+    pub block_id: i64,
+}
+
+/// Block size for locality calculations
+///
+/// Each logical block contains approximately 128 node IDs.
+/// Nodes 1-127 → block 0, nodes 128-255 → block 1, etc.
+pub const BLOCK_SIZE: i64 = 128;
+
+/// Compute block_id from a node_id
+#[inline]
+pub const fn node_id_to_block(node_id: i64) -> i64 {
+    if node_id < 1 {
+        return 0;
+    }
+    (node_id - 1) / BLOCK_SIZE
 }
 
 impl NodePage {
@@ -138,6 +168,7 @@ impl NodePage {
             used_bytes: 0,
             base_id: 0,
             checksum: 0,
+            block_id: 0, // Will be computed when nodes are added
         }
     }
 
@@ -150,6 +181,33 @@ impl NodePage {
             used_bytes: 0,
             base_id: 0,
             checksum: 0,
+            block_id: 0,
+        }
+    }
+
+    /// Get the block_id for this page
+    ///
+    /// For pages with nodes, computes based on base_id.
+    /// For empty pages, returns 0.
+    pub fn block_id(&self) -> i64 {
+        if self.block_id != 0 {
+            self.block_id
+        } else {
+            node_id_to_block(self.base_id)
+        }
+    }
+
+    /// Recompute block_id from current nodes
+    ///
+    /// Updates block_id based on the minimum node_id in this page.
+    /// Called after adding nodes or unpacking from disk.
+    pub fn recompute_block_id(&mut self) {
+        if let Some(min_id) = self.nodes.iter().map(|n| n.id()).min() {
+            self.base_id = min_id;
+            self.block_id = node_id_to_block(min_id);
+        } else {
+            self.base_id = 0;
+            self.block_id = 0;
         }
     }
 
@@ -189,6 +247,375 @@ impl NodePage {
         (USABLE_SIZE as u16).saturating_sub(self.used_bytes)
     }
 
+    /// Find a node by ID using binary search.
+    ///
+    /// # Panics
+    /// Panics if nodes are not sorted by ID. This is guaranteed by the insertion
+    /// order (sequential node_id allocation) and page filling strategy.
+    ///
+    /// # Returns
+    /// * `Some(&node_record)` if found
+    /// * `None` if not found in this page
+    #[inline]
+    pub fn find_node(&self, node_id: i64) -> Option<&NodeRecordV3> {
+        // Binary search on sorted node IDs
+        // Nodes are guaranteed sorted by sequential insertion
+        let mut left = 0;
+        let mut right = self.nodes.len();
+
+        while left < right {
+            let mid = left + (right - left) / 2;
+            let mid_id = self.nodes[mid].id();
+
+            if mid_id == node_id {
+                return Some(&self.nodes[mid]);
+            } else if mid_id < node_id {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+
+        // Check the last element
+        if left < self.nodes.len() && self.nodes[left].id() == node_id {
+            Some(&self.nodes[left])
+        } else {
+            None
+        }
+    }
+
+    /// Find a node by ID using lazy decoding - only decodes O(log n) node IDs
+    /// then fully decodes only the target node.
+    ///
+    /// This performs binary search directly on the encoded data, decoding node IDs
+    /// on-the-fly. Once the target node is found, it fully decodes that node's record.
+    ///
+    /// # Parameters
+    /// - `page_data`: Raw page bytes (must be MAX_PAGE_SIZE)
+    /// Find a node by ID using lazy linear scan.
+    ///
+    /// For ~100-node pages, linear scan is simpler and nearly as fast as binary search.
+    /// This only decodes node IDs during scan, then fully decodes only the target node.
+    ///
+    /// # Arguments
+    /// - `page_data`: Raw page bytes
+    /// - `node_id`: The node ID to find
+    ///
+    /// # Returns
+    /// - `Some(NodeRecordV3)` if found
+    /// - `None` if not found in this page
+    pub fn find_node_lazy(page_data: &[u8], node_id: i64) -> NativeResult<Option<NodeRecordV3>> {
+        use crate::backend::native::v3::compression::delta::decode_id_delta;
+        use crate::backend::native::v3::compression::varint::{decode_varint, decode_varint_u16};
+
+        // Read page header
+        let node_count = u16::from_be_bytes(
+            page_data[constants::NODE_COUNT_OFFSET..constants::NODE_COUNT_OFFSET + 2]
+                .try_into()
+                .map_err(|_| NativeBackendError::InvalidHeader {
+                    field: "node_page.node_count".to_string(),
+                    reason: "invalid node_count bytes".to_string(),
+                })?,
+        ) as usize;
+
+        let base_id = i64::from_be_bytes(
+            page_data[constants::BASE_ID_OFFSET..constants::BASE_ID_OFFSET + 8]
+                .try_into()
+                .map_err(|_| NativeBackendError::InvalidHeader {
+                    field: "node_page.base_id".to_string(),
+                    reason: "invalid base_id bytes".to_string(),
+                })?,
+        );
+
+        let used_bytes = u16::from_be_bytes(
+            page_data[constants::USED_BYTES_OFFSET..constants::USED_BYTES_OFFSET + 2]
+                .try_into()
+                .map_err(|_| NativeBackendError::InvalidHeader {
+                    field: "node_page.used_bytes".to_string(),
+                    reason: "invalid used_bytes bytes".to_string(),
+                })?,
+        ) as usize;
+
+        let data_start = PAGE_HEADER_SIZE;
+        let data_end = data_start + used_bytes;
+        let data = &page_data[data_start..data_end];
+
+        // Linear scan: decode only node IDs first
+        let mut offset = 0;
+        for _ in 0..node_count {
+            let node_start_offset = offset;
+
+            // Decode ID delta (1 varint)
+            let (delta, id_bytes) =
+                decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                    field: "node.id_delta".to_string(),
+                    reason: "invalid varint encoding".to_string(),
+                })?;
+            offset += id_bytes;
+
+            let id = decode_id_delta(delta as u32, base_id).map_err(|_| {
+                NativeBackendError::InvalidHeader {
+                    field: "node.id".to_string(),
+                    reason: format!(
+                        "failed to reconstruct ID from delta {} and base_id {}",
+                        delta, base_id
+                    ),
+                }
+            })?;
+
+            if id == node_id {
+                // Found! Decode the full node starting from node_start_offset
+                return Self::decode_node_at_offset(&data[node_start_offset..], base_id);
+            }
+
+            // Skip to next node (skip remaining fields after ID delta)
+            offset = Self::skip_remaining_fields(data, offset)?;
+        }
+
+        Ok(None)
+    }
+
+    /// Skip remaining fields of a node (after ID delta has been decoded)
+    /// Returns the offset at the start of the next node
+    fn skip_remaining_fields(data: &[u8], mut offset: usize) -> NativeResult<usize> {
+        // Skip flags (4 bytes)
+        offset += 4;
+
+        // Skip kind_offset (1 varint u16)
+        let (_, bytes_read) =
+            decode_varint_u16(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.kind_offset".to_string(),
+                reason: "invalid varint encoding".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Skip name_offset (1 varint u16)
+        let (_, bytes_read) =
+            decode_varint_u16(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.name_offset".to_string(),
+                reason: "invalid varint encoding".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Skip data_len (1 varint u16)
+        let (encoded_data_len, bytes_read) =
+            decode_varint_u16(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.data_len".to_string(),
+                reason: "invalid varint encoding".to_string(),
+            })?;
+        offset += bytes_read;
+
+        let is_external = (encoded_data_len & super::record::constants::EXTERNAL_DATA_FLAG) != 0;
+        let data_len = encoded_data_len & super::record::constants::MAX_DATA_LEN;
+
+        // Skip outgoing_cluster_offset (1 varint)
+        let (_, bytes_read) =
+            decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.outgoing_cluster_offset".to_string(),
+                reason: "invalid varint encoding".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Skip outgoing_edge_count (1 varint)
+        let (_, bytes_read) =
+            decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.outgoing_edge_count".to_string(),
+                reason: "invalid varint encoding".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Skip incoming_cluster_offset (1 varint)
+        let (_, bytes_read) =
+            decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.incoming_cluster_offset".to_string(),
+                reason: "invalid varint encoding".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Skip incoming_edge_count (1 varint)
+        let (_, bytes_read) =
+            decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.incoming_edge_count".to_string(),
+                reason: "invalid varint encoding".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Skip inline/external data
+        if is_external {
+            offset += 8;
+        } else {
+            offset += data_len as usize;
+        }
+
+        Ok(offset)
+    }
+
+    /// Decode a single node record starting at the given offset
+    fn decode_node_at_offset(data: &[u8], base_id: i64) -> NativeResult<Option<NodeRecordV3>> {
+        use crate::backend::native::types::NodeFlags;
+        let mut offset = 0;
+
+        // Decode ID delta (already done by caller, but we need the full ID)
+        let (delta, bytes_read) =
+            decode_varint(data).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.id_delta".to_string(),
+                reason: "invalid varint encoding for ID delta".to_string(),
+            })?;
+        offset += bytes_read;
+
+        let id = decode_id_delta(delta as u32, base_id).map_err(|_| {
+            NativeBackendError::InvalidHeader {
+                field: "node.id".to_string(),
+                reason: format!(
+                    "failed to reconstruct ID from delta {} and base_id {}",
+                    delta, base_id
+                ),
+            }
+        })?;
+
+        // Decode flags (4 bytes fixed)
+        if offset + 4 > data.len() {
+            return Err(NativeBackendError::InvalidHeader {
+                field: "node.flags".to_string(),
+                reason: "insufficient bytes for flags".to_string(),
+            });
+        }
+        let flags = NodeFlags(u32::from_be_bytes(
+            data.get(offset..offset + 4)
+                .ok_or_else(|| NativeBackendError::InvalidHeader {
+                    field: "node.flags".to_string(),
+                    reason: "cannot read flag bytes".to_string(),
+                })?
+                .try_into()
+                .map_err(|_| NativeBackendError::InvalidHeader {
+                    field: "node.flags".to_string(),
+                    reason: "invalid flag byte array".to_string(),
+                })?,
+        ));
+        offset += 4;
+
+        // Decode kind_offset as varint u16
+        let (kind_offset, bytes_read) =
+            decode_varint_u16(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.kind_offset".to_string(),
+                reason: "invalid varint encoding for kind_offset".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Decode name_offset as varint u16
+        let (name_offset, bytes_read) =
+            decode_varint_u16(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.name_offset".to_string(),
+                reason: "invalid varint encoding for name_offset".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Decode data_len as varint u16
+        let (encoded_data_len, bytes_read) =
+            decode_varint_u16(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.data_len".to_string(),
+                reason: "invalid varint encoding for data_len".to_string(),
+            })?;
+        offset += bytes_read;
+
+        let is_external = (encoded_data_len & super::record::constants::EXTERNAL_DATA_FLAG) != 0;
+        let data_len = encoded_data_len & super::record::constants::MAX_DATA_LEN;
+
+        // Decode outgoing_cluster_offset as varint
+        let (outgoing_cluster_offset, bytes_read) =
+            decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.outgoing_cluster_offset".to_string(),
+                reason: "invalid varint encoding for outgoing_cluster_offset".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Decode outgoing_edge_count as varint
+        let (outgoing_edge_count, bytes_read) =
+            decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.outgoing_edge_count".to_string(),
+                reason: "invalid varint encoding for outgoing_edge_count".to_string(),
+            })?;
+        let outgoing_edge_count = outgoing_edge_count as u32;
+        offset += bytes_read;
+
+        // Decode incoming_cluster_offset as varint
+        let (incoming_cluster_offset, bytes_read) =
+            decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.incoming_cluster_offset".to_string(),
+                reason: "invalid varint encoding for incoming_cluster_offset".to_string(),
+            })?;
+        offset += bytes_read;
+
+        // Decode incoming_edge_count as varint
+        let (incoming_edge_count, bytes_read) =
+            decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
+                field: "node.incoming_edge_count".to_string(),
+                reason: "invalid varint encoding for incoming_edge_count".to_string(),
+            })?;
+        let incoming_edge_count = incoming_edge_count as u32;
+        offset += bytes_read;
+
+        // Handle inline vs external data
+        let (data_inline, data_external_offset) = if is_external {
+            // External data - read 8-byte offset
+            if offset + 8 > data.len() {
+                return Err(NativeBackendError::InvalidHeader {
+                    field: "node.data_external_offset".to_string(),
+                    reason: format!(
+                        "insufficient bytes for external offset: need 8, have {}",
+                        data.len().saturating_sub(offset)
+                    ),
+                });
+            }
+            let ext_offset = u64::from_be_bytes(
+                data.get(offset..offset + 8)
+                    .ok_or_else(|| NativeBackendError::InvalidHeader {
+                        field: "node.data_external_offset".to_string(),
+                        reason: "cannot read external offset bytes".to_string(),
+                    })?
+                    .try_into()
+                    .map_err(|_| NativeBackendError::InvalidHeader {
+                        field: "node.data_external_offset".to_string(),
+                        reason: "invalid external offset byte array".to_string(),
+                    })?,
+            );
+            offset += 8;
+            (None, Some(ext_offset))
+        } else {
+            // Inline data - copy remaining bytes
+            let data_end = offset + data_len as usize;
+            if data_end > data.len() {
+                return Err(NativeBackendError::InvalidHeader {
+                    field: "node.data_inline".to_string(),
+                    reason: format!(
+                        "insufficient bytes for inline data: need {}, have {}",
+                        data_len,
+                        data.len().saturating_sub(offset)
+                    ),
+                });
+            }
+            let inline_data = data[offset..data_end].to_vec();
+            offset = data_end;
+            (Some(inline_data), None)
+        };
+
+        let node = NodeRecordV3 {
+            id,
+            flags,
+            kind_offset,
+            name_offset,
+            data_len: encoded_data_len,
+            data_inline,
+            data_external_offset,
+            outgoing_cluster_offset,
+            outgoing_edge_count,
+            incoming_cluster_offset,
+            incoming_edge_count,
+        };
+
+        Ok(Some(node))
+    }
+
     /// Add a node to the page
     ///
     /// Returns an error if the node would cause the page to overflow.
@@ -221,13 +648,69 @@ impl NodePage {
 
         self.nodes.push(node);
         self.used_bytes += compressed_size;
+
+        // CRITICAL VALIDATION: Verify the actual packed size fits in USABLE_SIZE
+        // This catches any discrepancy between estimated size and actual packed size
+        let actual_packed_size = self.pack_nodes()?.len();
+        if actual_packed_size > USABLE_SIZE {
+            // Rollback: remove the node we just added
+            self.nodes.pop();
+            self.used_bytes -= compressed_size;
+            // Restore previous base_id if we had nodes
+            if !self.nodes.is_empty() {
+                self.base_id = self
+                    .nodes
+                    .iter()
+                    .map(|n| n.id())
+                    .min()
+                    .unwrap_or(self.base_id);
+            }
+
+            // Provide detailed diagnostics for debugging
+            #[cfg(feature = "v3-page-overflow-debug")]
+            {
+                eprintln!(
+                    "Page {} overflow: node_count={}, used_bytes={}, actual_packed_size={}, USABLE_SIZE={}, estimated={}",
+                    self.page_id,
+                    self.nodes.len() + 1, // including the failed node
+                    self.used_bytes + compressed_size,
+                    actual_packed_size,
+                    USABLE_SIZE,
+                    compressed_size
+                );
+            }
+
+            return Err(NativeBackendError::InvalidHeader {
+                field: "node_page".to_string(),
+                reason: format!(
+                    "page {} full: node_count={}, used_bytes={}, actual packed {} exceeds USABLE_SIZE {} (new node estimated {})",
+                    self.page_id,
+                    self.nodes.len(),
+                    self.used_bytes,
+                    actual_packed_size,
+                    USABLE_SIZE,
+                    compressed_size
+                ),
+            });
+        }
+
+        // Update used_bytes to actual packed size for accuracy
+        self.used_bytes = actual_packed_size as u16;
+
+        // Recompute block_id after adding node (PROTOTYPE: block-aware caching)
+        self.block_id = node_id_to_block(self.base_id);
+
         Ok(())
     }
 
     /// Estimate the compressed size of a node record with a specific base_id
     ///
     /// This is used by add_node to calculate size before updating base_id.
-    fn estimate_compressed_size_with_base(&self, node: &NodeRecordV3, base_id: i64) -> NativeResult<u16> {
+    fn estimate_compressed_size_with_base(
+        &self,
+        node: &NodeRecordV3,
+        base_id: i64,
+    ) -> NativeResult<u16> {
         let mut size: usize = 0;
 
         // ID delta (varint, usually 1-4 bytes)
@@ -258,9 +741,11 @@ impl NodePage {
         // incoming_edge_count: varint u32 (usually 1-3 bytes)
         size += compression::varint::varint_size(node.incoming_edge_count as u64);
 
-        // Inline data (if any)
+        // Inline data OR external offset (8 bytes)
         if let Some(ref data) = node.data_inline {
             size += data.len();
+        } else if node.data_external_offset.is_some() {
+            size += 8; // External offset is u64 (8 bytes)
         }
 
         // Ensure we don't overflow u16
@@ -313,9 +798,11 @@ impl NodePage {
         // incoming_edge_count: varint u32 (usually 1-3 bytes)
         size += compression::varint::varint_size(node.incoming_edge_count as u64);
 
-        // Inline data (if any)
+        // Inline data OR external offset (8 bytes)
         if let Some(ref data) = node.data_inline {
             size += data.len();
+        } else if node.data_external_offset.is_some() {
+            size += 8; // External offset is u64 (8 bytes)
         }
 
         // Ensure we don't overflow u16
@@ -384,25 +871,33 @@ impl NodePage {
     /// Unpack nodes from a byte slice using delta/varint encoding
     ///
     /// Returns a vector of NodeRecordV3 and the actual bytes consumed.
-    fn unpack_nodes(data: &[u8], base_id: i64, node_count: usize) -> NativeResult<(Vec<NodeRecordV3>, usize)> {
+    fn unpack_nodes(
+        data: &[u8],
+        base_id: i64,
+        node_count: usize,
+    ) -> NativeResult<(Vec<NodeRecordV3>, usize)> {
         let mut nodes = Vec::with_capacity(node_count);
         let mut offset = 0;
 
         for _ in 0..node_count {
             // Decode ID delta
-            let (delta, bytes_read) = decode_varint(&data[offset..])
-                .map_err(|_| NativeBackendError::InvalidHeader {
+            let (delta, bytes_read) =
+                decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
                     field: "node.id_delta".to_string(),
                     reason: "invalid varint encoding for ID delta".to_string(),
                 })?;
             offset += bytes_read;
 
             // Reconstruct full ID
-            let id = decode_id_delta(delta as u32, base_id)
-                .map_err(|_| NativeBackendError::InvalidHeader {
+            let id = decode_id_delta(delta as u32, base_id).map_err(|_| {
+                NativeBackendError::InvalidHeader {
                     field: "node.id".to_string(),
-                    reason: format!("failed to reconstruct ID from delta {} and base_id {}", delta, base_id),
-                })?;
+                    reason: format!(
+                        "failed to reconstruct ID from delta {} and base_id {}",
+                        delta, base_id
+                    ),
+                }
+            })?;
 
             // Decode flags (4 bytes fixed)
             if offset + 4 > data.len() {
@@ -412,48 +907,62 @@ impl NodePage {
                 });
             }
             let flags = crate::backend::native::types::NodeFlags(u32::from_be_bytes(
-                data[offset..offset + 4].try_into().unwrap()
+                data.get(offset..offset + 4)
+                    .ok_or_else(|| NativeBackendError::InvalidHeader {
+                        field: "node.flags".to_string(),
+                        reason: "cannot read flag bytes".to_string(),
+                    })?
+                    .try_into()
+                    .map_err(|_| NativeBackendError::InvalidHeader {
+                        field: "node.flags".to_string(),
+                        reason: "invalid flag byte array".to_string(),
+                    })?,
             ));
             offset += 4;
 
             // Decode kind_offset as varint u16
-            let (kind_offset, bytes_read) = decode_varint_u16(&data[offset..])
-                .map_err(|_| NativeBackendError::InvalidHeader {
+            let (kind_offset, bytes_read) = decode_varint_u16(&data[offset..]).map_err(|_| {
+                NativeBackendError::InvalidHeader {
                     field: "node.kind_offset".to_string(),
                     reason: "invalid varint encoding for kind_offset".to_string(),
-                })?;
+                }
+            })?;
             offset += bytes_read;
 
             // Decode name_offset as varint u16
-            let (name_offset, bytes_read) = decode_varint_u16(&data[offset..])
-                .map_err(|_| NativeBackendError::InvalidHeader {
+            let (name_offset, bytes_read) = decode_varint_u16(&data[offset..]).map_err(|_| {
+                NativeBackendError::InvalidHeader {
                     field: "node.name_offset".to_string(),
                     reason: "invalid varint encoding for name_offset".to_string(),
-                })?;
+                }
+            })?;
             offset += bytes_read;
 
             // Decode data_len as varint u16
-            let (encoded_data_len, bytes_read) = decode_varint_u16(&data[offset..])
-                .map_err(|_| NativeBackendError::InvalidHeader {
-                    field: "node.data_len".to_string(),
-                    reason: "invalid varint encoding for data_len".to_string(),
+            let (encoded_data_len, bytes_read) =
+                decode_varint_u16(&data[offset..]).map_err(|_| {
+                    NativeBackendError::InvalidHeader {
+                        field: "node.data_len".to_string(),
+                        reason: "invalid varint encoding for data_len".to_string(),
+                    }
                 })?;
             offset += bytes_read;
 
-            let is_external = (encoded_data_len & super::record::constants::EXTERNAL_DATA_FLAG) != 0;
+            let is_external =
+                (encoded_data_len & super::record::constants::EXTERNAL_DATA_FLAG) != 0;
             let data_len = encoded_data_len & super::record::constants::MAX_DATA_LEN;
 
             // Decode outgoing_cluster_offset as varint u64
-            let (outgoing_cluster_offset, bytes_read) = decode_varint(&data[offset..])
-                .map_err(|_| NativeBackendError::InvalidHeader {
+            let (outgoing_cluster_offset, bytes_read) =
+                decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
                     field: "node.outgoing_cluster_offset".to_string(),
                     reason: "invalid varint encoding for outgoing_cluster_offset".to_string(),
                 })?;
             offset += bytes_read;
 
             // Decode outgoing_edge_count as varint u32
-            let (outgoing_edge_count, bytes_read) = decode_varint(&data[offset..])
-                .map_err(|_| NativeBackendError::InvalidHeader {
+            let (outgoing_edge_count, bytes_read) =
+                decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
                     field: "node.outgoing_edge_count".to_string(),
                     reason: "invalid varint encoding for outgoing_edge_count".to_string(),
                 })?;
@@ -461,16 +970,16 @@ impl NodePage {
             offset += bytes_read;
 
             // Decode incoming_cluster_offset as varint u64
-            let (incoming_cluster_offset, bytes_read) = decode_varint(&data[offset..])
-                .map_err(|_| NativeBackendError::InvalidHeader {
+            let (incoming_cluster_offset, bytes_read) =
+                decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
                     field: "node.incoming_cluster_offset".to_string(),
                     reason: "invalid varint encoding for incoming_cluster_offset".to_string(),
                 })?;
             offset += bytes_read;
 
             // Decode incoming_edge_count as varint u32
-            let (incoming_edge_count, bytes_read) = decode_varint(&data[offset..])
-                .map_err(|_| NativeBackendError::InvalidHeader {
+            let (incoming_edge_count, bytes_read) =
+                decode_varint(&data[offset..]).map_err(|_| NativeBackendError::InvalidHeader {
                     field: "node.incoming_edge_count".to_string(),
                     reason: "invalid varint encoding for incoming_edge_count".to_string(),
                 })?;
@@ -483,12 +992,24 @@ impl NodePage {
                 if offset + 8 > data.len() {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "node.data_external_offset".to_string(),
-                        reason: format!("insufficient bytes for external offset: need 8, have {}", data.len().saturating_sub(offset)),
+                        reason: format!(
+                            "insufficient bytes for external offset: need 8, have {}",
+                            data.len().saturating_sub(offset)
+                        ),
                     });
                 }
                 let ext_offset = u64::from_be_bytes(
-                    data[offset..offset + 8].try_into().unwrap()
-                );
+                data.get(offset..offset + 8)
+                    .ok_or_else(|| NativeBackendError::InvalidHeader {
+                        field: "node.data_external_offset".to_string(),
+                        reason: "cannot read external offset bytes".to_string(),
+                    })?
+                    .try_into()
+                    .map_err(|_| NativeBackendError::InvalidHeader {
+                        field: "node.data_external_offset".to_string(),
+                        reason: "invalid external offset byte array".to_string(),
+                    })?,
+            );
                 offset += 8;
                 (None, Some(ext_offset))
             } else {
@@ -497,7 +1018,11 @@ impl NodePage {
                 if data_end > data.len() {
                     return Err(NativeBackendError::InvalidHeader {
                         field: "node.data_inline".to_string(),
-                        reason: format!("insufficient bytes for inline data: need {}, have {}", data_len, data.len().saturating_sub(offset)),
+                        reason: format!(
+                            "insufficient bytes for inline data: need {}, have {}",
+                            data_len,
+                            data.len().saturating_sub(offset)
+                        ),
                     });
                 }
                 let inline_data = data[offset..data_end].to_vec();
@@ -606,6 +1131,14 @@ impl NodePage {
     ///
     /// Deserializes the page using delta/varint decompression and validates checksum.
     pub fn unpack(bytes: &[u8]) -> NativeResult<Self> {
+        #[cfg(feature = "v3-forensics")]
+        {
+            use crate::backend::native::v3::forensics::FORENSIC_COUNTERS;
+            FORENSIC_COUNTERS
+                .node_page_unpack_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+
         if bytes.len() < MAX_PAGE_SIZE {
             return Err(NativeBackendError::InvalidHeader {
                 field: "node_page".to_string(),
@@ -686,11 +1219,8 @@ impl NodePage {
             });
         }
 
-        let (nodes, actual_bytes_used) = Self::unpack_nodes(
-            &bytes[data_start..data_end],
-            base_id,
-            node_count
-        )?;
+        let (nodes, actual_bytes_used) =
+            Self::unpack_nodes(&bytes[data_start..data_end], base_id, node_count)?;
 
         // Verify bytes used matches expected
         if actual_bytes_used != used_bytes as usize {
@@ -711,6 +1241,7 @@ impl NodePage {
             used_bytes,
             base_id,
             checksum,
+            block_id: node_id_to_block(base_id), // Compute from base_id (PROTOTYPE)
         };
 
         // Calculate checksum on all data up to actual end
@@ -720,8 +1251,7 @@ impl NodePage {
                 field: "node_page_checksum".to_string(),
                 reason: format!(
                     "checksum mismatch: expected {}, found {}",
-                    calculated_checksum,
-                    checksum
+                    calculated_checksum, checksum
                 ),
             });
         }
@@ -752,8 +1282,8 @@ impl Default for NodePage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::constants::*;
+    use super::*;
     use crate::backend::native::types::NodeFlags;
 
     #[test]
@@ -896,7 +1426,10 @@ mod tests {
         assert_eq!(restored_node.flags, NodeFlags::DELETED);
         assert_eq!(restored_node.kind_offset, 42);
         assert_eq!(restored_node.name_offset, 84);
-        assert_eq!(restored_node.data_inline, Some(b"Test node data for full preservation".to_vec()));
+        assert_eq!(
+            restored_node.data_inline,
+            Some(b"Test node data for full preservation".to_vec())
+        );
         assert_eq!(restored_node.outgoing_cluster_offset, 0x123456789ABCDEF0);
         assert_eq!(restored_node.outgoing_edge_count, 42);
         assert_eq!(restored_node.incoming_cluster_offset, 0xFEDCBA9876543210);
@@ -907,17 +1440,8 @@ mod tests {
     fn test_checksum_validation() {
         let page = &mut NodePage::new(1);
 
-        let node = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            b"data".to_vec(),
-            0,
-            0,
-            0,
-            0,
-        );
+        let node =
+            NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, b"data".to_vec(), 0, 0, 0, 0);
         page.add_node(node).unwrap();
 
         let bytes = page.pack().unwrap();
@@ -961,34 +1485,15 @@ mod tests {
     fn test_used_size_calculation() {
         let page = &mut NodePage::new(1);
 
-        let empty_node = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            vec![],
-            0,
-            0,
-            0,
-            0,
-        );
+        let empty_node = NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, vec![], 0, 0, 0, 0);
 
         page.add_node(empty_node).unwrap();
         // Compressed size: delta(1) + flags(4) + kind(1) + name(1) + data_len(1) +
         //                     outgoing_cluster(1) + outgoing_count(1) + incoming_cluster(1) + incoming_count(1) = 12 bytes
         assert_eq!(page.used_size(), 12);
 
-        let node_with_data = NodeRecordV3::new_inline(
-            2,
-            NodeFlags::empty(),
-            0,
-            0,
-            vec![1u8; 32],
-            0,
-            0,
-            0,
-            0,
-        );
+        let node_with_data =
+            NodeRecordV3::new_inline(2, NodeFlags::empty(), 0, 0, vec![1u8; 32], 0, 0, 0, 0);
 
         page.add_node(node_with_data).unwrap();
         // First node: 12 bytes, Second node: 12 + 32 = 44 bytes
@@ -1001,17 +1506,7 @@ mod tests {
         assert_eq!(page.remaining_capacity(), USABLE_SIZE);
 
         // Use 50 bytes which is less than MAX_INLINE_DATA (64)
-        let node = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            vec![0u8; 50],
-            0,
-            0,
-            0,
-            0,
-        );
+        let node = NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, vec![0u8; 50], 0, 0, 0, 0);
 
         page.add_node(node).unwrap();
         assert!(page.remaining_capacity() < USABLE_SIZE);
@@ -1077,13 +1572,13 @@ mod tests {
             let node = NodeRecordV3::new_inline(
                 *id,
                 NodeFlags::empty(),
-                10,  // kind_offset
-                20,  // name_offset
+                10, // kind_offset
+                20, // name_offset
                 vec![],
                 0,
-                5,    // outgoing_edge_count
+                5, // outgoing_edge_count
                 0,
-                3,    // incoming_edge_count
+                3, // incoming_edge_count
             );
             page.add_node(node).unwrap();
         }
@@ -1092,12 +1587,7 @@ mod tests {
         let restored = NodePage::unpack(&bytes).unwrap();
 
         for (i, node) in restored.nodes.iter().enumerate() {
-            assert_eq!(
-                node.id(),
-                test_ids[i],
-                "ID at index {} not preserved",
-                i
-            );
+            assert_eq!(node.id(), test_ids[i], "ID at index {} not preserved", i);
         }
     }
 
@@ -1133,7 +1623,11 @@ mod tests {
         let restored = NodePage::unpack(&bytes).unwrap();
 
         // Should fit at least 20 nodes
-        assert!(restored.node_count() >= 20, "Should fit at least 20 nodes, got {}", restored.node_count());
+        assert!(
+            restored.node_count() >= 20,
+            "Should fit at least 20 nodes, got {}",
+            restored.node_count()
+        );
     }
 
     #[test]
@@ -1142,17 +1636,7 @@ mod tests {
 
         // Add node with max inline data
         let max_data = vec![0xFFu8; MAX_INLINE_DATA];
-        let node = NodeRecordV3::new_inline(
-            1,
-            NodeFlags::empty(),
-            0,
-            0,
-            max_data,
-            0,
-            0,
-            0,
-            0,
-        );
+        let node = NodeRecordV3::new_inline(1, NodeFlags::empty(), 0, 0, max_data, 0, 0, 0, 0);
 
         page.add_node(node).unwrap();
 
@@ -1161,7 +1645,10 @@ mod tests {
         let restored = NodePage::unpack(&bytes).unwrap();
 
         assert_eq!(restored.node_count(), 1);
-        assert_eq!(restored.nodes[0].data_inline.as_ref().unwrap().len(), MAX_INLINE_DATA);
+        assert_eq!(
+            restored.nodes[0].data_inline.as_ref().unwrap().len(),
+            MAX_INLINE_DATA
+        );
     }
 
     #[test]
@@ -1175,12 +1662,12 @@ mod tests {
             NodeFlags::empty(),
             0,
             0,
-            5000,    // external data offset (not stored in compressed format)
-            200,     // data length
+            5000, // external data offset (not stored in compressed format)
+            200,  // data length
             0,
-            5,    // outgoing_edge_count (non-zero for better varint testing)
+            5, // outgoing_edge_count (non-zero for better varint testing)
             0,
-            3,    // incoming_edge_count (non-zero for better varint testing)
+            3, // incoming_edge_count (non-zero for better varint testing)
         );
 
         page.add_node(node).unwrap();

@@ -3,7 +3,9 @@
 //! This test reproduces the cursor-in-JSON failure where CompactEdgeRecord::deserialize
 //! receives 58 bytes of ASCII text instead of binary record data, causing "Buffer too small: 58 < 8774"
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 
 #[test]
 fn test_v2_cluster_record_framing_regression() -> Result<(), Box<dyn std::error::Error>> {
@@ -82,7 +84,9 @@ fn test_v2_cluster_record_framing_regression() -> Result<(), Box<dyn std::error:
     println!("STEP 5: Running neighbor query to trigger cluster read...");
 
     // This is where the "Buffer too small: 58 < 8774" error should occur
-    match graph_reopened.neighbors(SnapshotId::current(), source_node,
+    match graph_reopened.neighbors(
+        SnapshotId::current(),
+        source_node,
         NeighborQuery {
             direction: BackendDirection::Outgoing,
             edge_type: None,
@@ -203,7 +207,9 @@ fn test_v2_edge_insert_crash_consistency() -> Result<(), Box<dyn std::error::Err
 
     // Step 4: Verify edge exists and is accessible
     println!("STEP 4: Verifying edge persistence...");
-    let neighbors = graph_reopened.neighbors(SnapshotId::current(), node1,
+    let neighbors = graph_reopened.neighbors(
+        SnapshotId::current(),
+        node1,
         NeighborQuery {
             direction: BackendDirection::Outgoing,
             edge_type: None,

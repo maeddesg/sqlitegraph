@@ -48,7 +48,8 @@ fn test_phase64_node_count_durability_regression() -> Result<(), Box<dyn std::er
     println!("STEP 4: Verifying node accessibility after reopen...");
     for (i, &expected_id) in node_ids.iter().enumerate() {
         // Try to access each node - this would fail with InvalidNodeId if node_count = 0
-        let neighbors = graph_reopened.neighbors(SnapshotId::current(), expected_id, Default::default())?;
+        let neighbors =
+            graph_reopened.neighbors(SnapshotId::current(), expected_id, Default::default())?;
         println!(
             "✅ Node {} (ID {}) accessible - has {} neighbors",
             i + 1,

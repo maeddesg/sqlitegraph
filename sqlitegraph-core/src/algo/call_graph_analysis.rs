@@ -169,7 +169,7 @@ impl SccCollapseResult {
     /// let collapsed = collapse_sccs(&graph)?;
     /// if let Some(supernode) = collapsed.supernode_for(node_id) {
     ///     println!("Node {} is in SCC {}", node_id, supernode);
-   /// }
+    /// }
     /// ```
     pub fn supernode_for(&self, node: i64) -> Option<i64> {
         self.node_to_supernode.get(&node).copied()
@@ -337,9 +337,7 @@ impl SccCollapseResult {
 ///
 /// - CP-Algorithms: Strongly Connected Components and Condensation Graph
 ///   https://cp-algorithms.com/graph/strongly-connected-components.html
-pub fn collapse_sccs(
-    graph: &SqliteGraph,
-) -> Result<SccCollapseResult, SqliteGraphError> {
+pub fn collapse_sccs(graph: &SqliteGraph) -> Result<SccCollapseResult, SqliteGraphError> {
     // Step 1: Compute SCCs using Tarjan's algorithm
     let scc_result = strongly_connected_components(graph)?;
 
@@ -450,7 +448,10 @@ where
     progress.on_progress(
         0,
         None,
-        &format!("SCC collapse: computed {} SCCs", scc_result.components.len()),
+        &format!(
+            "SCC collapse: computed {} SCCs",
+            scc_result.components.len()
+        ),
     );
 
     // Step 2: Handle empty graph
@@ -479,11 +480,7 @@ where
             .insert(node);
     }
 
-    progress.on_progress(
-        0,
-        None,
-        "SCC collapse: building condensed graph...",
-    );
+    progress.on_progress(0, None, "SCC collapse: building condensed graph...");
 
     // Step 4: Build supernode edges with progress tracking
     let mut edge_set: AHashSet<(i64, i64)> = AHashSet::new();
@@ -539,7 +536,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create empty graph
     fn create_empty_graph() -> SqliteGraph {
@@ -557,7 +554,9 @@ mod tests {
             file_path: Some("single.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         graph
     }
@@ -575,7 +574,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.all_entity_ids().expect("Failed to get IDs");
@@ -608,7 +609,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.all_entity_ids().expect("Failed to get IDs");
@@ -642,7 +645,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.all_entity_ids().expect("Failed to get IDs");
@@ -713,7 +718,10 @@ mod tests {
         assert_eq!(members.unwrap().len(), 1, "SCC should have 1 member");
 
         // Check is_trivial
-        assert!(collapsed.is_trivial(supernode.unwrap()), "Single node should be trivial");
+        assert!(
+            collapsed.is_trivial(supernode.unwrap()),
+            "Single node should be trivial"
+        );
     }
 
     #[test]
@@ -741,7 +749,10 @@ mod tests {
 
         // Verify all SCCs are trivial
         for (&supernode, members) in &collapsed.supernode_members {
-            assert!(collapsed.is_trivial(supernode), "DAG nodes should be trivial SCCs");
+            assert!(
+                collapsed.is_trivial(supernode),
+                "DAG nodes should be trivial SCCs"
+            );
             assert_eq!(members.len(), 1, "Each SCC should have 1 member");
         }
     }
@@ -781,9 +792,16 @@ mod tests {
 
         // Verify the mutual recursion SCC is non-trivial
         if let Some(scc_id) = scc0 {
-            assert!(!collapsed.is_trivial(scc_id), "Mutual recursion SCC should be non-trivial");
+            assert!(
+                !collapsed.is_trivial(scc_id),
+                "Mutual recursion SCC should be non-trivial"
+            );
             if let Some(members) = collapsed.members_of(scc_id) {
-                assert_eq!(members.len(), 2, "Mutual recursion SCC should have 2 members");
+                assert_eq!(
+                    members.len(),
+                    2,
+                    "Mutual recursion SCC should have 2 members"
+                );
             }
         }
 
@@ -825,7 +843,10 @@ mod tests {
 
         // Verify SCC is non-trivial
         if let Some(scc_id) = scc0 {
-            assert!(!collapsed.is_trivial(scc_id), "Triangle SCC should be non-trivial");
+            assert!(
+                !collapsed.is_trivial(scc_id),
+                "Triangle SCC should be non-trivial"
+            );
             if let Some(members) = collapsed.members_of(scc_id) {
                 assert_eq!(members.len(), 3, "Triangle SCC should have 3 members");
             }
@@ -936,7 +957,10 @@ mod tests {
 
         // Non-existent node should return None
         let non_existent = collapsed.supernode_for(99999);
-        assert!(non_existent.is_none(), "Non-existent node should return None");
+        assert!(
+            non_existent.is_none(),
+            "Non-existent node should return None"
+        );
     }
 
     #[test]
@@ -958,7 +982,10 @@ mod tests {
 
         // Non-existent supernode should return None
         let non_existent = collapsed.members_of(99999);
-        assert!(non_existent.is_none(), "Non-existent supernode should return None");
+        assert!(
+            non_existent.is_none(),
+            "Non-existent supernode should return None"
+        );
     }
 
     #[test]
@@ -976,16 +1003,25 @@ mod tests {
 
         if let Some(scc_id) = scc0 {
             // Multi-node SCC should be non-trivial
-            assert!(!collapsed.is_trivial(scc_id), "Multi-node SCC should not be trivial");
+            assert!(
+                !collapsed.is_trivial(scc_id),
+                "Multi-node SCC should not be trivial"
+            );
         }
 
         if let Some(scc_id) = scc2 {
             // Single node SCC should be trivial
-            assert!(collapsed.is_trivial(scc_id), "Single node SCC should be trivial");
+            assert!(
+                collapsed.is_trivial(scc_id),
+                "Single node SCC should be trivial"
+            );
         }
 
         // Non-existent SCC should return false (not found)
-        assert!(!collapsed.is_trivial(99999), "Non-existent SCC should return false");
+        assert!(
+            !collapsed.is_trivial(99999),
+            "Non-existent SCC should return false"
+        );
     }
 
     #[test]
@@ -1048,8 +1084,7 @@ mod tests {
         let result_without = collapse_sccs(&graph).expect("Failed");
 
         assert_eq!(
-            result_with.num_sccs,
-            result_without.num_sccs,
+            result_with.num_sccs, result_without.num_sccs,
             "Progress and non-progress results should match"
         );
 

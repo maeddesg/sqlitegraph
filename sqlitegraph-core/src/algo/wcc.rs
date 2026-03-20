@@ -50,8 +50,8 @@
 
 use std::collections::VecDeque;
 
-use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 use crate::progress::ProgressCallback;
+use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 
 /// Finds all weakly connected components in the graph using bidirectional BFS.
 ///
@@ -88,9 +88,7 @@ use crate::progress::ProgressCallback;
 ///     println!("Component {}: {:?}", i, component);
 /// }
 /// ```
-pub fn weakly_connected_components(
-    graph: &SqliteGraph,
-) -> Result<Vec<Vec<i64>>, SqliteGraphError> {
+pub fn weakly_connected_components(graph: &SqliteGraph) -> Result<Vec<Vec<i64>>, SqliteGraphError> {
     let mut components = Vec::new();
     let mut visited = ahash::AHashSet::new();
 
@@ -189,11 +187,7 @@ where
         }
 
         // Report progress
-        progress.on_progress(
-            idx + 1,
-            Some(total),
-            "Finding weakly connected components",
-        );
+        progress.on_progress(idx + 1, Some(total), "Finding weakly connected components");
 
         // Start BFS from this node
         let mut queue = VecDeque::new();
@@ -398,8 +392,16 @@ mod tests {
         );
 
         // Each component should have 2 nodes
-        assert_eq!(components[0].len(), 2, "First component should have 2 nodes");
-        assert_eq!(components[1].len(), 2, "Second component should have 2 nodes");
+        assert_eq!(
+            components[0].len(),
+            2,
+            "First component should have 2 nodes"
+        );
+        assert_eq!(
+            components[1].len(),
+            2,
+            "Second component should have 2 nodes"
+        );
 
         // Verify all nodes appear exactly once across all components
         let all_nodes: i64 = graph.list_entity_ids().expect("Failed to get IDs").len() as i64;
@@ -423,7 +425,11 @@ mod tests {
             weakly_connected_components(&graph).expect("WCC without progress failed");
 
         // Results should be identical
-        assert_eq!(result.len(), result_no_progress.len(), "Component count mismatch");
+        assert_eq!(
+            result.len(),
+            result_no_progress.len(),
+            "Component count mismatch"
+        );
         for (comp_with, comp_without) in result.iter().zip(result_no_progress.iter()) {
             assert_eq!(comp_with, comp_without, "Component mismatch");
         }

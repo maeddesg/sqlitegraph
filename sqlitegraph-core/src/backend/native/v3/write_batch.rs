@@ -119,9 +119,9 @@ impl WriteBatch {
 
     /// Write all pages to disk with single fsync
     fn write_pages_to_disk(&self, db_path: &Path) -> NativeResult<()> {
+        use crate::backend::native::v3::constants::{DEFAULT_PAGE_SIZE, V3_HEADER_SIZE};
         use std::fs::OpenOptions;
         use std::io::{Seek, SeekFrom, Write};
-        use crate::backend::native::v3::constants::{V3_HEADER_SIZE, DEFAULT_PAGE_SIZE};
 
         let mut file = OpenOptions::new()
             .read(true)
@@ -142,15 +142,17 @@ impl WriteBatch {
             let offset = V3_HEADER_SIZE + (page_id - 1) * DEFAULT_PAGE_SIZE;
             let page_bytes = page.pack()?;
 
-            file.seek(SeekFrom::Start(offset)).map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to seek to page {}", page_id),
-                source: e,
-            })?;
+            file.seek(SeekFrom::Start(offset))
+                .map_err(|e| NativeBackendError::IoError {
+                    context: format!("Failed to seek to page {}", page_id),
+                    source: e,
+                })?;
 
-            file.write_all(&page_bytes).map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to write page {}", page_id),
-                source: e,
-            })?;
+            file.write_all(&page_bytes)
+                .map_err(|e| NativeBackendError::IoError {
+                    context: format!("Failed to write page {}", page_id),
+                    source: e,
+                })?;
         }
 
         // Single fsync for entire batch
@@ -184,20 +186,20 @@ mod tests {
     fn create_test_db() -> (TempDir, std::path::PathBuf) {
         let temp = TempDir::new().unwrap();
         let db_path = temp.path().join("test.graph");
-        
+
         // Create minimal V3 database file
         use crate::backend::native::v3::header::PersistentHeaderV3;
         use std::fs::File;
         use std::io::Write;
-        
+
         let header = PersistentHeaderV3::new_v3();
         let header_bytes = header.to_bytes();
-        
+
         let mut file = File::create(&db_path).unwrap();
         file.write_all(&header_bytes).unwrap();
         // Pre-allocate space for a few pages
         file.set_len(4096 * 10).unwrap();
-        
+
         (temp, db_path)
     }
 
@@ -213,9 +215,9 @@ mod tests {
     fn test_stage_page_increases_count() {
         let mut batch = WriteBatch::new();
         let page = IndexPage::new_leaf(1);
-        
+
         batch.stage_page(page).unwrap();
-        
+
         assert_eq!(batch.len(), 1);
         assert!(!batch.is_empty());
     }
@@ -225,10 +227,10 @@ mod tests {
         let mut batch = WriteBatch::new();
         let page1 = IndexPage::new_leaf(1);
         let page2 = IndexPage::new_leaf(1); // Same page_id
-        
+
         batch.stage_page(page1).unwrap();
         batch.stage_page(page2.clone()).unwrap();
-        
+
         // Should still be 1 page (overwritten)
         assert_eq!(batch.len(), 1);
         assert_eq!(batch.get_page(1).unwrap().page_id(), 1);
@@ -238,9 +240,9 @@ mod tests {
     fn test_cannot_commit_empty_batch() {
         let (_temp, db_path) = create_test_db();
         let batch = WriteBatch::new();
-        
+
         let result = batch.commit(&db_path);
-        
+
         assert!(result.is_err());
     }
 
@@ -248,15 +250,15 @@ mod tests {
     fn test_commit_multiple_pages() {
         let (_temp, db_path) = create_test_db();
         let mut batch = WriteBatch::new();
-        
+
         // Stage 5 pages
         for i in 1..=5 {
             let page = IndexPage::new_leaf(i);
             batch.stage_page(page).unwrap();
         }
-        
+
         assert_eq!(batch.len(), 5);
-        
+
         // Commit should succeed
         batch.commit(&db_path).unwrap();
     }
@@ -265,14 +267,14 @@ mod tests {
     fn test_commit_skips_page_zero() {
         let (_temp, db_path) = create_test_db();
         let mut batch = WriteBatch::new();
-        
+
         // Try to stage page 0 (should be skipped on commit)
         let page0 = IndexPage::new_leaf(0);
         let page1 = IndexPage::new_leaf(1);
-        
+
         batch.stage_page(page0).unwrap();
         batch.stage_page(page1).unwrap();
-        
+
         // Commit should succeed (page 0 skipped)
         batch.commit(&db_path).unwrap();
     }

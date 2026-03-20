@@ -1,8 +1,8 @@
 //! Test to isolate RwLock overhead
 
-use std::time::Instant;
-use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 fn main() {
     println!("═══════════════════════════════════════════════════════════════");
@@ -40,8 +40,8 @@ fn main() {
 
         let start = Instant::now();
         for _ in 0..10000 {
-            let inner_lock = outer.read().unwrap();  // First lock
-            let map = inner_lock.read().unwrap();     // Second lock
+            let inner_lock = outer.read().unwrap(); // First lock
+            let map = inner_lock.read().unwrap(); // Second lock
             let _ = map.get(&1).cloned();
         }
         let elapsed = start.elapsed();

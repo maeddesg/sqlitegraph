@@ -9,9 +9,7 @@ use super::Direction;
 
 // Import instrumentation when in debug mode
 #[cfg(debug_assertions)]
-use super::instrumentation::convenience::{
-    start_timing, track_iteration, validate_state,
-};
+use super::instrumentation::convenience::{start_timing, track_iteration, validate_state};
 
 #[cfg(debug_assertions)]
 use log::error;

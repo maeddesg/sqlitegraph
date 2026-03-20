@@ -56,17 +56,17 @@ impl Publisher {
     /// A tuple of (SubscriberId, Receiver<PubSubEvent>)
     pub fn subscribe(&self, filter: SubscriptionFilter) -> (SubscriberId, Receiver<PubSubEvent>) {
         let (tx, rx) = mpsc::channel();
-        
+
         let id = {
             let mut next = self.next_id.lock().unwrap();
             let id = *next;
             *next = next.wrapping_add(1);
             SubscriberId::new(id)
         };
-        
+
         let mut senders = self.senders.lock().unwrap();
         senders.push((id, tx, filter));
-        
+
         (id, rx)
     }
 
@@ -80,7 +80,7 @@ impl Publisher {
     pub fn unsubscribe(&self, subscriber_id: SubscriberId) -> bool {
         let mut senders = self.senders.lock().unwrap();
         let pos = senders.iter().position(|(id, _, _)| *id == subscriber_id);
-        
+
         if let Some(pos) = pos {
             senders.swap_remove(pos);
             true
@@ -100,7 +100,7 @@ impl Publisher {
     /// * `event` - The event to emit
     pub fn emit(&self, event: PubSubEvent) {
         let senders = self.senders.lock().unwrap();
-        
+
         for (_, sender, filter) in senders.iter() {
             if filter.matches(&event) {
                 // Best-effort delivery - ignore errors
@@ -136,15 +136,15 @@ mod tests {
     #[test]
     fn test_subscribe_unsubscribe() {
         let publisher = Publisher::new();
-        
+
         let (id, _rx) = publisher.subscribe(SubscriptionFilter::all());
         assert_eq!(publisher.subscriber_count(), 1);
         assert!(publisher.has_subscribers());
-        
+
         let removed = publisher.unsubscribe(id);
         assert!(removed);
         assert_eq!(publisher.subscriber_count(), 0);
-        
+
         // Unsubscribing again should return false
         let removed = publisher.unsubscribe(id);
         assert!(!removed);
@@ -153,45 +153,54 @@ mod tests {
     #[test]
     fn test_emit_event() {
         let publisher = Publisher::new();
-        
+
         let (id, rx) = publisher.subscribe(SubscriptionFilter::all());
-        
-        let event = PubSubEvent::NodeChanged { node_id: 1, snapshot_id: 1 };
+
+        let event = PubSubEvent::NodeChanged {
+            node_id: 1,
+            snapshot_id: 1,
+        };
         publisher.emit(event.clone());
-        
+
         // Should receive the event
         let received = rx.recv_timeout(Duration::from_millis(100));
         assert_eq!(received, Ok(event));
-        
+
         publisher.unsubscribe(id);
     }
 
     #[test]
     fn test_filter_matching() {
         let publisher = Publisher::new();
-        
+
         // Subscriber 1: all events
         let (_id1, rx1) = publisher.subscribe(SubscriptionFilter::all());
-        
+
         // Subscriber 2: nodes only
         let (_id2, rx2) = publisher.subscribe(SubscriptionFilter::nodes_only());
-        
+
         // Emit node change - both should receive
-        let node_event = PubSubEvent::NodeChanged { node_id: 1, snapshot_id: 1 };
+        let node_event = PubSubEvent::NodeChanged {
+            node_id: 1,
+            snapshot_id: 1,
+        };
         publisher.emit(node_event.clone());
-        
-        assert_eq!(rx1.recv_timeout(Duration::from_millis(100)), Ok(node_event.clone()));
+
+        assert_eq!(
+            rx1.recv_timeout(Duration::from_millis(100)),
+            Ok(node_event.clone())
+        );
         assert_eq!(rx2.recv_timeout(Duration::from_millis(100)), Ok(node_event));
-        
+
         // Emit edge change - only subscriber 1 should receive
-        let edge_event = PubSubEvent::EdgeChanged { 
-            edge_id: 1, 
-            from_node: 1, 
-            to_node: 2, 
-            snapshot_id: 1 
+        let edge_event = PubSubEvent::EdgeChanged {
+            edge_id: 1,
+            from_node: 1,
+            to_node: 2,
+            snapshot_id: 1,
         };
         publisher.emit(edge_event.clone());
-        
+
         assert_eq!(rx1.recv_timeout(Duration::from_millis(100)), Ok(edge_event));
         // rx2 should timeout since it doesn't subscribe to edge changes
         assert!(rx2.recv_timeout(Duration::from_millis(50)).is_err());
@@ -200,15 +209,18 @@ mod tests {
     #[test]
     fn test_multiple_subscribers_receive_independent_events() {
         let publisher = Publisher::new();
-        
+
         let (_id1, rx1) = publisher.subscribe(SubscriptionFilter::all());
         let (_id2, rx2) = publisher.subscribe(SubscriptionFilter::all());
-        
+
         let event = PubSubEvent::SnapshotCommitted { snapshot_id: 42 };
         publisher.emit(event.clone());
-        
+
         // Both should receive the same event
-        assert_eq!(rx1.recv_timeout(Duration::from_millis(100)), Ok(event.clone()));
+        assert_eq!(
+            rx1.recv_timeout(Duration::from_millis(100)),
+            Ok(event.clone())
+        );
         assert_eq!(rx2.recv_timeout(Duration::from_millis(100)), Ok(event));
     }
 }

@@ -3,7 +3,9 @@
 //! This test validates that free_space_offset is properly maintained to be
 //! >= incoming_cluster_offset after V2 cluster operations.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 
 /// Regression test for header free space invariant
 #[test]
@@ -63,10 +65,14 @@ fn test_v2_header_free_space_invariant_regression() -> Result<(), Box<dyn std::e
 
     // Step 5: Verify data integrity after reopen
     let neighbor_count = graph_reopened
-        .neighbors(SnapshotId::current(), node_ids[0], NeighborQuery {
-            direction: BackendDirection::Outgoing,
-            edge_type: None,
-        })?
+        .neighbors(
+            SnapshotId::current(),
+            node_ids[0],
+            NeighborQuery {
+                direction: BackendDirection::Outgoing,
+                edge_type: None,
+            },
+        )?
         .len();
     assert!(neighbor_count > 0, "Should have neighbors after reopen");
     println!(
@@ -141,10 +147,14 @@ fn test_v2_header_free_space_invariant_stress() -> Result<(), Box<dyn std::error
 
     // Quick integrity check
     let total_neighbors = graph_reopened
-        .neighbors(SnapshotId::current(), node_ids[0], NeighborQuery {
-            direction: BackendDirection::Outgoing,
-            edge_type: None,
-        })?
+        .neighbors(
+            SnapshotId::current(),
+            node_ids[0],
+            NeighborQuery {
+                direction: BackendDirection::Outgoing,
+                edge_type: None,
+            },
+        )?
         .len();
     assert!(
         total_neighbors >= edges_per_node,

@@ -93,7 +93,7 @@ impl KvMetadata {
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        
+
         Self {
             created_at: now,
             updated_at: now,
@@ -103,7 +103,12 @@ impl KvMetadata {
     }
 
     /// Create metadata for recovery (preserves original timestamps)
-    pub fn for_recovery(created_at: u64, updated_at: u64, ttl_seconds: Option<u64>, version: u64) -> Self {
+    pub fn for_recovery(
+        created_at: u64,
+        updated_at: u64,
+        ttl_seconds: Option<u64>,
+        version: u64,
+    ) -> Self {
         Self {
             created_at,
             updated_at,
@@ -157,7 +162,7 @@ impl KvEntry {
 pub fn hash_key(key: &[u8]) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
     hasher.finish()
@@ -185,7 +190,12 @@ mod tests {
             let type_tag = original.type_tag();
             let bytes = original.to_bytes();
             let recovered = KvValue::from_bytes(&bytes, type_tag);
-            assert_eq!(Some(original), recovered, "Roundtrip failed for type_tag {}", type_tag);
+            assert_eq!(
+                Some(original),
+                recovered,
+                "Roundtrip failed for type_tag {}",
+                type_tag
+            );
         }
     }
 
@@ -193,7 +203,7 @@ mod tests {
     fn test_kv_metadata_expiration() {
         let meta = KvMetadata::new(1, Some(60)); // 60 second TTL
         assert!(!meta.is_expired_at(meta.updated_at + 30)); // Not expired after 30s
-        assert!(meta.is_expired_at(meta.updated_at + 61));  // Expired after 61s
+        assert!(meta.is_expired_at(meta.updated_at + 61)); // Expired after 61s
     }
 
     #[test]
@@ -206,13 +216,16 @@ mod tests {
     fn test_key_hashing() {
         let key1 = b"test_key_1";
         let key2 = b"test_key_2";
-        
+
         let hash1 = hash_key(key1);
         let hash1_dup = hash_key(key1);
         let hash2 = hash_key(key2);
-        
+
         assert_eq!(hash1, hash1_dup, "Same key should produce same hash");
-        assert_ne!(hash1, hash2, "Different keys should produce different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Different keys should produce different hashes"
+        );
     }
 
     #[test]

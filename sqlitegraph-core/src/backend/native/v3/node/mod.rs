@@ -8,8 +8,10 @@
 //! - `record` - NodeRecordV3 with full ID encoding
 //! - `page` - NodePage with delta/varint compression
 //! - `store` - NodeStore with B+Tree lookup and TraversalCache
+//! - `block_cache` - Block-aware traversal cache prototype
 //! - `tests` - Comprehensive unit tests for NodeStore V3 components
 
+pub mod block_cache;
 pub mod page;
 pub mod record;
 pub mod store;
@@ -19,16 +21,23 @@ pub mod store;
 pub mod tests;
 
 // Re-export node record types
-pub use record::{NodeRecordV3, FIXED_METADATA_SIZE, MAX_INLINE_DATA};
+pub use record::{FIXED_METADATA_SIZE, MAX_INLINE_DATA, NodeRecordV3};
 
 // Re-export node page types
-pub use page::{NodePage, PAGE_HEADER_SIZE, MAX_PAGE_SIZE, USABLE_SIZE, MAX_NODE_CAPACITY};
+pub use page::{MAX_NODE_CAPACITY, MAX_PAGE_SIZE, NodePage, PAGE_HEADER_SIZE, USABLE_SIZE};
 
 // Re-export store types
 pub use store::{
-    NodeStore,
-    TraversalCache, TraversalCacheBuilder,
-    DEFAULT_CACHE_CAPACITY, MAX_CACHE_CAPACITY, MIN_CACHE_CAPACITY
+    DEFAULT_CACHE_CAPACITY, MAX_CACHE_CAPACITY, MIN_CACHE_CAPACITY, NodeStore, TraversalCache,
+    TraversalCacheBuilder,
+};
+
+// Re-export block-aware cache (always available, opt-in via API)
+pub use block_cache::{
+    BLOCK_SIZE, BlockAwareTraversalCache, BlockStats,
+    DEFAULT_CACHE_CAPACITY as BLOCK_CACHE_DEFAULT_CAPACITY,
+    MAX_CACHE_CAPACITY as BLOCK_CACHE_MAX_CAPACITY, MIN_CACHE_CAPACITY as BLOCK_CACHE_MIN_CAPACITY,
+    node_id_to_block,
 };
 
 /// Node record constants

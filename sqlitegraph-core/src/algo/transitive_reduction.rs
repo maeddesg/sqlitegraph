@@ -106,9 +106,7 @@ use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 /// # See Also
 /// - [`transitive_reduction_with_progress`] - For progress tracking
 /// - [`transitive_closure`] - For computing reachability used by this algorithm
-pub fn transitive_reduction(
-    graph: &SqliteGraph,
-) -> Result<HashSet<(i64, i64)>, SqliteGraphError> {
+pub fn transitive_reduction(graph: &SqliteGraph) -> Result<HashSet<(i64, i64)>, SqliteGraphError> {
     // Compute transitive closure first
     let closure = super::transitive_closure::transitive_closure(graph, None)?;
 
@@ -180,7 +178,8 @@ where
     F: ProgressCallback,
 {
     // Compute transitive closure first
-    let closure = super::transitive_closure::transitive_closure_with_progress(graph, None, progress)?;
+    let closure =
+        super::transitive_closure::transitive_closure_with_progress(graph, None, progress)?;
 
     let mut essential_edges = HashSet::new();
 
@@ -257,7 +256,7 @@ fn is_reachable_via_intermediate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create test graph with linear chain: 0 -> 1 -> 2 -> 3
     fn create_linear_graph() -> SqliteGraph {
@@ -272,7 +271,9 @@ mod tests {
                 file_path: Some(format!("test_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -306,7 +307,9 @@ mod tests {
                 file_path: Some(format!("test_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -340,7 +343,9 @@ mod tests {
                 file_path: Some(format!("test_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -388,7 +393,9 @@ mod tests {
             file_path: Some("test.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let result = transitive_reduction(&graph);
         assert!(result.is_ok(), "transitive_reduction failed");
@@ -413,7 +420,11 @@ mod tests {
         // Note: The transitive_reduction algorithm may have bugs in identifying
         // essential edges. This test verifies the function runs and returns
         // a result without panicking.
-        assert!(essential.len() <= 3, "Should have at most 3 essential edges, got {}", essential.len());
+        assert!(
+            essential.len() <= 3,
+            "Should have at most 3 essential edges, got {}",
+            essential.len()
+        );
     }
 
     #[test]
@@ -430,7 +441,11 @@ mod tests {
 
         // Verify the computation completed and returned reasonable results
         // In a diamond: 5 edges total, 1 redundant (0->3), so 4 essential expected
-        assert!(essential.len() <= 5, "Should have at most 5 edges, got {}", essential.len());
+        assert!(
+            essential.len() <= 5,
+            "Should have at most 5 edges, got {}",
+            essential.len()
+        );
     }
 
     #[test]
@@ -448,7 +463,11 @@ mod tests {
         // In a complete DAG of 4 nodes:
         // Total edges: 4*3/2 = 6
         // Essential edges: expected 3, but actual result depends on algorithm
-        assert!(essential.len() <= 6, "Should have at most 6 edges, got {}", essential.len());
+        assert!(
+            essential.len() <= 6,
+            "Should have at most 6 edges, got {}",
+            essential.len()
+        );
     }
 
     #[test]
@@ -483,7 +502,9 @@ mod tests {
 
         // Verify that essential edges are a subset of original edges
         for &from_id in &entity_ids {
-            let outgoing = graph.fetch_outgoing(from_id).expect("Failed to get outgoing");
+            let outgoing = graph
+                .fetch_outgoing(from_id)
+                .expect("Failed to get outgoing");
             for &to_id in &outgoing {
                 if essential.contains(&(from_id, to_id)) {
                     // Essential edge should exist in original graph (always true by construction)
@@ -508,7 +529,11 @@ mod tests {
         let essential = result.unwrap();
         // Progress version should return same results as non-progress version
         // Actual count depends on algorithm implementation
-        assert!(essential.len() <= 5, "Should have at most 5 edges, got {}", essential.len());
+        assert!(
+            essential.len() <= 5,
+            "Should have at most 5 edges, got {}",
+            essential.len()
+        );
     }
 
     #[test]
@@ -526,7 +551,11 @@ mod tests {
         let essential1 = result1.unwrap();
         let essential2 = result2.unwrap();
 
-        assert_eq!(essential1.len(), essential2.len(), "Different number of essential edges");
+        assert_eq!(
+            essential1.len(),
+            essential2.len(),
+            "Different number of essential edges"
+        );
         assert_eq!(essential1, essential2, "Essential edges differ");
     }
 }

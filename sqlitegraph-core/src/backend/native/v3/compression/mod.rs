@@ -10,8 +10,8 @@ pub mod delta;
 pub mod varint;
 
 // Re-export compression utilities
-pub use delta::{decode_id_delta, encode_id_delta, DeltaDecodeError};
-pub use varint::{decode_varint, encode_varint, VarintError, MAX_VARINT_BYTES};
+pub use delta::{DeltaDecodeError, decode_id_delta, encode_id_delta};
+pub use varint::{MAX_VARINT_BYTES, VarintError, decode_varint, encode_varint};
 
 /// Compression statistics for tracking space savings
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

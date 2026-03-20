@@ -340,9 +340,15 @@ impl FlowNetwork {
         let reverse_idx = self.adjacency.entry(to).or_insert_with(Vec::new).len();
 
         // Add forward edge
-        self.adjacency.entry(from).or_insert_with(Vec::new).push(FlowEdge::new(to, capacity));
+        self.adjacency
+            .entry(from)
+            .or_insert_with(Vec::new)
+            .push(FlowEdge::new(to, capacity));
         // Add reverse edge (for residual graph)
-        self.adjacency.entry(to).or_insert_with(Vec::new).push(FlowEdge::new(from, 0));
+        self.adjacency
+            .entry(to)
+            .or_insert_with(Vec::new)
+            .push(FlowEdge::new(from, 0));
 
         // Track reverse edges for updates
         self.reverse_edge.insert((from, to), reverse_idx);
@@ -351,7 +357,10 @@ impl FlowNetwork {
 
     /// Get all neighbors of a node.
     fn neighbors(&self, node: i64) -> &[FlowEdge] {
-        self.adjacency.get(&node).map(|v| v.as_slice()).unwrap_or(&[])
+        self.adjacency
+            .get(&node)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Get all nodes in the network.
@@ -418,11 +427,7 @@ impl FlowNetwork {
 /// # Complexity
 /// - Time: O(V * E²) where V = vertices, E = edges
 /// - Space: O(V + E) for residual graph and BFS queue
-fn edmonds_karp(
-    mut network: FlowNetwork,
-    source: i64,
-    sink: i64,
-) -> (usize, FlowNetwork) {
+fn edmonds_karp(mut network: FlowNetwork, source: i64, sink: i64) -> (usize, FlowNetwork) {
     let mut max_flow = 0;
 
     // Find augmenting paths while they exist
@@ -739,7 +744,10 @@ where
         progress.on_progress(
             iteration,
             None,
-            &format!("Min cut: iteration {}, flow so far: {}", iteration, max_flow),
+            &format!(
+                "Min cut: iteration {}, flow so far: {}",
+                iteration, max_flow
+            ),
         );
     }
 
@@ -818,9 +826,9 @@ impl VertexSplitTransform {
         if node_id == self.source || node_id == self.sink {
             node_id
         } else if node_id % 2 == 0 {
-            node_id / 2  // x_in -> x
+            node_id / 2 // x_in -> x
         } else {
-            (node_id - 1) / 2  // x_out -> x
+            (node_id - 1) / 2 // x_out -> x
         }
     }
 
@@ -1120,7 +1128,10 @@ where
         progress.on_progress(
             iteration,
             None,
-            &format!("Vertex cut: iteration {}, flow so far: {}", iteration, max_flow),
+            &format!(
+                "Vertex cut: iteration {}, flow so far: {}",
+                iteration, max_flow
+            ),
         );
     }
 
@@ -1553,11 +1564,7 @@ fn select_seeds_by_degree(
 ///
 /// # Returns
 /// Minimum distance (number of edges) to any target, or usize::MAX if unreachable.
-fn shortest_distance_to_targets(
-    graph: &SqliteGraph,
-    from: i64,
-    targets: &AHashSet<i64>,
-) -> usize {
+fn shortest_distance_to_targets(graph: &SqliteGraph, from: i64, targets: &AHashSet<i64>) -> usize {
     if targets.contains(&from) {
         return 0;
     }
@@ -1902,7 +1909,10 @@ where
                         progress.on_progress(
                             assigned_count,
                             Some(total_nodes),
-                            &format!("K-way partition: assigned {}/{} nodes", assigned_count, total_nodes),
+                            &format!(
+                                "K-way partition: assigned {}/{} nodes",
+                                assigned_count, total_nodes
+                            ),
                         );
                     }
                 }
@@ -1974,7 +1984,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2007,7 +2019,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2041,7 +2055,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2075,7 +2091,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2106,7 +2124,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2175,11 +2195,7 @@ mod tests {
 
         let result = min_st_cut(&graph, source, sink).expect("Failed to compute min cut");
 
-        assert_eq!(
-            result.cut_size,
-            3,
-            "Parallel paths should have cut size 3"
-        );
+        assert_eq!(result.cut_size, 3, "Parallel paths should have cut size 3");
         assert_eq!(result.cut_edges.len(), 3, "Should have 3 cut edges");
     }
 
@@ -2210,7 +2226,10 @@ mod tests {
 
         assert_eq!(result.cut_size, 0, "Source==target should have cut size 0");
         assert!(result.cut_edges.is_empty(), "Cut edges should be empty");
-        assert!(result.source_side.contains(&source), "Source side contains source");
+        assert!(
+            result.source_side.contains(&source),
+            "Source side contains source"
+        );
         assert!(result.sink_side.is_empty(), "Sink side should be empty");
     }
 
@@ -2228,8 +2247,7 @@ mod tests {
         let result_without = min_st_cut(&graph, source, sink).expect("Failed");
 
         assert_eq!(
-            result_with.cut_size,
-            result_without.cut_size,
+            result_with.cut_size, result_without.cut_size,
             "Cut size should match"
         );
         assert_eq!(
@@ -2251,11 +2269,14 @@ mod tests {
         let result = min_vertex_cut(&graph, source, sink).expect("Failed to compute vertex cut");
 
         assert_eq!(
-            result.cut_size,
-            2,
+            result.cut_size, 2,
             "Linear chain should have vertex cut size 2 (both intermediate nodes)"
         );
-        assert_eq!(result.separator.len(), 2, "Should have 2 separator vertices");
+        assert_eq!(
+            result.separator.len(),
+            2,
+            "Should have 2 separator vertices"
+        );
     }
 
     #[test]
@@ -2267,11 +2288,14 @@ mod tests {
         let result = min_vertex_cut(&graph, source, sink).expect("Failed to compute vertex cut");
 
         assert_eq!(
-            result.cut_size,
-            2,
+            result.cut_size, 2,
             "Two parallel paths should have vertex cut size 2"
         );
-        assert_eq!(result.separator.len(), 2, "Should have 2 separator vertices");
+        assert_eq!(
+            result.separator.len(),
+            2,
+            "Should have 2 separator vertices"
+        );
     }
 
     #[test]
@@ -2279,16 +2303,18 @@ mod tests {
         // Scenario: Direct edge s -> t
         // Expected: vertex_cut_size = 0 (no intermediate vertices)
         let (graph, source, sink) = create_single_edge();
-        
+
         eprintln!("Direct edge test: source={}, sink={}", source, sink);
 
         let result = min_vertex_cut(&graph, source, sink).expect("Failed to compute vertex cut");
-        
-        eprintln!("cut_size={}, separator={:?}", result.cut_size, result.separator);
+
+        eprintln!(
+            "cut_size={}, separator={:?}",
+            result.cut_size, result.separator
+        );
 
         assert_eq!(
-            result.cut_size,
-            0,
+            result.cut_size, 0,
             "Direct edge should have vertex cut size 0"
         );
         assert!(
@@ -2303,12 +2329,14 @@ mod tests {
         // Expected: Empty separator result
         let (graph, source, _) = create_single_edge();
 
-        let result =
-            min_vertex_cut(&graph, source, source).expect("Failed to compute vertex cut");
+        let result = min_vertex_cut(&graph, source, source).expect("Failed to compute vertex cut");
 
         assert_eq!(result.cut_size, 0, "Source==target should have cut size 0");
         assert!(result.separator.is_empty(), "Separator should be empty");
-        assert!(result.source_side.contains(&source), "Source side contains source");
+        assert!(
+            result.source_side.contains(&source),
+            "Source side contains source"
+        );
     }
 
     #[test]
@@ -2325,8 +2353,7 @@ mod tests {
         let result_without = min_vertex_cut(&graph, source, sink).expect("Failed");
 
         assert_eq!(
-            result_with.cut_size,
-            result_without.cut_size,
+            result_with.cut_size, result_without.cut_size,
             "Cut size should match"
         );
         assert_eq!(
@@ -2345,11 +2372,14 @@ mod tests {
         let result = min_vertex_cut(&graph, source, sink).expect("Failed to compute vertex cut");
 
         assert_eq!(
-            result.cut_size,
-            3,
+            result.cut_size, 3,
             "Three parallel paths should have vertex cut size 3"
         );
-        assert_eq!(result.separator.len(), 3, "Should have 3 separator vertices");
+        assert_eq!(
+            result.separator.len(),
+            3,
+            "Should have 3 separator vertices"
+        );
     }
 
     // ============================================================================
@@ -2368,7 +2398,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2398,7 +2430,9 @@ mod tests {
             file_path: Some("center.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&center_entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&center_entity)
+            .expect("Failed to insert entity");
 
         // Create leaf nodes
         for i in 0..leaves {
@@ -2409,7 +2443,9 @@ mod tests {
                 file_path: Some(format!("leaf_{}.rs", i)),
                 data: serde_json::json!({}),
             };
-            graph.insert_entity(&leaf_entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&leaf_entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2443,7 +2479,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2492,7 +2530,9 @@ mod tests {
                 file_path: Some(format!("c1_{}.rs", i)),
                 data: serde_json::json!({"clique": 1}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         // Create clique 2: nodes 3, 4, 5
@@ -2504,7 +2544,9 @@ mod tests {
                 file_path: Some(format!("c2_{}.rs", i)),
                 data: serde_json::json!({"clique": 2}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -2615,8 +2657,8 @@ mod tests {
         // Expected: Each component forms separate partition based on nearest seed
         let (graph, node_a, node_b) = create_disconnected();
 
-        let result = partition_bfs_level(&graph, vec![node_a, node_b], 2)
-            .expect("Failed to partition");
+        let result =
+            partition_bfs_level(&graph, vec![node_a, node_b], 2).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
         // Nodes from different components should be in different partitions
@@ -2632,8 +2674,7 @@ mod tests {
         // Expected: Uses first k nodes by ID as seeds
         let graph = create_path_graph();
 
-        let result = partition_bfs_level(&graph, vec![], 2)
-            .expect("Failed to partition");
+        let result = partition_bfs_level(&graph, vec![], 2).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
     }
@@ -2646,14 +2687,17 @@ mod tests {
         // Expected: Greedy finds single cut edge
         let graph = create_two_cliques();
 
-        let result = partition_greedy(&graph, None, 100)
-            .expect("Failed to partition");
+        let result = partition_greedy(&graph, None, 100).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
         // Verify partition computation completes without error
         // Note: Algorithm may not assign all nodes correctly due to implementation bugs
         let total_assigned = result.partitions[0].len() + result.partitions[1].len();
-        assert!(total_assigned >= 3, "Should assign at least some nodes, got {}", total_assigned);
+        assert!(
+            total_assigned >= 3,
+            "Should assign at least some nodes, got {}",
+            total_assigned
+        );
     }
 
     #[test]
@@ -2667,8 +2711,7 @@ mod tests {
         let initial_cut_size = initial.cut_edges.len();
 
         // Apply greedy refinement
-        let result = partition_greedy(&graph, None, 100)
-            .expect("Failed to partition");
+        let result = partition_greedy(&graph, None, 100).expect("Failed to partition");
 
         assert!(
             result.cut_edges.len() <= initial_cut_size,
@@ -2683,12 +2726,22 @@ mod tests {
         let graph = create_path_graph();
 
         let initial_partition = vec![
-            graph.all_entity_ids().unwrap().into_iter().take(2).collect(),
-            graph.all_entity_ids().unwrap().into_iter().skip(2).collect(),
+            graph
+                .all_entity_ids()
+                .unwrap()
+                .into_iter()
+                .take(2)
+                .collect(),
+            graph
+                .all_entity_ids()
+                .unwrap()
+                .into_iter()
+                .skip(2)
+                .collect(),
         ];
 
-        let result = partition_greedy(&graph, Some(initial_partition), 10)
-            .expect("Failed to partition");
+        let result =
+            partition_greedy(&graph, Some(initial_partition), 10).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
     }
@@ -2711,7 +2764,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            large_graph.insert_entity(&entity).expect("Failed to insert entity");
+            large_graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = large_graph.list_entity_ids().expect("Failed to get IDs");
@@ -2723,7 +2778,9 @@ mod tests {
                 edge_type: "next".to_string(),
                 data: serde_json::json!({}),
             };
-            large_graph.insert_edge(&edge).expect("Failed to insert edge");
+            large_graph
+                .insert_edge(&edge)
+                .expect("Failed to insert edge");
         }
 
         let config = PartitionConfig {
@@ -2733,8 +2790,7 @@ mod tests {
             seeds: None,
         };
 
-        let result = partition_kway(&large_graph, &config)
-            .expect("Failed to partition");
+        let result = partition_kway(&large_graph, &config).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
         // Verify partition computation completes
@@ -2756,8 +2812,7 @@ mod tests {
             seeds: None,
         };
 
-        let result = partition_kway(&graph, &config)
-            .expect("Failed to partition");
+        let result = partition_kway(&graph, &config).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 3, "Should have 3 partitions");
         // All nodes assigned
@@ -2780,7 +2835,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         // Create isolated node
@@ -2791,7 +2848,9 @@ mod tests {
             file_path: Some("isolated.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&isolated).expect("Failed to insert entity");
+        graph
+            .insert_entity(&isolated)
+            .expect("Failed to insert entity");
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
@@ -2814,12 +2873,14 @@ mod tests {
             seeds: None,
         };
 
-        let result = partition_kway(&graph, &config)
-            .expect("Failed to partition");
+        let result = partition_kway(&graph, &config).expect("Failed to partition");
 
         // All nodes should be assigned
         let total_assigned: usize = result.partitions.iter().map(|p| p.len()).sum();
-        assert_eq!(total_assigned, 4, "All nodes including isolated should be assigned");
+        assert_eq!(
+            total_assigned, 4,
+            "All nodes including isolated should be assigned"
+        );
     }
 
     #[test]
@@ -2836,8 +2897,7 @@ mod tests {
             seeds: Some(vec![entity_ids[0], entity_ids[4]]),
         };
 
-        let result = partition_kway(&graph, &config)
-            .expect("Failed to partition");
+        let result = partition_kway(&graph, &config).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
         // First and last should be in different partitions
@@ -2872,10 +2932,8 @@ mod tests {
         let config = PartitionConfig::default();
 
         let progress = NoProgress;
-        let result_with = partition_kway_with_progress(&graph, &config, &progress)
-            .expect("Failed");
-        let result_without = partition_kway(&graph, &config)
-            .expect("Failed");
+        let result_with = partition_kway_with_progress(&graph, &config, &progress).expect("Failed");
+        let result_without = partition_kway(&graph, &config).expect("Failed");
 
         assert_eq!(
             result_with.partitions.len(),
@@ -2885,7 +2943,10 @@ mod tests {
 
         let total_with: usize = result_with.partitions.iter().map(|p| p.len()).sum();
         let total_without: usize = result_without.partitions.iter().map(|p| p.len()).sum();
-        assert_eq!(total_with, total_without, "Total assigned nodes should match");
+        assert_eq!(
+            total_with, total_without,
+            "Total assigned nodes should match"
+        );
     }
 
     #[test]
@@ -2894,8 +2955,7 @@ mod tests {
         // Expected: node_to_partition matches partitions
         let graph = create_binary_tree(2);
 
-        let result = partition_bfs_level(&graph, vec![], 3)
-            .expect("Failed to partition");
+        let result = partition_bfs_level(&graph, vec![], 3).expect("Failed to partition");
 
         // Verify node_to_partition is consistent with partitions
         for (pidx, partition) in result.partitions.iter().enumerate() {
@@ -2917,11 +2977,13 @@ mod tests {
         // Expected: Returns empty partitions
         let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
 
-        let result = partition_bfs_level(&graph, vec![], 2)
-            .expect("Failed to partition");
+        let result = partition_bfs_level(&graph, vec![], 2).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 2, "Should have k partitions");
-        assert!(result.partitions.iter().all(|p| p.is_empty()), "All partitions should be empty");
+        assert!(
+            result.partitions.iter().all(|p| p.is_empty()),
+            "All partitions should be empty"
+        );
         assert!(result.cut_edges.is_empty(), "No cut edges for empty graph");
     }
 
@@ -2940,11 +3002,12 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
-        let result = partition_bfs_level(&graph, vec![], 10)
-            .expect("Failed to partition");
+        let result = partition_bfs_level(&graph, vec![], 10).expect("Failed to partition");
 
         assert_eq!(result.partitions.len(), 10, "Should have 10 partitions");
         let non_empty_count = result.partitions.iter().filter(|p| !p.is_empty()).count();

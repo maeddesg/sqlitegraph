@@ -19,6 +19,32 @@
 //! 4. **WAL-first**: Write path is WAL'd (insert_edge/delete_edge/update adjacency)
 //!    before any compaction/relocation.
 //!
+//! # Edge Type Storage Model
+//!
+//! ## Durable Storage
+//! Edge types are stored durably in the edge_data field of CompactEdgeRecord using
+//! an inline encoding format: `[type_len: u8][type_bytes]`. This ensures edge types
+//! survive reopen/recovery.
+//!
+//! ## In-Memory Index
+//! The `edge_types: HashMap<(src, dst, dir), String>` field provides O(1) filtering.
+//! This HashMap is rebuilt from durable storage on cache miss via `load_neighbors_from_disk()`.
+//!
+//! ## SEMANTIC CONSTRAINT (Known Limitation)
+//!
+//! The edge_types HashMap is keyed by `(src, dst, dir)`, NOT by edge_id. This means:
+//!
+//! - **Only ONE edge type can exist between a given (src, dst, dir) tuple**
+//! - Inserting a second edge between same endpoints with a different type OVERWRITES the previous type
+//! - This is intentional for V3's simple tuple-key model
+//! - If multi-edge support (same endpoints, different types) is needed, the key model must change to use edge_id
+//!
+//! Example of the aliasing behavior:
+//! ```ignore
+//! insert_edge(1, 2, Outgoing, "CALLS")  // edge_types: {(1,2,Out) -> "CALLS"}
+//! insert_edge(1, 2, Outgoing, "USES")   // edge_types: {(1,2,Out) -> "USES"} ← OVERWRITES!
+//! ```
+//!
 //! # Architecture
 //!
 //! ```
@@ -31,26 +57,27 @@
 //! Insert edge: load cluster (or create), append, maybe split if page full
 //! ```
 
+#[cfg(feature = "v3-forensics")]
+use crate::backend::native::v3::forensics::{
+    FORENSIC_COUNTERS, PAGE_OWNERSHIP, PageType as ForensicPageType, Subsystem,
+};
+use crate::backend::native::v3::{
+    allocator::PageAllocator, btree::BTreeManager, constants::DEFAULT_PAGE_SIZE,
+    header::PersistentHeaderV3, wal::WALWriter,
+};
 use crate::backend::native::{
     types::{NativeBackendError, NativeResult},
     v2::edge_cluster::{
-        cluster_trace::Direction as V2Direction,
-        compact_record::CompactEdgeRecord,
+        cluster_trace::Direction as V2Direction, compact_record::CompactEdgeRecord,
     },
-};
-use crate::backend::native::v3::{
-    btree::BTreeManager,
-    constants::DEFAULT_PAGE_SIZE,
-    wal::WALWriter,
-    header::PersistentHeaderV3,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::{Seek, SeekFrom, Write};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::io::{Write, Seek, SeekFrom};
-use std::fs::OpenOptions;
-use std::path::PathBuf;
 
 /// Page type constants for V3 storage
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,14 +158,51 @@ impl V3EdgeCluster {
     }
 
     /// Add edge to cluster
-    pub fn add_edge(&mut self, dst: i64) {
-        let edge = CompactEdgeRecord::new(dst, 0, Vec::new());
+    /// Edge type is encoded in edge_data using inline format: [type_len: u8][type_bytes]
+    pub fn add_edge(&mut self, dst: i64, edge_type: Option<String>) {
+        // Encode edge_type into edge_data using inline format: [type_len: u8][type_bytes]
+        let edge_data = if let Some(et) = edge_type {
+            let et_bytes = et.as_bytes();
+            let mut data = Vec::with_capacity(1 + et_bytes.len());
+            data.push(et_bytes.len() as u8);
+            data.extend_from_slice(et_bytes);
+            data
+        } else {
+            // Empty edge_data means no edge_type
+            Vec::new()
+        };
+
+        let edge = CompactEdgeRecord::new(dst, 0, edge_data);
         self.edges.push(edge);
+    }
+
+    /// Extract edge type from edge data
+    /// Returns None if edge_data is empty (no edge_type stored)
+    fn extract_edge_type(edge_data: &[u8]) -> Option<String> {
+        if edge_data.is_empty() {
+            return None;
+        }
+        let type_len = edge_data[0] as usize;
+        if edge_data.len() < 1 + type_len {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&edge_data[1..1 + type_len]).to_string())
     }
 
     /// Get destination node IDs
     pub fn dsts(&self) -> Vec<i64> {
         self.edges.iter().map(|e| e.neighbor_id).collect()
+    }
+
+    /// Get edges with their types (for recovery/rebuilding HashMap)
+    pub fn edges_with_types(&self) -> Vec<(i64, Option<String>)> {
+        self.edges
+            .iter()
+            .map(|e| {
+                let edge_type = Self::extract_edge_type(&e.edge_data);
+                (e.neighbor_id, edge_type)
+            })
+            .collect()
     }
 
     /// Serialize to bytes for page storage
@@ -194,13 +258,13 @@ impl V3EdgeCluster {
                 });
             }
 
-            let neighbor_id = i64::from_be_bytes(bytes[pos..pos+8].try_into().unwrap());
+            let neighbor_id = i64::from_be_bytes(bytes[pos..pos + 8].try_into().unwrap());
             pos += 8;
 
-            let type_offset = u16::from_be_bytes(bytes[pos..pos+2].try_into().unwrap());
+            let type_offset = u16::from_be_bytes(bytes[pos..pos + 2].try_into().unwrap());
             pos += 2;
 
-            let data_len = u16::from_be_bytes(bytes[pos..pos+2].try_into().unwrap()) as usize;
+            let data_len = u16::from_be_bytes(bytes[pos..pos + 2].try_into().unwrap()) as usize;
             pos += 2;
 
             let edge_data = if data_len > 0 {
@@ -209,7 +273,7 @@ impl V3EdgeCluster {
                         context: "Edge data truncated".to_string(),
                     });
                 }
-                bytes[pos..pos+data_len].to_vec()
+                bytes[pos..pos + data_len].to_vec()
             } else {
                 Vec::new()
             };
@@ -250,6 +314,16 @@ pub struct V3EdgeStore {
     /// In-memory cache of neighbor lists - using Arc<[i64]> for zero-copy reads
     /// This matches SQLite's AdjacencyCache pattern but with Arc for zero-copy
     cache: RwLock<HashMap<(i64, Direction), Arc<[i64]>>>,
+    /// Edge type storage: (src, dst, dir) -> edge_type string
+    ///
+    /// SEMANTIC CONSTRAINT: Key is (src, dst, dir), NOT edge_id.
+    /// This means only ONE edge type can exist between a given (src, dst, dir) tuple.
+    /// Inserting multiple edges between same endpoints with different types will
+    /// cause aliasing - the last type wins. See module-level docs for details.
+    ///
+    /// This HashMap is rebuilt from durable edge_data on cache miss via
+    /// load_neighbors_from_disk(), ensuring edge types survive reopen/recovery.
+    edge_types: RwLock<HashMap<(i64, i64, Direction), String>>,
     /// Performance counters
     cache_hits: AtomicU64,
     cache_misses: AtomicU64,
@@ -264,60 +338,126 @@ pub struct V3EdgeStore {
     dirty_clusters: RwLock<HashMap<(i64, Direction), V3EdgeCluster>>,
     /// Path to database file for writing pages
     db_path: Option<PathBuf>,
+    /// Page allocator for edge page allocation
+    /// CRITICAL: Shared with NodeStore to prevent page ID collisions
+    allocator: Arc<RwLock<PageAllocator>>,
+}
+
+/// Encode (src, dir) into a composite u64 key for B+Tree lookup
+/// Format: [src: 63 bits][dir: 1 bit] where dir=0 for Outgoing, dir=1 for Incoming
+fn edge_key(src: i64, dir: Direction) -> u64 {
+    ((src as u64) << 1) | (if dir == Direction::Outgoing { 0 } else { 1 })
 }
 
 impl V3EdgeStore {
     /// Create new edge store (in-memory only)
-    pub fn new(btree: BTreeManager, wal: Option<WALWriter>) -> Self {
+    /// NOTE: Prefer with_path_and_allocator() for database-backed edge stores
+    pub fn new(
+        btree: BTreeManager,
+        wal: Option<WALWriter>,
+        allocator: Arc<RwLock<PageAllocator>>,
+    ) -> Self {
         Self {
             btree: parking_lot::RwLock::new(btree),
             wal: wal.map(|w| RwLock::new(w)),
             cache: RwLock::new(HashMap::new()),
+            edge_types: RwLock::new(HashMap::new()),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
             hit_time_ns: AtomicU64::new(0),
             miss_time_ns: AtomicU64::new(0),
             dirty_clusters: RwLock::new(HashMap::new()),
             db_path: None,
+            allocator,
         }
     }
-    
-    /// Create new edge store with disk persistence path
-    pub fn with_path(btree: BTreeManager, wal: Option<WALWriter>, db_path: PathBuf) -> Self {
+
+    /// Create new edge store with database path and allocator
+    /// This is the preferred constructor for database-backed edge stores
+    pub fn with_path_and_allocator(
+        btree: BTreeManager,
+        wal: Option<WALWriter>,
+        db_path: PathBuf,
+        allocator: Arc<RwLock<PageAllocator>>,
+    ) -> Self {
         Self {
             btree: parking_lot::RwLock::new(btree),
             wal: wal.map(|w| RwLock::new(w)),
             cache: RwLock::new(HashMap::new()),
+            edge_types: RwLock::new(HashMap::new()),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
             hit_time_ns: AtomicU64::new(0),
             miss_time_ns: AtomicU64::new(0),
             dirty_clusters: RwLock::new(HashMap::new()),
             db_path: Some(db_path),
+            allocator,
+        }
+    }
+
+    /// Create new edge store with disk persistence path
+    /// NOTE: This creates a temporary allocator for compatibility.
+    /// For proper page allocation, use with_path_and_allocator() instead.
+    pub fn with_path(btree: BTreeManager, wal: Option<WALWriter>, db_path: PathBuf) -> Self {
+        // Create a temporary allocator for compatibility
+        // WARNING: This allocator is not shared with NodeStore, so page IDs
+        // may collide. Always use with_path_and_allocator() in production.
+        let header = PersistentHeaderV3::new_v3();
+        Self {
+            btree: parking_lot::RwLock::new(btree),
+            wal: wal.map(|w| RwLock::new(w)),
+            cache: RwLock::new(HashMap::new()),
+            edge_types: RwLock::new(HashMap::new()),
+            cache_hits: AtomicU64::new(0),
+            cache_misses: AtomicU64::new(0),
+            hit_time_ns: AtomicU64::new(0),
+            miss_time_ns: AtomicU64::new(0),
+            dirty_clusters: RwLock::new(HashMap::new()),
+            db_path: Some(db_path),
+            allocator: Arc::new(RwLock::new(PageAllocator::new(&header))),
         }
     }
 
     /// Get neighbors from cache - returns Arc<[i64]> for zero-copy!
-    /// 
+    ///
     /// IMPROVED: On cache miss, attempts to load from disk if db_path is set.
     /// This enables recovery after reopening the edge store.
     pub fn neighbors(&self, src: i64, dir: Direction) -> NativeResult<Arc<[i64]>> {
         let key = (src, dir);
-        
+
+        #[cfg(feature = "v3-forensics")]
+        FORENSIC_COUNTERS
+            .logical_neighbors_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         // First check in-memory cache
         {
             let cache = self.cache.read();
             if let Some(neighbors) = cache.get(&key) {
                 self.cache_hits.fetch_add(1, Ordering::Relaxed);
+                #[cfg(feature = "v3-forensics")]
+                FORENSIC_COUNTERS
+                    .edge_cache_hit_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 return Ok(neighbors.clone()); // Arc clone is just pointer bump, no data copy
             }
         }
-        
+
         self.cache_misses.fetch_add(1, Ordering::Relaxed);
-        
+        #[cfg(feature = "v3-forensics")]
+        FORENSIC_COUNTERS
+            .edge_cache_miss_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         // Cache miss - try to load from disk if we have a db_path
         if let Some(ref db_path) = self.db_path {
             if let Ok(neighbors) = self.load_neighbors_from_disk(src, dir, db_path) {
+                #[cfg(feature = "v3-forensics")]
+                if !neighbors.is_empty() {
+                    FORENSIC_COUNTERS
+                        .edge_page_read_count
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
                 if !neighbors.is_empty() {
                     // Cache the loaded neighbors
                     let mut cache = self.cache.write();
@@ -326,31 +466,55 @@ impl V3EdgeStore {
                 }
             }
         }
-        
+
         Ok(Arc::from([])) // Empty slice, no allocation
     }
-    
+
     /// Load neighbors from disk for recovery
-    fn load_neighbors_from_disk(&self, src: i64, dir: Direction, db_path: &PathBuf) -> NativeResult<Arc<[i64]>> {
+    /// IMPORTANT: Also rebuilds edge_types HashMap from deserialized edge records
+    /// CRITICAL FIX: Query B+Tree for page_id instead of using formula
+    fn load_neighbors_from_disk(
+        &self,
+        src: i64,
+        dir: Direction,
+        db_path: &PathBuf,
+    ) -> NativeResult<Arc<[i64]>> {
+        use crate::backend::native::v3::constants::V3_HEADER_SIZE;
         use std::fs::File;
         use std::io::Read;
-        use crate::backend::native::v3::constants::V3_HEADER_SIZE;
-        
-        // Calculate page ID (same formula as in flush)
-        let page_id = (src as u64) * 2 + if dir == Direction::Outgoing { 100 } else { 200 };
+
+        // CRITICAL FIX: Query B+Tree for page_id instead of calculating it
+        // This prevents page ID collision with node storage
+        let key = edge_key(src, dir) as i64; // Convert u64 to i64 for BTree lookup
+        let btree = self.btree.read();
+
+        // Try to get page_id from B+Tree
+        let page_id = match btree.lookup(key) {
+            Ok(Some(pid)) => pid,
+            Ok(None) => {
+                // No entry in B+Tree means no edges for this (src, dir)
+                return Ok(Arc::from([]));
+            }
+            Err(_) => {
+                // B+Tree lookup error - treat as no edges
+                return Ok(Arc::from([]));
+            }
+        };
+        drop(btree);
+
         let offset = V3_HEADER_SIZE as u64 + (page_id - 1) * DEFAULT_PAGE_SIZE;
-        
+
         // Try to open file and read page
         let mut file = match File::open(db_path) {
             Ok(f) => f,
             Err(_) => return Ok(Arc::from([])), // File doesn't exist yet
         };
-        
+
         // Seek to page offset
         if let Err(_) = file.seek(SeekFrom::Start(offset)) {
             return Ok(Arc::from([]));
         }
-        
+
         // Read page data
         let mut buffer = vec![0u8; 4096]; // Read a full page
         match file.read(&mut buffer) {
@@ -358,6 +522,16 @@ impl V3EdgeStore {
                 // Try to deserialize cluster from page
                 match V3EdgeCluster::deserialize(&buffer, page_id) {
                     Ok(cluster) => {
+                        // Rebuild edge_types HashMap from deserialized edge records
+                        // This is critical for edge_type filtering to survive reopen/recovery
+                        let edges_with_types = cluster.edges_with_types();
+                        let mut edge_types = self.edge_types.write();
+                        for (dst, edge_type) in edges_with_types {
+                            if let Some(et) = edge_type {
+                                edge_types.insert((src, dst, dir), et);
+                            }
+                        }
+
                         let neighbors: Vec<i64> = cluster.dsts();
                         Ok(Arc::from(neighbors.into_boxed_slice()))
                     }
@@ -378,8 +552,54 @@ impl V3EdgeStore {
         self.neighbors(src, Direction::Incoming)
     }
 
+    /// Get neighbors filtered by edge type
+    /// Returns only neighbors connected by edges matching the specified edge_type
+    pub fn neighbors_filtered(
+        &self,
+        src: i64,
+        dir: Direction,
+        edge_type: &str,
+    ) -> NativeResult<Arc<[i64]>> {
+        // Get all neighbors first
+        let all_neighbors = self.neighbors(src, dir)?;
+
+        // Filter by edge type
+        let edge_types = self.edge_types.read();
+        let filtered: Vec<i64> = all_neighbors
+            .iter()
+            .filter(|&&dst| {
+                edge_types
+                    .get(&(src, dst, dir))
+                    .map(|stored_type| stored_type == edge_type)
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
+
+        Ok(Arc::from(filtered.into_boxed_slice()))
+    }
+
+    /// Get the edge type for a specific edge
+    pub fn get_edge_type(&self, src: i64, dst: i64, dir: Direction) -> Option<String> {
+        let edge_types = self.edge_types.read();
+        edge_types.get(&(src, dst, dir)).cloned()
+    }
+
     /// Insert an edge - uses interior mutability via RwLock, takes &self!
-    pub fn insert_edge(&self, src: i64, dst: i64, dir: Direction) -> NativeResult<()> {
+    ///
+    /// # SEMANTIC CONSTRAINT
+    /// The edge_types HashMap is keyed by (src, dst, dir). This means:
+    /// - Only ONE edge type can exist between a given (src, dst, dir) tuple
+    /// - Inserting a second edge between same endpoints with different type will OVERWRITE
+    /// - This is intentional for V3's simple tuple-key model
+    /// - If multi-edge support is needed, the key model must change to use edge_id
+    pub fn insert_edge(
+        &self,
+        src: i64,
+        dst: i64,
+        dir: Direction,
+        edge_type: Option<String>,
+    ) -> NativeResult<()> {
         let cache_key = (src, dir);
         let mut cache = self.cache.write();
 
@@ -396,32 +616,90 @@ impl V3EdgeStore {
             cache.insert(cache_key, Arc::from(vec![dst]));
         }
 
-        // Mark cluster as dirty for later flush
-        {
-            let mut dirty = self.dirty_clusters.write();
-            let cluster = dirty.entry(cache_key).or_insert_with(|| {
-                V3EdgeCluster::new(src, dir, 0) // page_id will be assigned during flush
-            });
-            cluster.add_edge(dst);
+        // Store edge type in HashMap AND pass to cluster for durable storage
+        // NOTE: If an edge already exists between (src, dst, dir) with a different type,
+        // this will overwrite the previous type. This is a known semantic limitation.
+        if let Some(ref edge_type_str) = edge_type {
+            let mut edge_types = self.edge_types.write();
+
+            // DETECT POTENTIAL ALIASING: Check if we're overwriting a different type
+            let key = (src, dst, dir);
+            if let Some(existing_type) = edge_types.get(&key) {
+                if existing_type != edge_type_str {
+                    // SEMANTIC WARNING: Overwriting different edge type for same tuple
+                    // This is logged but not an error - the caller's responsibility
+                    eprintln!(
+                        "WARNING: V3EdgeStore inserting edge_type '{}' for ({}, {}, {:?}), overwriting existing type '{}'. This is a known limitation of tuple-key model.",
+                        edge_type_str, src, dst, dir, existing_type
+                    );
+                }
+            }
+
+            edge_types.insert(key, edge_type_str.clone());
+        } else {
+            // If edge_type is None, remove any existing entry to clear it
+            let mut edge_types = self.edge_types.write();
+            edge_types.remove(&(src, dst, dir));
         }
+
+        // Mark cluster as dirty for later flush
+        // CRITICAL FIX: Allocate page via PageAllocator instead of using formula
+        // First, find or allocate page_id, then create/update cluster
+        let page_id = {
+            let mut dirty = self.dirty_clusters.write();
+
+            // Check if cluster already exists in dirty_clusters
+            if !dirty.contains_key(&cache_key) {
+                // Need to find or allocate page_id for new cluster
+                let key = edge_key(src, dir) as i64; // Convert u64 to i64 for BTree lookup
+                let btree = self.btree.read();
+
+                // Check B+Tree for existing page_id
+                let page_id_to_use = match btree.lookup(key) {
+                    Ok(Some(pid)) => pid,
+                    Ok(None) | Err(_) => {
+                        // No entry or lookup error - allocate new page via PageAllocator
+                        // The unified PageAllocator ensures page IDs don't collide across subsystems
+                        drop(btree);
+                        let mut allocator = self.allocator.write();
+                        match allocator.allocate() {
+                            Ok(pid) => pid,
+                            Err(e) => {
+                                eprintln!("WARNING: Failed to allocate edge page: {:?}", e);
+                                0 // Fallback - will be retried on flush
+                            }
+                        }
+                    }
+                };
+
+                // Create new cluster with allocated page_id
+                dirty.insert(cache_key, V3EdgeCluster::new(src, dir, page_id_to_use));
+            }
+
+            // Now get the cluster and add the edge
+            let cluster = dirty.get_mut(&cache_key).unwrap();
+            let cluster_page_id = cluster.page_id;
+            // CRITICAL: Pass edge_type to add_edge() so it gets serialized into edge_data
+            cluster.add_edge(dst, edge_type);
+            cluster_page_id
+        };
 
         // Log to WAL if configured
         if let Some(ref wal) = self.wal {
-            // CRITICAL TODO: Create proper WAL record for edge insert
-            // For now, we need to implement a custom edge insert WAL record
             let mut wal_guard = wal.write();
-            // Write a PageWrite record as placeholder for edge data
-            // In the full implementation, we'd have a dedicated EdgeInsert record type
-            let edge_data = format!("EDGE:{}:{}:{}", src, dst, dir as u8).into_bytes();
-            let _ = wal_guard.page_write(0, 0, edge_data);
+            // Write EdgeInsert WAL record for crash recovery
+            // CRITICAL FIX: Use actual allocated page_id, not calculated formula
+            let _ = wal_guard.edge_insert(src, dst, dir as u8, page_id);
         }
 
         Ok(())
     }
 
     /// Clear in-memory cache
+    /// Also clears edge_types HashMap to ensure consistency
     pub fn clear_cache(&self) {
         self.cache.write().clear();
+        self.edge_types.write().clear();
         self.cache_hits.store(0, Ordering::Relaxed);
         self.cache_misses.store(0, Ordering::Relaxed);
     }
@@ -434,7 +712,11 @@ impl V3EdgeStore {
         let hit_ns = self.hit_time_ns.load(Ordering::Relaxed);
         let miss_ns = self.miss_time_ns.load(Ordering::Relaxed);
         let total = hits + misses;
-        let hit_rate = if total > 0 { (hits as f64 / total as f64) * 100.0 } else { 0.0 };
+        let hit_rate = if total > 0 {
+            (hits as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        };
         let avg_hit_ns = if hits > 0 { hit_ns / hits } else { 0 };
         let avg_miss_ns = if misses > 0 { miss_ns / misses } else { 0 };
 
@@ -447,12 +729,19 @@ impl V3EdgeStore {
     }
 
     /// Flush dirty clusters to disk
-    /// 
+    ///
     /// IMPLEMENTATION:
     /// 1. Write dirty clusters to pages
-    /// 2. Update B+Tree index  
-    /// 3. WAL checkpoint (if configured)
-    pub fn flush(&self) -> NativeResult<()> {
+    /// 2. Update B+Tree index
+    ///
+    /// Note: WAL checkpoint and KV checkpoint are handled by V3Backend::flush_to_disk()
+    /// because V3EdgeStore doesn't have direct access to V3Backend's WAL.
+    pub fn flush(
+        &self,
+        _kv_store: Option<
+            &parking_lot::RwLock<Option<crate::backend::native::v3::kv_store::store::KvStore>>,
+        >,
+    ) -> NativeResult<()> {
         let db_path = match &self.db_path {
             Some(path) => path.clone(),
             None => {
@@ -461,114 +750,262 @@ impl V3EdgeStore {
                 return Ok(());
             }
         };
-        
+
         let mut dirty = self.dirty_clusters.write();
-        
+
         if dirty.is_empty() {
             return Ok(()); // Nothing to flush
         }
-        
+
         // Get mutable access to btree for index updates
         // Note: We use unsafe here because we need to mutate through &self
         // In production, this would use interior mutability patterns
         // For now, we use a simple approach: clone dirty clusters and process them
-        let clusters_to_flush: Vec<((i64, Direction), V3EdgeCluster)> = dirty
-            .iter()
-            .map(|(k, v)| (*k, v.clone()))
-            .collect();
-        
+        let clusters_to_flush: Vec<((i64, Direction), V3EdgeCluster)> =
+            dirty.iter().map(|(k, v)| (*k, v.clone())).collect();
+
         // Drop the lock before doing I/O
         drop(dirty);
-        
+
         // Process each dirty cluster
         for ((src, dir), mut cluster) in clusters_to_flush {
             // Serialize cluster to bytes
             let cluster_bytes = cluster.serialize()?;
-            
-            // For now, use a simple mapping: src node ID -> page ID
-            // In full implementation, we'd allocate pages dynamically
-            let page_id = (src as u64) * 2 + if dir == Direction::Outgoing { 100 } else { 200 };
-            
+
+            // CRITICAL FIX: Use cluster's allocated page_id instead of calculating it
+            // If page_id is 0 (allocation failed during insert), allocate now
+            // The unified PageAllocator ensures page IDs don't collide across subsystems
+            let page_id = if cluster.page_id == 0 {
+                let mut allocator = self.allocator.write();
+                match allocator.allocate() {
+                    Ok(pid) => pid,
+                    Err(e) => {
+                        return Err(NativeBackendError::IoError {
+                            context: format!(
+                                "Failed to allocate edge page for ({}, {:?})",
+                                src, dir
+                            ),
+                            source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                        });
+                    }
+                }
+            } else {
+                cluster.page_id
+            };
+
             // Write cluster data to page on disk
             self.write_page_to_disk(&db_path, page_id, &cluster_bytes)?;
-            
-            // Update cluster with assigned page_id
-            cluster.page_id = page_id;
-            
-            // Update B+Tree index: map source node ID to page ID
-            // Note: We use a simple key scheme where the node ID maps to edge page
-            // In full implementation, B+Tree would support composite keys (src, dir)
+
+            // Update B+Tree index with composite key: (src, dir) -> page_id
+            // CRITICAL FIX: Use edge_key() to create composite key instead of just src
             {
                 let mut btree = self.btree.write();
-                // Insert mapping: source node ID -> page ID
-                // Using src as the key, page_id as value
-                let _ = btree.insert(src, page_id);
+                let key = edge_key(src, dir) as i64; // Convert u64 to i64 for BTree
+                let _ = btree.insert(key, page_id);
             }
         }
-        
+
         // Clear dirty clusters after successful flush
         self.dirty_clusters.write().clear();
-        
-        // Write WAL checkpoint if configured
+
+        // CRITICAL FIX: Checkpoint and truncate WAL after successful flush
+        // This ensures WAL doesn't grow unbounded and data is durable
         if let Some(ref wal) = self.wal {
-            let header = PersistentHeaderV3::new_v3();
             let mut wal_guard = wal.write();
+            
+            // Get current B+Tree state for checkpoint
             let btree = self.btree.read();
+            let root_page_id = btree.root_page_id();
+            let tree_height = btree.tree_height();
+            
             // Write checkpoint record
             let _ = wal_guard.checkpoint(
-                btree.root_page_id(),
-                100, // total_pages - placeholder
-                btree.tree_height(),
-                0, // free_page_list_head
-                &header,
+                root_page_id,
+                0, // total_pages - not tracked in edge store
+                tree_height,
+                0, // free_page_list_head - not tracked in edge store
+                &PersistentHeaderV3::new_v3(), // header snapshot
             );
+            
+            // Flush WAL to ensure checkpoint is on disk
+            let _ = wal_guard.flush();
+            
+            // Truncate WAL after successful checkpoint
+            // Safe because main DB pages are now durable
+            let _ = wal_guard.truncate();
         }
-        
+
+        // CRITICAL FIX: Persist B+Tree metadata to allow recovery
+        // This must happen after WAL checkpoint since we need the final root_page_id
+        self.persist_btree_metadata()?;
+
         Ok(())
     }
-    
+
+    /// Get the path to the edge metadata file
+    fn metadata_path(&self) -> Option<PathBuf> {
+        self.db_path.as_ref().map(|p| p.with_extension("v3edgemeta"))
+    }
+
+    /// Persist B+Tree root metadata to disk for recovery
+    ///
+    /// This writes a small metadata file containing the B+Tree root_page_id
+    /// and tree_height so that the edge index can be recovered after restart.
+    fn persist_btree_metadata(&self) -> NativeResult<()> {
+        let meta_path = match self.metadata_path() {
+            Some(p) => p,
+            None => return Ok(()), // In-memory mode, no persistence needed
+        };
+
+        let btree = self.btree.read();
+        let root_page_id = btree.root_page_id();
+        let tree_height = btree.tree_height();
+
+        // Metadata format: [magic: 8 bytes][root_page_id: 8 bytes][tree_height: 4 bytes][checksum: 4 bytes]
+        let mut data = Vec::with_capacity(24);
+        data.extend_from_slice(b"V3EDGE\x00\x00"); // 8 bytes magic
+        data.extend_from_slice(&root_page_id.to_le_bytes()); // 8 bytes
+        data.extend_from_slice(&(tree_height as u32).to_le_bytes()); // 4 bytes
+
+        // Simple checksum (XOR of bytes)
+        let checksum: u32 = data.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
+        data.extend_from_slice(&checksum.to_le_bytes()); // 4 bytes
+
+        std::fs::write(&meta_path, &data).map_err(|e| NativeBackendError::IoError {
+            context: format!("Failed to write edge metadata: {}", meta_path.display()),
+            source: e,
+        })?;
+
+        Ok(())
+    }
+
+    /// Recover B+Tree root metadata from disk
+    ///
+    /// Returns (root_page_id, tree_height) if metadata file exists and is valid.
+    /// Returns None if metadata doesn't exist or is corrupted.
+    fn recover_btree_metadata(&self) -> NativeResult<Option<(u64, u32)>> {
+        let meta_path = match self.metadata_path() {
+            Some(p) => p,
+            None => return Ok(None), // In-memory mode, no recovery possible
+        };
+
+        if !meta_path.exists() {
+            return Ok(None);
+        }
+
+        let data = std::fs::read(&meta_path).map_err(|e| NativeBackendError::IoError {
+            context: format!("Failed to read edge metadata: {}", meta_path.display()),
+            source: e,
+        })?;
+
+        if data.len() < 24 {
+            return Ok(None); // Corrupted or incomplete
+        }
+
+        // Verify magic
+        if &data[0..8] != b"V3EDGE\x00\x00" {
+            return Ok(None); // Invalid magic
+        }
+
+        // Parse values
+        let root_page_id = u64::from_le_bytes([data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15]]);
+        let tree_height = u32::from_le_bytes([data[16], data[17], data[18], data[19]]);
+
+        // Verify checksum
+        let stored_checksum = u32::from_le_bytes([data[20], data[21], data[22], data[23]]);
+        let computed_checksum: u32 = data[..20].iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
+
+        if stored_checksum != computed_checksum {
+            return Ok(None); // Checksum mismatch
+        }
+
+        Ok(Some((root_page_id, tree_height)))
+    }
+
+    /// Restore B+Tree state from persisted metadata
+    ///
+    /// This should be called after creating a new V3EdgeStore to recover
+    /// the B+Tree root from a previous session.
+    pub fn restore_btree_from_metadata(&self) -> NativeResult<bool> {
+        if let Some((root_page_id, tree_height)) = self.recover_btree_metadata()? {
+            let mut btree = self.btree.write();
+            btree.set_root_page_id(root_page_id);
+            btree.set_tree_height(tree_height);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     /// Write a page of data to disk
     fn write_page_to_disk(&self, db_path: &PathBuf, page_id: u64, data: &[u8]) -> NativeResult<()> {
         use crate::backend::native::v3::constants::V3_HEADER_SIZE;
-        
+
         // Calculate page offset (page 0 is header, data pages start at 1)
         let offset: u64 = if page_id == 0 {
             0
         } else {
             (V3_HEADER_SIZE as u64) + (page_id - 1) * DEFAULT_PAGE_SIZE
         };
-        
-        // Open file and write data
+
+        #[cfg(feature = "v3-forensics")]
+        {
+            // Track page ownership for forensics
+            crate::track_page_alloc!(page_id, Subsystem::EdgeStore, ForensicPageType::Edge);
+            crate::track_page_write!(
+                page_id,
+                Subsystem::EdgeStore,
+                ForensicPageType::Edge,
+                offset,
+                "EdgeStore::write_page_to_disk"
+            );
+        }
+
+        // CRITICAL FIX: Do NOT use create(true) - it truncates the file!
+        let file_exists = db_path.exists();
         let mut file = OpenOptions::new()
             .write(true)
-            .create(true)
+            .create(!file_exists)
             .open(db_path)
             .map_err(|e| NativeBackendError::IoError {
                 context: format!("Failed to open db file for page write: {}", page_id),
                 source: e,
             })?;
-        
+
+        // Extend file if needed
+        let required_len = offset + data.len() as u64;
+        let current_len = file.metadata().map(|m| m.len()).unwrap_or(0);
+        if required_len > current_len {
+            file.set_len(required_len)
+                .map_err(|e| NativeBackendError::IoError {
+                    context: format!(
+                        "Failed to extend file to {} bytes for page {}",
+                        required_len, page_id
+                    ),
+                    source: e,
+                })?;
+        }
+
         file.seek(SeekFrom::Start(offset as u64))
             .map_err(|e| NativeBackendError::IoError {
                 context: format!("Failed to seek to page {} offset {}", page_id, offset),
                 source: e,
             })?;
-        
+
         file.write_all(data)
             .map_err(|e| NativeBackendError::IoError {
                 context: format!("Failed to write page {} data", page_id),
                 source: e,
             })?;
-        
-        file.sync_data()
-            .map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to sync page {} write", page_id),
-                source: e,
-            })?;
-        
+
+        file.sync_data().map_err(|e| NativeBackendError::IoError {
+            context: format!("Failed to sync page {} write", page_id),
+            source: e,
+        })?;
+
         Ok(())
     }
-    
+
     /// Flush WAL buffer to disk (for durability testing)
     #[cfg(test)]
     pub fn flush_wal(&self) -> NativeResult<()> {
@@ -579,21 +1016,40 @@ impl V3EdgeStore {
             Ok(())
         }
     }
+
+    /// Get the current B+Tree root page ID
+    /// CRITICAL: Must be called during flush_to_disk to update header
+    ///
+    /// Returns None if the tree is empty (EMPTY_TREE_ROOT = u64::MAX)
+    /// Returns Some(page_id) if the tree has a valid root
+    pub fn btree_root_page_id(&self) -> Option<u64> {
+        let root = self.btree.read().root_page_id();
+        // Filter out EMPTY_TREE_ROOT (u64::MAX) and 0 (uninitialized)
+        if root != 0 && root != u64::MAX {
+            Some(root)
+        } else {
+            None
+        }
+    }
+
+    /// Get the current B+Tree height
+    /// CRITICAL: Must be called during flush_to_disk to update header
+    pub fn btree_height(&self) -> u32 {
+        self.btree.read().tree_height()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
-    use std::sync::Arc;
-    use parking_lot::RwLock;
     use crate::backend::native::v3::{
-        allocator::PageAllocator,
-        header::PersistentHeaderV3,
-        btree::BTreeManager,
+        allocator::PageAllocator, btree::BTreeManager, header::PersistentHeaderV3,
     };
-    use tempfile::TempDir;
+    use parking_lot::RwLock;
     use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::time::Instant;
+    use tempfile::TempDir;
 
     #[test]
     fn test_page_type_from_u8() {
@@ -623,16 +1079,16 @@ mod tests {
     #[test]
     fn test_v3_edge_cluster_add_edge() {
         let mut cluster = V3EdgeCluster::new(1, Direction::Outgoing, 1);
-        cluster.add_edge(2);
-        cluster.add_edge(3);
+        cluster.add_edge(2, None);
+        cluster.add_edge(3, None);
         assert_eq!(cluster.dsts(), vec![2, 3]);
     }
 
     #[test]
     fn test_v3_edge_cluster_serialize_roundtrip() {
         let mut cluster = V3EdgeCluster::new(42, Direction::Outgoing, 100);
-        cluster.add_edge(100);
-        cluster.add_edge(200);
+        cluster.add_edge(100, None);
+        cluster.add_edge(200, None);
 
         let bytes = cluster.serialize().unwrap();
         let deserialized = V3EdgeCluster::deserialize(&bytes, 100).unwrap();
@@ -652,17 +1108,19 @@ mod tests {
     //========================================================================
 
     /// Test helper: Create a V3EdgeStore with WAL for durability testing
-    fn create_test_edge_store(db_path: Option<PathBuf>) -> (V3EdgeStore, Arc<RwLock<PageAllocator>>) {
+    fn create_test_edge_store(
+        db_path: Option<PathBuf>,
+    ) -> (V3EdgeStore, Arc<RwLock<PageAllocator>>) {
         let header = PersistentHeaderV3::new_v3();
         let allocator = Arc::new(RwLock::new(PageAllocator::new(&header)));
-        
+
         // Create BTreeManager with the allocator
         let btree = if let Some(ref path) = db_path {
             BTreeManager::new(allocator.clone(), None, path.clone())
         } else {
             BTreeManager::new(allocator.clone(), None, None::<PathBuf>)
         };
-        
+
         // Create edge store with or without persistence path
         let edge_store = if let Some(ref path) = db_path {
             // Create WAL writer
@@ -671,14 +1129,18 @@ mod tests {
             writer.write_header().expect("Failed to write WAL header");
             V3EdgeStore::with_path(btree, Some(writer), path.clone())
         } else {
-            V3EdgeStore::new(btree, None)
+            V3EdgeStore::new(btree, None, allocator.clone())
         };
-        
+
+        // CRITICAL FIX: Restore B+Tree metadata if it exists
+        // This allows recovery of the edge index from a previous session
+        let _ = edge_store.restore_btree_from_metadata();
+
         (edge_store, allocator)
     }
 
     /// TODO Test 1: Edge insert should write WAL record for durability
-    /// 
+    ///
     /// CRITICAL: This test verifies that insert_edge() creates a proper WAL record.
     /// Without this, edges inserted via cache are lost on crash.
     #[test]
@@ -686,69 +1148,77 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.graph");
         let wal_path = db_path.with_extension("v3wal");
-        
+
         // Create edge store with WAL
         let (edge_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
-        
+
         // Insert an edge - this should create a WAL record
-        edge_store.insert_edge(1, 2, Direction::Outgoing).expect("Insert failed");
-        
+        edge_store
+            .insert_edge(1, 2, Direction::Outgoing, None)
+            .expect("Insert failed");
+
         // Flush WAL to ensure record is written
         edge_store.flush_wal().expect("WAL flush failed");
-        
+
         // CRITICAL TODO FIX: Verify WAL file exists and contains edge insert record
         // Currently this fails because insert_edge() does NOT write WAL records
         assert!(
             wal_path.exists(),
             "CRITICAL TODO: WAL file should exist after edge insert with WAL enabled"
         );
-        
+
         // Read WAL and verify edge insert record exists
         let wal_content = std::fs::read(&wal_path).expect("Failed to read WAL file");
         assert!(
             wal_content.len() > 64, // Header is 64 bytes, records add more
             "CRITICAL TODO: WAL should contain edge insert record beyond header"
         );
-        
+
         // TODO: Parse WAL and verify edge-specific record type exists
         // This requires implementing EdgeInsert record type in WAL
     }
 
-    /// TODO Test 2: Flush should write dirty clusters to pages
+    /// Test 2: Flush should write dirty clusters to pages
     ///
     /// CRITICAL: This test verifies that flush() actually persists edge data.
-    /// Currently flush() is a no-op that returns Ok(()) immediately.
+    /// Flush writes dirty clusters to disk pages via write_page_to_disk.
     #[test]
     fn test_flush_writes_dirty_clusters_to_pages() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.graph");
-        
+
         // Create the database file first
         std::fs::write(&db_path, vec![0u8; 4096]).expect("Failed to create db file");
-        
+
         // Create edge store with disk persistence
         let (edge_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
-        
+
         // Insert edges into cache
-        edge_store.insert_edge(1, 2, Direction::Outgoing).expect("Insert 1->2 failed");
-        edge_store.insert_edge(1, 3, Direction::Outgoing).expect("Insert 1->3 failed");
-        edge_store.insert_edge(2, 4, Direction::Outgoing).expect("Insert 2->4 failed");
-        
+        edge_store
+            .insert_edge(1, 2, Direction::Outgoing, None)
+            .expect("Insert 1->2 failed");
+        edge_store
+            .insert_edge(1, 3, Direction::Outgoing, None)
+            .expect("Insert 1->3 failed");
+        edge_store
+            .insert_edge(2, 4, Direction::Outgoing, None)
+            .expect("Insert 2->4 failed");
+
         // Flush should write dirty clusters to disk pages
-        let result = edge_store.flush();
+        let result = edge_store.flush(None);
         assert!(result.is_ok(), "Flush should succeed");
-        
+
         // CRITICAL TODO FIX: After flush, edge data should be on disk
         // Currently this fails because flush() does nothing
         let file_size = std::fs::metadata(&db_path)
             .expect("Failed to read file metadata")
             .len();
-        
+
         assert!(
             file_size > 4096,
             "CRITICAL TODO: Database file should grow after flush writes dirty clusters"
         );
-        
+
         // Verify we can read back the edges after reopening
         // This requires implementing cluster deserialization from pages
     }
@@ -761,127 +1231,209 @@ mod tests {
     fn test_flush_updates_btree_index() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.graph");
-        
+
         // Create database file
         std::fs::write(&db_path, vec![0u8; 4096]).expect("Failed to create db file");
-        
+
         // Create edge store
         let (edge_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
-        
+
         // Insert edges for node 1
-        edge_store.insert_edge(1, 2, Direction::Outgoing).expect("Insert failed");
-        edge_store.insert_edge(1, 3, Direction::Outgoing).expect("Insert failed");
-        
+        edge_store
+            .insert_edge(1, 2, Direction::Outgoing, None)
+            .expect("Insert failed");
+        edge_store
+            .insert_edge(1, 3, Direction::Outgoing, None)
+            .expect("Insert failed");
+
         // Flush should update B+Tree index
-        edge_store.flush().expect("Flush failed");
-        
+        edge_store.flush(None).expect("Flush failed");
+
         // CRITICAL TODO FIX: B+Tree should contain mapping for node 1
         // Currently btree only tracks node_id -> page_id, not edge lookups
         // Need to implement (src, direction) composite key lookup
-        
+
         // After fix: verify B+Tree contains edge cluster mapping
         let btree = edge_store.btree.read();
-        let lookup_result = btree.lookup(1); // Looking up node 1's edge page
-        
+        let lookup_key = edge_key(1, Direction::Outgoing) as i64;
+        let lookup_result = btree.lookup(lookup_key);
+
         assert!(
             lookup_result.is_ok(),
-            "CRITICAL TODO: B+Tree lookup should succeed"
+            "B+Tree lookup should succeed"
         );
         assert!(
             lookup_result.unwrap().is_some(),
-            "CRITICAL TODO: B+Tree should contain edge page mapping for node 1 after flush"
+            "B+Tree should contain edge page mapping for node 1 after flush"
         );
     }
 
-    /// TODO Test 4: WAL checkpoint should truncate WAL after successful flush
+    /// Test 4: WAL checkpoint should truncate WAL after successful flush
     ///
-    /// CRITICAL: After flush() persists data to pages, WAL should be checkpointed
-    /// to enable truncation and prevent unbounded WAL growth.
+    /// VERIFIED: After flush() persists data to pages, WAL is checkpointed
+    /// and truncated to prevent unbounded WAL growth.
     #[test]
     fn test_wal_checkpoint_after_flush() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.graph");
         let wal_path = db_path.with_extension("v3wal");
-        
+
         // Create database file
         std::fs::write(&db_path, vec![0u8; 4096]).expect("Failed to create db file");
-        
+
         // Create edge store with WAL
         let (edge_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
-        
+
         // Insert and flush multiple times
         for i in 0..5 {
-            edge_store.insert_edge(1, i as i64 + 10, Direction::Outgoing)
+            edge_store
+                .insert_edge(1, i as i64 + 10, Direction::Outgoing, None)
                 .expect(&format!("Insert iteration {} failed", i));
-            edge_store.flush().expect("Flush failed");
+            edge_store.flush(None).expect("Flush failed");
         }
-        
-        // CRITICAL TODO FIX: After checkpoint, WAL should be truncated or checkpointed
-        // Currently no checkpoint happens
-        
-        // Verify WAL contains checkpoint record
-        // For now, just verify WAL exists and has content
-        assert!(wal_path.exists(), "WAL file should exist");
-        
-        // After implementing checkpoint: verify WAL is truncated or has checkpoint record
-        // let wal_content = std::fs::read(&wal_path).expect("Failed to read WAL");
-        // Parse for checkpoint record type...
+
+        // VERIFIED: WAL should be truncated (removed) after flush
+        // The truncate() call now happens after checkpoint in flush()
+        //
+        // DURABILITY GUARANTEE:
+        // - Main DB pages are synced before WAL is truncated
+        // - WAL replay is not implemented (so WAL is not needed for recovery)
+        // - Safe to remove WAL file after checkpoint
+        assert!(
+            !wal_path.exists(),
+            "WAL file should be truncated (removed) after flush"
+        );
     }
 
     /// Test 5: Edge data should survive crash (recovery test)
     ///
-    /// CRITICAL: This test verifies that edges persisted to disk can be recovered
-    /// after reopening the edge store.
+    /// VERIFIED: Edges persisted to disk can be recovered after reopening.
+    /// WAL is truncated after flush, but main DB file contains durable data.
     #[test]
     fn test_edge_recovery_after_crash() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.graph");
         let wal_path = db_path.with_extension("v3wal");
-        
+
         // Create database file
         std::fs::write(&db_path, vec![0u8; 4096]).expect("Failed to create db file");
-        
+
         // Phase 1: Create edges and persist to disk
         {
             let (edge_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
-            
-            edge_store.insert_edge(1, 2, Direction::Outgoing).expect("Insert failed");
-            edge_store.insert_edge(1, 3, Direction::Outgoing).expect("Insert failed");
-            edge_store.insert_edge(2, 4, Direction::Outgoing).expect("Insert failed");
-            
-            // CRITICAL: Call flush() to write dirty clusters to disk pages
+
+            edge_store
+                .insert_edge(1, 2, Direction::Outgoing, None)
+                .expect("Insert failed");
+            edge_store
+                .insert_edge(1, 3, Direction::Outgoing, None)
+                .expect("Insert failed");
+            edge_store
+                .insert_edge(2, 4, Direction::Outgoing, None)
+                .expect("Insert failed");
+
+            // Call flush() to write dirty clusters to disk pages
             // This ensures data survives after the edge store is dropped
-            edge_store.flush().expect("Flush failed");
-            
-            // Also flush WAL for durability
-            edge_store.flush_wal().expect("WAL flush failed");
+            edge_store.flush(None).expect("Flush failed");
+
+            // VERIFIED: WAL is now truncated after flush
+            assert!(
+                !wal_path.exists(),
+                "WAL file should be truncated (removed) after flush with checkpoint"
+            );
         }
-        
-        // Verify WAL exists with content
-        assert!(
-            wal_path.exists(),
-            "WAL file should exist after inserts with WAL enabled"
-        );
-        
+
         // Phase 2: "Recover" by creating new edge store
         // The new store should load edges from disk on cache miss
         {
             let (recovered_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
-            
+
             // Load neighbors for node 1 - should read from disk since cache is empty
-            let neighbors = recovered_store.outgoing(1).expect("Failed to get neighbors");
-            
-            // After implementing disk read, this should return the persisted edges
+            let neighbors = recovered_store
+                .outgoing(1)
+                .expect("Failed to get neighbors");
+
+            // VERIFIED: Data persists from main DB file (WAL is not needed for recovery)
             assert!(
                 neighbors.len() >= 2,
                 "After recovery, node 1 should have at least 2 outgoing neighbors"
             );
-            
+
             // Verify specific neighbors are present
             let neighbor_vec: Vec<i64> = neighbors.iter().copied().collect();
-            assert!(neighbor_vec.contains(&2), "Node 1 should have edge to node 2");
-            assert!(neighbor_vec.contains(&3), "Node 1 should have edge to node 3");
+            assert!(
+                neighbor_vec.contains(&2),
+                "Node 1 should have edge to node 2"
+            );
+            assert!(
+                neighbor_vec.contains(&3),
+                "Node 1 should have edge to node 3"
+            );
         }
+    }
+
+    /// Test 6: Data persists after multiple flush cycles with WAL truncation
+    ///
+    /// VERIFIED: Multiple insert/flush cycles work correctly, WAL is truncated each time,
+    /// and all data is recoverable from main DB file.
+    #[test]
+    fn test_data_persists_after_multiple_wal_truncations() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+        let wal_path = db_path.with_extension("v3wal");
+
+        // Create database file
+        std::fs::write(&db_path, vec![0u8; 4096]).expect("Failed to create db file");
+
+        // Phase 1: Insert multiple batches, each flushed
+        {
+            let (edge_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
+
+            // First batch
+            for i in 0..5 {
+                edge_store
+                    .insert_edge(1, i + 10, Direction::Outgoing, None)
+                    .expect("Insert failed");
+            }
+            edge_store.flush(None).expect("Flush failed");
+            assert!(
+                !wal_path.exists(),
+                "WAL should be truncated after first flush"
+            );
+
+            // Second batch
+            for i in 0..5 {
+                edge_store
+                    .insert_edge(2, i + 20, Direction::Outgoing, None)
+                    .expect("Insert failed");
+            }
+            edge_store.flush(None).expect("Flush failed");
+            assert!(
+                !wal_path.exists(),
+                "WAL should be truncated after second flush"
+            );
+        }
+
+        // Phase 2: Verify all data persisted
+        let (recovered_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
+
+        let neighbors1 = recovered_store
+            .outgoing(1)
+            .expect("Failed to get node 1 neighbors");
+        assert_eq!(
+            neighbors1.len(),
+            5,
+            "Node 1 should have 5 outgoing neighbors"
+        );
+
+        let neighbors2 = recovered_store
+            .outgoing(2)
+            .expect("Failed to get node 2 neighbors");
+        assert_eq!(
+            neighbors2.len(),
+            5,
+            "Node 2 should have 5 outgoing neighbors"
+        );
     }
 
     /// TODO Test 6: Empty flush should not error
@@ -891,12 +1443,12 @@ mod tests {
     fn test_flush_with_no_dirty_clusters() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.graph");
-        
+
         // Create edge store without inserting any edges
         let (edge_store, _allocator) = create_test_edge_store(Some(db_path));
-        
+
         // Flush with empty cache should succeed
-        let result = edge_store.flush();
+        let result = edge_store.flush(None);
         assert!(result.is_ok(), "Flush with empty cache should succeed");
     }
 
@@ -908,19 +1460,158 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.graph");
         std::fs::write(&db_path, vec![0u8; 4096]).expect("Failed to create db file");
-        
+
         let (edge_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
-        
+
         // Insert edges
-        edge_store.insert_edge(1, 2, Direction::Outgoing).expect("Insert failed");
-        
+        edge_store
+            .insert_edge(1, 2, Direction::Outgoing, None)
+            .expect("Insert failed");
+
         // Flush multiple times
         for _ in 0..3 {
-            edge_store.flush().expect("Flush failed");
+            edge_store.flush(None).expect("Flush failed");
         }
-        
+
         // After implementing flush: verify edges are still queryable
         // Currently this just verifies no panic occurs
+    }
+
+    /// Test 8: WAL EdgeInsert record is correctly written and can be recovered
+    ///
+    /// CRITICAL: This test verifies that edge_insert() writes a proper WAL record
+    /// that can be recovered during WAL replay.
+    #[test]
+    fn test_wal_edge_insert_record_format() {
+        use crate::backend::native::v3::wal::{V3_WAL_HEADER_SIZE, V3WALRecord, V3WALRecordType};
+        use std::fs;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+        let wal_path = db_path.with_extension("v3wal");
+
+        // Create edge store with WAL
+        let (edge_store, _allocator) = create_test_edge_store(Some(db_path.clone()));
+
+        // Insert an edge - should write EdgeInsert WAL record
+        edge_store
+            .insert_edge(1, 2, Direction::Outgoing, None)
+            .expect("Insert failed");
+        edge_store.flush_wal().expect("WAL flush failed");
+
+        // Read WAL file
+        let wal_content = fs::read(&wal_path).expect("Failed to read WAL");
+
+        // Verify WAL has more than just header (64 bytes)
+        assert!(
+            wal_content.len() > V3_WAL_HEADER_SIZE,
+            "WAL should have records beyond header"
+        );
+
+        // Verify EdgeInsert record type is in the WAL
+        // WAL format: [size: 4 bytes][bincode serialized record]
+        let mut pos = V3_WAL_HEADER_SIZE; // Skip header
+
+        let mut found_edge_insert = false;
+        while pos < wal_content.len() - 8 {
+            // Read record size
+            if pos + 4 > wal_content.len() {
+                break;
+            }
+            let size = u32::from_le_bytes([
+                wal_content[pos],
+                wal_content[pos + 1],
+                wal_content[pos + 2],
+                wal_content[pos + 3],
+            ]) as usize;
+
+            pos += 4;
+            if pos + size > wal_content.len() || size == 0 {
+                break;
+            }
+
+            // Deserialize the record using bincode
+            let record_bytes = &wal_content[pos..pos + size];
+            if let Ok(record) = V3WALRecord::from_bytes(record_bytes) {
+                if record.record_type() == V3WALRecordType::EdgeInsert {
+                    found_edge_insert = true;
+                    break;
+                }
+            }
+
+            // Skip to next record
+            pos += size;
+        }
+
+        assert!(
+            found_edge_insert,
+            "WAL should contain EdgeInsert record (type 12)"
+        );
+    }
+
+    //========================================================================
+    // Edge Type Durability Tests
+    //========================================================================
+
+    /// Test that edge_type survives serialization roundtrip
+    /// This is critical for durability across reopen
+    #[test]
+    fn test_edge_type_serialization_roundtrip() {
+        let mut cluster = V3EdgeCluster::new(1, Direction::Outgoing, 100);
+
+        // Add edge with type
+        cluster.add_edge(2, Some("TEST_TYPE".to_string()));
+
+        // Verify edge_data was populated
+        assert_eq!(cluster.edges.len(), 1);
+        let edge = &cluster.edges[0];
+        assert!(
+            !edge.edge_data.is_empty(),
+            "edge_data should not be empty when edge_type is set"
+        );
+
+        // Verify edge_type can be extracted
+        let extracted = V3EdgeCluster::extract_edge_type(&edge.edge_data);
+        assert_eq!(extracted, Some("TEST_TYPE".to_string()));
+
+        // Test serialization roundtrip
+        let serialized = cluster.serialize().unwrap();
+        let deserialized = V3EdgeCluster::deserialize(&serialized, 100).unwrap();
+
+        assert_eq!(deserialized.edges.len(), 1);
+        let deser_edge = &deserialized.edges[0];
+        let deser_type = V3EdgeCluster::extract_edge_type(&deser_edge.edge_data);
+        assert_eq!(
+            deser_type,
+            Some("TEST_TYPE".to_string()),
+            "edge_type should survive serialization roundtrip"
+        );
+    }
+
+    /// Test that edge_type is extracted correctly during edges_with_types
+    #[test]
+    fn test_edges_with_types_extraction() {
+        let mut cluster = V3EdgeCluster::new(1, Direction::Outgoing, 100);
+
+        // Add edges with different types
+        cluster.add_edge(2, Some("CALLS".to_string()));
+        cluster.add_edge(3, Some("USES".to_string()));
+        cluster.add_edge(4, None); // No type
+
+        let edges_with_types = cluster.edges_with_types();
+        assert_eq!(edges_with_types.len(), 3);
+
+        // Check first edge
+        assert_eq!(edges_with_types[0].0, 2);
+        assert_eq!(edges_with_types[0].1, Some("CALLS".to_string()));
+
+        // Check second edge
+        assert_eq!(edges_with_types[1].0, 3);
+        assert_eq!(edges_with_types[1].1, Some("USES".to_string()));
+
+        // Check third edge (no type)
+        assert_eq!(edges_with_types[2].0, 4);
+        assert_eq!(edges_with_types[2].1, None);
     }
 
     //========================================================================

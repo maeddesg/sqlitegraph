@@ -14,7 +14,9 @@
 //! The `Publisher` uses `Arc<Mutex<>>` to allow thread-safe access to the subscriber list.
 //! This means multiple threads can subscribe/unsubscribe concurrently.
 
-use crate::backend::native::v2::pubsub::{NodeMetadata, PubSubEvent, SubscriberId, SubscriptionFilter};
+use crate::backend::native::v2::pubsub::{
+    NodeMetadata, PubSubEvent, SubscriberId, SubscriptionFilter,
+};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 

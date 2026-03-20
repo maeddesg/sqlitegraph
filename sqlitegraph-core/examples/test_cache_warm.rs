@@ -1,7 +1,9 @@
 //! Test to verify cache is being populated during insert_edge
 
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 use std::time::Instant;
-use sqlitegraph::{GraphConfig, NodeSpec, EdgeSpec, open_graph, SnapshotId, NeighborQuery, BackendDirection};
 use tempfile::tempdir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -53,7 +55,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let result = graph.neighbors(snapshot, node_ids[0], query.clone())?;
     let second_ns = start.elapsed().as_nanos();
-    println!("Second query: {} ns ({} neighbors)", second_ns, result.len());
+    println!(
+        "Second query: {} ns ({} neighbors)",
+        second_ns,
+        result.len()
+    );
 
     // Third query
     let start = Instant::now();

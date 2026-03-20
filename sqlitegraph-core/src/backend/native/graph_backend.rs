@@ -26,11 +26,14 @@ use crate::backend::native::v2::wal::{
 use crate::backend::native::v2::kv_store::store::KvStore;
 
 #[cfg(feature = "native-v2")]
-use crate::backend::native::v2::kv_store::types::KvValue;
+use crate::backend::native::types::KvValue;
 
 /// Native backend implementation using interior mutability
 pub struct NativeGraphBackend {
     graph_file: RwLock<GraphFile>,
+    /// Neighbors cache to avoid repeated B+tree traversals
+    /// Key: (node_id, direction), Value: Arc<[i64]> for zero-copy reads
+    neighbors_cache: RwLock<std::collections::HashMap<(i64, Direction), std::sync::Arc<[i64]>>>,
     /// WAL integrator for transaction management and checkpointing
     /// Always available when native-v2 feature is enabled (production ready)
     #[cfg(feature = "native-v2")]
@@ -55,6 +58,7 @@ impl NativeGraphBackend {
 
         Ok(Self {
             graph_file: RwLock::new(graph_file),
+            neighbors_cache: RwLock::new(std::collections::HashMap::new()),
             #[cfg(feature = "native-v2")]
             wal_integrator,
             #[cfg(feature = "native-v2")]
@@ -71,6 +75,7 @@ impl NativeGraphBackend {
 
         Ok(Self {
             graph_file: RwLock::new(graph_file),
+            neighbors_cache: RwLock::new(std::collections::HashMap::new()),
             #[cfg(feature = "native-v2")]
             wal_integrator,
             #[cfg(feature = "native-v2")]
@@ -104,6 +109,7 @@ impl NativeGraphBackend {
 
         Ok(Self {
             graph_file: RwLock::new(graph_file),
+            neighbors_cache: RwLock::new(std::collections::HashMap::new()),
             #[cfg(feature = "native-v2")]
             wal_integrator,
             #[cfg(feature = "native-v2")]
@@ -191,10 +197,7 @@ impl Drop for NativeGraphBackend {
             // Use soft_shutdown which works via Arc reference
             // We need to access the inner WAL manager
             if let Err(e) = integrator.soft_shutdown() {
-                eprintln!(
-                    "Warning: Failed to soft shutdown WAL integrator: {:?}",
-                    e
-                );
+                eprintln!("Warning: Failed to soft shutdown WAL integrator: {:?}", e);
             }
         }
     }
@@ -222,15 +225,60 @@ impl GraphBackend for NativeGraphBackend {
         id: i64,
     ) -> Result<GraphEntity, SqliteGraphError> {
         self.with_graph_file(|graph_file| {
-            // TODO: Pass snapshot_id to filter WAL records (Phase 38-04)
-            let _snapshot_id = snapshot_id; // Suppress unused warning until Phase 38-04
             let mut node_store = NodeStore::new(graph_file);
             let record = node_store.read_node(id as NativeNodeId)?;
+
+            // Phase 38-04: Apply snapshot isolation using delta index
+            #[cfg(feature = "native-v2")]
+            {
+                if let Some(ref integrator) = self.wal_integrator {
+                    let delta_index = integrator.wal_manager().get_delta_index();
+                    let delta_guard = delta_index.read();
+
+                    // Check if there's a delta record for this node at or before our snapshot
+                    if let Some(delta) = delta_guard.get_node_delta(id, snapshot_id) {
+                        use crate::backend::native::v2::wal::V2WALRecord;
+                        match &delta.record {
+                            V2WALRecord::NodeDelete { .. } => {
+                                // Node was deleted at or before this snapshot - it doesn't exist
+                                return Err(crate::backend::native::NativeBackendError::InvalidNodeId {
+                                    id: id as NativeNodeId,
+                                    max_id: 0,
+                                }.into());
+                            }
+                            V2WALRecord::NodeUpdate { new_data, .. } => {
+                                // Node was updated - return the updated version from WAL
+                                // Parse the new_data to get the NodeRecordV2
+                                match crate::backend::native::v2::node_record_v2::NodeRecordV2::deserialize(new_data) {
+                                    Ok(updated_record) => {
+                                        return Ok(node_record_to_entity(updated_record));
+                                    }
+                                    Err(_) => {
+                                        // Fall through to return base record
+                                    }
+                                }
+                            }
+                            _ => {
+                                // Other record types - fall through to return base record
+                            }
+                        }
+                    }
+                    // If no delta found, the base record is valid for this snapshot
+                }
+            }
+
             Ok(node_record_to_entity(record))
         })
     }
 
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
+        // Invalidate neighbors cache for affected nodes
+        {
+            let mut cache = self.neighbors_cache.write();
+            cache.remove(&(edge.from, Direction::Outgoing));
+            cache.remove(&(edge.to, Direction::Incoming));
+        }
+
         self.with_graph_file(|graph_file| {
             // Phase 44.2: Use V2 clustered adjacency when experimental feature is enabled
             // Phase 44.2: Use V2 clustered adjacency when experimental feature is enabled
@@ -309,38 +357,33 @@ impl GraphBackend for NativeGraphBackend {
         node: i64,
         query: NeighborQuery,
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        self.with_graph_file(|graph_file| {
-            let node_id = node as NativeNodeId;
+        // For unfiltered queries, try the cache first (hot path optimization)
+        if query.edge_type.is_none() && snapshot_id.as_lsn() == 0 {
+            let dir = match query.direction {
+                BackendDirection::Outgoing => Direction::Outgoing,
+                BackendDirection::Incoming => Direction::Incoming,
+            };
+            let cache_key = (node, dir);
 
-            // Use snapshot-aware helpers for neighbor retrieval
-            let neighbors = if let Some(edge_type) = &query.edge_type {
-                let edge_type_ref = edge_type.as_str();
-                match query.direction {
-                    BackendDirection::Outgoing => {
-                        AdjacencyHelpers::get_outgoing_neighbors_filtered(
-                            graph_file,
-                            node_id,
-                            &[edge_type_ref],
-                        )
-                    }
-                    BackendDirection::Incoming => {
-                        AdjacencyHelpers::get_incoming_neighbors_filtered(
-                            graph_file,
-                            node_id,
-                            &[edge_type_ref],
-                        )
-                    }
+            // Check cache (read lock)
+            {
+                let cache = self.neighbors_cache.read();
+                if let Some(cached) = cache.get(&cache_key) {
+                    // Cache hit - return cloned Vec (Arc clone is cheap)
+                    return Ok(cached.to_vec());
                 }
-            } else {
-                // Phase 38-04: Use snapshot-aware neighbor retrieval
-                // Note: WAL reader not available at this layer - pass None for base data only
-                match query.direction {
+            }
+
+            // Cache miss - fetch from storage
+            let neighbors = self.with_graph_file(|graph_file| {
+                let node_id = node as NativeNodeId;
+                let result = match query.direction {
                     BackendDirection::Outgoing => {
                         AdjacencyHelpers::get_outgoing_neighbors_at_snapshot(
                             graph_file,
                             node_id,
                             snapshot_id,
-                            None, // WAL reader - base data only
+                            None,
                         )
                     }
                     BackendDirection::Incoming => {
@@ -348,14 +391,68 @@ impl GraphBackend for NativeGraphBackend {
                             graph_file,
                             node_id,
                             snapshot_id,
-                            None, // WAL reader - base data only
+                            None,
                         )
                     }
-                }
-            }?;
+                }?;
+                Ok(result.into_iter().map(|id| id as i64).collect::<Vec<i64>>())
+            })?;
 
-            Ok(neighbors.into_iter().map(|id| id as i64).collect())
-        })
+            // Populate cache (write lock)
+            let neighbors_arc: std::sync::Arc<[i64]> = neighbors.clone().into();
+            {
+                let mut cache = self.neighbors_cache.write();
+                cache.insert(cache_key, neighbors_arc);
+            }
+
+            Ok(neighbors)
+        } else {
+            // Filtered queries or snapshot queries - bypass cache (cold path)
+            self.with_graph_file(|graph_file| {
+                let node_id = node as NativeNodeId;
+
+                let neighbors = if let Some(edge_type) = &query.edge_type {
+                    let edge_type_ref = edge_type.as_str();
+                    match query.direction {
+                        BackendDirection::Outgoing => {
+                            AdjacencyHelpers::get_outgoing_neighbors_filtered(
+                                graph_file,
+                                node_id,
+                                &[edge_type_ref],
+                            )
+                        }
+                        BackendDirection::Incoming => {
+                            AdjacencyHelpers::get_incoming_neighbors_filtered(
+                                graph_file,
+                                node_id,
+                                &[edge_type_ref],
+                            )
+                        }
+                    }
+                } else {
+                    match query.direction {
+                        BackendDirection::Outgoing => {
+                            AdjacencyHelpers::get_outgoing_neighbors_at_snapshot(
+                                graph_file,
+                                node_id,
+                                snapshot_id,
+                                None,
+                            )
+                        }
+                        BackendDirection::Incoming => {
+                            AdjacencyHelpers::get_incoming_neighbors_at_snapshot(
+                                graph_file,
+                                node_id,
+                                snapshot_id,
+                                None,
+                            )
+                        }
+                    }
+                }?;
+
+                Ok(neighbors.into_iter().map(|id| id as i64).collect())
+            })
+        }
     }
 
     fn bfs(
@@ -779,7 +876,7 @@ impl GraphBackend for NativeGraphBackend {
     ) -> Result<
         Vec<(
             Vec<u8>,
-            crate::backend::native::v2::kv_store::types::KvValue,
+            crate::backend::native::types::KvValue,
         )>,
         SqliteGraphError,
     > {

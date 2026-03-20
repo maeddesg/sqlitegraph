@@ -23,7 +23,7 @@ pub mod types;
 
 // Re-export public API
 pub use store::KvStore;
-pub use types::{hash_key, KvEntry, KvMetadata, KvValue};
+pub use types::{KvEntry, KvMetadata, KvValue, hash_key};
 
 #[cfg(test)]
 mod tests {

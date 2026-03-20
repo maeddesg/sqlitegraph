@@ -3,7 +3,9 @@
 //! Single case execution test for V2 NativeGraphBackend performance.
 //! Measures insertion throughput and neighbor query performance.
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

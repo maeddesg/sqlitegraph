@@ -66,7 +66,9 @@ fn test_v2_basic_graph_operations() {
 
     // Verify we can retrieve nodes
     for &node_id in &node_ids {
-        let entity = graph.get_node(SnapshotId::current(), node_id).expect("Failed to get node");
+        let entity = graph
+            .get_node(SnapshotId::current(), node_id)
+            .expect("Failed to get node");
         assert_eq!(entity.id, node_id);
         assert_eq!(entity.kind, "Function");
     }
@@ -116,8 +118,10 @@ fn test_v2_basic_graph_operations() {
     // Test 3: Verify neighbors queries in both directions
     // main's outgoing neighbors should be [helper]
     let main_outgoing = graph
-        .neighbors(SnapshotId::current(), node_ids[0],
-                        NeighborQuery {
+        .neighbors(
+            SnapshotId::current(),
+            node_ids[0],
+            NeighborQuery {
                 direction: BackendDirection::Outgoing,
                 edge_type: None,
             },
@@ -127,8 +131,10 @@ fn test_v2_basic_graph_operations() {
 
     // main's incoming neighbors should be [cleanup]
     let main_incoming = graph
-        .neighbors(SnapshotId::current(), node_ids[0],
-                        NeighborQuery {
+        .neighbors(
+            SnapshotId::current(),
+            node_ids[0],
+            NeighborQuery {
                 direction: BackendDirection::Incoming,
                 edge_type: None,
             },
@@ -142,8 +148,10 @@ fn test_v2_basic_graph_operations() {
 
     // Test filtered by edge type
     let main_calls = graph
-        .neighbors(SnapshotId::current(), node_ids[0],
-                        NeighborQuery {
+        .neighbors(
+            SnapshotId::current(),
+            node_ids[0],
+            NeighborQuery {
                 direction: BackendDirection::Outgoing,
                 edge_type: Some("CALLS".to_string()),
             },
@@ -153,7 +161,12 @@ fn test_v2_basic_graph_operations() {
 
     // Test 4: Verify k=2 hop results
     let k2_from_main = graph
-        .k_hop(SnapshotId::current(), node_ids[0], 2, BackendDirection::Outgoing)
+        .k_hop(
+            SnapshotId::current(),
+            node_ids[0],
+            2,
+            BackendDirection::Outgoing,
+        )
         .expect("Failed to get k=2 hop from main");
     // main -> helper -> util
     assert!(
@@ -167,10 +180,20 @@ fn test_v2_basic_graph_operations() {
 
     // Get both outgoing and incoming k=2 hops
     let k2_from_util_outgoing = graph
-        .k_hop(SnapshotId::current(), node_ids[2], 2, BackendDirection::Outgoing)
+        .k_hop(
+            SnapshotId::current(),
+            node_ids[2],
+            2,
+            BackendDirection::Outgoing,
+        )
         .expect("Failed to get k=2 outgoing from util");
     let k2_from_util_incoming = graph
-        .k_hop(SnapshotId::current(), node_ids[2], 2, BackendDirection::Incoming)
+        .k_hop(
+            SnapshotId::current(),
+            node_ids[2],
+            2,
+            BackendDirection::Incoming,
+        )
         .expect("Failed to get k=2 incoming from util");
 
     let mut k2_from_util = k2_from_util_outgoing;
@@ -189,8 +212,10 @@ fn test_v2_basic_graph_operations() {
     // Test 5: Verify final graph state (no delete operations needed for basic functionality)
     // The graph should be stable with all nodes and edges intact
     let final_main_neighbors = graph
-        .neighbors(SnapshotId::current(), node_ids[0],
-                        NeighborQuery {
+        .neighbors(
+            SnapshotId::current(),
+            node_ids[0],
+            NeighborQuery {
                 direction: BackendDirection::Outgoing,
                 edge_type: None,
             },
@@ -204,7 +229,12 @@ fn test_v2_basic_graph_operations() {
 
     // Verify k-hop still works correctly
     let final_k2_from_main = graph
-        .k_hop(SnapshotId::current(), node_ids[0], 3, BackendDirection::Outgoing)
+        .k_hop(
+            SnapshotId::current(),
+            node_ids[0],
+            3,
+            BackendDirection::Outgoing,
+        )
         .expect("Failed to get final k=3 hop from main");
     assert!(
         final_k2_from_main.contains(&node_ids[4]),
@@ -274,7 +304,10 @@ fn test_v2_reopen_invariants() {
 
         // Verify initial state
         let user_neighbors = graph
-            .neighbors(SnapshotId::current(), node1, NeighborQuery {
+            .neighbors(
+                SnapshotId::current(),
+                node1,
+                NeighborQuery {
                     direction: BackendDirection::Outgoing,
                     edge_type: None,
                 },
@@ -303,8 +336,10 @@ fn test_v2_reopen_invariants() {
 
         // Verify edges and relationships preserved
         let user_neighbors = graph
-            .neighbors(SnapshotId::current(), 1,
-                                NeighborQuery {
+            .neighbors(
+                SnapshotId::current(),
+                1,
+                NeighborQuery {
                     direction: BackendDirection::Outgoing,
                     edge_type: None,
                 },
@@ -317,8 +352,10 @@ fn test_v2_reopen_invariants() {
         );
 
         let post_neighbors = graph
-            .neighbors(SnapshotId::current(), 2,
-                                NeighborQuery {
+            .neighbors(
+                SnapshotId::current(),
+                2,
+                NeighborQuery {
                     direction: BackendDirection::Outgoing,
                     edge_type: None,
                 },
@@ -350,8 +387,10 @@ fn test_v2_reopen_invariants() {
             .expect("Failed to insert edge after reopen");
 
         let comment_neighbors = graph
-            .neighbors(SnapshotId::current(), 3,
-                                NeighborQuery {
+            .neighbors(
+                SnapshotId::current(),
+                3,
+                NeighborQuery {
                     direction: BackendDirection::Outgoing,
                     edge_type: None,
                 },

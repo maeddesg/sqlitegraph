@@ -451,12 +451,16 @@ impl From<NativeBackendError> for RecoveryError {
                     .with_source(format!("NativeBackendError: {}", context))
             }
             NativeBackendError::SerializationError { context, .. } => {
-                Self::new(RecoveryErrorKind::Corruption, message)
-                    .with_source(format!("NativeBackendError: Serialization error - {}", context))
+                Self::new(RecoveryErrorKind::Corruption, message).with_source(format!(
+                    "NativeBackendError: Serialization error - {}",
+                    context
+                ))
             }
             NativeBackendError::DeserializationError { context, .. } => {
-                Self::new(RecoveryErrorKind::Corruption, message)
-                    .with_source(format!("NativeBackendError: Deserialization error - {}", context))
+                Self::new(RecoveryErrorKind::Corruption, message).with_source(format!(
+                    "NativeBackendError: Deserialization error - {}",
+                    context
+                ))
             }
             _ => Self::unknown(message).with_source("NativeBackendError".to_string()),
         }

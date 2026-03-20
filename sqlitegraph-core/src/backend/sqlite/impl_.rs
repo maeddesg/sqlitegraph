@@ -3,8 +3,8 @@
 //! This module contains the SqliteGraphBackend implementation that wraps
 //! SqliteGraph and provides the concrete implementation of all GraphBackend methods.
 
-use rusqlite::params;
 use parking_lot::RwLock;
+use rusqlite::params;
 
 use crate::{
     SqliteGraphError,
@@ -20,7 +20,13 @@ use crate::{
 ///
 /// Similar to V3's Publisher but simplified for SQLite backend use
 struct Publisher {
-    subscribers: RwLock<Vec<(u64, std::sync::mpsc::Sender<PubSubEvent>, SubscriptionFilter)>>,
+    subscribers: RwLock<
+        Vec<(
+            u64,
+            std::sync::mpsc::Sender<PubSubEvent>,
+            SubscriptionFilter,
+        )>,
+    >,
     next_id: std::sync::atomic::AtomicU64,
 }
 
@@ -31,15 +37,20 @@ impl Publisher {
             next_id: std::sync::atomic::AtomicU64::new(1),
         }
     }
-    
-    fn subscribe(&self, filter: SubscriptionFilter) -> (u64, std::sync::mpsc::Receiver<PubSubEvent>) {
-        let id = self.next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+    fn subscribe(
+        &self,
+        filter: SubscriptionFilter,
+    ) -> (u64, std::sync::mpsc::Receiver<PubSubEvent>) {
+        let id = self
+            .next_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let (tx, rx) = std::sync::mpsc::channel();
-        
+
         self.subscribers.write().push((id, tx, filter));
         (id, rx)
     }
-    
+
     fn unsubscribe(&self, subscriber_id: u64) -> bool {
         let mut subs = self.subscribers.write();
         if let Some(pos) = subs.iter().position(|(id, _, _)| *id == subscriber_id) {
@@ -49,7 +60,7 @@ impl Publisher {
             false
         }
     }
-    
+
     fn emit(&self, event: PubSubEvent) {
         let subs = self.subscribers.read();
         for (_, sender, filter) in subs.iter() {
@@ -59,22 +70,47 @@ impl Publisher {
             }
         }
     }
-    
+
     #[cfg(not(feature = "native-v2"))]
     fn should_send(event: &PubSubEvent, filter: &SubscriptionFilter) -> bool {
         match event {
             PubSubEvent::NodeChanged { .. } => filter.node_changes,
             PubSubEvent::EdgeChanged { .. } => filter.edge_changes,
-            PubSubEvent::KVChanged { .. } => filter.kv_changes,
+            PubSubEvent::KvChanged { .. } => filter.kv_changes,
             PubSubEvent::SnapshotCommitted { .. } => filter.snapshot_commits,
         }
     }
-    
+
     #[cfg(feature = "native-v2")]
     fn should_send(event: &PubSubEvent, filter: &SubscriptionFilter) -> bool {
         // V2's SubscriptionFilter has a matches_simple method
         filter.matches_simple(event)
     }
+}
+
+/// Validate snapshot_id for SQLite backend
+///
+/// SQLite backend does not support historical snapshot isolation.
+/// Only SnapshotId::current() (which has as_lsn() == 0) is supported.
+///
+/// Historical snapshot isolation would require:
+/// - WAL-based versioning with timestamp/LSN indexing
+/// - AS OF queries or point-in-time recovery mechanisms
+/// - Multi-version concurrency control (MVCC) extensions
+///
+/// These are not implemented in the current SQLite backend.
+fn validate_snapshot_for_sqlite(
+    snapshot_id: crate::snapshot::SnapshotId,
+) -> Result<(), SqliteGraphError> {
+    if snapshot_id.as_lsn() == 0 {
+        return Ok(());
+    }
+    Err(SqliteGraphError::query(format!(
+        "SQLite backend does not support historical snapshots (requested: {}). \
+        Only SnapshotId::current() is supported. \
+        Historical snapshot isolation requires AS OF queries or MVCC which are not implemented.",
+        snapshot_id.as_lsn()
+    )))
 }
 
 /// SQLite-backed implementation of the GraphBackend trait.
@@ -98,7 +134,7 @@ impl SqliteGraphBackend {
 
     /// Create a new SQLite backend from an existing SqliteGraph instance.
     pub fn from_graph(graph: SqliteGraph) -> Self {
-        Self { 
+        Self {
             graph,
             publisher: RwLock::new(None),
         }
@@ -108,7 +144,7 @@ impl SqliteGraphBackend {
     pub fn graph(&self) -> &SqliteGraph {
         &self.graph
     }
-    
+
     /// Create a new HNSW vector storage using this SQLite backend
     ///
     /// # Arguments
@@ -125,8 +161,10 @@ impl SqliteGraphBackend {
     /// let backend = SqliteGraphBackend::in_memory().unwrap();
     /// let storage = backend.create_hnsw_storage("my_index").unwrap();
     /// ```
-    pub fn create_hnsw_storage(&self, _index_name: impl Into<String>) -> Option<Box<dyn crate::hnsw::storage::VectorStorage>> {
-
+    pub fn create_hnsw_storage(
+        &self,
+        _index_name: impl Into<String>,
+    ) -> Option<Box<dyn crate::hnsw::storage::VectorStorage>> {
         // SQLiteVectorStorage requires an owned Connection, but we only have a reference
         // This is a limitation - we can't easily create a storage from &self
         // The caller should use SQLiteVectorStorage::new() directly with a connection
@@ -215,7 +253,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
             file_path: node.file_path,
             data: node.data,
         })?;
-        
+
         // Emit event if publisher is initialized
         let pub_guard = self.publisher.read();
         if let Some(ref publisher) = *pub_guard {
@@ -224,7 +262,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
                 snapshot_id: 0, // SQLite doesn't use snapshot IDs
             });
         }
-        
+
         Ok(id)
     }
 
@@ -233,9 +271,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         snapshot_id: crate::snapshot::SnapshotId,
         id: i64,
     ) -> Result<GraphEntity, SqliteGraphError> {
-        // SQLite: BEGIN TRANSACTION at snapshot_id, then query
-        // For now, snapshot_id is ignored (SQLite transactions handle isolation)
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         self.graph.get_entity(id)
     }
 
@@ -247,16 +283,16 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
             edge_type: edge.edge_type,
             data: edge.data,
         })?;
-        
+
         // Emit event if publisher is initialized
         let pub_guard = self.publisher.read();
         if let Some(ref publisher) = *pub_guard {
-            publisher.emit(PubSubEvent::EdgeChanged {
+            publisher.emit(PubSubEvent::EdgeChanged { from_node: edge.from, to_node: edge.to,
                 edge_id: id,
                 snapshot_id: 0, // SQLite doesn't use snapshot IDs
             });
         }
-        
+
         Ok(id)
     }
 
@@ -286,8 +322,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         node: i64,
         query: NeighborQuery,
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        // SQLite: Transactions handle isolation automatically
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         self.query_neighbors(node, query.direction, &query.edge_type)
     }
 
@@ -297,8 +332,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         start: i64,
         depth: u32,
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        // SQLite: Transactions handle isolation automatically
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         // Check query cache first
         if let Some(cached_result) = self.graph.query_cache.get_bfs(start, depth) {
             return Ok(cached_result);
@@ -316,8 +350,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         start: i64,
         end: i64,
     ) -> Result<Option<Vec<i64>>, SqliteGraphError> {
-        // SQLite: Transactions handle isolation automatically
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         // Check query cache first
         if let Some(cached_result) = self.graph.query_cache.get_shortest_path(start, end) {
             return Ok(cached_result);
@@ -336,8 +369,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         snapshot_id: crate::snapshot::SnapshotId,
         node: i64,
     ) -> Result<(usize, usize), SqliteGraphError> {
-        // SQLite: Transactions handle isolation automatically
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         let out = self.graph.fetch_outgoing(node)?.len();
         let incoming = self.graph.fetch_incoming(node)?.len();
         Ok((out, incoming))
@@ -350,8 +382,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         depth: u32,
         direction: BackendDirection,
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        // SQLite: Transactions handle isolation automatically
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         // Check query cache first
         if let Some(cached_result) = self.graph.query_cache.get_k_hop(start, depth, direction) {
             return Ok(cached_result);
@@ -373,8 +404,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         direction: BackendDirection,
         allowed_edge_types: &[&str],
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        // SQLite: Transactions handle isolation automatically
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         // Check query cache first
         if let Some(cached_result) =
             self.graph
@@ -403,8 +433,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         start: i64,
         chain: &[crate::multi_hop::ChainStep],
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        // SQLite: Transactions handle isolation automatically
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         multi_hop::chain_query(&self.graph, start, chain)
     }
 
@@ -414,8 +443,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         start: i64,
         pattern: &PatternQuery,
     ) -> Result<Vec<PatternMatch>, SqliteGraphError> {
-        // SQLite: Transactions handle isolation automatically
-        let _snapshot_id = snapshot_id; // Suppress unused warning until snapshot isolation is implemented
+        validate_snapshot_for_sqlite(snapshot_id)?;
         pattern::execute_pattern(&self.graph, start, pattern)
     }
 
@@ -571,10 +599,11 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
     #[cfg(feature = "native-v2")]
     fn kv_get(
         &self,
-        _snapshot_id: crate::snapshot::SnapshotId,
+        snapshot_id: crate::snapshot::SnapshotId,
         key: &[u8],
-    ) -> Result<Option<crate::backend::native::v2::kv_store::types::KvValue>, crate::SqliteGraphError>
+    ) -> Result<Option<crate::backend::native::types::KvValue>, crate::SqliteGraphError>
     {
+        validate_snapshot_for_sqlite(snapshot_id)?;
         use std::time::SystemTime;
 
         // Initialize KV table if needed
@@ -637,7 +666,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
     fn kv_set(
         &self,
         key: Vec<u8>,
-        value: crate::backend::native::v2::kv_store::types::KvValue,
+        value: crate::backend::native::types::KvValue,
         ttl_seconds: Option<u64>,
     ) -> Result<(), crate::SqliteGraphError> {
         use std::time::SystemTime;
@@ -736,15 +765,16 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
     #[cfg(feature = "native-v2")]
     fn kv_prefix_scan(
         &self,
-        _snapshot_id: crate::snapshot::SnapshotId,
+        snapshot_id: crate::snapshot::SnapshotId,
         prefix: &[u8],
     ) -> Result<
         Vec<(
             Vec<u8>,
-            crate::backend::native::v2::kv_store::types::KvValue,
+            crate::backend::native::types::KvValue,
         )>,
         crate::SqliteGraphError,
     > {
+        validate_snapshot_for_sqlite(snapshot_id)?;
         self.ensure_kv_table()?;
         let conn = self.graph.connection();
 
@@ -779,12 +809,13 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 
     fn query_nodes_by_kind(
         &self,
-        _snapshot_id: crate::snapshot::SnapshotId,
+        snapshot_id: crate::snapshot::SnapshotId,
         kind: &str,
     ) -> Result<Vec<i64>, crate::SqliteGraphError> {
+        validate_snapshot_for_sqlite(snapshot_id)?;
         let conn = self.graph.connection();
         let mut stmt = conn
-            .prepare_cached("SELECT id FROM entities WHERE kind = ?1")
+            .prepare_cached("SELECT id FROM graph_entities WHERE kind = ?1")
             .map_err(|e| SqliteGraphError::query(e.to_string()))?;
 
         let node_ids: Vec<i64> = stmt
@@ -798,12 +829,13 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 
     fn query_nodes_by_name_pattern(
         &self,
-        _snapshot_id: crate::snapshot::SnapshotId,
+        snapshot_id: crate::snapshot::SnapshotId,
         pattern: &str,
     ) -> Result<Vec<i64>, crate::SqliteGraphError> {
+        validate_snapshot_for_sqlite(snapshot_id)?;
         let conn = self.graph.connection();
         let mut stmt = conn
-            .prepare_cached("SELECT id FROM entities WHERE label GLOB ?1")
+            .prepare_cached("SELECT id FROM graph_entities WHERE name GLOB ?1")
             .map_err(|e| SqliteGraphError::query(e.to_string()))?;
 
         let node_ids: Vec<i64> = stmt
@@ -819,9 +851,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 /// Convert KvValue to serde_json::Value for serialization
 #[cfg(feature = "native-v2")]
 fn kv_value_to_json(
-    value: &crate::backend::native::v2::kv_store::types::KvValue,
+    value: &crate::backend::native::types::KvValue,
 ) -> serde_json::Value {
-    use crate::backend::native::v2::kv_store::types::KvValue;
+    use crate::backend::native::types::KvValue;
 
     match value {
         KvValue::Bytes(bytes) => {
@@ -893,8 +925,8 @@ fn string_to_bytes(s: &str) -> Result<Vec<u8>, SqliteGraphError> {
 #[cfg(feature = "native-v2")]
 fn json_to_kv_value(
     json_value: serde_json::Value,
-) -> Result<crate::backend::native::v2::kv_store::types::KvValue, SqliteGraphError> {
-    use crate::backend::native::v2::kv_store::types::KvValue;
+) -> Result<crate::backend::native::types::KvValue, SqliteGraphError> {
+    use crate::backend::native::types::KvValue;
 
     let type_str = json_value
         .get("type")

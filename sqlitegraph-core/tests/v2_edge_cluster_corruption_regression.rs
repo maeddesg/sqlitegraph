@@ -57,7 +57,9 @@ fn test_v2_edge_cluster_corruption_regression() {
     println!("Inserted node_c with ID: {}", node_c);
 
     // Verify nodes can be retrieved
-    let entity_a = graph.get_node(SnapshotId::current(), node_a).expect("Failed to get node_a");
+    let entity_a = graph
+        .get_node(SnapshotId::current(), node_a)
+        .expect("Failed to get node_a");
     assert_eq!(entity_a.name, "node_a");
     println!("Verified node_a retrieval");
 

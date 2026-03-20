@@ -1,9 +1,9 @@
 use sqlitegraph::{
+    SnapshotId,
     backend::{BackendDirection, GraphBackend, NeighborQuery, SqliteGraphBackend},
     graph::{GraphEntity, SqliteGraph},
     graph_opt::{GraphEdgeCreate, GraphEntityCreate, bulk_insert_edges, bulk_insert_entities},
     index::{add_label, add_property, get_entities_by_label, get_entities_by_property},
-    SnapshotId,
 };
 
 // Helper function to check if index exists using schema version check

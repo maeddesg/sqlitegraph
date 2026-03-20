@@ -3,8 +3,8 @@
 //! Provides various graph structures to test algorithm performance
 //! under different topological conditions.
 
-use sqlitegraph::backend::{NodeSpec, EdgeSpec};
 use rand::Rng;
+use sqlitegraph::backend::{EdgeSpec, NodeSpec};
 
 /// Graph topology types for benchmarking
 #[derive(Debug, Clone, Copy)]
@@ -237,8 +237,8 @@ fn generate_binary_tree(nodes: usize) -> GraphData {
 
 /// Generate power-law (scale-free) graph using preferential attachment
 fn generate_power_law(nodes: usize, target_edges: usize, alpha: f64) -> GraphData {
-    use rand::distributions::{Distribution, WeightedIndex};
     use rand::SeedableRng;
+    use rand::distributions::{Distribution, WeightedIndex};
     use rand::rngs::StdRng;
 
     let node_specs = (0..nodes)

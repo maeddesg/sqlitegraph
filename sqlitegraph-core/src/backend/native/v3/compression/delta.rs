@@ -261,10 +261,7 @@ mod tests {
 
     #[test]
     fn test_decode_id_delta_max_delta() {
-        assert_eq!(
-            decode_id_delta(MAX_DELTA, 0).unwrap(),
-            MAX_DELTA as i64
-        );
+        assert_eq!(decode_id_delta(MAX_DELTA, 0).unwrap(), MAX_DELTA as i64);
         assert_eq!(
             decode_id_delta(MAX_DELTA, 1000).unwrap(),
             1000 + MAX_DELTA as i64
@@ -288,10 +285,7 @@ mod tests {
         // At the edge: delta = u32::MAX, base near i64::MAX
         // i64::MAX - u32::MAX = 9223372032559808512
         let base_at_edge = i64::MAX - MAX_DELTA as i64;
-        assert_eq!(
-            decode_id_delta(MAX_DELTA, base_at_edge).unwrap(),
-            i64::MAX
-        );
+        assert_eq!(decode_id_delta(MAX_DELTA, base_at_edge).unwrap(), i64::MAX);
     }
 
     #[test]
@@ -365,9 +359,6 @@ mod tests {
         // Large base near MAX
         let base_near_max = max_id - 1000;
         assert_eq!(encode_id_delta(max_id, base_near_max), 1000);
-        assert_eq!(
-            encode_id_delta(max_id, base_near_max + 500),
-            500
-        );
+        assert_eq!(encode_id_delta(max_id, base_near_max + 500), 500);
     }
 }

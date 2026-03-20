@@ -212,11 +212,13 @@ fn test_cluster_offsets_must_be_after_reserved_node_region() {
     // This indirectly verifies cluster offsets don't overlap node slots
 
     for (i, &node_id) in node_ids.iter().enumerate() {
-        let node = graph.get_node(SnapshotId::current(), node_id).expect(&format!(
-            "Failed to read node {} (index {})",
-            node_id,
-            i + 1
-        ));
+        let node = graph
+            .get_node(SnapshotId::current(), node_id)
+            .expect(&format!(
+                "Failed to read node {} (index {})",
+                node_id,
+                i + 1
+            ));
 
         assert_eq!(node.id, node_id, "Node {} ID corrupted", node_id);
         assert!(

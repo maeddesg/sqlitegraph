@@ -429,7 +429,11 @@ impl Subscriber {
     /// Check if an event should be delivered to this subscriber (with pattern support)
     ///
     /// For pattern-based subscriptions, provide node metadata to enable matching.
-    pub fn accepts_with_metadata(&self, event: &PubSubEvent, metadata: Option<&NodeMetadata>) -> bool {
+    pub fn accepts_with_metadata(
+        &self,
+        event: &PubSubEvent,
+        metadata: Option<&NodeMetadata>,
+    ) -> bool {
         self.filter.matches(event, metadata)
     }
 }
@@ -715,10 +719,8 @@ mod tests {
 
     #[test]
     fn test_filter_kind_patterns_multiple() {
-        let filter = SubscriptionFilter::kind_patterns(vec![
-            "agent:*".to_string(),
-            "user:*".to_string(),
-        ]);
+        let filter =
+            SubscriptionFilter::kind_patterns(vec!["agent:*".to_string(), "user:*".to_string()]);
 
         let event = PubSubEvent::NodeChanged {
             node_id: 1,
@@ -777,11 +779,13 @@ mod tests {
         assert!(filter.matches(&event, Some(&metadata_match)));
 
         // Should not match - wrong kind
-        let metadata_wrong_kind = NodeMetadata::new("user:admin".to_string(), "agent-123".to_string());
+        let metadata_wrong_kind =
+            NodeMetadata::new("user:admin".to_string(), "agent-123".to_string());
         assert!(!filter.matches(&event, Some(&metadata_wrong_kind)));
 
         // Should not match - wrong name
-        let metadata_wrong_name = NodeMetadata::new("agent:worker".to_string(), "user-123".to_string());
+        let metadata_wrong_name =
+            NodeMetadata::new("agent:worker".to_string(), "user-123".to_string());
         assert!(!filter.matches(&event, Some(&metadata_wrong_name)));
     }
 

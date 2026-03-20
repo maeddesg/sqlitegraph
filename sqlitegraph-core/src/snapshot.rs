@@ -44,11 +44,11 @@
 pub struct SnapshotId(pub u64);
 
 #[cfg(feature = "native-v2")]
+use crate::backend::native::v2::wal::manager::V2WALManager;
+#[cfg(feature = "native-v2")]
 use std::sync::Arc;
 #[cfg(feature = "native-v2")]
 use std::sync::OnceLock;
-#[cfg(feature = "native-v2")]
-use crate::backend::native::v2::wal::manager::V2WALManager;
 
 /// Global storage for the current WAL manager reference.
 ///
@@ -136,11 +136,7 @@ impl SnapshotId {
     /// ```
     #[cfg(feature = "native-v2")]
     pub fn current() -> Self {
-        let lsn = with_wal_manager(|manager| {
-            manager
-                .map(|m| m.max_committed_lsn())
-                .unwrap_or(0)
-        });
+        let lsn = with_wal_manager(|manager| manager.map(|m| m.max_committed_lsn()).unwrap_or(0));
         SnapshotId(lsn)
     }
 

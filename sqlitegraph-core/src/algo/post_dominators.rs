@@ -185,7 +185,10 @@ impl PostDominatorResult {
     /// # Returns
     /// `true` if node is an exit node, `false` otherwise.
     pub fn is_exit(&self, node: i64) -> bool {
-        self.ipdom.get(&node).map(|ipdom| ipdom.is_none()).unwrap_or(false)
+        self.ipdom
+            .get(&node)
+            .map(|ipdom| ipdom.is_none())
+            .unwrap_or(false)
     }
 }
 
@@ -479,9 +482,7 @@ pub fn post_dominators_auto_exit(
 /// Predecessor map: `preds[b].contains(a)`
 ///
 /// This allows us to traverse "backward" through the graph without modifying it.
-fn build_predecessor_map(
-    graph: &SqliteGraph,
-) -> Result<AHashMap<i64, Vec<i64>>, SqliteGraphError> {
+fn build_predecessor_map(graph: &SqliteGraph) -> Result<AHashMap<i64, Vec<i64>>, SqliteGraphError> {
     let mut preds = AHashMap::new();
 
     // Get all nodes
@@ -675,7 +676,10 @@ fn iterate_post_dominators(
 
             // Check if changed
             let old_post_dom_set = post_dom.get(&node);
-            if old_post_dom_set.map(|old| old != &intersected).unwrap_or(true) {
+            if old_post_dom_set
+                .map(|old| old != &intersected)
+                .unwrap_or(true)
+            {
                 post_dom.insert(node, intersected);
                 changed = true;
             }
@@ -722,8 +726,11 @@ fn extract_immediate_post_dominators(
         }
 
         // Get strict post-dominators (all post-dominators except node itself)
-        let strict_post_dominators: Vec<i64> =
-            post_dom_set.iter().copied().filter(|&d| d != node).collect();
+        let strict_post_dominators: Vec<i64> = post_dom_set
+            .iter()
+            .copied()
+            .filter(|&d| d != node)
+            .collect();
 
         if strict_post_dominators.is_empty() {
             // Node has no strict post-dominators (shouldn't happen in valid CFG)
@@ -749,7 +756,7 @@ fn extract_immediate_post_dominators(
                     immediate_post_dominator = Some(candidate);
                     break;
                 }
-                
+
                 // Fallback: select candidate with largest post-dominator set
                 let post_dom_size = candidate_post_dom.len();
                 if post_dom_size > max_post_dom_size {
@@ -798,7 +805,10 @@ fn post_dominators_with_virtual_exit(
 
     // Add virtual exit to predecessor map: virtual exit has all real exits as predecessors
     // In the reversed CFG, this means real exits -> virtual_exit
-    preds.entry(virtual_exit).or_insert_with(Vec::new).extend(exits.iter().copied());
+    preds
+        .entry(virtual_exit)
+        .or_insert_with(Vec::new)
+        .extend(exits.iter().copied());
 
     // Create extended node list including virtual exit
     let mut extended_nodes = all_nodes.clone();
@@ -840,7 +850,7 @@ fn post_dominators_with_virtual_exit(
     for (_, set) in post_dom.iter_mut() {
         set.remove(&virtual_exit);
     }
-    
+
     // Any node that had virtual_exit as ipdom should now have None (they're real exits)
     for (_, ipdom_val) in ipdom.iter_mut() {
         if *ipdom_val == Some(virtual_exit) {
@@ -854,7 +864,7 @@ fn post_dominators_with_virtual_exit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GraphEntity, GraphEdge};
+    use crate::{GraphEdge, GraphEntity};
 
     /// Helper: Create linear chain graph: 0 -> 1 -> 2 -> 3
     fn create_linear_chain() -> SqliteGraph {
@@ -869,7 +879,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -902,7 +914,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -936,7 +950,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -970,7 +986,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1005,7 +1023,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1050,24 +1070,60 @@ mod tests {
         // - Node 3 post-dominates {1,2,3} (on paths from 1,2,3 to exit)
         // - Node 2 post-dominates {1,2} (on paths from 1,2 to exit)
         // - Node 1 post-dominates {1} (on paths from 1 to exit)
-        
+
         // Node 3 (entity_ids[2]) post-dominates {1, 2, 3}
-        assert!(result.post_dominates(entity_ids[2], entity_ids[0]), "Node 3 should post-dominate node 1");
-        assert!(result.post_dominates(entity_ids[2], entity_ids[1]), "Node 3 should post-dominate node 2");
-        assert!(result.post_dominates(entity_ids[2], entity_ids[2]), "Node 3 should post-dominate itself");
-        assert!(!result.post_dominates(entity_ids[2], entity_ids[3]), "Node 3 should NOT post-dominate exit 4");
+        assert!(
+            result.post_dominates(entity_ids[2], entity_ids[0]),
+            "Node 3 should post-dominate node 1"
+        );
+        assert!(
+            result.post_dominates(entity_ids[2], entity_ids[1]),
+            "Node 3 should post-dominate node 2"
+        );
+        assert!(
+            result.post_dominates(entity_ids[2], entity_ids[2]),
+            "Node 3 should post-dominate itself"
+        );
+        assert!(
+            !result.post_dominates(entity_ids[2], entity_ids[3]),
+            "Node 3 should NOT post-dominate exit 4"
+        );
 
         // Node 2 (entity_ids[1]) post-dominates {1, 2}
-        assert!(result.post_dominates(entity_ids[1], entity_ids[0]), "Node 2 should post-dominate node 1");
-        assert!(result.post_dominates(entity_ids[1], entity_ids[1]), "Node 2 should post-dominate itself");
-        assert!(!result.post_dominates(entity_ids[1], entity_ids[2]), "Node 2 should NOT post-dominate node 3");
-        assert!(!result.post_dominates(entity_ids[1], entity_ids[3]), "Node 2 should NOT post-dominate exit 4");
+        assert!(
+            result.post_dominates(entity_ids[1], entity_ids[0]),
+            "Node 2 should post-dominate node 1"
+        );
+        assert!(
+            result.post_dominates(entity_ids[1], entity_ids[1]),
+            "Node 2 should post-dominate itself"
+        );
+        assert!(
+            !result.post_dominates(entity_ids[1], entity_ids[2]),
+            "Node 2 should NOT post-dominate node 3"
+        );
+        assert!(
+            !result.post_dominates(entity_ids[1], entity_ids[3]),
+            "Node 2 should NOT post-dominate exit 4"
+        );
 
         // Node 1 (entity_ids[0]) post-dominates {1} (only itself)
-        assert!(result.post_dominates(entity_ids[0], entity_ids[0]), "Node 1 should post-dominate itself");
-        assert!(!result.post_dominates(entity_ids[0], entity_ids[1]), "Node 1 should NOT post-dominate node 2");
-        assert!(!result.post_dominates(entity_ids[0], entity_ids[2]), "Node 1 should NOT post-dominate node 3");
-        assert!(!result.post_dominates(entity_ids[0], entity_ids[3]), "Node 1 should NOT post-dominate exit 4");
+        assert!(
+            result.post_dominates(entity_ids[0], entity_ids[0]),
+            "Node 1 should post-dominate itself"
+        );
+        assert!(
+            !result.post_dominates(entity_ids[0], entity_ids[1]),
+            "Node 1 should NOT post-dominate node 2"
+        );
+        assert!(
+            !result.post_dominates(entity_ids[0], entity_ids[2]),
+            "Node 1 should NOT post-dominate node 3"
+        );
+        assert!(
+            !result.post_dominates(entity_ids[0], entity_ids[3]),
+            "Node 1 should NOT post-dominate exit 4"
+        );
     }
 
     #[test]
@@ -1082,7 +1138,11 @@ mod tests {
 
         // Exit post-dominates all
         for &node in &entity_ids {
-            assert!(result.post_dominates(exit, node), "Exit should post-dominate {}", node);
+            assert!(
+                result.post_dominates(exit, node),
+                "Exit should post-dominate {}",
+                node
+            );
         }
 
         // Node 0 only post-dominates itself (paths from 0 can go through 1 or 2)
@@ -1115,7 +1175,11 @@ mod tests {
 
         // Exit post-dominates all
         for &node in &entity_ids {
-            assert!(result.post_dominates(exit, node), "Exit should post-dominate {}", node);
+            assert!(
+                result.post_dominates(exit, node),
+                "Exit should post-dominate {}",
+                node
+            );
         }
 
         // Node 2 is exit, post-dominates only itself
@@ -1133,7 +1197,7 @@ mod tests {
         let exit = entity_ids[3];
 
         let result = post_dominators(&graph, exit).expect("Failed to compute post-dominators");
-        
+
         eprintln!("Entity IDs: {:?}", entity_ids);
         eprintln!("Exit: {}", exit);
         eprintln!("Post-dominators: {:?}", result.post_dom);
@@ -1172,8 +1236,12 @@ mod tests {
 
         let result = post_dominators(&graph, exit).expect("Failed to compute post-dominators");
 
-        assert_eq!(result.immediate_post_dominator(exit), None, "Exit should have no ipdom");
-        
+        assert_eq!(
+            result.immediate_post_dominator(exit),
+            None,
+            "Exit should have no ipdom"
+        );
+
         // Both branches (1 and 2) have exit as their ipdom
         assert_eq!(
             result.immediate_post_dominator(entity_ids[1]),
@@ -1185,7 +1253,7 @@ mod tests {
             Some(exit),
             "ipdom(2) should be exit"
         );
-        
+
         // Node 0 also has exit as its ipdom (all paths from 0 go to exit)
         assert_eq!(
             result.immediate_post_dominator(entity_ids[0]),
@@ -1253,16 +1321,24 @@ mod tests {
 
         // Should have results for all nodes
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
-        
+
         eprintln!("Entity IDs: {:?}", entity_ids);
         eprintln!("Post-dominators: {:?}", result.post_dom);
         eprintln!("IPDOM: {:?}", result.ipdom);
-        
+
         assert_eq!(result.post_dom.len(), entity_ids.len());
 
         // Both exits (2 and 4) should have None as ipdom
-        assert_eq!(result.immediate_post_dominator(entity_ids[2]), None, "Exit 2 should have no ipdom");
-        assert_eq!(result.immediate_post_dominator(entity_ids[4]), None, "Exit 4 should have no ipdom");
+        assert_eq!(
+            result.immediate_post_dominator(entity_ids[2]),
+            None,
+            "Exit 2 should have no ipdom"
+        );
+        assert_eq!(
+            result.immediate_post_dominator(entity_ids[4]),
+            None,
+            "Exit 4 should have no ipdom"
+        );
     }
 
     #[test]
@@ -1299,7 +1375,9 @@ mod tests {
                 file_path: Some(format!("node_{}.rs", i)),
                 data: serde_json::json!({"index": i}),
             };
-            graph.insert_entity(&entity).expect("Failed to insert entity");
+            graph
+                .insert_entity(&entity)
+                .expect("Failed to insert entity");
         }
 
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
@@ -1381,7 +1459,9 @@ mod tests {
             file_path: Some("single.rs".to_string()),
             data: serde_json::json!({}),
         };
-        graph.insert_entity(&entity).expect("Failed to insert entity");
+        graph
+            .insert_entity(&entity)
+            .expect("Failed to insert entity");
 
         let entity_ids = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[0];
@@ -1391,7 +1471,11 @@ mod tests {
         // Exit post-dominates only itself
         assert!(result.post_dominates(exit, exit));
         assert_eq!(result.immediate_post_dominator(exit), None);
-        assert_eq!(result.post_dom.len(), 1, "Should have 1 node in post_dom sets");
+        assert_eq!(
+            result.post_dom.len(),
+            1,
+            "Should have 1 node in post_dom sets"
+        );
     }
 
     #[test]
@@ -1405,9 +1489,18 @@ mod tests {
         let result = post_dominators(&graph, exit).expect("Failed to compute post-dominators");
 
         assert!(result.is_exit(exit), "Exit should be identified as exit");
-        assert!(!result.is_exit(entity_ids[0]), "Non-exit should not be exit");
-        assert!(!result.is_exit(entity_ids[1]), "Non-exit should not be exit");
-        assert!(!result.is_exit(entity_ids[2]), "Non-exit should not be exit");
+        assert!(
+            !result.is_exit(entity_ids[0]),
+            "Non-exit should not be exit"
+        );
+        assert!(
+            !result.is_exit(entity_ids[1]),
+            "Non-exit should not be exit"
+        );
+        assert!(
+            !result.is_exit(entity_ids[2]),
+            "Non-exit should not be exit"
+        );
     }
 
     #[test]
@@ -1421,8 +1514,7 @@ mod tests {
         let exit = entity_ids[3];
 
         let progress = NoProgress;
-        let result_with =
-            post_dominators_with_progress(&graph, exit, &progress).expect("Failed");
+        let result_with = post_dominators_with_progress(&graph, exit, &progress).expect("Failed");
         let result_without = post_dominators(&graph, exit).expect("Failed");
 
         // Check post-dominance sets match
@@ -1462,14 +1554,21 @@ mod tests {
 
         // Reflexive: every node post-dominates itself
         for &node in &entity_ids {
-            assert!(result.post_dominates(node, node), "Reflexivity failed for {}", node);
+            assert!(
+                result.post_dominates(node, node),
+                "Reflexivity failed for {}",
+                node
+            );
         }
 
         // Transitive: if a post-dominates b and b post-dominates c, then a post-dominates c
         // In linear chain: 3 post-dominates 2, 2 post-dominates 1, so 3 should post-dominate 1
         assert!(result.post_dominates(exit, entity_ids[2]));
         assert!(result.post_dominates(entity_ids[2], entity_ids[1]));
-        assert!(result.post_dominates(exit, entity_ids[1]), "Transitivity failed");
+        assert!(
+            result.post_dominates(exit, entity_ids[1]),
+            "Transitivity failed"
+        );
 
         // Antisymmetric: if a post-dominates b and b post-dominates a, then a = b
         // In linear chain with more than 1 node, no two distinct nodes mutually post-dominate

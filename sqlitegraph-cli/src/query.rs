@@ -70,7 +70,10 @@ fn parse_match(query: &str) -> anyhow::Result<Query> {
     let (pattern_str, returns) = if let Some(pos) = return_pos {
         let pattern_part = &rest[..pos];
         let return_part = &rest[pos + 8..];
-        let returns: Vec<String> = return_part.split(',').map(|s| s.trim().to_string()).collect();
+        let returns: Vec<String> = return_part
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
         (pattern_part.trim(), returns)
     } else {
         (rest, vec!["*".to_string()])

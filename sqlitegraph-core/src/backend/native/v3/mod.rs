@@ -13,16 +13,23 @@ pub mod btree;
 pub mod compression;
 pub mod constants;
 pub mod edge_compat;
+pub mod file_coordinator;
+#[cfg(feature = "v3-forensics")]
+pub mod forensics;
 pub mod header;
 pub mod index;
+pub mod index_persistence;
+pub mod kind_index;
 pub mod kv_store;
+pub mod name_index;
+pub mod string_table;
 pub mod node;
 pub mod pubsub;
 pub mod wal;
 pub mod write_batch;
 
 // Re-export V3 types
-pub use header::{offset as header_offset, size as header_size, PersistentHeaderV3};
+pub use header::{PersistentHeaderV3, offset as header_offset, size as header_size};
 
 /// V3 magic bytes for file format identification
 pub use constants::V3_MAGIC;
@@ -37,29 +44,33 @@ pub use constants::V3_HEADER_SIZE;
 pub use index::{IndexPage, IndexPageType};
 
 // Re-export node types
-pub use node::{NodeRecordV3, NodePage, FIXED_METADATA_SIZE, MAX_INLINE_DATA,
-              PAGE_HEADER_SIZE as NODE_PAGE_HEADER_SIZE,
-              MAX_PAGE_SIZE as NODE_PAGE_SIZE,
-              USABLE_SIZE as NODE_PAGE_USABLE_SIZE,
-              MAX_NODE_CAPACITY,
-              TraversalCache, TraversalCacheBuilder,
-              DEFAULT_CACHE_CAPACITY, MAX_CACHE_CAPACITY, MIN_CACHE_CAPACITY,
-              NodeStore};
+pub use node::{
+    DEFAULT_CACHE_CAPACITY, FIXED_METADATA_SIZE, MAX_CACHE_CAPACITY, MAX_INLINE_DATA,
+    MAX_NODE_CAPACITY, MAX_PAGE_SIZE as NODE_PAGE_SIZE, MIN_CACHE_CAPACITY, NodePage, NodeRecordV3,
+    NodeStore, PAGE_HEADER_SIZE as NODE_PAGE_HEADER_SIZE, TraversalCache, TraversalCacheBuilder,
+    USABLE_SIZE as NODE_PAGE_USABLE_SIZE,
+};
 
 // Re-export allocator types
-pub use allocator::{PageAllocator, PageState, FreePageHeader};
+pub use allocator::{FreePageHeader, PageAllocator, PageState};
 
 // Re-export edge compatibility types
 pub use edge_compat::{Direction as EdgeDirection, PageType, V3EdgeCluster, V3EdgeStore};
 
+// Re-export file coordinator for coordinated I/O
+pub use file_coordinator::FileCoordinator;
+
 // Re-export KV store types
-pub use kv_store::{hash_key as kv_hash_key, KvEntry, KvMetadata, KvStore, KvValue};
+pub use kv_store::{KvEntry, KvMetadata, KvStore, KvValue, hash_key as kv_hash_key};
 
 // Re-export pub/sub types
-pub use pubsub::{Publisher, PubSubEvent, PubSubEventType, SubscriberId, SubscriptionFilter};
+pub use pubsub::{PubSubEvent, PubSubEventType, Publisher, SubscriberId, SubscriptionFilter};
 
 // Re-export WAL types
-pub use wal::{WALWriter, WALRecovery, WALRecoveryStats, V3WALRecord};
+pub use wal::{V3WALRecord, WALRecovery, WALRecoveryStats, WALWriter};
+
+// Re-export kind index
+pub use kind_index::KindIndex;
 
 // Re-export V3Backend
 pub use backend::V3Backend;

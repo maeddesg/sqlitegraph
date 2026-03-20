@@ -58,10 +58,7 @@ use crate::hnsw::{
     storage::{VectorStorage, VectorStorageStats},
 };
 #[cfg(test)]
-use crate::hnsw::{
-    config::hnsw_config,
-    errors::HnswIndexError,
-};
+use crate::hnsw::{config::hnsw_config, errors::HnswIndexError};
 
 /// Main HNSW vector search index
 ///

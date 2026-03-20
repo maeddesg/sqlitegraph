@@ -6,12 +6,14 @@
 use super::manager::MemoryResourceManager;
 
 use crate::backend::native::{
-    graph_file::buffers::ReadBuffer,
-    graph_file::file_ops::FileOperations,
-    types::NativeResult,
+    graph_file::buffers::ReadBuffer, graph_file::file_ops::FileOperations, types::NativeResult,
 };
 
-#[cfg(any(feature = "native-v2", feature = "v2_io_exclusive_mmap", feature = "v2_io_exclusive_std"))]
+#[cfg(any(
+    feature = "native-v2",
+    feature = "v2_io_exclusive_mmap",
+    feature = "v2_io_exclusive_std"
+))]
 use crate::backend::native::types::NativeBackendError;
 
 #[cfg(any(feature = "v2_io_exclusive_mmap", feature = "v2_io_exclusive_std"))]

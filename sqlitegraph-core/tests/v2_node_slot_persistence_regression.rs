@@ -58,9 +58,15 @@ fn test_v2_node_slot_persistence_reopen() -> Result<(), Box<dyn std::error::Erro
 
     // Read all 3 nodes back directly
     println!("Reading nodes before close...");
-    let read_node1 = graph.get_node(SnapshotId::current(), node_id1).expect("Failed to read node 1");
-    let read_node2 = graph.get_node(SnapshotId::current(), node_id2).expect("Failed to read node 2");
-    let read_node3 = graph.get_node(SnapshotId::current(), node_id3).expect("Failed to read node 3");
+    let read_node1 = graph
+        .get_node(SnapshotId::current(), node_id1)
+        .expect("Failed to read node 1");
+    let read_node2 = graph
+        .get_node(SnapshotId::current(), node_id2)
+        .expect("Failed to read node 2");
+    let read_node3 = graph
+        .get_node(SnapshotId::current(), node_id3)
+        .expect("Failed to read node 3");
 
     // Verify node data integrity
     assert_eq!(read_node1.kind, "Function");
@@ -103,7 +109,10 @@ fn test_v2_node_slot_persistence_reopen() -> Result<(), Box<dyn std::error::Erro
 
     // Verify edge persistence
     let neighbors = graph_reopened
-        .neighbors(SnapshotId::current(), node_id1, sqlitegraph::backend::NeighborQuery {
+        .neighbors(
+            SnapshotId::current(),
+            node_id1,
+            sqlitegraph::backend::NeighborQuery {
                 direction: sqlitegraph::backend::BackendDirection::Outgoing,
                 edge_type: Some("imports".to_string()),
             },

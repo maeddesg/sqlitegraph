@@ -5,7 +5,9 @@
 //! where 58 bytes (estimate_cluster_size(1)) was being used instead of the actual
 //! cluster size (8774 bytes).
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 
 /// Regression test for Phase 65 cluster size corruption bug
 ///
@@ -90,10 +92,14 @@ fn test_phase65_cluster_size_corruption_regression() -> Result<(), Box<dyn std::
 
     for (i, &node_id) in node_ids.iter().enumerate() {
         // This neighbor query should trigger cluster reads and expose any size corruption
-        match graph_reopened.neighbors(SnapshotId::current(), node_id, NeighborQuery {
+        match graph_reopened.neighbors(
+            SnapshotId::current(),
+            node_id,
+            NeighborQuery {
                 direction: BackendDirection::Outgoing,
                 edge_type: None,
-            }) {
+            },
+        ) {
             Ok(neighbors) => {
                 successful_queries += 1;
                 total_neighbors += neighbors.len();
@@ -141,10 +147,14 @@ fn test_phase65_cluster_size_corruption_regression() -> Result<(), Box<dyn std::
     let sample_nodes = [10, 25, 50, 75, 90];
     for &sample_node_id in &sample_nodes {
         if sample_node_id <= node_ids.len() as i64 {
-            let neighbors = graph_reopened.neighbors(SnapshotId::current(), sample_node_id, NeighborQuery {
-                direction: BackendDirection::Outgoing,
-                edge_type: None,
-            })?;
+            let neighbors = graph_reopened.neighbors(
+                SnapshotId::current(),
+                sample_node_id,
+                NeighborQuery {
+                    direction: BackendDirection::Outgoing,
+                    edge_type: None,
+                },
+            )?;
             println!(
                 "✅ Sample node {} has {} neighbors",
                 sample_node_id,
@@ -206,10 +216,14 @@ fn test_phase65_cluster_size_detection_mechanism() -> Result<(), Box<dyn std::er
     let graph_reopened = open_graph(&db_path, &reopen_config)?;
 
     // This should work fine - single edge clusters are typically > 100 bytes
-    let neighbors = graph_reopened.neighbors(SnapshotId::current(), node1, NeighborQuery {
-                direction: BackendDirection::Outgoing,
-                edge_type: None,
-            })?;
+    let neighbors = graph_reopened.neighbors(
+        SnapshotId::current(),
+        node1,
+        NeighborQuery {
+            direction: BackendDirection::Outgoing,
+            edge_type: None,
+        },
+    )?;
     assert!(
         neighbors.contains(&node2),
         "Node2 should be neighbor of Node1"

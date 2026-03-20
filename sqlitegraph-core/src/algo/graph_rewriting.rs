@@ -93,14 +93,10 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use crate::{
-    errors::SqliteGraphError,
-    graph::SqliteGraph,
-    progress::ProgressCallback,
-};
+use crate::{errors::SqliteGraphError, graph::SqliteGraph, progress::ProgressCallback};
 
 // Re-export subgraph_isomorphism for pattern matching
-use super::subgraph_isomorphism::{find_subgraph_patterns, SubgraphPatternBounds};
+use super::subgraph_isomorphism::{SubgraphPatternBounds, find_subgraph_patterns};
 
 /// Bounds for limiting graph rewriting operations.
 ///
@@ -453,7 +449,8 @@ fn copy_graph(graph: &SqliteGraph) -> Result<SqliteGraph, SqliteGraphError> {
     }
 
     // Copy all edges
-    let new_ids: Vec<i64> = new_graph.all_entity_ids()?
+    let new_ids: Vec<i64> = new_graph
+        .all_entity_ids()?
         .into_iter()
         .take(entity_ids.len())
         .collect();
@@ -466,10 +463,9 @@ fn copy_graph(graph: &SqliteGraph) -> Result<SqliteGraph, SqliteGraphError> {
     for &from_id in &entity_ids {
         if let Ok(outgoing) = graph.fetch_outgoing(from_id) {
             for to_id in outgoing {
-                if let (Some(&new_from), Some(&new_to)) = (
-                    old_to_new.get(&from_id),
-                    old_to_new.get(&to_id)
-                ) {
+                if let (Some(&new_from), Some(&new_to)) =
+                    (old_to_new.get(&from_id), old_to_new.get(&to_id))
+                {
                     let edge = crate::GraphEdge {
                         id: 0,
                         from_id: new_from,
@@ -587,12 +583,8 @@ pub fn rewrite_graph_patterns(
         let pattern_match = &match_result.matches[match_idx];
 
         // Apply this rewrite
-        let (new_graph, operations) = apply_single_rewrite(
-            &current_graph,
-            rule,
-            pattern_match,
-            patterns_replaced,
-        )?;
+        let (new_graph, operations) =
+            apply_single_rewrite(&current_graph, rule, pattern_match, patterns_replaced)?;
 
         current_graph = new_graph;
         all_operations.extend(operations);
@@ -711,12 +703,8 @@ where
         );
 
         // Apply this rewrite
-        let (new_graph, operations) = apply_single_rewrite(
-            &current_graph,
-            rule,
-            pattern_match,
-            patterns_replaced,
-        )?;
+        let (new_graph, operations) =
+            apply_single_rewrite(&current_graph, rule, pattern_match, patterns_replaced)?;
 
         current_graph = new_graph;
         all_operations.extend(operations);
@@ -910,7 +898,11 @@ fn apply_single_rewrite(
 
                     if let (Some(from_i), Some(to_i)) = (from_idx, to_idx) {
                         // Find the interface mapping or use replacement node map
-                        let from_id = if let Some((pat_idx, _)) = rule.interface.iter().find(|(_, rep_idx)| *rep_idx == from_i) {
+                        let from_id = if let Some((pat_idx, _)) = rule
+                            .interface
+                            .iter()
+                            .find(|(_, rep_idx)| *rep_idx == from_i)
+                        {
                             if *pat_idx < pattern_match.len() {
                                 old_to_new_id.get(&pattern_match[*pat_idx]).copied()
                             } else {
@@ -920,7 +912,9 @@ fn apply_single_rewrite(
                             replacement_node_map.get(&from_i).copied()
                         };
 
-                        let to_id = if let Some((pat_idx, _)) = rule.interface.iter().find(|(_, rep_idx)| *rep_idx == to_i) {
+                        let to_id = if let Some((pat_idx, _)) =
+                            rule.interface.iter().find(|(_, rep_idx)| *rep_idx == to_i)
+                        {
                             if *pat_idx < pattern_match.len() {
                                 old_to_new_id.get(&pattern_match[*pat_idx]).copied()
                             } else {
@@ -939,10 +933,7 @@ fn apply_single_rewrite(
                                 data: serde_json::json!({}),
                             };
                             if new_graph.insert_edge(&edge).is_ok() {
-                                operations.push(RewriteOperation::EdgeAdded {
-                                    from: from,
-                                    to: to,
-                                });
+                                operations.push(RewriteOperation::EdgeAdded { from: from, to: to });
                             }
                         }
                     }
@@ -1304,7 +1295,10 @@ mod tests {
         let result = rewrite_graph_patterns(&graph, &rule, bounds).unwrap();
 
         // Single node pattern matches all 3 nodes
-        assert_eq!(result.patterns_replaced, 3, "Single node pattern should match all 3 nodes");
+        assert_eq!(
+            result.patterns_replaced, 3,
+            "Single node pattern should match all 3 nodes"
+        );
         assert!(result.is_valid());
     }
 
@@ -1358,37 +1352,45 @@ mod tests {
         let graph = SqliteGraph::open_in_memory().unwrap();
 
         // Create nodes: Add1, Add2, x, y
-        let add1 = graph.insert_entity(&GraphEntity {
-            id: 0,
-            kind: "Op".to_string(),
-            name: "Add1".to_string(),
-            file_path: None,
-            data: serde_json::json!({"op": "add"}),
-        }).unwrap();
+        let add1 = graph
+            .insert_entity(&GraphEntity {
+                id: 0,
+                kind: "Op".to_string(),
+                name: "Add1".to_string(),
+                file_path: None,
+                data: serde_json::json!({"op": "add"}),
+            })
+            .unwrap();
 
-        let add2 = graph.insert_entity(&GraphEntity {
-            id: 0,
-            kind: "Op".to_string(),
-            name: "Add2".to_string(),
-            file_path: None,
-            data: serde_json::json!({"op": "add"}),
-        }).unwrap();
+        let add2 = graph
+            .insert_entity(&GraphEntity {
+                id: 0,
+                kind: "Op".to_string(),
+                name: "Add2".to_string(),
+                file_path: None,
+                data: serde_json::json!({"op": "add"}),
+            })
+            .unwrap();
 
-        let x = graph.insert_entity(&GraphEntity {
-            id: 0,
-            kind: "Var".to_string(),
-            name: "x".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
+        let x = graph
+            .insert_entity(&GraphEntity {
+                id: 0,
+                kind: "Var".to_string(),
+                name: "x".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
 
-        let y = graph.insert_entity(&GraphEntity {
-            id: 0,
-            kind: "Var".to_string(),
-            name: "y".to_string(),
-            file_path: None,
-            data: serde_json::json!({}),
-        }).unwrap();
+        let y = graph
+            .insert_entity(&GraphEntity {
+                id: 0,
+                kind: "Var".to_string(),
+                name: "y".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
 
         // Add edges: Add->x, Add->y (data flow from vars to op)
         let _ = graph.insert_edge(&GraphEdge {
@@ -1464,7 +1466,8 @@ mod tests {
         let bounds = RewriteBounds::default();
 
         // Should not panic with progress callback
-        let result = rewrite_graph_patterns_with_progress(&graph, &rule, bounds, &progress).unwrap();
+        let result =
+            rewrite_graph_patterns_with_progress(&graph, &rule, bounds, &progress).unwrap();
 
         // Pattern matches 2 edges: (0->1) and (1->2)
         assert_eq!(result.patterns_replaced, 2, "Should find 2 pattern matches");

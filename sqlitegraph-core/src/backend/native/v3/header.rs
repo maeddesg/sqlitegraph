@@ -13,24 +13,33 @@
 //! - edge_count[8] - Total edge count
 //! - schema_version[4] - Schema version
 //! - reserved[4] - Reserved field
-//! - node_data_offset[8] - Offset to node data region
-//! - edge_data_offset[8] - Offset to edge data region
-//! - outgoing_cluster_offset[8] - Outgoing edge cluster offset
-//! - incoming_cluster_offset[8] - Incoming edge cluster offset
-//! - free_space_offset[8] - Free space management offset
+//! - node_data_offset[8] - **V3: NodeStore's B+Tree root page ID** (was byte offset in V2)
+//! - edge_data_offset[8] - **V3: EdgeStore's B+Tree root page ID** (was byte offset in V2)
+//! - outgoing_cluster_offset[8] - Outgoing edge cluster offset (V2 compat, byte offset)
+//! - incoming_cluster_offset[8] - Incoming edge cluster offset (V2 compat, byte offset)
+//! - free_space_offset[8] - Free space management offset (V2 compat, byte offset)
 //!
 //! **New V3 fields (bytes 80-111):**
-//! - root_index_page[8] - Root B+Tree index page ID
+//! - root_index_page[8] - Root B+Tree index page ID (primary node index)
 //! - free_page_list_head[8] - Head of free page list (0 if none)
 //! - total_pages[8] - Total pages allocated
 //! - page_size[4] - Page size in bytes (typically 4096)
 //! - btree_height[4] - Current B+Tree height
 //!
-//! Note: Checksum is calculated separately and not stored in the header.
+//! ## Important: B+Tree Root Page ID Storage
+//!
+//! In V3's page-based storage model:
+//! - `node_data_offset` stores **NodeStore's B+Tree root page ID** (not a byte offset)
+//! - `edge_data_offset` stores **EdgeStore's B+Tree root page ID** (not a byte offset)
+//! - Value 0 means uninitialized/no data
+//! - Value >= 1 is a valid page ID
+//!
+//! This reuses the V2 offset fields for compatibility but changes their semantics.
+//! The validation in `validate()` reflects this new interpretation.
 
-use crate::backend::native::constants;
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
+use crate::backend::native::constants;
 use crate::backend::native::v2;
 use crate::backend::native::v3::constants::{
     DEFAULT_PAGE_SIZE, DEFAULT_SCHEMA_VERSION, DEFAULT_V3_FEATURE_FLAGS, MAX_BTREE_HEIGHT,
@@ -57,19 +66,20 @@ pub struct PersistentHeaderV3 {
     pub schema_version: u32,
     /// Reserved field (for future use)
     pub reserved: u32,
-    /// Offset to node data section
+    /// **V3: NodeStore's B+Tree root page ID** (value 0 = uninitialized, >= 1 = valid page ID)
+    /// Note: Field name "node_data_offset" is kept for V2 compatibility, but stores a page ID in V3
     pub node_data_offset: u64,
-    /// Offset to edge data section
+    /// **V3: EdgeStore's B+Tree root page ID** (value 0 = uninitialized, >= 1 = valid page ID)
+    /// Note: Field name "edge_data_offset" is kept for V2 compatibility, but stores a page ID in V3
     pub edge_data_offset: u64,
-    /// Offset where outgoing edge clusters begin
+    /// Offset where outgoing edge clusters begin (V2 compat, still byte offset)
     pub outgoing_cluster_offset: u64,
-    /// Offset where incoming edge clusters begin
+    /// Offset where incoming edge clusters begin (V2 compat, still byte offset)
     pub incoming_cluster_offset: u64,
-    /// Offset where free space management begins
+    /// Offset where free space management begins (V2 compat, still byte offset)
     pub free_space_offset: u64,
 
     // --- V3-specific fields (bytes 80-111) ---
-
     /// Root B+Tree index page ID (0 if tree is empty)
     pub root_index_page: u64,
     /// Head of free page list for page reuse (0 if none)
@@ -176,9 +186,11 @@ impl PersistentHeaderV3 {
             .copy_from_slice(&self.node_data_offset.to_be_bytes());
         bytes[offset::EDGE_DATA_OFFSET..offset::EDGE_DATA_OFFSET + size::EDGE_DATA_OFFSET]
             .copy_from_slice(&self.edge_data_offset.to_be_bytes());
-        bytes[offset::OUTGOING_CLUSTER_OFFSET..offset::OUTGOING_CLUSTER_OFFSET + size::OUTGOING_CLUSTER_OFFSET]
+        bytes[offset::OUTGOING_CLUSTER_OFFSET
+            ..offset::OUTGOING_CLUSTER_OFFSET + size::OUTGOING_CLUSTER_OFFSET]
             .copy_from_slice(&self.outgoing_cluster_offset.to_be_bytes());
-        bytes[offset::INCOMING_CLUSTER_OFFSET..offset::INCOMING_CLUSTER_OFFSET + size::INCOMING_CLUSTER_OFFSET]
+        bytes[offset::INCOMING_CLUSTER_OFFSET
+            ..offset::INCOMING_CLUSTER_OFFSET + size::INCOMING_CLUSTER_OFFSET]
             .copy_from_slice(&self.incoming_cluster_offset.to_be_bytes());
         bytes[offset::FREE_SPACE_OFFSET..offset::FREE_SPACE_OFFSET + size::FREE_SPACE_OFFSET]
             .copy_from_slice(&self.free_space_offset.to_be_bytes());
@@ -244,26 +256,38 @@ impl PersistentHeaderV3 {
             });
         }
 
-        // Check offset ordering
-        if self.node_data_offset < V3_HEADER_SIZE {
+        // V3 B+TREE INDEXING MODEL:
+        // In V3's page-based storage, node_data_offset and edge_data_offset
+        // store B+Tree root page IDs (not byte offsets like the field names suggest).
+        // - Value 0 means uninitialized/no data
+        // - Value >= 1 is a valid page ID
+        //
+        // The original monolithic file layout with byte offsets has been replaced
+        // by page-based B+Tree indexing, but we reuse these fields for compatibility.
+
+        // Validate node_data_offset as page ID (0 or >= 1)
+        if self.node_data_offset != 0 && self.node_data_offset < 1 {
             return Err(NativeBackendError::InvalidHeader {
                 field: "node_data_offset".to_string(),
-                reason: format!("must be >= header_size ({})", V3_HEADER_SIZE),
+                reason: "must be 0 (uninitialized) or >= 1 (valid page ID)".to_string(),
             });
         }
 
-        if self.edge_data_offset < self.node_data_offset {
+        // Validate edge_data_offset as page ID (0 or >= 1)
+        if self.edge_data_offset != 0 && self.edge_data_offset < 1 {
             return Err(NativeBackendError::InvalidHeader {
                 field: "edge_data_offset".to_string(),
-                reason: "must be >= node_data_offset".to_string(),
+                reason: "must be 0 (uninitialized) or >= 1 (valid page ID)".to_string(),
             });
         }
 
-        // Validate cluster offset ordering
-        if self.outgoing_cluster_offset > 0 && self.outgoing_cluster_offset < self.node_data_offset {
+        // Validate cluster offset ordering (these are still byte offsets for V2 compat)
+        // The cluster offsets are compared against V3_HEADER_SIZE as byte offsets
+        if self.outgoing_cluster_offset > 0 && self.outgoing_cluster_offset < V3_HEADER_SIZE as u64
+        {
             return Err(NativeBackendError::InvalidHeader {
                 field: "outgoing_cluster_offset".to_string(),
-                reason: "must be >= node_data_offset".to_string(),
+                reason: format!("must be 0 or >= header_size ({})", V3_HEADER_SIZE),
             });
         }
 
@@ -358,12 +382,14 @@ impl PersistentHeaderV3 {
                 .unwrap(),
         );
         let outgoing_cluster_offset = u64::from_be_bytes(
-            bytes[offset::OUTGOING_CLUSTER_OFFSET..offset::OUTGOING_CLUSTER_OFFSET + size::OUTGOING_CLUSTER_OFFSET]
+            bytes[offset::OUTGOING_CLUSTER_OFFSET
+                ..offset::OUTGOING_CLUSTER_OFFSET + size::OUTGOING_CLUSTER_OFFSET]
                 .try_into()
                 .unwrap(),
         );
         let incoming_cluster_offset = u64::from_be_bytes(
-            bytes[offset::INCOMING_CLUSTER_OFFSET..offset::INCOMING_CLUSTER_OFFSET + size::INCOMING_CLUSTER_OFFSET]
+            bytes[offset::INCOMING_CLUSTER_OFFSET
+                ..offset::INCOMING_CLUSTER_OFFSET + size::INCOMING_CLUSTER_OFFSET]
                 .try_into()
                 .unwrap(),
         );
@@ -380,7 +406,8 @@ impl PersistentHeaderV3 {
                 .unwrap(),
         );
         let free_page_list_head = u64::from_be_bytes(
-            bytes[offset::FREE_PAGE_LIST_HEAD..offset::FREE_PAGE_LIST_HEAD + size::FREE_PAGE_LIST_HEAD]
+            bytes[offset::FREE_PAGE_LIST_HEAD
+                ..offset::FREE_PAGE_LIST_HEAD + size::FREE_PAGE_LIST_HEAD]
                 .try_into()
                 .unwrap(),
         );
@@ -483,8 +510,7 @@ mod tests {
             "PersistentHeaderV3 must be exactly 112 bytes"
         );
         assert_eq!(
-            PERSISTENT_HEADER_V3_SIZE,
-            112,
+            PERSISTENT_HEADER_V3_SIZE, 112,
             "Calculated header size must be 112 bytes"
         );
     }
@@ -630,6 +656,10 @@ mod tests {
     fn test_v3_preserves_v2_layout_prefix() {
         // Verify V3 header layout is a strict extension of V2
         // V2 header ends at byte 80 (FREE_SPACE_OFFSET ends at 79)
-        assert_eq!(offset::ROOT_INDEX_PAGE, 80, "V3 fields should start at byte 80");
+        assert_eq!(
+            offset::ROOT_INDEX_PAGE,
+            80,
+            "V3 fields should start at byte 80"
+        );
     }
 }

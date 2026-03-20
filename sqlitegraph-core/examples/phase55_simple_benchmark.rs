@@ -2,8 +2,8 @@
 //!
 //! Evidence-only measurement without debug output
 
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
 use sqlitegraph::SnapshotId;
+use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, open_graph};
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

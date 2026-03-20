@@ -11,8 +11,10 @@
 //! The benchmark report's "70× faster" is for HOT path (cached adjacency).
 //! The "slow" quick test was measuring COLD path (full lookup chain).
 
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 use std::time::Instant;
-use sqlitegraph::{GraphConfig, NodeSpec, EdgeSpec, open_graph, SnapshotId, NeighborQuery, BackendDirection};
 use tempfile::tempdir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -63,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("───────────────────────────────────────────────────────────────────");
     println!("  COLD CACHE (First Query - Full Path)");
     println!("───────────────────────────────────────────────────────────────────");
-    
+
     // First query (cold cache) - this is: B+tree lookup + cache miss + populate
     let start = Instant::now();
     let result = graph.neighbors(snapshot, node_ids[0], query.clone())?;
@@ -97,9 +99,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════════════");
     println!("  Cold path (B+tree + cache miss):  {} ns", cold_ns);
     println!("  Hot path  (cached adjacency):     {} ns", hot_ns);
-    println!("  Cache warmup benefit:             {}× faster", cold_ns as f64 / hot_ns as f64);
+    println!(
+        "  Cache warmup benefit:             {}× faster",
+        cold_ns as f64 / hot_ns as f64
+    );
     println!("");
-    
+
     if hot_ns < 1000 {
         println!("  ✅ EXCELLENT: Hot path < 1 μs (cached adjacency is fast)");
     } else if hot_ns < 5000 {
@@ -107,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("  ⚠️  OK: Hot path {} μs", hot_ns / 1000);
     }
-    
+
     println!("\n  NOTE: Benchmark report's '70× faster' measures HOT path vs SQLite");
     println!("        (cached adjacency fetch, not cold B+tree lookup)");
     println!("═══════════════════════════════════════════════════════════════════");

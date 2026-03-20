@@ -191,11 +191,11 @@ pub fn betweenness_centrality(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::{EdgeSpec, NodeSpec};
     #[cfg(feature = "native-v3")]
     use crate::backend::native::v3::V3Backend;
+    use crate::backend::{EdgeSpec, NodeSpec};
     use tempfile::TempDir;
-    
+
     #[cfg(not(feature = "native-v3"))]
     compile_error!("Tests require native-v3 feature");
 
@@ -209,21 +209,25 @@ mod tests {
     fn build_chain(backend: &V3Backend) -> Vec<i64> {
         let mut nodes = Vec::new();
         for _ in 0..4 {
-            let id = backend.insert_node(NodeSpec {
-                kind: "Node".to_string(),
-                name: "node".to_string(),
-                file_path: None,
-                data: serde_json::json!({}),
-            }).unwrap();
+            let id = backend
+                .insert_node(NodeSpec {
+                    kind: "Node".to_string(),
+                    name: "node".to_string(),
+                    file_path: None,
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
             nodes.push(id);
         }
-        for i in 0..nodes.len()-1 {
-            backend.insert_edge(EdgeSpec {
-                from: nodes[i],
-                to: nodes[i+1],
-                edge_type: "links".to_string(),
-                data: serde_json::json!({}),
-            }).unwrap();
+        for i in 0..nodes.len() - 1 {
+            backend
+                .insert_edge(EdgeSpec {
+                    from: nodes[i],
+                    to: nodes[i + 1],
+                    edge_type: "links".to_string(),
+                    data: serde_json::json!({}),
+                })
+                .unwrap();
         }
         nodes
     }
@@ -234,13 +238,13 @@ mod tests {
         let nodes = build_chain(&backend);
 
         let scores = pagerank(&backend, 0.85, 20).unwrap();
-        
+
         assert_eq!(scores.len(), 4);
-        
+
         // Verify scores sum to ~1.0
         let total: f64 = scores.iter().map(|(_, s)| s).sum();
         assert!((total - 1.0).abs() < 0.01);
-        
+
         // End node should have higher score than start
         let scores_map: std::collections::HashMap<i64, f64> = scores.into_iter().collect();
         assert!(scores_map[&nodes[3]] > scores_map[&nodes[0]]);
@@ -252,9 +256,9 @@ mod tests {
         build_chain(&backend);
 
         let centrality = betweenness_centrality(&backend).unwrap();
-        
+
         assert_eq!(centrality.len(), 4);
-        
+
         // In a chain, middle nodes should have higher betweenness
         // (they lie on more shortest paths)
     }
@@ -262,7 +266,7 @@ mod tests {
     #[test]
     fn test_backend_pagerank_empty() {
         let (backend, _temp) = create_test_backend();
-        
+
         let scores = pagerank(&backend, 0.85, 20).unwrap();
         assert!(scores.is_empty());
     }
@@ -270,7 +274,7 @@ mod tests {
     #[test]
     fn test_backend_betweenness_empty() {
         let (backend, _temp) = create_test_backend();
-        
+
         let centrality = betweenness_centrality(&backend).unwrap();
         assert!(centrality.is_empty());
     }

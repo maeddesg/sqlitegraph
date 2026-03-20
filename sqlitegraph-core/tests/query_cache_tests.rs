@@ -195,8 +195,20 @@ fn test_query_cache_filtered_k_hop() -> Result<(), Box<dyn std::error::Error>> {
     let backend = create_test_graph()?;
 
     // Run filtered k-hop query twice with same filter
-    let result1 = backend.k_hop_filtered(SnapshotId::current(), 1, 2, BackendDirection::Outgoing, &["chain"])?;
-    let result2 = backend.k_hop_filtered(SnapshotId::current(), 1, 2, BackendDirection::Outgoing, &["chain"])?;
+    let result1 = backend.k_hop_filtered(
+        SnapshotId::current(),
+        1,
+        2,
+        BackendDirection::Outgoing,
+        &["chain"],
+    )?;
+    let result2 = backend.k_hop_filtered(
+        SnapshotId::current(),
+        1,
+        2,
+        BackendDirection::Outgoing,
+        &["chain"],
+    )?;
 
     // Results should be identical
     assert_eq!(

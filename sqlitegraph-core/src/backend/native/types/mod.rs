@@ -9,6 +9,7 @@ pub use cpu_profile::*;
 pub use errors::*;
 pub use file_header::*;
 pub use flags::*;
+pub use kv_types::*;
 pub use records::*;
 pub use utils::*;
 
@@ -18,5 +19,6 @@ mod cpu_profile;
 mod errors;
 mod file_header;
 mod flags;
+mod kv_types;
 mod records;
 mod utils;
