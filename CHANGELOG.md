@@ -1,5 +1,33 @@
 # SQLiteGraph Changelog
 
+## [2.1.0] - 2026-04-20
+
+### Merged
+- **feat/v3-completion branch merged into main**
+  - V3 B+Tree native backend is now the primary native storage implementation
+  - Removed all dead v2 native backend modules, tests, benchmarks, and examples
+  - Cleaned up `native/mod.rs` to export only v3 types
+
+### Fixed
+- **Snapshot isolation compatibility with main branch**
+  - `SnapshotId::current()` in main returns auto-incrementing LSNs (starting at 1), not 0
+  - `require_current_snapshot()` changed to no-op since V3 has no MVCC — all snapshots accepted
+  - Updated `v3_algorithm_tests.rs` to reflect V3 snapshot behavior (no historical rejection)
+
+- **Compilation error in unsafe_invariants_tests.rs**
+  - Fixed wrong crate name: `sqlitegraph_core` → `sqlitegraph`
+
+### Removed
+- **Dead v2 native backend code (317 files)**
+  - `native/core/` — v2 clustered edge kernel, WAL, checkpoint, recovery, pub/sub
+  - `native/adjacency/` — v2 adjacency iterators and cluster readers
+  - `native/edge_store/` — v2 edge store capacity coordinator and record ops
+  - `native/graph_file/` — v2 graph file I/O, mmap, transaction management
+  - `native/graph_ops/` — v2 BFS, k-hop, pathfinding, chain queries
+  - `native/graph_backend.rs`, `native/node_store.rs`, `native/node_cache.rs`
+  - 100+ v2 regression and integration test files
+  - v2-specific benchmarks (`v2_performance`, `io12_validation`, `prefetch_bench`, etc.)
+
 ## [2.0.9] - 2026-04-10
 
 ### Fixed
