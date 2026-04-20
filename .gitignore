@@ -2,6 +2,9 @@
 /target/
 Cargo.lock
 
+# Worktrees
+.worktrees/
+
 # IDE files
 .vscode/
 .idea/
@@ -51,7 +54,6 @@ benchmark_results/
 # Claude and internal development files
 .claude/
 results/
-AGENTS.md
 .mcp.json
 .splice/
 .splice-backup/
@@ -67,7 +69,6 @@ V2_REGRESSION_GATES_*.md
 Archive.zip
 
 # Project development files (internal use)
-CLAUDE.md
 .planning/
 .codemcp/
 .splice/
