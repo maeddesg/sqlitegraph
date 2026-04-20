@@ -1,6 +1,48 @@
 # SQLiteGraph Changelog
 
-## [2.1.0] - 2026-04-20
+## [2.0.9] - 2026-04-20
+
+### Fixed
+- **HNSW `search_layer` accepted empty query vectors**
+  - Cosine distance would panic; other metrics silently returned 0.0, corrupting results
+  - `search_layer` now rejects empty `query_vector` with `InvalidSearchParameters`
+  - Added `test_search_layer_empty_query_vector` (neighborhood.rs) and `test_search_rejects_empty_query_vector` (index_api.rs)
+  - Location: `sqlitegraph-core/src/hnsw/neighborhood.rs`
+
+- **Misleading `drop(btree)` no-op in NodeStore**
+  - `drop(btree)` on `&mut BTreeManager` is a no-op; references don't implement `Drop`
+  - Removed the call and misleading comment. NLL ends the borrow automatically
+  - This also eliminated the `dropping_references` compiler warning
+  - Location: `sqlitegraph-core/src/backend/native/v3/node/store.rs`
+
+- **Compiler warning count: 28 → 0**
+  - `cargo check --features native-v3` now passes clean
+
+### Removed
+- **`debug.rs` module**
+  - 4 unused macros (`debug_log!`, `info_log!`, `warn_log!`, `error_log!`) never invoked anywhere
+  - Removed `pub mod debug;` from `lib.rs`
+
+- **Dead code (~350+ lines across 10 files)**
+  - `btree.rs`: 5 unused B+Tree split helpers (`split_page`, `find_leaf_path`, `split_and_insert_leaf`, `split_internal_page`, `update_parent_after_split`) — ~183 lines
+  - `backend.rs`: 4 unused lazy-init methods (`get_or_init_kv`, `get_or_init_publisher`, etc.) — ~38 lines
+  - `node/store.rs`: `btree_manager()`, `page_allocator()`, `evict_page_cache_if_needed()`, `load_page_from_disk_ro()`, `total_pages` field — ~74 lines
+  - `node/page.rs`: `estimate_compressed_size()` — ~47 lines
+  - `allocator.rs`: unread `page_size` field
+  - `graph/core.rs`: unused `from_connection()`
+  - `graph/adjacency.rs`: unused `underlying_connection()`
+  - `api_ergonomics.rs`: unused `EdgeId` struct
+  - `algo/observability.rs`: unused `default_weight_fn()` (moved to test scope only)
+  - `algo/cut_partition.rs`: unused `add_flow()` and `is_original_node()`
+  - `fault_injection.rs`: unused `Phase75V2ClusterMetadataBeforeCommit` variant, `reset_faults()`, `configure_fault()`
+
+- **Unused assignments in page serialization**
+  - `index/page.rs:528`: removed dead `data_offset += PAGE_ID_SIZE`
+  - `node/page.rs:581`: removed dead `offset += 8`
+  - `node/page.rs:597`: removed dead `offset = data_end`
+
+- **Unused import**
+  - `sqlitegraph-cli/src/main.rs:137`: removed `BackendDirection` import
 
 ### Merged
 - **feat/v3-completion branch merged into main**
