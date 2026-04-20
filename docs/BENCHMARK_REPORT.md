@@ -387,7 +387,64 @@ cargo bench --features native-v3 --bench backend_comparison
 
 ---
 
-## 7. Conclusion
+## 7. V3 Primitive Micro-Benchmarks
+
+Run: `cargo bench --features v3-bench`
+Date: 2026-04-20
+Profile: release (opt-level=3)
+Tool: Criterion.rs 0.5.1
+
+### Page Allocator
+
+| Operation | N | Median Time | Throughput |
+|-----------|---|-------------|------------|
+| allocate (sequential) | 100 | 107.9 ns | 926.8 Melem/s |
+| allocate (sequential) | 1,000 | 740.4 ns | 1.35 Gelem/s |
+| allocate (sequential) | 10,000 | 7.03 µs | 1.42 Gelem/s |
+| allocate/deallocate/reuse | 1,000 alloc + 500 dealloc + 500 realloc | 3.08 µs | -- |
+
+### B+Tree Manager
+
+| Operation | N | Median Time | Per-Operation |
+|-----------|---|-------------|---------------|
+| insert | 100 | 446.9 µs | 4.47 µs/key |
+| insert | 1,000 | 4.97 ms | 4.97 µs/key |
+| insert | 10,000 | 51.52 ms | 5.15 µs/key |
+| lookup | 100 | 8.26 µs | 82.6 ns/key |
+| lookup | 1,000 | 139.0 µs | 139 ns/key |
+| lookup | 10,000 | 1.57 ms | 157 ns/key |
+
+### V3 Backend (End-to-End)
+
+| Operation | N | Median Time | Per-Operation |
+|-----------|---|-------------|---------------|
+| insert_node | 100 | 4.31 ms | 43.1 µs/node |
+| insert_node | 1,000 | 56.74 ms | 56.7 µs/node |
+| insert_edge (chain, 49 edges) | 49 | 208.1 µs | 4.25 µs/edge |
+| insert_edge (chain, 199 edges) | 199 | 791.7 µs | 3.98 µs/edge |
+| get_neighbors (outgoing, star 100) | 100 | 43.15 ns | -- |
+| get_neighbors (incoming, leaf 1) | 1 | 35.37 ns | -- |
+
+### Graph Algorithms (V3)
+
+| Operation | Graph | Median Time |
+|-----------|-------|-------------|
+| bfs_traversal/k_hop | chain_100 | 5.20 µs |
+| bfs_traversal/k_hop | chain_500 | 5.37 µs |
+| k_hop (binary_tree depth=1) | 3 nodes | 94.1 ns |
+| k_hop (binary_tree depth=2) | 7 nodes | 264.1 ns |
+| k_hop (binary_tree depth=3) | 15 nodes | 753.5 ns |
+| k_hop (binary_tree depth=4) | 31 nodes | 1.51 µs |
+| neighbors/star_outgoing_center | 100 edges | 42.34 ns |
+| neighbors/star_incoming_leaf | 1 edge | 35.54 ns |
+| neighbors/star_filtered_type | 100 edges | 2.41 µs |
+| get_node | 1 node | 1.33 ms |
+| entity_ids | all nodes | 1.31 ms |
+| node_degree | 1 node | 5.12 µs |
+
+---
+
+## 8. Conclusion
 
 Native V3 delivers substantial performance improvements (10-20×) for graph traversal and adjacency-heavy workloads compared to SQLite. This comes from:
 
