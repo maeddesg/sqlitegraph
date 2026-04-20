@@ -50,14 +50,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("\n=== Testing neighbors after reopen ===");
         for node_id in [100, 500, 999] {
-            match backend.neighbors(sqlitegraph::SnapshotId::current(), node_id, query) {
+            match backend.neighbors(sqlitegraph::SnapshotId::current(), node_id, query.clone()) {
                 Ok(neighbors) => println!("Node {}: {} neighbors", node_id, neighbors.len()),
                 Err(e) => println!("Node {}: ERROR - {}", node_id, e),
             }
         }
 
         println!("\n=== Testing BFS after reopen ===");
-        let bfs_result = backend.bfs_traversal(1)?;
+        let bfs_result = backend.bfs(sqlitegraph::SnapshotId::current(), 1, 1000)?;
         println!("BFS from node 1: {} nodes reached", bfs_result.len());
 
         println!("\n=== Testing get_node after reopen ===");

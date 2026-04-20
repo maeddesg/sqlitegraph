@@ -2,21 +2,21 @@
 //!
 //! Run with: cargo run --features native-v3,v3-forensics --example v3_forensics_example
 
-use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec, native::v3::V3Backend};
+use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec};
+use sqlitegraph::backend::native::v3::V3Backend;
 use sqlitegraph::snapshot::SnapshotId;
 
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;
 
+#[cfg(feature = "v3-forensics")]
 fn main() {
-    #[cfg(feature = "v3-forensics")]
-    {
-        println!("\n═══════════════════════════════════════════════════════════");
-        println!("          V3 FORENSIC INVESTIGATION                         ");
-        println!("═══════════════════════════════════════════════════════════\n");
+    println!("\n═══════════════════════════════════════════════════════════");
+    println!("          V3 FORENSIC INVESTIGATION                         ");
+    println!("═══════════════════════════════════════════════════════════\n");
 
-        // Reset counters
-        FORENSIC_COUNTERS.reset();
+    // Reset counters
+    FORENSIC_COUNTERS.reset();
 
         // Create temp directory
         let temp_dir = tempfile::TempDir::new().unwrap();
@@ -168,7 +168,6 @@ fn main() {
         println!("   This is a known issue in src/backend/native/v3/");
         println!("   - btree.rs:1059: file.sync_data() on write_page");
         println!("   - node/store.rs:678: file.sync_all() on write_node_page");
-    }
 }
 
 #[cfg(not(feature = "v3-forensics"))]

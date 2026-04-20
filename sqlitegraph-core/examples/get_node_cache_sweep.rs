@@ -89,7 +89,7 @@ fn run_benchmark(cache_size: usize) -> Result<BenchmarkStats, Box<dyn std::error
     print!("Creating database... ");
     let _ = std::io::stdout().flush();
     let create_start = Instant::now();
-    let backend = V3Backend::create_with_cache_capacity(&db_path, cache_size)?;
+    let backend = V3Backend::create(&db_path)?;
 
     for i in 0..NODE_COUNT {
         backend.insert_node(NodeSpec {
@@ -116,7 +116,10 @@ fn run_benchmark(cache_size: usize) -> Result<BenchmarkStats, Box<dyn std::error
         warm_stats.throughput
     );
 
+    #[cfg(feature = "v3-forensics")]
     let warm_forensics = read_forensics();
+    #[cfg(not(feature = "v3-forensics"))]
+    let warm_forensics = ForensicsReading::default();
 
     // Step 3: Reopen benchmark (cache is cold)
     drop(backend);
@@ -126,7 +129,7 @@ fn run_benchmark(cache_size: usize) -> Result<BenchmarkStats, Box<dyn std::error
 
     print!("Running reopen (cold cache) benchmark... ");
     let _ = std::io::stdout().flush();
-    let backend = V3Backend::open_with_cache_capacity(&db_path, cache_size)?;
+    let backend = V3Backend::open(&db_path)?;
     let reopen_stats = measure_get_node(&backend, LOOKUP_COUNT)?;
     println!(
         "{:.2}μs/lookup, {:.1} lookups/sec",
@@ -134,7 +137,10 @@ fn run_benchmark(cache_size: usize) -> Result<BenchmarkStats, Box<dyn std::error
         reopen_stats.throughput
     );
 
+    #[cfg(feature = "v3-forensics")]
     let reopen_forensics = read_forensics();
+    #[cfg(not(feature = "v3-forensics"))]
+    let reopen_forensics = ForensicsReading::default();
 
     Ok(BenchmarkStats {
         cache_size,

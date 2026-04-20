@@ -71,7 +71,6 @@ impl Publisher {
         }
     }
 
-    #[cfg(not(feature = "native-v2"))]
     fn should_send(event: &PubSubEvent, filter: &SubscriptionFilter) -> bool {
         match event {
             PubSubEvent::NodeChanged { .. } => filter.node_changes,
@@ -79,12 +78,6 @@ impl Publisher {
             PubSubEvent::KvChanged { .. } => filter.kv_changes,
             PubSubEvent::SnapshotCommitted { .. } => filter.snapshot_commits,
         }
-    }
-
-    #[cfg(feature = "native-v2")]
-    fn should_send(event: &PubSubEvent, filter: &SubscriptionFilter) -> bool {
-        // V2's SubscriptionFilter has a matches_simple method
-        filter.matches_simple(event)
     }
 }
 
@@ -596,7 +589,6 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         })
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_get(
         &self,
         snapshot_id: crate::snapshot::SnapshotId,
@@ -662,7 +654,6 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         }
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_set(
         &self,
         key: Vec<u8>,
@@ -718,7 +709,6 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         Ok(())
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_delete(&self, key: &[u8]) -> Result<(), crate::SqliteGraphError> {
         // Initialize KV table if needed
         self.ensure_kv_table()?;
@@ -762,7 +752,6 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 
     // ========== Pub/Sub Enhancement APIs (v1.4.0) ==========
 
-    #[cfg(feature = "native-v2")]
     fn kv_prefix_scan(
         &self,
         snapshot_id: crate::snapshot::SnapshotId,
@@ -849,13 +838,13 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 }
 
 /// Convert KvValue to serde_json::Value for serialization
-#[cfg(feature = "native-v2")]
 fn kv_value_to_json(
     value: &crate::backend::native::types::KvValue,
 ) -> serde_json::Value {
     use crate::backend::native::types::KvValue;
 
     match value {
+        KvValue::Null => serde_json::json!({"type": "null"}),
         KvValue::Bytes(bytes) => {
             serde_json::json!({
                 "type": "bytes",
@@ -896,7 +885,6 @@ fn kv_value_to_json(
 }
 
 /// Convert bytes to comma-separated string for storage
-#[cfg(feature = "native-v2")]
 fn bytes_to_string(bytes: &[u8]) -> String {
     use std::fmt::Write;
     let mut result = String::new();
@@ -910,7 +898,6 @@ fn bytes_to_string(bytes: &[u8]) -> String {
 }
 
 /// Convert comma-separated string back to bytes
-#[cfg(feature = "native-v2")]
 fn string_to_bytes(s: &str) -> Result<Vec<u8>, SqliteGraphError> {
     s.split(',')
         .map(|part| {
@@ -922,7 +909,6 @@ fn string_to_bytes(s: &str) -> Result<Vec<u8>, SqliteGraphError> {
 }
 
 /// Convert serde_json::Value back to KvValue after deserialization
-#[cfg(feature = "native-v2")]
 fn json_to_kv_value(
     json_value: serde_json::Value,
 ) -> Result<crate::backend::native::types::KvValue, SqliteGraphError> {

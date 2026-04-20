@@ -1,5 +1,56 @@
 # SQLiteGraph Changelog
 
+## [2.0.9] - 2026-04-10
+
+### Fixed
+- **PageAllocator free list chain bug (data loss)**
+  - Replaced single `free_list_head: u64` with `free_list: Vec<u64>` stack
+  - Previously only 1 deallocated page could ever be reused; all others were leaked
+  - `allocate()` now properly pops from the stack; `deallocate()` pushes onto it
+  - Location: `sqlitegraph-core/src/backend/native/v3/allocator.rs`
+
+- **PageAllocator double-free detection gap**
+  - `deallocate()` now extends bitmap to cover the page being freed
+  - Previously pages beyond `bitmap.len()` could be double-freed silently
+  - Location: `sqlitegraph-core/src/backend/native/v3/allocator.rs`
+
+- **PageAllocator stats() accuracy**
+  - `stats()` now returns `free = free_list.len()` instead of incorrect `total - allocated`
+  - Old calculation was wrong with sparse bitmaps
+  - Location: `sqlitegraph-core/src/backend/native/v3/allocator.rs`
+
+- **Edge cluster deserialization losing src/direction**
+  - Bumped `V3EdgeCluster` format from v1 to v2, embedding `src` and `direction` in serialized data
+  - v1 deserialization still supported for backward compatibility
+  - Location: `sqlitegraph-core/src/backend/native/v3/edge_compat.rs`
+
+- **edge_key() producing negative B+Tree keys**
+  - Rewrote to use zigzag encoding that always produces positive `i64`
+  - Previous `u64` to `i64` cast could produce negative keys for large node IDs
+  - Location: `sqlitegraph-core/src/backend/native/v3/edge_compat.rs`
+
+- **V3EdgeStore bypassing FileCoordinator**
+  - Added optional `file_coordinator` field to `V3EdgeStore`
+  - `write_page_to_disk()` routes through coordinator when set
+  - Location: `sqlitegraph-core/src/backend/native/v3/edge_compat.rs`
+
+- **V3Backend ignoring edge_type in EdgeSpec**
+  - `insert_edge_inner()` was passing `None` for edge_type, discarding the actual type
+  - Fixed to forward `edge.edge_type` to `V3EdgeStore::insert_edge()`
+  - `neighbors()` now uses `neighbors_filtered()` when `query.edge_type` is `Some`
+  - Location: `sqlitegraph-core/src/backend/native/v3/backend.rs`
+
+### Added
+- **V3 backend benchmarks behind feature flag**
+  - Added `v3-bench` feature flag (`cargo bench --features v3-bench`)
+  - `v3_backend_benchmarks.rs`: PageAllocator, BTreeManager, V3Backend primitives
+  - `v3_algorithm_benchmarks.rs`: BFS traversal, k-hop, neighbor queries, node operations
+
+- **V3 algorithm integration tests** (8 new tests)
+  - BFS chain/disconnected traversal, star topology, binary tree k-hop
+  - Diamond DAG degree verification, edge type filtering, 200-node stress test
+  - Location: `sqlitegraph-core/src/backend/native/v3/tests/mod.rs`
+
 ## [2.0.9] - 2026-03-15
 
 ### Fixed

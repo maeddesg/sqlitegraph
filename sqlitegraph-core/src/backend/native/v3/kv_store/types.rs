@@ -3,27 +3,8 @@
 //! This module defines the types for V3's native key-value storage,
 //! designed to integrate with V3's page-based architecture and WAL.
 
-use serde::{Deserialize, Serialize};
+pub use crate::backend::native::types::{KvEntry, KvMetadata, KvValue};
 use std::time::SystemTime;
-
-/// Value types supported by the KV store
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum KvValue {
-    /// Null value
-    Null,
-    /// 64-bit signed integer
-    Integer(i64),
-    /// 64-bit floating point
-    Float(f64),
-    /// UTF-8 string
-    String(String),
-    /// Boolean
-    Boolean(bool),
-    /// Raw bytes
-    Bytes(Vec<u8>),
-    /// JSON value
-    Json(serde_json::Value),
-}
 
 impl KvValue {
     /// Get the type tag for WAL serialization
@@ -73,19 +54,6 @@ impl KvValue {
     }
 }
 
-/// Metadata for KV entries
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct KvMetadata {
-    /// Creation timestamp (Unix epoch seconds)
-    pub created_at: u64,
-    /// Last update timestamp
-    pub updated_at: u64,
-    /// TTL in seconds (None = no expiration)
-    pub ttl_seconds: Option<u64>,
-    /// Version (LSN from WAL)
-    pub version: u64,
-}
-
 impl KvMetadata {
     /// Create new metadata with current timestamp
     pub fn new(version: u64, ttl_seconds: Option<u64>) -> Self {
@@ -127,17 +95,6 @@ impl KvMetadata {
     }
 }
 
-/// A versioned KV entry
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct KvEntry {
-    /// Key bytes
-    pub key: Vec<u8>,
-    /// Value
-    pub value: KvValue,
-    /// Entry metadata
-    pub metadata: KvMetadata,
-}
-
 impl KvEntry {
     /// Create a new KV entry
     pub fn new(key: Vec<u8>, value: KvValue, version: u64, ttl_seconds: Option<u64>) -> Self {
@@ -166,71 +123,4 @@ pub fn hash_key(key: &[u8]) -> u64 {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
     hasher.finish()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_kv_value_roundtrip() {
-        let values = vec![
-            KvValue::Null,
-            KvValue::Integer(42),
-            KvValue::Integer(-123456789),
-            KvValue::Float(3.14159),
-            KvValue::String("hello world".to_string()),
-            KvValue::Boolean(true),
-            KvValue::Boolean(false),
-            KvValue::Bytes(vec![0x01, 0x02, 0x03]),
-            KvValue::Json(serde_json::json!({"key": "value", "num": 123})),
-        ];
-
-        for original in values {
-            let type_tag = original.type_tag();
-            let bytes = original.to_bytes();
-            let recovered = KvValue::from_bytes(&bytes, type_tag);
-            assert_eq!(
-                Some(original),
-                recovered,
-                "Roundtrip failed for type_tag {}",
-                type_tag
-            );
-        }
-    }
-
-    #[test]
-    fn test_kv_metadata_expiration() {
-        let meta = KvMetadata::new(1, Some(60)); // 60 second TTL
-        assert!(!meta.is_expired_at(meta.updated_at + 30)); // Not expired after 30s
-        assert!(meta.is_expired_at(meta.updated_at + 61)); // Expired after 61s
-    }
-
-    #[test]
-    fn test_kv_metadata_no_expiration() {
-        let meta = KvMetadata::new(1, None); // No TTL
-        assert!(!meta.is_expired_at(u64::MAX)); // Never expires
-    }
-
-    #[test]
-    fn test_key_hashing() {
-        let key1 = b"test_key_1";
-        let key2 = b"test_key_2";
-
-        let hash1 = hash_key(key1);
-        let hash1_dup = hash_key(key1);
-        let hash2 = hash_key(key2);
-
-        assert_eq!(hash1, hash1_dup, "Same key should produce same hash");
-        assert_ne!(
-            hash1, hash2,
-            "Different keys should produce different hashes"
-        );
-    }
-
-    #[test]
-    fn test_kv_entry_expiration() {
-        let entry = KvEntry::new(b"key".to_vec(), KvValue::Integer(1), 1, Some(0)); // Expired immediately
-        assert!(entry.is_expired(), "Entry with 0 TTL should be expired");
-    }
 }

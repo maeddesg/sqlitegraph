@@ -69,7 +69,7 @@ fn run_decomposition(dataset_name: &str, node_count: usize) -> Result<(), Box<dy
     print!("A. Pure open()... ");
     let _ = std::io::stdout().flush();
     let open_start = Instant::now();
-    let backend = V3Backend::open_with_cache_capacity(&db_path, 64)?;
+    let backend = V3Backend::open(&db_path)?;
     let open_time = open_start.elapsed();
     println!("{:.2} ms", open_time.as_secs_f64() * 1000.0);
 

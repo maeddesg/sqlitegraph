@@ -8,9 +8,6 @@
 mod impl_;
 pub mod types;
 
-#[cfg(all(test, feature = "native-v2"))]
-mod kv_tests;
-
 #[cfg(test)]
 mod pubsub_tests;
 

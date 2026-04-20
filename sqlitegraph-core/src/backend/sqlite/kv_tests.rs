@@ -2,7 +2,7 @@
 
 use super::SqliteGraphBackend;
 use crate::backend::GraphBackend;
-use crate::backend::native::v2::kv_store::types::KvValue;
+use crate::backend::native::v3::kv_store::types::KvValue;
 use crate::snapshot::SnapshotId;
 
 #[cfg(test)]

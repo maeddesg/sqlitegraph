@@ -10,6 +10,7 @@
 pub mod allocator;
 pub mod backend;
 pub mod btree;
+pub mod compact_edge_record;
 pub mod compression;
 pub mod constants;
 pub mod edge_compat;

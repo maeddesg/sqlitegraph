@@ -2,7 +2,8 @@
 
 use sqlitegraph::{
     backend::native::v3::{V3Backend, V3EdgeStore, edge_compat::Direction},
-    EdgeSpec, GraphConfig, NodeSpec,
+    backend::GraphBackend,
+    EdgeSpec, NodeSpec,
 };
 use std::time::Instant;
 use tempfile::tempdir;
@@ -53,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test 1: Full path through neighbors()
     let start = Instant::now();
     for _ in 0..ITERATIONS {
-        let _ = backend.outgoing(src_node)?;
+        let _ = backend.fetch_outgoing(src_node)?;
         std::hint::black_box(());
     }
     let full_time = start.elapsed();
@@ -96,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   (found_count={})", found_count);
 
     // Test 3: Just HashMap lookup (no lock)
-    let simple_map = std::sync::Mutex::new(vec![(key, test_value.clone())]);
+    let simple_map = std::sync::Mutex::new(std::collections::HashMap::from([(key, test_value.clone())]));
     let start = Instant::now();
     let mut found_count = 0;
     for _ in 0..ITERATIONS {

@@ -8,7 +8,7 @@
 //!   cargo bench --bench comprehensive_performance -- --baseline main
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 use std::time::Duration;
 
 mod bench_utils;
@@ -36,7 +36,7 @@ fn bench_wal_recovery_throughput(criterion: &mut Criterion) {
     for &tx_count in &[10, 50, 100, 500] {
         group.bench_with_input(
             BenchmarkId::from_parameter(tx_count),
-            tx_count,
+            &tx_count,
             |b, &count| {
                 b.iter_batched(
                     || {
@@ -94,7 +94,7 @@ fn bench_insert_throughput(criterion: &mut Criterion) {
     for &batch_size in &[1, 10, 100, 1000] {
         group.bench_with_input(
             BenchmarkId::from_parameter(batch_size),
-            batch_size,
+            &batch_size,
             |b, &size| {
                 b.iter_batched(
                     || create_benchmark_temp_dir(),
@@ -139,7 +139,7 @@ fn bench_traversal_performance(criterion: &mut Criterion) {
 
     // Setup: Create graph with edges for BFS benchmark
     for &depth in &[10, 50, 100, 500] {
-        group.bench_with_input(BenchmarkId::new("bfs_depth", depth), depth, |b, &d| {
+        group.bench_with_input(BenchmarkId::new("bfs_depth", depth), &depth, |b, &d| {
             b.iter_batched(
                 || {
                     let temp_dir = create_benchmark_temp_dir();
@@ -161,10 +161,10 @@ fn bench_traversal_performance(criterion: &mut Criterion) {
                     }
 
                     // Create chain edges
-                    for i in 0..d.saturating_sub(1) {
+                    for i in 0..(d as usize).saturating_sub(1) {
                         let _ = graph.insert_edge(EdgeSpec {
-                            from_id: node_ids[i],
-                            to_id: node_ids[i + 1],
+                            from: node_ids[i],
+                            to: node_ids[i + 1],
                             edge_type: "next".to_string(),
                             data: serde_json::json!({}),
                         });
@@ -175,7 +175,7 @@ fn bench_traversal_performance(criterion: &mut Criterion) {
                 |(temp_dir, graph, node_ids)| {
                     let start = std::time::Instant::now();
                     // Perform BFS to specified depth
-                    let _results = graph.bfs(node_ids[0], d as u32).unwrap();
+                    let _results = graph.bfs(SnapshotId::current(), node_ids[0], d as u32).unwrap();
                     let duration = start.elapsed();
 
                     drop(graph);
@@ -204,7 +204,7 @@ fn bench_memory_efficiency(criterion: &mut Criterion) {
     for &node_count in &[100, 1000, 10000] {
         group.bench_with_input(
             BenchmarkId::new("nodes_memory", node_count),
-            node_count,
+            &node_count,
             |b, &count| {
                 b.iter_batched(
                     || create_benchmark_temp_dir(),

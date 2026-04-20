@@ -65,7 +65,7 @@ fn benchmark_insert(
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("cache_bench.db");
 
-    let graph = V3Backend::create_with_cache_capacity(&db_path, cache_size)?;
+    let graph = V3Backend::create(&db_path)?;
 
     let start = Instant::now();
     for i in 0..node_count {
@@ -100,7 +100,7 @@ fn benchmark_get_node(
     let db_path = temp_dir.path().join("cache_bench.db");
 
     // Create and populate graph
-    let graph = V3Backend::create_with_cache_capacity(&db_path, cache_size)?;
+    let graph = V3Backend::create(&db_path)?;
     for i in 0..node_count {
         graph.insert_node(NodeSpec {
             kind: "TestNode".to_string(),
@@ -137,7 +137,7 @@ fn benchmark_neighbors(
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("cache_bench.db");
 
-    let graph = V3Backend::create_with_cache_capacity(&db_path, cache_size)?;
+    let graph = V3Backend::create(&db_path)?;
 
     // Create chain graph: 1 -> 2 -> 3 -> ... -> N
     let mut node_ids = Vec::new();
@@ -186,7 +186,7 @@ fn benchmark_bfs(
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("cache_bench.db");
 
-    let graph = V3Backend::create_with_cache_capacity(&db_path, cache_size)?;
+    let graph = V3Backend::create(&db_path)?;
 
     // Create chain graph
     let mut node_ids = Vec::new();

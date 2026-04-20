@@ -4,66 +4,21 @@
 //! It implements file-based adjacency storage without SQLite dependency.
 //! NO GraphBackend implementation is provided here - this is storage layer only.
 
-// Glob pattern matching utility for pub/sub enhancements
-pub mod pattern;
-
 // Module organization
-pub mod adjacency;
 pub mod constants;
 pub mod cpu_tuning;
-pub mod edge_store;
-pub mod graph_file;
-pub mod node_cache;
-pub mod node_store;
-pub mod optimizations; // Internal performance optimizations
-pub mod types; // CPU detection and optimization mapping
-
-// Phase 10: Header architecture refactor
-pub mod persistent_header;
-pub mod transaction_state;
-
-// Include GraphBackend implementation
-pub mod graph_backend;
-pub mod graph_ops;
-pub mod graph_validation;
-
-// V2 clustered edge kernel (Phase 14)
-pub mod v2;
+pub mod types;
 
 // V3 B+Tree backend (Phase 63)
-#[cfg(feature = "native-v3")]
 pub mod v3;
 
 // Re-export public types for external use
 pub use types::{
-    CpuProfile, EdgeFlags, EdgeRecord, FileHeader, FileOffset, NativeBackendError, NativeEdgeId,
-    NativeNodeId, NativeResult, NodeFlags, NodeRecord, RecordSize,
+    CpuProfile, EdgeFlags, FileOffset, NativeBackendError, NativeEdgeId,
+    NativeNodeId, NativeResult, NodeFlags, RecordSize,
 };
 
-pub use adjacency::{AdjacencyHelpers, AdjacencyIterator, Direction};
-pub use edge_store::EdgeStore;
-pub use graph_backend::NativeGraphBackend;
-pub use graph_file::{
-    DEFAULT_NODE_DATA_START, GraphFile, RESERVED_NODE_REGION_BYTES, decode_persistent_header,
-    encode_persistent_header, get_slice_safe,
-};
-pub use node_cache::NodeRecordCache;
-pub use node_store::{NodeStore, clear_node_cache};
+pub use v3::V3Backend as NativeGraphBackend;
 
-// V2 clustered edge kernel re-exports
-pub use v2::{
-    EdgeCluster,
-    EdgeRecordCompactExt,
-    FreeSpaceManager,
-    NodeRecordV2,
-    StringTable,
-    // Snapshot support
-    export::SnapshotExporter,
-    export::snapshot::SnapshotExportConfig,
-    import::SnapshotImporter,
-    import::snapshot::SnapshotImportConfig,
-};
-
-// V3 re-exports (feature-gated)
-#[cfg(feature = "native-v3")]
-pub use v3::{PersistentHeaderV3, V3_FORMAT_VERSION, V3_HEADER_SIZE, V3_MAGIC};
+// V3 re-exports
+pub use v3::{PersistentHeaderV3, V3_FORMAT_VERSION, V3_HEADER_SIZE, V3_MAGIC, V3Backend};

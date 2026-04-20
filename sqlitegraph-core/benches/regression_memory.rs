@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 
 mod bench_utils;
 use bench_utils::{MEASURE, WARM_UP, create_benchmark_temp_dir};
@@ -74,7 +74,7 @@ fn bench_memory_overhead_native(criterion: &mut Criterion) {
                     // Run BFS - native backend has telemetry in TraversalContext
                     let start_node = node_ids[0];
                     let _result = graph
-                        .bfs(start_node, size as u32)
+                        .bfs(SnapshotId::current(), start_node, size as u32)
                         .expect("BFS traversal failed");
 
                     std::mem::forget(_temp_dir);
@@ -110,7 +110,7 @@ fn bench_memory_overhead_sqlite(criterion: &mut Criterion) {
                     // Run BFS - SQLite backend without TraversalContext overhead
                     let start_node = node_ids[0];
                     let _result = graph
-                        .bfs(start_node, size as u32)
+                        .bfs(SnapshotId::current(), start_node, size as u32)
                         .expect("BFS traversal failed");
 
                     std::mem::forget(_temp_dir);

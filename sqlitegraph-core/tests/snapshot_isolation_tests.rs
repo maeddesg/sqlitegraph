@@ -23,7 +23,7 @@ fn test_node(name: &str, kind: &str) -> NodeSpec {
 #[test]
 fn test_uncommitted_writes_not_visible() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let backend = sqlitegraph::backend::native::NativeGraphBackend::new(
+    let backend = sqlitegraph::backend::native::NativeGraphBackend::create(
         temp_dir.path().join("test.graph")
     ).unwrap();
     let backend = Arc::new(backend);
@@ -52,7 +52,7 @@ fn test_uncommitted_writes_not_visible() {
 fn test_bfs_snapshot_isolation() {
     let temp_dir = tempfile::tempdir().unwrap();
     let backend = Arc::new(
-        sqlitegraph::backend::native::NativeGraphBackend::new(
+        sqlitegraph::backend::native::NativeGraphBackend::create(
             temp_dir.path().join("test.graph")
         ).unwrap()
     );
@@ -87,7 +87,7 @@ fn test_bfs_snapshot_isolation() {
 fn test_shortest_path_snapshot_isolation() {
     let temp_dir = tempfile::tempdir().unwrap();
     let backend = Arc::new(
-        sqlitegraph::backend::native::NativeGraphBackend::new(
+        sqlitegraph::backend::native::NativeGraphBackend::create(
             temp_dir.path().join("test.graph")
         ).unwrap()
     );

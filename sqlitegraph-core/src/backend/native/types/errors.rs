@@ -208,20 +208,5 @@ impl From<std::time::SystemTimeError> for NativeBackendError {
     }
 }
 
-// Add conversion from CheckpointError
-impl From<crate::backend::native::v2::wal::checkpoint::errors::CheckpointError>
-    for NativeBackendError
-{
-    fn from(error: crate::backend::native::v2::wal::checkpoint::errors::CheckpointError) -> Self {
-        Self::InvalidState {
-            context: format!("Checkpoint error: {:?}", error),
-            source: None,
-        }
-    }
-}
-
-impl From<crate::backend::native::v2::wal::recovery::errors::RecoveryError> for NativeBackendError {
-    fn from(error: crate::backend::native::v2::wal::recovery::errors::RecoveryError) -> Self {
-        Self::Recovery(format!("{:?}: {}", error.kind, error.message))
-    }
-}
+// Conversion impls for CheckpointError and RecoveryError removed
+// along with the deprecated V2 WAL backend.

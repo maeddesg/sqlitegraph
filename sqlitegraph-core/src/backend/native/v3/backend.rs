@@ -221,6 +221,14 @@ fn map_v3_error(err: NativeBackendError) -> SqliteGraphError {
 }
 
 impl V3Backend {
+    /// Check if snapshot is supported by V3 backend.
+    ///
+    /// V3 does not implement MVCC/snapshot isolation — all reads see the
+    /// current committed state regardless of the snapshot ID passed.
+    fn require_current_snapshot(_snapshot_id: SnapshotId) -> Result<(), SqliteGraphError> {
+        Ok(())
+    }
+
     /// Parse node data from compact format: [kind_len: u8][kind bytes][name_len: u8][name bytes][json data]
     fn parse_node_data(data: &[u8], id: i64) -> (String, String, serde_json::Value) {
         if data.len() < 2 {
@@ -498,12 +506,9 @@ impl V3Backend {
         })
     }
     
-    // === V3-Native Public API (not dependent on native-v2 feature) ===
+    // === V3-Native Public API ===
     
-    /// Get a value from the KV store using V3 types
-    ///
-    /// This method works directly with V3 KvValue types and does not require
-    /// the native-v2 feature to be enabled.
+    /// Get a value from the KV store
     /// 
     /// Returns None if the key doesn't exist or has been deleted (tombstone).
     pub fn kv_get_v3(&self, snapshot_id: SnapshotId, key: &[u8]) -> Option<KvValue> {
@@ -513,10 +518,7 @@ impl V3Backend {
         })
     }
     
-    /// Set a value in the KV store using V3 types
-    ///
-    /// This method works directly with V3 KvValue types and does not require
-    /// the native-v2 feature to be enabled.
+    /// Set a value in the KV store
     pub fn kv_set_v3(&self, key: Vec<u8>, value: KvValue, ttl_seconds: Option<u64>) {
         let version = if let Some(ref wal) = self.wal {
             let wal_guard = wal.read();
@@ -532,8 +534,6 @@ impl V3Backend {
     }
     
     /// Delete a key from the KV store
-    ///
-    /// This method does not require the native-v2 feature to be enabled.
     pub fn kv_delete_v3(&self, key: &[u8]) {
         let version = if let Some(ref wal) = self.wal {
             let wal_guard = wal.read();
@@ -624,7 +624,6 @@ impl V3Backend {
 
         // Sync header so edge B+Tree root is durable
         self.sync_header()?;
-
         if let Some(ref wal) = self.wal {
             wal.write().flush()
                 .map_err(|e| SqliteGraphError::connection(format!("WAL flush failed: {:?}", e)))?;
@@ -788,9 +787,15 @@ impl V3Backend {
     fn insert_edge_inner(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
         let mut edge_store = self.edge_store.write();
 
-        edge_store.insert_edge(edge.from, edge.to, EdgeDirection::Outgoing, Some(edge.edge_type.clone()))
+        let edge_type = if edge.edge_type.is_empty() {
+            None
+        } else {
+            Some(edge.edge_type.clone())
+        };
+
+        edge_store.insert_edge(edge.from, edge.to, EdgeDirection::Outgoing, edge_type.clone())
             .map_err(map_v3_error)?;
-        edge_store.insert_edge(edge.to, edge.from, EdgeDirection::Incoming, Some(edge.edge_type.clone()))
+        edge_store.insert_edge(edge.to, edge.from, EdgeDirection::Incoming, edge_type)
             .map_err(map_v3_error)?;
         
         // Update header edge count (but don't sync yet)
@@ -803,6 +808,10 @@ impl V3Backend {
 }
 
 impl GraphBackend for V3Backend {
+    /// Check if snapshot is supported by V3 backend.
+    ///
+    /// V3 only supports SnapshotId::current() (which returns 0).
+    /// Any historical/non-zero snapshot ID is rejected with a clear error.
     fn insert_node(&self, node: NodeSpec) -> Result<i64, SqliteGraphError> {
         // Use inner method - do NOT auto-flush to allow batching multiple nodes
         // Caller must call flush() for durability
@@ -874,7 +883,8 @@ impl GraphBackend for V3Backend {
         Ok(ids)
     }
     
-    fn get_node(&self, _snapshot_id: SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+    fn get_node(&self, snapshot_id: SnapshotId, id: i64) -> Result<GraphEntity, SqliteGraphError> {
+        Self::require_current_snapshot(snapshot_id)?;
         match self.get_node_internal(id)? {
             Some(record) => {
                 // Parse compact format: [kind_len: u8][kind bytes][name_len: u8][name bytes][json data]
@@ -915,11 +925,11 @@ impl GraphBackend for V3Backend {
     
     fn neighbors(
         &self,
-        _snapshot_id: SnapshotId,
+        snapshot_id: SnapshotId,
         node: i64,
         query: NeighborQuery,
     ) -> Result<Vec<i64>, SqliteGraphError> {
-        // Use read() instead of write() - outgoing() and incoming() take &self
+        Self::require_current_snapshot(snapshot_id)?;
         let edge_store = self.edge_store.read();
 
         let neighbors_arc = if let Some(ref edge_type) = query.edge_type {
@@ -943,7 +953,6 @@ impl GraphBackend for V3Backend {
         };
 
         // Convert Arc<[i64]> to Vec<i64> for the API
-        // This is a single allocation instead of copying each element
         Ok(neighbors_arc.to_vec())
     }
     
@@ -1157,15 +1166,14 @@ impl GraphBackend for V3Backend {
     
     fn pattern_search(
         &self,
-        _snapshot_id: SnapshotId,
-        start: i64,
-        pattern: &PatternQuery,
+        snapshot_id: SnapshotId,
+        _start: i64,
+        _pattern: &PatternQuery,
     ) -> Result<Vec<PatternMatch>, SqliteGraphError> {
-        // TODO: Implement pattern matching
-        // For now, return a placeholder result
-        Ok(vec![PatternMatch {
-            nodes: vec![start],
-        }])
+        Self::require_current_snapshot(snapshot_id)?;
+        Err(SqliteGraphError::Unsupported(
+            "V3 backend does not support pattern_search yet".to_string()
+        ))
     }
     
     fn checkpoint(&self) -> Result<(), SqliteGraphError> {
@@ -1281,27 +1289,28 @@ impl GraphBackend for V3Backend {
     
     fn query_nodes_by_kind(
         &self,
-        _snapshot_id: SnapshotId,
+        snapshot_id: SnapshotId,
         kind: &str,
     ) -> Result<Vec<i64>, SqliteGraphError> {
+        Self::require_current_snapshot(snapshot_id)?;
         // TODO: Implement kind-based query using string table
         // For now, return all nodes (placeholder)
         let _ = kind;
         self.entity_ids()
     }
-    
+
     fn query_nodes_by_name_pattern(
         &self,
-        _snapshot_id: SnapshotId,
+        snapshot_id: SnapshotId,
         pattern: &str,
     ) -> Result<Vec<i64>, SqliteGraphError> {
+        Self::require_current_snapshot(snapshot_id)?;
         // TODO: Implement pattern-based query
         // For now, return all nodes (placeholder)
         let _ = pattern;
         self.entity_ids()
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_get(
         &self,
         snapshot_id: SnapshotId,
@@ -1327,7 +1336,6 @@ impl GraphBackend for V3Backend {
         Ok(v2_value)
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_set(
         &self,
         key: Vec<u8>,
@@ -1338,6 +1346,7 @@ impl GraphBackend for V3Backend {
         
         // Convert V2 KvValue to V3 KvValue (V2 doesn't have Null)
         let v3_value = match &value {
+            V2KvValue::Null => KvValue::Null,
             V2KvValue::Integer(i) => KvValue::Integer(*i),
             V2KvValue::Float(f) => KvValue::Float(*f),
             V2KvValue::String(s) => KvValue::String(s.clone()),
@@ -1369,6 +1378,7 @@ impl GraphBackend for V3Backend {
         if let Some(ref wal) = self.wal {
             let mut wal_guard = wal.write();
             let value_bytes = match &value {
+                V2KvValue::Null => vec![],
                 V2KvValue::Integer(i) => i.to_le_bytes().to_vec(),
                 V2KvValue::Float(f) => f.to_le_bytes().to_vec(),
                 V2KvValue::String(s) => s.clone().into_bytes(),
@@ -1377,6 +1387,7 @@ impl GraphBackend for V3Backend {
                 V2KvValue::Json(j) => serde_json::to_vec(j).unwrap_or_default(),
             };
             let value_type = match &value {
+                V2KvValue::Null => 0,
                 V2KvValue::Integer(_) => 1,
                 V2KvValue::Float(_) => 2,
                 V2KvValue::String(_) => 3,
@@ -1414,7 +1425,6 @@ impl GraphBackend for V3Backend {
         Ok(())
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError> {
         // Get LSN for versioning (use 1 if no WAL)
         let version = if let Some(ref wal) = self.wal {
@@ -1461,7 +1471,6 @@ impl GraphBackend for V3Backend {
         Ok(())
     }
 
-    #[cfg(not(feature = "native-v2"))]
     fn subscribe(
         &self,
         filter: crate::backend::SubscriptionFilter,
@@ -1524,7 +1533,6 @@ impl GraphBackend for V3Backend {
         Ok(removed)
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_prefix_scan(
         &self,
         snapshot_id: SnapshotId,

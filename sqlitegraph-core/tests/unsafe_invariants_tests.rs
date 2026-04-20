@@ -50,131 +50,7 @@ fn test_v3_storage_pointer_safety() {
 }
 
 // ============================================================================
-// Test Category 2: WAL Recovery Transmute Safety
-// ============================================================================
-
-/// Test that NodeStore created via transmute has proper lifetime bounds
-/// This verifies the 'static lifetime extension is sound
-#[test]
-#[cfg(feature = "v2_experimental")]
-fn test_node_store_transmute_lifetime() {
-    use sqlitegraph_core::backend::native::{GraphFile, NodeStore};
-    use std::sync::{Arc, Mutex};
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let graph_path = temp_dir.path().join("test_lifetime.v2");
-
-    // Create GraphFile wrapped in Arc<Mutex<>> (simulating the pattern in store_helpers.rs)
-    let graph_file = Arc::new(Mutex::new(
-        GraphFile::create(&graph_path).unwrap()
-    ));
-
-    // Create a clone to verify GraphFile stays alive
-    let graph_file_clone = Arc::clone(&graph_file);
-
-    {
-        let mut guard = graph_file.lock().unwrap();
-
-        // Create NodeStore using the same pattern as store_helpers.rs
-        // SAFETY: This is safe because the Arc keeps GraphFile alive
-        let mut node_store = unsafe {
-            use std::mem;
-            NodeStore::new(mem::transmute::<&mut _, &'static mut _>(
-                &mut *guard
-            ))
-        };
-
-        // Use the store to verify it works
-        let _node_id = node_store.allocate_node_id().unwrap();
-
-        // Store is dropped here
-        drop(node_store);
-        drop(guard);
-    }
-
-    // Verify GraphFile is still valid after store is dropped
-    let guard = graph_file_clone.lock().unwrap();
-    let _header = guard.header();
-
-    // If we get here without panics or UB, the lifetime extension worked
-}
-
-/// Test that EdgeStore created via transmute has proper lifetime bounds
-#[test]
-#[cfg(feature = "v2_experimental")]
-fn test_edge_store_transmute_lifetime() {
-    use sqlitegraph_core::backend::native::{GraphFile, EdgeStore};
-    use std::sync::{Arc, Mutex};
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let graph_path = temp_dir.path().join("test_edge_lifetime.v2");
-
-    let graph_file = Arc::new(Mutex::new(
-        GraphFile::create(&graph_path).unwrap()
-    ));
-    let graph_file_clone = Arc::clone(&graph_file);
-
-    {
-        let mut guard = graph_file.lock().unwrap();
-
-        let edge_store = unsafe {
-            use std::mem;
-            EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(
-                &mut *guard
-            ))
-        };
-
-        // Use the store
-        let _max_id = edge_store.max_edge_id();
-
-        drop(edge_store);
-        drop(guard);
-    }
-
-    // Verify GraphFile is still valid
-    let guard = graph_file_clone.lock().unwrap();
-    let _header = guard.header();
-}
-
-/// Test that drop order doesn't cause use-after-free
-/// This is a critical safety property for the transmute pattern
-#[test]
-#[cfg(feature = "v2_experimental")]
-fn test_store_drop_order_safety() {
-    use sqlitegraph_core::backend::native::{GraphFile, NodeStore};
-    use std::sync::{Arc, Mutex};
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let graph_path = temp_dir.path().join("test_drop_order.v2");
-
-    let graph_file = Arc::new(Mutex::new(
-        GraphFile::create(&graph_path).unwrap()
-    ));
-
-    // Create store
-    let store = {
-        let mut guard = graph_file.lock().unwrap();
-        unsafe {
-            use std::mem;
-            NodeStore::new(mem::transmute::<&mut _, &'static mut _>(
-                &mut *guard
-            ))
-        }
-    };
-
-    // Drop the original Arc
-    drop(graph_file);
-
-    // Store should still be valid because the Mutex guard kept the lock
-    // In the actual implementation, this would be UB - this test documents
-    // the requirement that stores must be dropped before the Arc
-
-    // This test is expected to demonstrate the unsafety of the current pattern
-    // A proper fix would use proper lifetimes instead of 'static
-}
-
-// ============================================================================
-// Test Category 3: SIMD Safety
+// Test Category 2: SIMD Safety
 // ============================================================================
 
 /// Test that SIMD operations produce correct results
@@ -182,7 +58,7 @@ fn test_store_drop_order_safety() {
 #[test]
 #[cfg(all(feature = "native-v3", target_arch = "x86_64"))]
 fn test_simd_dot_product_correctness() {
-    use sqlitegraph_core::hnsw::simd::dot_product;
+    use sqlitegraph::hnsw::simd::dot_product;
 
     // Test vectors
     let a = vec![1.0f32, 2.0, 3.0, 4.0];
@@ -197,7 +73,7 @@ fn test_simd_dot_product_correctness() {
 #[test]
 #[cfg(all(feature = "native-v3", target_arch = "x86_64"))]
 fn test_simd_edge_cases() {
-    use sqlitegraph_core::hnsw::simd::{dot_product, euclidean_distance};
+    use sqlitegraph::hnsw::simd::{dot_product, euclidean_distance};
 
     // Empty vectors should panic
     let empty: Vec<f32> = vec![];
@@ -222,7 +98,7 @@ fn test_simd_edge_cases() {
 #[test]
 #[cfg(all(feature = "native-v3", target_arch = "x86_64"))]
 fn test_simd_scalar_consistency() {
-    use sqlitegraph_core::hnsw::simd::{dot_product, dot_product_scalar};
+    use sqlitegraph::hnsw::simd::{dot_product, dot_product_scalar};
 
     // Test various sizes to ensure SIMD and scalar match
     for size in [1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 100] {
@@ -245,33 +121,6 @@ fn test_simd_scalar_consistency() {
 // ============================================================================
 // Test Category 4: Raw Pointer Operations
 // ============================================================================
-
-/// Test that read_unaligned operations work correctly
-/// This verifies the unsafe pointer reads in WAL code
-#[test]
-#[cfg(feature = "v2_experimental")]
-fn test_read_unaligned_wal_header() {
-    use sqlitegraph_core::backend::native::v2::wal::V2WALHeader;
-
-    // Create a properly aligned byte buffer
-    let mut bytes = vec![0u8; std::mem::size_of::<V2WALHeader>()];
-
-    // Fill with recognizable pattern
-    for (i, byte) in bytes.iter_mut().enumerate() {
-        *byte = (i % 256) as u8;
-    }
-
-    // Read using the same pattern as the WAL code
-    let header = unsafe {
-        std::ptr::read_unaligned::<V2WALHeader>(
-            bytes.as_ptr() as *const V2WALHeader
-        )
-    };
-
-    // The header should be readable without crashing
-    // We can't easily verify contents without knowing the struct layout
-    drop(header);
-}
 
 /// Test that unaligned reads don't cause UB with different alignments
 #[test]
@@ -297,43 +146,7 @@ fn test_read_unaligned_various_alignments() {
 }
 
 // ============================================================================
-// Test Category 5: Memory Mapping Safety
-// ============================================================================
-
-/// Test that mmap operations have proper bounds checking
-#[test]
-#[cfg(feature = "v2_experimental")]
-fn test_mmap_bounds_checking() {
-    use sqlitegraph_core::backend::native::graph_file::MemoryMappingManager;
-    use memmap2::MmapMut;
-    use tempfile::tempfile;
-    use std::io::Write;
-
-    let mut temp_file = tempfile().unwrap();
-    temp_file.write_all(b"test data for mmap").unwrap();
-    temp_file.flush().unwrap();
-
-    let mut mmap: Option<MmapMut> = None;
-
-    // Initialize mmap
-    MemoryMappingManager::ensure_mmap_initialized(
-        &temp_file, &mut mmap
-    ).unwrap();
-
-    assert!(mmap.is_some());
-
-    // Try to read beyond bounds - should error, not panic
-    let mut buffer = vec![0u8; 1000];
-    let result = MemoryMappingManager::mmap_read_bytes(
-        &mmap, 0, &mut buffer
-    );
-
-    // Should fail because buffer is larger than mmap
-    assert!(result.is_err());
-}
-
-// ============================================================================
-// Test Category 6: Interior Mutability Patterns
+// Test Category 5: Interior Mutability Patterns
 // ============================================================================
 
 /// Test that RwLock-based interior mutability works correctly

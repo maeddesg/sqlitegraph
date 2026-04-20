@@ -63,13 +63,11 @@ use crate::backend::native::v3::forensics::{
 };
 use crate::backend::native::v3::{
     allocator::PageAllocator, btree::BTreeManager, constants::DEFAULT_PAGE_SIZE,
-    header::PersistentHeaderV3, wal::WALWriter,
+    file_coordinator::FileCoordinator, header::PersistentHeaderV3, wal::WALWriter,
 };
 use crate::backend::native::{
     types::{NativeBackendError, NativeResult},
-    v2::edge_cluster::{
-        cluster_trace::Direction as V2Direction, compact_record::CompactEdgeRecord,
-    },
+    v3::compact_edge_record::{CompactEdgeRecord, Direction as V2Direction},
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -152,7 +150,7 @@ impl V3EdgeCluster {
             src,
             edges: Vec::new(),
             direction,
-            format_version: 1, // V2 compat format
+            format_version: 2, // v2 includes src+direction for recovery
             page_id,
         }
     }
@@ -206,12 +204,21 @@ impl V3EdgeCluster {
     }
 
     /// Serialize to bytes for page storage
-    /// Format: [version: 1 byte] [edge_count: 4 bytes] [edges...]
+    /// Format v2: [version: 1 byte] [src: 8 bytes] [dir: 1 byte] [edge_count: 4 bytes] [edges...]
+    /// Format v1: [version: 1 byte] [edge_count: 4 bytes] [edges...]  (legacy, no src/dir)
     pub fn serialize(&self) -> NativeResult<Vec<u8>> {
         let mut result = Vec::new();
 
         // Header: format_version (1 byte)
         result.push(self.format_version);
+
+        // v2 format: embed src and direction for recovery
+        if self.format_version >= 2 {
+            // Source node ID (8 bytes, big-endian)
+            result.extend_from_slice(&self.src.to_be_bytes());
+            // Direction (1 byte): 0 = Outgoing, 1 = Incoming
+            result.push(if self.direction == Direction::Outgoing { 0 } else { 1 });
+        }
 
         // Edge count (4 bytes, big-endian)
         let count = self.edges.len() as u32;
@@ -227,7 +234,8 @@ impl V3EdgeCluster {
     }
 
     /// Deserialize from bytes
-    /// Format: [version: 1 byte] [edge_count: 4 bytes] [edges...]
+    /// Format v2: [version: 1 byte] [src: 8 bytes] [dir: 1 byte] [edge_count: 4 bytes] [edges...]
+    /// Format v1: [version: 1 byte] [edge_count: 4 bytes] [edges...]  (src=0, dir=Outgoing)
     pub fn deserialize(bytes: &[u8], page_id: u64) -> NativeResult<Self> {
         if bytes.len() < 5 {
             return Err(NativeBackendError::DeserializationError {
@@ -237,17 +245,44 @@ impl V3EdgeCluster {
 
         let format_version = bytes[0];
 
-        if format_version != 1 {
+        if format_version > 2 {
             return Err(NativeBackendError::DeserializationError {
                 context: format!("Unknown edge cluster format version: {}", format_version),
             });
         }
 
+        let mut pos = 1;
+
+        // v2: read src and direction from serialized data
+        let (src, direction) = if format_version >= 2 {
+            if bytes.len() < 1 + 8 + 1 {
+                return Err(NativeBackendError::DeserializationError {
+                    context: "Edge cluster v2 header too short".to_string(),
+                });
+            }
+            let src = i64::from_be_bytes(
+                bytes[pos..pos + 8].try_into().expect("bounds checked above"),
+            );
+            pos += 8;
+            let dir_byte = bytes[pos];
+            pos += 1;
+            let direction = if dir_byte == 1 { Direction::Incoming } else { Direction::Outgoing };
+            (src, direction)
+        } else {
+            // v1: no src/direction in serialized data (legacy)
+            (0, Direction::Outgoing)
+        };
+
         // Read edge count
-        let count = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize;
+        if pos + 4 > bytes.len() {
+            return Err(NativeBackendError::DeserializationError {
+                context: "Edge cluster truncated at edge count".to_string(),
+            });
+        }
+        let count = u32::from_be_bytes([bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3]]) as usize;
+        pos += 4;
 
         let mut edges = Vec::with_capacity(count);
-        let mut pos = 5;
 
         // Deserialize each edge
         // CompactEdgeRecord format: [neighbor_id: 8 bytes] [type_offset: 2 bytes] [data_len: 2 bytes] [data: variable]
@@ -258,13 +293,19 @@ impl V3EdgeCluster {
                 });
             }
 
-            let neighbor_id = i64::from_be_bytes(bytes[pos..pos + 8].try_into().unwrap());
+            let neighbor_id = i64::from_be_bytes(
+                bytes[pos..pos + 8].try_into().expect("bounds checked above"),
+            );
             pos += 8;
 
-            let type_offset = u16::from_be_bytes(bytes[pos..pos + 2].try_into().unwrap());
+            let type_offset = u16::from_be_bytes(
+                bytes[pos..pos + 2].try_into().expect("bounds checked above"),
+            );
             pos += 2;
 
-            let data_len = u16::from_be_bytes(bytes[pos..pos + 2].try_into().unwrap()) as usize;
+            let data_len = u16::from_be_bytes(
+                bytes[pos..pos + 2].try_into().expect("bounds checked above"),
+            ) as usize;
             pos += 2;
 
             let edge_data = if data_len > 0 {
@@ -282,12 +323,10 @@ impl V3EdgeCluster {
             edges.push(CompactEdgeRecord::new(neighbor_id, type_offset, edge_data));
         }
 
-        // Direction and src need to be passed in or stored separately
-        // For now, use placeholders - these should come from B+Tree key
         Ok(Self {
-            src: 0, // Should be set by caller
+            src,
             edges,
-            direction: Direction::Outgoing, // Should be set by caller
+            direction,
             format_version,
             page_id,
         })
@@ -341,12 +380,31 @@ pub struct V3EdgeStore {
     /// Page allocator for edge page allocation
     /// CRITICAL: Shared with NodeStore to prevent page ID collisions
     allocator: Arc<RwLock<PageAllocator>>,
+    /// Coordinated file handle for all main DB I/O (optional for backward compat)
+    /// When set, all file writes go through this coordinator to prevent race conditions
+    file_coordinator: Option<Arc<FileCoordinator>>,
 }
 
-/// Encode (src, dir) into a composite u64 key for B+Tree lookup
-/// Format: [src: 63 bits][dir: 1 bit] where dir=0 for Outgoing, dir=1 for Incoming
-fn edge_key(src: i64, dir: Direction) -> u64 {
-    ((src as u64) << 1) | (if dir == Direction::Outgoing { 0 } else { 1 })
+/// Encode (src, dir) into a composite key for B+Tree lookup
+/// Format: [dir: 1 bit][src_abs: 62 bits][sign: 1 bit]
+///
+/// This encoding guarantees the resulting i64 is always positive by placing
+/// the direction bit in the MSB position and using only the magnitude of src.
+/// Negative src node IDs are encoded with a sign bit in the LSB.
+///
+/// Ordering: Incoming edges sort before Outgoing edges for the same node.
+fn edge_key(src: i64, dir: Direction) -> i64 {
+    let dir_bit = if dir == Direction::Outgoing { 0i64 } else { 1i64 };
+    // Use zigzag encoding for src to handle negative node IDs
+    // zigzag(n) = (n << 1) ^ (n >> 63) maps negatives to positive even numbers
+    let zigzag_src = (src << 1) ^ (src >> 63);
+    // Combine: dir in high bit, zigzag_src in lower bits
+    // Ensure result is positive: dir_bit is 0 or 1, zigzag_src is non-negative
+    // We place zigzag_src in lower 63 bits and dir_bit in bit 63
+    // But bit 63 makes it negative! Instead, interleave:
+    // key = (dir_bit << 62) | (zigzag_src & 0x3FFF_FFFF_FFFF_FFFF)
+    let key = (dir_bit << 62) | (zigzag_src & 0x3FFF_FFFF_FFFF_FFFF);
+    key
 }
 
 impl V3EdgeStore {
@@ -369,6 +427,7 @@ impl V3EdgeStore {
             dirty_clusters: RwLock::new(HashMap::new()),
             db_path: None,
             allocator,
+            file_coordinator: None,
         }
     }
 
@@ -392,6 +451,7 @@ impl V3EdgeStore {
             dirty_clusters: RwLock::new(HashMap::new()),
             db_path: Some(db_path),
             allocator,
+            file_coordinator: None,
         }
     }
 
@@ -415,7 +475,16 @@ impl V3EdgeStore {
             dirty_clusters: RwLock::new(HashMap::new()),
             db_path: Some(db_path),
             allocator: Arc::new(RwLock::new(PageAllocator::new(&header))),
+            file_coordinator: None,
         }
+    }
+
+    /// Set the file coordinator for coordinated I/O
+    ///
+    /// When set, all file writes will go through this coordinator to prevent
+    /// race conditions when multiple components write to the same file.
+    pub fn set_file_coordinator(&mut self, coordinator: Arc<FileCoordinator>) {
+        self.file_coordinator = Some(coordinator);
     }
 
     /// Get neighbors from cache - returns Arc<[i64]> for zero-copy!
@@ -485,7 +554,7 @@ impl V3EdgeStore {
 
         // CRITICAL FIX: Query B+Tree for page_id instead of calculating it
         // This prevents page ID collision with node storage
-        let key = edge_key(src, dir) as i64; // Convert u64 to i64 for BTree lookup
+        let key = edge_key(src, dir);
         let btree = self.btree.read();
 
         // Try to get page_id from B+Tree
@@ -651,7 +720,7 @@ impl V3EdgeStore {
             // Check if cluster already exists in dirty_clusters
             if !dirty.contains_key(&cache_key) {
                 // Need to find or allocate page_id for new cluster
-                let key = edge_key(src, dir) as i64; // Convert u64 to i64 for BTree lookup
+                let key = edge_key(src, dir);
                 let btree = self.btree.read();
 
                 // Check B+Tree for existing page_id
@@ -677,7 +746,8 @@ impl V3EdgeStore {
             }
 
             // Now get the cluster and add the edge
-            let cluster = dirty.get_mut(&cache_key).unwrap();
+            // SAFETY: We just inserted the key above (line 682), or it already existed (checked at line 656)
+            let cluster = dirty.get_mut(&cache_key).expect("cluster must exist after insert");
             let cluster_page_id = cluster.page_id;
             // CRITICAL: Pass edge_type to add_edge() so it gets serialized into edge_data
             cluster.add_edge(dst, edge_type);
@@ -800,7 +870,7 @@ impl V3EdgeStore {
             // CRITICAL FIX: Use edge_key() to create composite key instead of just src
             {
                 let mut btree = self.btree.write();
-                let key = edge_key(src, dir) as i64; // Convert u64 to i64 for BTree
+                let key = edge_key(src, dir);
                 let _ = btree.insert(key, page_id);
             }
         }
@@ -938,19 +1008,19 @@ impl V3EdgeStore {
     }
 
     /// Write a page of data to disk
+    ///
+    /// BUG FIX: Previously opened a raw file handle bypassing FileCoordinator,
+    /// which could cause data corruption from concurrent writes with NodeStore.
+    /// Now routes through FileCoordinator when available.
     fn write_page_to_disk(&self, db_path: &PathBuf, page_id: u64, data: &[u8]) -> NativeResult<()> {
-        use crate::backend::native::v3::constants::V3_HEADER_SIZE;
-
-        // Calculate page offset (page 0 is header, data pages start at 1)
-        let offset: u64 = if page_id == 0 {
-            0
-        } else {
-            (V3_HEADER_SIZE as u64) + (page_id - 1) * DEFAULT_PAGE_SIZE
-        };
-
         #[cfg(feature = "v3-forensics")]
         {
-            // Track page ownership for forensics
+            use crate::backend::native::v3::constants::V3_HEADER_SIZE;
+            let offset: u64 = if page_id == 0 {
+                0
+            } else {
+                (V3_HEADER_SIZE as u64) + (page_id - 1) * DEFAULT_PAGE_SIZE
+            };
             crate::track_page_alloc!(page_id, Subsystem::EdgeStore, ForensicPageType::Edge);
             crate::track_page_write!(
                 page_id,
@@ -960,6 +1030,28 @@ impl V3EdgeStore {
                 "EdgeStore::write_page_to_disk"
             );
         }
+
+        // Use FileCoordinator when available to prevent race conditions
+        if let Some(ref coordinator) = self.file_coordinator {
+            // Pad data to full page size if needed for page-aligned writes
+            let page_data = if data.len() < DEFAULT_PAGE_SIZE as usize {
+                let mut padded = data.to_vec();
+                padded.resize(DEFAULT_PAGE_SIZE as usize, 0);
+                padded
+            } else {
+                data.to_vec()
+            };
+            return coordinator.write_page(page_id, &page_data);
+        }
+
+        // Fallback: raw file I/O (legacy path, no coordinator set)
+        use crate::backend::native::v3::constants::V3_HEADER_SIZE;
+
+        let offset: u64 = if page_id == 0 {
+            0
+        } else {
+            (V3_HEADER_SIZE as u64) + (page_id - 1) * DEFAULT_PAGE_SIZE
+        };
 
         // CRITICAL FIX: Do NOT use create(true) - it truncates the file!
         let file_exists = db_path.exists();
@@ -1080,7 +1172,7 @@ mod tests {
         assert!(cluster.edges.is_empty());
         assert_eq!(cluster.direction, Direction::Outgoing);
         assert_eq!(cluster.page_id, 100);
-        assert_eq!(cluster.format_version, 1);
+        assert_eq!(cluster.format_version, 2);
     }
 
     #[test]
@@ -1100,9 +1192,24 @@ mod tests {
         let bytes = cluster.serialize().unwrap();
         let deserialized = V3EdgeCluster::deserialize(&bytes, 100).unwrap();
 
-        assert_eq!(deserialized.format_version, 1);
+        assert_eq!(deserialized.format_version, 2);
+        assert_eq!(deserialized.src, 42, "src should survive roundtrip");
+        assert_eq!(deserialized.direction, Direction::Outgoing, "direction should survive roundtrip");
         assert_eq!(deserialized.dsts(), vec![100, 200]);
         assert_eq!(deserialized.page_id, 100);
+    }
+
+    #[test]
+    fn test_v3_edge_cluster_roundtrip_incoming() {
+        let mut cluster = V3EdgeCluster::new(99, Direction::Incoming, 50);
+        cluster.add_edge(10, None);
+
+        let bytes = cluster.serialize().unwrap();
+        let deserialized = V3EdgeCluster::deserialize(&bytes, 50).unwrap();
+
+        assert_eq!(deserialized.src, 99);
+        assert_eq!(deserialized.direction, Direction::Incoming,
+            "Incoming direction must survive serialization roundtrip");
     }
 
     //========================================================================
@@ -1134,7 +1241,7 @@ mod tests {
             let wal_path = path.with_extension("v3wal");
             let mut writer = WALWriter::new(wal_path, 1).expect("Failed to create WAL writer");
             writer.write_header().expect("Failed to write WAL header");
-            V3EdgeStore::with_path(btree, Some(writer), path.clone())
+            V3EdgeStore::with_path_and_allocator(btree, Some(writer), path.clone(), allocator.clone())
         } else {
             V3EdgeStore::new(btree, None, allocator.clone())
         };
@@ -1262,7 +1369,7 @@ mod tests {
 
         // After fix: verify B+Tree contains edge cluster mapping
         let btree = edge_store.btree.read();
-        let lookup_key = edge_key(1, Direction::Outgoing) as i64;
+        let lookup_key = edge_key(1, Direction::Outgoing);
         let lookup_result = btree.lookup(lookup_key);
 
         assert!(

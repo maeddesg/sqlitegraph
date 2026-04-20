@@ -274,16 +274,12 @@ pub fn bfs(graph: &dyn GraphBackend, start: i64, depth: u32) -> Result<Vec<i64>,
     Ok(result)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "native-v3"))]
 mod tests {
     use super::*;
-    #[cfg(feature = "native-v3")]
     use crate::backend::native::v3::V3Backend;
     use crate::backend::{EdgeSpec, NodeSpec};
     use tempfile::TempDir;
-
-    #[cfg(not(feature = "native-v3"))]
-    compile_error!("Tests require native-v3 feature");
 
     fn create_backend() -> (V3Backend, TempDir) {
         let temp_dir = TempDir::new().unwrap();

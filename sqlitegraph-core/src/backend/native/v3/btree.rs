@@ -1261,7 +1261,12 @@ impl BTreeManager {
                 let offset = V3_HEADER_SIZE + (page_id - 1) * self.page_size;
                 let required_len = offset + page_bytes.len() as u64;
 
-                let db_path = self.db_path.as_ref().unwrap();
+                let db_path = self.db_path.as_ref().ok_or_else(|| {
+                    NativeBackendError::InvalidHeader {
+                        field: "db_path".to_string(),
+                        reason: "Cannot write page to disk without db_path".to_string(),
+                    }
+                })?;
                 let mut file = OpenOptions::new()
                     .read(true)
                     .write(true)
@@ -1580,7 +1585,7 @@ mod tests {
 
         let (len, capacity) = manager.cache_stats();
         assert_eq!(len, 0);
-        assert_eq!(capacity, 16);
+        assert_eq!(capacity, 64);
     }
 
     #[test]

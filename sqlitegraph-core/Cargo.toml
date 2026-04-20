@@ -10,9 +10,6 @@ readme = "README.md"
 keywords = ["graph", "database", "sqlite", "embedded", "vector"]
 categories = ["database", "data-structures"]
 exclude = [
-    "docs/internal/**",
-    ".codemcp/**",
-    ".splice-backup/**",
     "benches/*.json",
     "benches/*.txt",
 ]
@@ -60,8 +57,10 @@ native-v3 = []                # Native V3 backend (B+Tree index, unlimited capac
 # Development/debug features
 debug = []                   # Enable debug/info logging (disabled in release for zero overhead)
 bench-ci = []                # CI benchmarking
+v3-bench = ["native-v3"]     # Enable V3 backend benchmarks
 dependency-monitoring = []   # Enable dependency health monitoring
 v3-forensics = []            # Enable forensic instrumentation for V3 backend performance analysis
+v3-page-overflow-debug = []  # Enable detailed page overflow diagnostics in node page packing
 
 # Legacy compatibility
 
@@ -104,24 +103,11 @@ harness = false
 name = "connection_pool"
 harness = false
 
-# Phase 23: V2 performance benchmarks
-[[bench]]
-name = "v2_performance"
-harness = false
-
-# Phase 32: Prefetch window tuning benchmarks
-[[bench]]
-name = "prefetch_bench"
-harness = false
-
 # Phase 36: IO-12 Validation benchmarks
 
 # Backend comparison: SQLite vs V3
 [[bench]]
 name = "backend_comparison"
-harness = false
-[[bench]]
-name = "io12_validation"
 harness = false
 
 # Phase 1: SQLite vs V3 Minimal Benchmark Suite
@@ -133,3 +119,15 @@ harness = false
 [[bench]]
 name = "graph_theory_benchmarks"
 harness = false
+
+# V3 Backend benchmarks (requires native-v3 feature)
+[[bench]]
+name = "v3_backend_benchmarks"
+harness = false
+required-features = ["native-v3"]
+
+# V3 Algorithm benchmarks (requires native-v3 feature)
+[[bench]]
+name = "v3_algorithm_benchmarks"
+harness = false
+required-features = ["native-v3"]

@@ -18,8 +18,8 @@ fn main() {
             &sqlitegraph::backend::native::v3::PersistentHeaderV3::new_v3(),
         ),
     ));
-    let btree = BTreeManager::new(allocator, None, db_path.clone());
-    let mut store = V3EdgeStore::new(btree, None);
+    let btree = BTreeManager::new(allocator.clone(), None, db_path.clone());
+    let mut store = V3EdgeStore::new(btree, None, allocator);
 
     println!("═══════════════════════════════════════════════════════════════");
     println!("  V3EdgeStore Performance Test (RwLock + Vec<i64> cache)");

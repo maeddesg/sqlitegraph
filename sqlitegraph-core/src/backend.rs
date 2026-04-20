@@ -120,8 +120,7 @@ pub trait GraphBackend {
     /// Update an existing node in place without allocating a new node ID
     ///
     /// This modifies the data associated with an existing node while preserving
-    /// its node_id. This is critical for avoiding node region exhaustion in
-    /// the Native V2 backend, which has a hard limit of 2048 nodes.
+    /// its node_id.
     ///
     /// # Arguments
     /// * `node_id` - The ID of the node to update (must exist)
@@ -137,7 +136,7 @@ pub trait GraphBackend {
     /// - The backend doesn't support in-place updates
     ///
     /// # Behavior by Backend
-    /// - **Native V2**: Uses WAL to update node data in place, preserving node_id
+    /// - **Native**: Uses WAL to update node data in place, preserving node_id
     /// - **SQLite**: Uses UPDATE SQL query on entities table
     ///
     /// # Example
@@ -276,7 +275,7 @@ pub trait GraphBackend {
     /// Ensures all buffered WAL records (including KV writes) are persisted
     /// immediately, making them visible to other processes.
     ///
-    /// For Native V2 backend with WAL: flushes WAL buffer to disk
+    /// For Native backend with WAL: flushes WAL buffer to disk
     /// For SQLite backend: returns Ok(()) as no-op (SQLite handles sync)
     /// For backends without WAL: returns Ok(()) as no-op
     fn flush(&self) -> Result<(), SqliteGraphError>;
@@ -284,8 +283,6 @@ pub trait GraphBackend {
     /// Create a backup of the database
     ///
     /// Creates a consistent snapshot of the database including all data pages.
-    /// For Native V2 backend, optionally checkpoints before backup to ensure
-    /// WAL is applied and snapshot is consistent.
     ///
     /// # Arguments
     /// * `backup_dir` - Destination directory for backup files
@@ -297,7 +294,7 @@ pub trait GraphBackend {
     /// Export database snapshot to the specified directory
     ///
     /// Creates a consistent snapshot of the current database state.
-    /// For Native backend: uses V2 snapshot format
+    /// For Native backend: uses snapshot format
     /// For SQLite backend: uses JSON dump format
     ///
     /// # Arguments
@@ -313,7 +310,7 @@ pub trait GraphBackend {
     /// Import database snapshot from the specified directory
     ///
     /// Restores database state from a previously created snapshot.
-    /// For Native backend: loads V2 snapshot format
+    /// For Native backend: loads snapshot format
     /// For SQLite backend: loads JSON dump format
     ///
     /// # Arguments
@@ -334,7 +331,6 @@ pub trait GraphBackend {
     ///
     /// # Returns
     /// The value if found and visible at snapshot, or None if not found
-    #[cfg(feature = "native-v2")]
     fn kv_get(
         &self,
         snapshot_id: SnapshotId,
@@ -350,7 +346,6 @@ pub trait GraphBackend {
     /// * `key` - Key to set (arbitrary bytes)
     /// * `value` - Value to store
     /// * `ttl_seconds` - Optional TTL in seconds (None = no expiration)
-    #[cfg(feature = "native-v2")]
     fn kv_set(
         &self,
         key: Vec<u8>,
@@ -365,7 +360,6 @@ pub trait GraphBackend {
     ///
     /// # Arguments
     /// * `key` - Key to delete
-    #[cfg(feature = "native-v2")]
     fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError>;
 
     // Pub/Sub operations (in-process event notification)
@@ -407,10 +401,8 @@ pub trait GraphBackend {
     /// ```
     fn subscribe(
         &self,
-        _filter: SubscriptionFilter,
-    ) -> Result<(u64, std::sync::mpsc::Receiver<PubSubEvent>), SqliteGraphError> {
-        Err(SqliteGraphError::unsupported("Pub/Sub not supported by this backend"))
-    }
+        filter: SubscriptionFilter,
+    ) -> Result<(u64, std::sync::mpsc::Receiver<PubSubEvent>), SqliteGraphError>;
 
     /// Unsubscribe from events
     ///
@@ -419,9 +411,7 @@ pub trait GraphBackend {
     ///
     /// # Arguments
     /// * `subscriber_id` - The subscriber ID returned by subscribe()
-    fn unsubscribe(&self, _subscriber_id: u64) -> Result<bool, SqliteGraphError> {
-        Err(SqliteGraphError::unsupported("Pub/Sub not supported by this backend"))
-    }
+    fn unsubscribe(&self, subscriber_id: u64) -> Result<bool, SqliteGraphError>;
 
     // ========== Pub/Sub Enhancement APIs (v1.4.0) ==========
 
@@ -436,7 +426,6 @@ pub trait GraphBackend {
     ///
     /// # Returns
     /// Vector of (key, value) pairs for all matching keys
-    #[cfg(feature = "native-v2")]
     fn kv_prefix_scan(
         &self,
         snapshot_id: SnapshotId,
@@ -667,7 +656,6 @@ where
         (*self).snapshot_import(import_dir)
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_get(
         &self,
         snapshot_id: SnapshotId,
@@ -677,7 +665,6 @@ where
         (*self).kv_get(snapshot_id, key)
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_set(
         &self,
         key: Vec<u8>,
@@ -687,7 +674,6 @@ where
         (*self).kv_set(key, value, ttl_seconds)
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_delete(&self, key: &[u8]) -> Result<(), SqliteGraphError> {
         (*self).kv_delete(key)
     }
@@ -703,7 +689,6 @@ where
         (*self).unsubscribe(subscriber_id)
     }
 
-    #[cfg(feature = "native-v2")]
     fn kv_prefix_scan(
         &self,
         snapshot_id: SnapshotId,

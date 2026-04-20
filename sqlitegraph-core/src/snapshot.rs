@@ -24,6 +24,11 @@
 //! let snapshot = SnapshotId::from_tx(12345);
 //! ```
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Global counter for snapshot IDs when no WAL manager is available.
+static SNAPSHOT_COUNTER: AtomicU64 = AtomicU64::new(1);
+
 /// Snapshot identifier - points to committed transaction state
 ///
 /// Only data committed at or before this snapshot_id is visible.
@@ -43,56 +48,6 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SnapshotId(pub u64);
 
-#[cfg(feature = "native-v2")]
-use crate::backend::native::v2::wal::manager::V2WALManager;
-#[cfg(feature = "native-v2")]
-use std::sync::Arc;
-#[cfg(feature = "native-v2")]
-use std::sync::OnceLock;
-
-/// Global storage for the current WAL manager reference.
-///
-/// This is set by V2GraphBackend when initialized and allows
-/// SnapshotId::current() to access the actual max committed LSN.
-///
-/// We use OnceLock to provide safe shared access to the WAL manager.
-#[cfg(feature = "native-v2")]
-static CURRENT_WAL_MANAGER: OnceLock<Arc<V2WALManager>> = OnceLock::new();
-
-/// Register the WAL manager for use by SnapshotId::current()
-///
-/// This should be called by the V2GraphBackend when it is initialized.
-/// Returns an error if a WAL manager is already registered.
-///
-/// # Note
-///
-/// This function takes ownership of an Arc clone. The WAL manager will
-/// remain available until explicitly replaced or the program exits.
-#[cfg(feature = "native-v2")]
-pub(crate) fn register_wal_manager(manager: Arc<V2WALManager>) -> Result<(), Arc<V2WALManager>> {
-    CURRENT_WAL_MANAGER.set(manager)
-}
-
-/// Unregister the WAL manager (called on backend shutdown)
-///
-/// Note: OnceLock cannot be cleared, so this is a no-op.
-/// The WAL manager reference remains valid for the lifetime of the program.
-#[cfg(feature = "native-v2")]
-pub(crate) fn unregister_wal_manager() {
-    // OnceLock cannot be cleared, so we intentionally do nothing here.
-    // The WAL manager reference remains valid for the lifetime of the program.
-}
-
-/// Get access to the current WAL manager (if registered)
-#[cfg(feature = "native-v2")]
-fn with_wal_manager<F, R>(f: F) -> R
-where
-    F: FnOnce(Option<&V2WALManager>) -> R,
-{
-    let manager = CURRENT_WAL_MANAGER.get();
-    f(manager.map(|m| m.as_ref()))
-}
-
 impl SnapshotId {
     /// The "current" snapshot - sees only committed data
     ///
@@ -102,7 +57,7 @@ impl SnapshotId {
     ///
     /// # Implementation Note
     ///
-    /// - For native-v2 backend: Returns the maximum committed LSN from the WAL manager
+    /// - For native-v3 backend: Returns an auto-incrementing snapshot counter
     /// - For SQLite backend: Returns 0 to indicate "all committed data"
     ///
     /// # Example
@@ -112,31 +67,8 @@ impl SnapshotId {
     /// let snapshot = SnapshotId::current();
     /// // snapshot now points to the most recent committed transaction
     /// ```
-    #[cfg(not(feature = "native-v2"))]
     pub fn current() -> Self {
-        // For SQLite backend, 0 means "all committed data visible"
-        SnapshotId(0)
-    }
-
-    /// The "current" snapshot - sees only committed data (native-v2)
-    ///
-    /// This returns the most recent committed LSN from the WAL manager.
-    /// All reads using this snapshot are guaranteed to see only
-    /// data that has been durably committed.
-    ///
-    /// Returns 0 if no WAL manager is registered or no transactions
-    /// have been committed yet.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use sqlitegraph::snapshot::SnapshotId;
-    /// let snapshot = SnapshotId::current();
-    /// // snapshot now points to the most recent committed transaction
-    /// ```
-    #[cfg(feature = "native-v2")]
-    pub fn current() -> Self {
-        let lsn = with_wal_manager(|manager| manager.map(|m| m.max_committed_lsn()).unwrap_or(0));
+        let lsn = SNAPSHOT_COUNTER.fetch_add(1, Ordering::SeqCst);
         SnapshotId(lsn)
     }
 

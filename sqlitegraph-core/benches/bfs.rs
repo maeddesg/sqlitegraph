@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::SeedableRng;
-use sqlitegraph::{BackendDirection, BackendKind, EdgeSpec, NeighborQuery, NodeSpec};
+use sqlitegraph::{BackendDirection, BackendKind, EdgeSpec, NeighborQuery, NodeSpec, SnapshotId};
 
 mod bench_utils;
 use bench_utils::{
@@ -59,7 +59,7 @@ fn bfs_chain(criterion: &mut Criterion) {
 
                 // Perform BFS from first node
                 let _bfs_result = graph
-                    .bfs(node_ids[0], size as u32)
+                    .bfs(SnapshotId::current(), node_ids[0], size as u32)
                     .expect("Failed to perform BFS");
             });
         });
@@ -104,7 +104,7 @@ fn bfs_chain(criterion: &mut Criterion) {
                             .expect("Failed to open debug graph");
 
                         // Try to read node_id=257 directly to see its state
-                        match debug_graph.get_node(257) {
+                        match debug_graph.get_node(SnapshotId::current(), 257) {
                             Ok(_) => println!("[BFS_CHECKPOINT] After node creation, before edges: node_id=257 EXISTS"),
                             Err(e) => println!("[BFS_CHECKPOINT] After node creation, before edges: node_id=257 MISSING - {:?}", e),
                         }
@@ -131,7 +131,7 @@ fn bfs_chain(criterion: &mut Criterion) {
 
                 // Perform BFS from first node
                 let _bfs_result = graph
-                    .bfs(node_ids[0], size as u32)
+                    .bfs(SnapshotId::current(), node_ids[0], size as u32)
                     .expect("Failed to perform BFS");
                 std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
@@ -208,7 +208,7 @@ fn bfs_star(criterion: &mut Criterion) {
                 }
 
                 // Perform BFS from center node
-                let _bfs_result = graph.bfs(node_ids[0], 2).expect("Failed to perform BFS");
+                let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 2).expect("Failed to perform BFS");
             });
         });
 
@@ -248,7 +248,7 @@ fn bfs_star(criterion: &mut Criterion) {
                 }
 
                 // Perform BFS from center node
-                let _bfs_result = graph.bfs(node_ids[0], 2).expect("Failed to perform BFS");
+                let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 2).expect("Failed to perform BFS");
                 std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });
@@ -336,7 +336,7 @@ fn bfs_random(criterion: &mut Criterion) {
                 }
 
                 // Perform BFS from first node
-                let _bfs_result = graph.bfs(node_ids[0], 3).expect("Failed to perform BFS");
+                let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 3).expect("Failed to perform BFS");
             });
         });
 
@@ -385,7 +385,7 @@ fn bfs_random(criterion: &mut Criterion) {
                 }
 
                 // Perform BFS from first node
-                let _bfs_result = graph.bfs(node_ids[0], 3).expect("Failed to perform BFS");
+                let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 3).expect("Failed to perform BFS");
                 std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
         });

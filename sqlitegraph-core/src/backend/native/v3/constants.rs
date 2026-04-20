@@ -3,6 +3,12 @@
 //! This module contains magic numbers, version constants, and field sizes
 //! for the V3 graph database file format with B+Tree indexing.
 
+/// V2 magic bytes (retained for file format compatibility)
+pub const V2_MAGIC: [u8; 8] = [b'S', b'Q', b'L', b'T', b'G', b'F', 0, 0];
+
+/// V2 format version (retained for file format compatibility)
+pub const V2_FORMAT_VERSION: u32 = 3;
+
 /// V3 magic number for native graph database files
 /// Distinguished from V2 by magic[7] = 3 (instead of 0)
 pub const V3_MAGIC: [u8; 8] = [b'S', b'Q', b'L', b'T', b'G', b'F', 0, 3];
@@ -104,8 +110,7 @@ mod tests {
     #[test]
     fn test_v3_magic_distinguishes_from_v2() {
         // V2 magic has magic[7] = 0
-        let v2_magic = crate::backend::native::v2::V2_MAGIC;
-        assert_eq!(v2_magic[7], 0, "V2 magic should have 0 at position 7");
+        assert_eq!(V2_MAGIC[7], 0, "V2 magic should have 0 at position 7");
 
         // V3 magic has magic[7] = 3
         assert_eq!(V3_MAGIC[7], 3, "V3 magic should have 3 at position 7");
@@ -113,19 +118,18 @@ mod tests {
         // Ensure other bytes match
         assert_eq!(
             V3_MAGIC[0..7],
-            v2_magic[0..7],
+            V2_MAGIC[0..7],
             "V3 should preserve V2 magic prefix"
         );
     }
 
     #[test]
     fn test_v3_format_version_greater_than_v2() {
-        let v2_version = crate::backend::native::v2::V2_FORMAT_VERSION;
         assert!(
-            V3_FORMAT_VERSION > v2_version,
+            V3_FORMAT_VERSION > V2_FORMAT_VERSION,
             "V3 format version ({}) should be greater than V2 ({})",
             V3_FORMAT_VERSION,
-            v2_version
+            V2_FORMAT_VERSION
         );
     }
 

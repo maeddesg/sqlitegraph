@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::SeedableRng;
-use sqlitegraph::{BackendDirection, BackendKind, EdgeSpec, NodeSpec};
+use sqlitegraph::{BackendDirection, BackendKind, EdgeSpec, NodeSpec, SnapshotId};
 
 mod bench_utils;
 use bench_utils::{
@@ -59,7 +59,7 @@ fn k_hop_1(criterion: &mut Criterion) {
 
                 // 1-hop traversal from center node using k_hop API
                 let _k_hop_result = graph
-                    .k_hop(node_ids[0], 1, BackendDirection::Outgoing)
+                    .k_hop(SnapshotId::current(), node_ids[0], 1, BackendDirection::Outgoing)
                     .expect("Failed to perform 1-hop traversal");
             });
         });
@@ -101,7 +101,7 @@ fn k_hop_1(criterion: &mut Criterion) {
 
                 // 1-hop traversal from center node using k_hop API
                 let _k_hop_result = graph
-                    .k_hop(node_ids[0], 1, BackendDirection::Outgoing)
+                    .k_hop(SnapshotId::current(), node_ids[0], 1, BackendDirection::Outgoing)
                     .expect("Failed to perform 1-hop traversal");
                 std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
@@ -183,7 +183,7 @@ fn k_hop_2(criterion: &mut Criterion) {
 
                 // 2-hop traversal using k_hop API
                 let _k_hop_result = graph
-                    .k_hop(node_ids[0], 2, BackendDirection::Outgoing)
+                    .k_hop(SnapshotId::current(), node_ids[0], 2, BackendDirection::Outgoing)
                     .expect("Failed to perform 2-hop traversal");
             });
         });
@@ -225,7 +225,7 @@ fn k_hop_2(criterion: &mut Criterion) {
 
                 // 2-hop traversal using k_hop API
                 let _k_hop_result = graph
-                    .k_hop(node_ids[0], 2, BackendDirection::Outgoing)
+                    .k_hop(SnapshotId::current(), node_ids[0], 2, BackendDirection::Outgoing)
                     .expect("Failed to perform 2-hop traversal");
                 std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });
@@ -307,7 +307,7 @@ fn k_hop_3(criterion: &mut Criterion) {
 
                 // 3-hop traversal using k_hop API
                 let _k_hop_result = graph
-                    .k_hop(node_ids[0], 3, BackendDirection::Outgoing)
+                    .k_hop(SnapshotId::current(), node_ids[0], 3, BackendDirection::Outgoing)
                     .expect("Failed to perform 3-hop traversal");
             });
         });
@@ -349,7 +349,7 @@ fn k_hop_3(criterion: &mut Criterion) {
 
                 // 3-hop traversal using k_hop API
                 let _k_hop_result = graph
-                    .k_hop(node_ids[0], 3, BackendDirection::Outgoing)
+                    .k_hop(SnapshotId::current(), node_ids[0], 3, BackendDirection::Outgoing)
                     .expect("Failed to perform 3-hop traversal");
                 std::mem::forget(temp_dir); // Prevent TempDir deletion during benchmark (V2 backend uses async file ops)
             });

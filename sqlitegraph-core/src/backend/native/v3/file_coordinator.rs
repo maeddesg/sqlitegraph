@@ -42,11 +42,10 @@ impl FileCoordinator {
     /// created when the first write occurs.
     pub fn create(db_path: &std::path::Path) -> NativeResult<Self> {
         // Open file - create if doesn't exist, but don't truncate
-        let file_exists = db_path.exists();
         let file = OpenOptions::new()
             .read(true)
             .write(true)
-            .create(file_exists) // Only create if doesn't exist
+            .create(true) // Create if doesn't exist, no-op if exists
             .open(db_path)
             .map_err(|e| NativeBackendError::IoError {
                 context: format!(

@@ -1479,14 +1479,13 @@ fn test_v3_edge_type_aliasing_across_reopen() {
 // Snapshot Isolation Tests - V3 Backend
 // ============================================================================
 
-/// Test that V3 correctly rejects historical snapshots
+/// Test that V3 accepts all snapshot IDs (no MVCC)
 ///
-/// V3 LIMITATION: V3 does not yet support historical snapshots.
-/// Only SnapshotId::current() is supported.
-/// This test verifies that requesting a historical snapshot returns a clear error
-/// rather than silently returning incorrect data.
+/// V3 does not implement snapshot isolation / MVCC. All reads see the
+/// current committed state regardless of the snapshot ID passed.
+/// This test verifies that both current and arbitrary snapshots work.
 #[test]
-fn test_v3_snapshot_isolation_honest_rejection() {
+fn test_v3_snapshot_all_accepted() {
     use sqlitegraph::{
         backend::{BackendDirection, NeighborQuery},
         snapshot::SnapshotId,
@@ -1503,45 +1502,34 @@ fn test_v3_snapshot_isolation_honest_rejection() {
         })
         .unwrap();
 
-    // SnapshotId::current() should work (returns 0 for V3)
+    // SnapshotId::current() should work
     let current = SnapshotId::current();
     let entity = backend.get_node(current, node1).unwrap();
     assert_eq!(entity.name, "node1");
     assert_eq!(entity.data["initial"], "state");
 
-    // Historical snapshot should return a clear error, NOT silently return latest data
-    let historical = SnapshotId::from_lsn(12345); // Some arbitrary historical LSN
-
-    let result = backend.get_node(historical, node1);
-    assert!(result.is_err(), "Historical snapshot should return error");
-
-    let err = result.unwrap_err();
-    let err_msg = format!("{}", err);
-    assert!(
-        err_msg.contains("does not support historical snapshots") || err_msg.contains("12345"),
-        "Error message should explain snapshot limitation, got: {}",
-        err_msg
-    );
+    // Arbitrary snapshots are also accepted since V3 has no MVCC
+    let arbitrary = SnapshotId::from_lsn(12345);
+    let result = backend.get_node(arbitrary, node1);
+    assert!(result.is_ok(), "V3 accepts all snapshots (no MVCC)");
+    assert_eq!(result.unwrap().name, "node1");
 
     // Same for neighbors
     let neighbors_result = backend.neighbors(
-        historical,
+        arbitrary,
         node1,
         NeighborQuery {
             direction: BackendDirection::Outgoing,
             edge_type: None,
         },
     );
-    assert!(
-        neighbors_result.is_err(),
-        "neighbors() should also reject historical snapshot"
-    );
+    assert!(neighbors_result.is_ok(), "V3 neighbors accepts all snapshots");
 }
 
 /// Test that SnapshotId::current() works correctly in V3
 ///
-/// This test verifies that the current snapshot (which returns 0 for V3)
-/// allows all operations to work correctly.
+/// This test verifies that current snapshot allows all operations
+/// to work correctly. V3 does not distinguish snapshot IDs.
 #[test]
 fn test_v3_snapshot_current_works() {
     use sqlitegraph::{
@@ -1630,9 +1618,9 @@ fn test_v3_snapshot_current_works() {
 // historical snapshots.
 // ============================================================================
 
-/// Test that pattern_search rejects historical snapshots
+/// Test that pattern_search returns Unsupported regardless of snapshot
 #[test]
-fn test_v3_pattern_search_rejects_historical_snapshot() {
+fn test_v3_pattern_search_unsupported() {
     use sqlitegraph::snapshot::SnapshotId;
 
     let (backend, _temp) = create_v3_backend();
@@ -1646,25 +1634,24 @@ fn test_v3_pattern_search_rejects_historical_snapshot() {
         })
         .unwrap();
 
-    // Historical snapshot should be rejected
-    let historical = SnapshotId::from_lsn(999);
-    let result = backend.pattern_search(historical, node1, &Default::default());
-
+    // pattern_search is not yet implemented for V3 — returns Unsupported for any snapshot
+    let current = SnapshotId::current();
+    let result = backend.pattern_search(current, node1, &Default::default());
     assert!(
         result.is_err(),
-        "pattern_search should reject historical snapshot"
+        "pattern_search should return Unsupported (not yet implemented)"
     );
     let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("does not support historical snapshots"),
+        err_msg.contains("does not support pattern_search"),
         "Error message should explain limitation: {}",
         err_msg
     );
 }
 
-/// Test that query_nodes_by_kind rejects historical snapshots
+/// Test that query_nodes_by_kind accepts any snapshot (V3 has no MVCC)
 #[test]
-fn test_v3_query_nodes_by_kind_rejects_historical_snapshot() {
+fn test_v3_query_nodes_by_kind_accepts_any_snapshot() {
     use sqlitegraph::snapshot::SnapshotId;
 
     let (backend, _temp) = create_v3_backend();
@@ -1678,25 +1665,19 @@ fn test_v3_query_nodes_by_kind_rejects_historical_snapshot() {
         })
         .unwrap();
 
-    // Historical snapshot should be rejected
-    let historical = SnapshotId::from_lsn(888);
-    let result = backend.query_nodes_by_kind(historical, "TestKind");
-
+    // V3 accepts all snapshots — query_nodes_by_kind not yet implemented, returns all nodes
+    let arbitrary = SnapshotId::from_lsn(888);
+    let result = backend.query_nodes_by_kind(arbitrary, "TestKind");
     assert!(
-        result.is_err(),
-        "query_nodes_by_kind should reject historical snapshot"
+        result.is_ok(),
+        "query_nodes_by_kind should accept any snapshot"
     );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("does not support historical snapshots"),
-        "Error message should explain limitation: {}",
-        err_msg
-    );
+    assert_eq!(result.unwrap().len(), 1);
 }
 
-/// Test that query_nodes_by_name_pattern rejects historical snapshots
+/// Test that query_nodes_by_name_pattern accepts any snapshot (V3 has no MVCC)
 #[test]
-fn test_v3_query_nodes_by_name_pattern_rejects_historical_snapshot() {
+fn test_v3_query_nodes_by_name_pattern_accepts_any_snapshot() {
     use sqlitegraph::snapshot::SnapshotId;
 
     let (backend, _temp) = create_v3_backend();
@@ -1710,20 +1691,15 @@ fn test_v3_query_nodes_by_name_pattern_rejects_historical_snapshot() {
         })
         .unwrap();
 
-    // Historical snapshot should be rejected
-    let historical = SnapshotId::from_lsn(777);
-    let result = backend.query_nodes_by_name_pattern(historical, "test");
+    // V3 accepts all snapshots — query_nodes_by_name_pattern not yet implemented, returns all nodes
+    let arbitrary = SnapshotId::from_lsn(777);
+    let result = backend.query_nodes_by_name_pattern(arbitrary, "test");
 
     assert!(
-        result.is_err(),
-        "query_nodes_by_name_pattern should reject historical snapshot"
+        result.is_ok(),
+        "query_nodes_by_name_pattern should accept any snapshot"
     );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("does not support historical snapshots"),
-        "Error message should explain limitation: {}",
-        err_msg
-    );
+    assert_eq!(result.unwrap().len(), 1);
 }
 
 /// Test that all three fixed methods work with current snapshot

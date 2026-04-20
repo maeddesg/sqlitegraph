@@ -8,7 +8,7 @@
 //! - Space inefficiency measurements
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
-use sqlitegraph::{BackendDirection, EdgeSpec, NodeSpec, config::GraphConfig, open_graph};
+use sqlitegraph::{BackendDirection, EdgeSpec, NodeSpec, SnapshotId, config::GraphConfig, open_graph};
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -40,7 +40,7 @@ fn bench_sequential_node_access(c: &mut Criterion) {
             // Benchmark sequential access
             b.iter(|| {
                 for i in 1..=size {
-                    black_box(graph.get_node(i).unwrap());
+                    black_box(graph.get_node(SnapshotId::current(), i).unwrap());
                 }
             });
         });
@@ -80,7 +80,7 @@ fn bench_cache_thrashing(c: &mut Criterion) {
                 // Benchmark random access that forces cache thrashing
                 b.iter(|| {
                     for i in (1..=cache_test_size).rev() {
-                        black_box(graph.get_node(i).unwrap());
+                        black_box(graph.get_node(SnapshotId::current(), i).unwrap());
                     }
                 });
             },
@@ -121,7 +121,7 @@ fn bench_corruption_boundary(c: &mut Criterion) {
                 // Benchmark accessing boundary node
                 b.iter(|| {
                     // Note: This should fail with corruption before the fix
-                    black_box(graph.get_node(boundary_node).unwrap());
+                    black_box(graph.get_node(SnapshotId::current(), boundary_node).unwrap());
                 });
             },
         );
@@ -256,7 +256,7 @@ fn bench_k_hop_topology_performance(c: &mut Criterion) {
                     b.iter(|| {
                         black_box(
                             graph
-                                .k_hop(start_node, 1, BackendDirection::Outgoing)
+                                .k_hop(SnapshotId::current(), start_node, 1, BackendDirection::Outgoing)
                                 .unwrap(),
                         );
                     });

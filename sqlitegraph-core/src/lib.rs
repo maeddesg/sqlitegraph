@@ -46,7 +46,7 @@
 //! let cfg = GraphConfig::sqlite();
 //! let graph = open_graph("my_graph.db", &cfg)?;
 //!
-//! // Or use Native backend
+//! // Or use Native backend (V3 production standard)
 //! let cfg = GraphConfig::native();
 //! let graph = open_graph("my_graph.db", &cfg)?;
 //!
@@ -63,11 +63,11 @@
 //! |---------|----------------|----------------|
 //! | **ACID Transactions** | ✅ Full | ✅ WAL-based |
 //! | **Graph Algorithms** | ✅ Full support | ✅ Full support |
-//! | **HNSW Vector Search** | ✅ With persistence | ✅ In-memory |
+//! | **HNSW Vector Search** | ✅ With persistence | ✅ With persistence (V3 KV) |
 //! | **MVCC Snapshots** | ✅ | ✅ |
 //! | **Pattern Matching** | ✅ | ✅ |
 //! | **Raw SQL Access** | ✅ Native | ❌ Not supported |
-//! | **File Format** | SQLite DB | Custom binary |
+//! | **File Format** | SQLite DB | Custom binary (V3) |
 //! | **Startup Time** | Fast | Faster |
 //! | **Dependencies** | libsqlite3 | None (pure Rust) |
 //! | **Write Performance** | Good | Better |
@@ -80,7 +80,7 @@
 //! - **Raw SQL access** needed for complex queries or joins
 //! - **Database compatibility** with SQLite tools (sqlite3, DB Browser)
 //! - **Mature ecosystem** with third-party tooling
-//! - **HNSW persistence** required (vectors survive restarts)
+//! - **HNSW persistence** required
 //!
 //! ## When to Use Native Backend
 //!
@@ -88,8 +88,7 @@
 //! - **Performance is critical** (faster reads/writes)
 //! - **No external dependencies** desired (pure Rust)
 //! - **Fast startup** with large datasets
-//! - **Custom binary format** acceptable
-//! - **HNSW in-memory only** (vectors persist in separate file)
+//! - **Custom binary format (V3)** acceptable
 //!
 //! # Thread Safety
 //!
@@ -213,7 +212,7 @@
 //! - [`GraphEdge`] - Graph edge/relationship representation
 //! - [`GraphBackend`] - Unified trait for backend implementations
 //! - [`SqliteGraphBackend`] - SQLite backend implementation
-//! - [`NativeGraphBackend`] - Native backend implementation
+//! - [`V3Backend`] - Native V3 backend implementation
 //!
 //! ## Configuration
 //! - [`BackendKind`] - Runtime backend selection enum
@@ -272,16 +271,9 @@ pub use snapshot::SnapshotId;
 // Re-export backend implementations
 pub use backend::{BackendDirection, ChainStep, GraphBackend};
 pub use backend::{
-    BackupResult, EdgeSpec, NativeGraphBackend, NeighborQuery, NodeSpec, SqliteGraphBackend,
+    BackupResult, EdgeSpec, NeighborQuery, NodeSpec, SqliteGraphBackend,
 };
-
-// Re-export backup API for convenience
-
-// Re-export restore API for convenience
-
-// Re-export WAL functionality for native backend
-
-// Re-export WAL integration for advanced usage
+pub use backend::native::v3::V3Backend as NativeGraphBackend;
 
 // Re-export configuration and factory
 pub use config::{BackendKind, GraphConfig, NativeConfig, SqliteConfig, open_graph};
@@ -342,33 +334,3 @@ pub mod dependency_monitor;
 
 // Re-export cache statistics for benchmarking
 pub use cache::CacheStats;
-
-#[cfg(feature = "native-v2")]
-pub fn restore_from_backup(
-    backup_dir: &std::path::Path,
-    target_path: &std::path::Path,
-    overwrite: bool,
-) -> Result<RestoreResult, SqliteGraphError> {
-    use crate::backend::native::v2::restore::{database_restore, RestoreConfig};
-    let config = RestoreConfig::new(backup_dir, target_path).with_overwrite(overwrite);
-    database_restore(config).map_err(|e| SqliteGraphError::connection(e.to_string()))
-}
-#[cfg(feature = "native-v2")]
-pub fn restore_from_backup(
-    backup_dir: &std::path::Path,
-    target_path: &std::path::Path,
-    overwrite: bool,
-) -> Result<RestoreResult, SqliteGraphError> {
-    let config = RestoreConfig::new(backup_dir, target_path).with_overwrite(overwrite);
-    database_restore(config).map_err(|e| SqliteGraphError::connection(e.to_string()))
-}
-#[cfg(feature = "native-v2")]
-pub fn restore_from_backup(
-    backup_dir: &std::path::Path,
-    target_path: &std::path::Path,
-    overwrite: bool,
-) -> Result<RestoreResult, SqliteGraphError> {
-    use crate::backend::native::v2::restore::{database_restore, RestoreConfig};
-    let config = RestoreConfig::new(backup_dir, target_path).with_overwrite(overwrite);
-    database_restore(config).map_err(|e| SqliteGraphError::connection(e.to_string()))
-}

@@ -207,7 +207,7 @@ use crate::errors::SqliteGraphError;
 /// ```
 #[derive(Debug, Clone, Serialize)]
 pub struct GraphIntrospection {
-    /// Backend type identifier ("sqlite" or "native-v2")
+    /// Backend type identifier ("sqlite" or "native")
     pub backend_type: String,
 
     /// Total number of nodes in the graph

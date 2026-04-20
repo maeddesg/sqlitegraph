@@ -1,8 +1,6 @@
-//! Key-Value store types (migrated from V2 backend)
+//! Key-Value store types (production standard)
 //!
-//! These types are used across multiple backends (SQLite, V3) for KV operations.
-//! Originally part of the V2 backend, they have been migrated to a shared location
-//! for continued use after V2 removal.
+//! These types are used across all backends (SQLite, V3) for KV operations.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -10,16 +8,24 @@ use thiserror::Error;
 /// Value types supported by the KV store
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum KvValue {
+    /// Null value
+    Null,
+    /// Raw bytes
     Bytes(Vec<u8>),
+    /// UTF-8 string
     String(String),
+    /// 64-bit signed integer
     Integer(i64),
+    /// 64-bit floating point
     Float(f64),
+    /// Boolean
     Boolean(bool),
+    /// JSON value
     Json(serde_json::Value),
 }
 
 /// Metadata for a KV entry
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KvMetadata {
     pub created_at: u64,
     pub updated_at: u64,

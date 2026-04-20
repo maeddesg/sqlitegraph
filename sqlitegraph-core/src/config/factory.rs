@@ -42,9 +42,9 @@ pub fn open_graph<P: AsRef<Path>>(
             let path_ref = path.as_ref();
             let file_exists = path_ref.exists();
             let native_graph = if file_exists {
-                crate::backend::NativeGraphBackend::open(&path)?
+                crate::backend::native::v3::V3Backend::open(&path)?
             } else if cfg.native.create_if_missing {
-                crate::backend::NativeGraphBackend::new(&path)?
+                crate::backend::native::v3::V3Backend::create(&path)?
             } else {
                 return Err(SqliteGraphError::connection(format!(
                     "Database file does not exist and create_if_missing is false: {}",

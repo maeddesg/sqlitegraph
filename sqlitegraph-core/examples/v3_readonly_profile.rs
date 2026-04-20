@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("Opening database for read-only profiling with cache capacity {}...", cache_capacity);
-    let backend = V3Backend::open_with_cache_capacity(db_path, cache_capacity)?;
+    let backend = V3Backend::open(db_path)?;
     let snapshot_id = SnapshotId::current();
 
     // Warm up cache

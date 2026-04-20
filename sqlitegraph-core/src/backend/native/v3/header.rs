@@ -40,10 +40,10 @@
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
 use crate::backend::native::constants;
-use crate::backend::native::v2;
+use crate::backend::native::v3;
 use crate::backend::native::v3::constants::{
     DEFAULT_PAGE_SIZE, DEFAULT_SCHEMA_VERSION, DEFAULT_V3_FEATURE_FLAGS, MAX_BTREE_HEIGHT,
-    V3_FORMAT_VERSION, V3_HEADER_SIZE, V3_MAGIC,
+    V2_MAGIC, V3_FORMAT_VERSION, V3_HEADER_SIZE, V3_MAGIC,
 };
 
 /// V3 Persistent header that is written to disk
@@ -215,7 +215,7 @@ impl PersistentHeaderV3 {
         // Check magic number - must be V3_MAGIC
         if self.magic != V3_MAGIC {
             // Check if it's a V2 header for better error message
-            if self.magic == v2::V2_MAGIC {
+            if self.magic == V2_MAGIC {
                 return Err(NativeBackendError::UnsupportedVersion {
                     version: 2,
                     supported_version: 3,
@@ -462,7 +462,7 @@ impl PersistentHeaderV3 {
 
         if magic == V3_MAGIC {
             Ok(3)
-        } else if magic == v2::V2_MAGIC || magic == constants::MAGIC_BYTES {
+        } else if magic == V2_MAGIC || magic == constants::MAGIC_BYTES {
             Ok(2)
         } else {
             Err(NativeBackendError::InvalidMagic {
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn test_validate_rejects_v2_magic() {
         let mut header = PersistentHeaderV3::new_v3();
-        header.magic = v2::V2_MAGIC; // V2 magic
+        header.magic = V2_MAGIC; // V2 magic
 
         let result = header.validate();
         assert!(result.is_err(), "Should reject V2 magic");
@@ -624,7 +624,7 @@ mod tests {
     fn test_detect_version_v2() {
         // Create V2 magic bytes
         let mut bytes = [0u8; 112];
-        bytes[0..8].copy_from_slice(&v2::V2_MAGIC);
+        bytes[0..8].copy_from_slice(&V2_MAGIC);
 
         let version = PersistentHeaderV3::detect_version(&bytes).unwrap();
         assert_eq!(version, 2, "Should detect V2 version");

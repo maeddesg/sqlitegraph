@@ -32,7 +32,7 @@ fn run_forensics(cache_size: usize) -> Result<(), Box<dyn std::error::Error>> {
     let db_path = temp_dir.path().join("forensics.db");
 
     // Create database with specified cache size
-    let graph = V3Backend::create_with_cache_capacity(&db_path, cache_size)?;
+    let graph = V3Backend::create(&db_path)?;
 
     let node_count = 1000;
 

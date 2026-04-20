@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Run the instrumented open
         let open_total = Instant::now();
-        let _backend = V3Backend::open_with_cache_capacity(&db_path, 64)?;
+        let _backend = V3Backend::open(&db_path)?;
         let open_total = open_total.elapsed();
 
         println!("Total open() time: {:.2} ms", open_total.as_secs_f64() * 1000.0);

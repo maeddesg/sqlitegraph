@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut found_ids = HashSet::new();
     for &expected_id in &expected_ids {
         match backend.get_node(snapshot_id, expected_id) {
-            Ok(Some(node)) => {
+            Ok(node) => {
                 found_ids.insert(node.id);
                 if node.id % 100 == 0 {
                     println!(
@@ -39,10 +39,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         node.id, node.kind, node.name
                     );
                 }
-            }
-            Ok(None) => {
-                eprintln!("ERROR: Node {} not found!", expected_id);
-                return Err("Node not found".into());
             }
             Err(e) => {
                 eprintln!("ERROR: Failed to get node {}: {}", expected_id, e);
