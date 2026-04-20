@@ -52,8 +52,6 @@ pub struct PageAllocator {
     free_list: Vec<u64>,
     /// Total pages allocated (including free)
     total_pages: u64,
-    /// Page size in bytes
-    page_size: u64,
 }
 
 impl PageAllocator {
@@ -95,7 +93,6 @@ impl PageAllocator {
             bitmap,
             free_list: Vec::new(),
             total_pages: header.total_pages,
-            page_size: header.page_size as u64,
         }
     }
 
@@ -633,7 +630,7 @@ mod tests {
 
         // Free page 4
         allocator.deallocate(4).unwrap();
-        let (allocated, free, total) = allocator.stats();
+        let (allocated, free, _total) = allocator.stats();
         assert_eq!(allocated, 3, "Should have 3 allocated after freeing two");
         assert_eq!(free, 2, "Should have 2 free pages");
     }

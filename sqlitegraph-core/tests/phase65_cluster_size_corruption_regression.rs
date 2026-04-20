@@ -52,7 +52,7 @@ fn test_phase65_cluster_size_corruption_regression() -> Result<(), Box<dyn std::
         for j in 1..=6 {
             let target_index = (i + j * 17) % node_ids.len(); // Distribute edges
             if target_index != i {
-                let edge_id = graph.insert_edge(EdgeSpec {
+                let _edge_id = graph.insert_edge(EdgeSpec {
                     from: node_id,
                     to: node_ids[target_index],
                     edge_type: format!("stress_edge_type_{}", j),
@@ -82,7 +82,7 @@ fn test_phase65_cluster_size_corruption_regression() -> Result<(), Box<dyn std::
     let mut reopen_config = GraphConfig::native();
     reopen_config.native.create_if_missing = false;
 
-    let mut graph_reopened = open_graph(&db_path, &reopen_config)?;
+    let graph_reopened = open_graph(&db_path, &reopen_config)?;
     println!("✅ Database reopened successfully");
 
     // Step 5: Perform stress neighbor queries - this triggered the original bug

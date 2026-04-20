@@ -25,9 +25,10 @@
 // We'll define a local mapping function for V3 errors.
 use crate::backend::native::v3::{
     KvStore, KvValue, NodeRecordV3, NodeStore, PageAllocator,
-    PersistentHeaderV3, Publisher, V3EdgeStore, V3_HEADER_SIZE,
+    PersistentHeaderV3, Publisher, V3EdgeStore, V3_HEADER_SIZE, KindIndex,
 };
 use crate::backend::native::v3::btree::BTreeManager;
+use crate::backend::native::v3::name_index::NameIndex;
 use crate::backend::native::v3::edge_compat::Direction as EdgeDirection;
 use crate::backend::native::v3::wal::{WALWriter, V3WALPaths, V3WALRecord};
 use crate::backend::native::types::NativeBackendError;
@@ -75,6 +76,10 @@ pub struct V3Backend {
     kv_store: RwLock<Option<KvStore>>,
     /// Pub/Sub publisher for event notification (lazy initialized)
     publisher: RwLock<Option<Publisher>>,
+    /// Kind index for O(1) kind-based lookups
+    kind_index: KindIndex,
+    /// Name index for fast name lookups (exact, prefix, substring)
+    name_index: NameIndex,
 }
 
 /// Write batch guard for amortized durability
@@ -322,6 +327,8 @@ impl V3Backend {
             header: RwLock::new(header),
             kv_store: RwLock::new(None),  // Lazy initialized
             publisher: RwLock::new(None), // Lazy initialized
+            kind_index: KindIndex::new(),
+            name_index: NameIndex::new(),
         })
     }
 
@@ -443,8 +450,17 @@ impl V3Backend {
             edge_store.set_wal(Arc::clone(wal_arc));
         }
 
-        Ok(Self {
-            db_path,
+        // Initialize indexes: try to restore from .v3index sidecar, fall back to rebuild
+        let (kind_index, name_index) = match crate::backend::native::v3::index_persistence::restore_indexes(&db_path, header.node_count) {
+            Ok((kind, name)) => (kind, name),
+            Err(_) => {
+                // No sidecar or stale — will rebuild below
+                (KindIndex::new(), NameIndex::new())
+            }
+        };
+
+        let backend = Self {
+            db_path: db_path.clone(),
             btree: RwLock::new(btree),
             node_store: RwLock::new(node_store),
             edge_store: RwLock::new(edge_store),
@@ -453,7 +469,16 @@ impl V3Backend {
             header: RwLock::new(header),
             kv_store: RwLock::new(None),  // Lazy initialized
             publisher: RwLock::new(None), // Lazy initialized
-        })
+            kind_index,
+            name_index,
+        };
+
+        // If restore failed, rebuild indexes by scanning all nodes
+        if backend.kind_index.kind_count() == 0 && backend.header.read().node_count > 0 {
+            backend.rebuild_indexes();
+        }
+
+        Ok(backend)
     }
     
     /// Check if KV store has been initialized
@@ -464,46 +489,6 @@ impl V3Backend {
     /// Check if Publisher has been initialized
     pub fn is_pubsub_initialized(&self) -> bool {
         self.publisher.read().is_some()
-    }
-    
-    /// Get or initialize the KV store
-    fn get_or_init_kv(&self) -> parking_lot::MappedRwLockReadGuard<'_, KvStore> {
-        if self.kv_store.read().is_none() {
-            *self.kv_store.write() = Some(KvStore::new());
-        }
-        parking_lot::RwLockReadGuard::map(self.kv_store.read(), |opt| {
-            opt.as_ref().expect("KV store just initialized")
-        })
-    }
-    
-    /// Get or initialize the Publisher
-    fn get_or_init_publisher(&self) -> parking_lot::MappedRwLockReadGuard<'_, Publisher> {
-        if self.publisher.read().is_none() {
-            *self.publisher.write() = Some(Publisher::new());
-        }
-        parking_lot::RwLockReadGuard::map(self.publisher.read(), |opt| {
-            opt.as_ref().expect("Publisher just initialized")
-        })
-    }
-    
-    /// Get mutable access to or initialize the KV store
-    fn get_or_init_kv_mut(&self) -> parking_lot::MappedRwLockWriteGuard<'_, KvStore> {
-        if self.kv_store.read().is_none() {
-            *self.kv_store.write() = Some(KvStore::new());
-        }
-        parking_lot::RwLockWriteGuard::map(self.kv_store.write(), |opt| {
-            opt.as_mut().expect("KV store just initialized")
-        })
-    }
-    
-    /// Get mutable access to or initialize the Publisher
-    fn get_or_init_publisher_mut(&self) -> parking_lot::MappedRwLockWriteGuard<'_, Publisher> {
-        if self.publisher.read().is_none() {
-            *self.publisher.write() = Some(Publisher::new());
-        }
-        parking_lot::RwLockWriteGuard::map(self.publisher.write(), |opt| {
-            opt.as_mut().expect("Publisher just initialized")
-        })
     }
     
     // === V3-Native Public API ===
@@ -620,7 +605,16 @@ impl V3Backend {
         if let Some(root_page) = self.edge_store.read().btree_root_page_id() {
             header.edge_data_offset = root_page;
         }
+        let node_count = header.node_count;
         drop(header);
+
+        // Persist kind and name indexes to .v3index sidecar
+        let _ = crate::backend::native::v3::index_persistence::persist_indexes(
+            &self.db_path,
+            &self.kind_index,
+            &self.name_index,
+            node_count,
+        );
 
         // Sync header so edge B+Tree root is durable
         self.sync_header()?;
@@ -753,11 +747,15 @@ impl V3Backend {
         let mut node_store = self.node_store.write();
         let node_id = node_store.insert_node(node_record)
             .map_err(map_v3_error)?;
-        
+
+        // Update indexes with kind and name from the inserted node
+        self.kind_index.insert(node.kind.clone(), node_id);
+        self.name_index.insert(node.name.clone(), node_id);
+
         // Update header node count and B+Tree root info (but don't sync yet)
         let mut header = self.header.write();
         header.node_count += 1;
-        
+
         // Sync B+Tree root page ID and height from NodeStore's BTreeManager
         if let Some(root_page) = node_store.btree_root_page_id() {
             header.root_index_page = root_page;
@@ -765,12 +763,12 @@ impl V3Backend {
         if let Some(tree_height) = node_store.btree_height() {
             header.btree_height = tree_height;
         }
-        
+
         Ok(node_id)
     }
     
     /// Calculate file offset for a given page ID
-    /// 
+    ///
     /// Page 0 is the header at offset 0.
     /// Data pages start at page 1, which maps to offset V3_HEADER_SIZE.
     fn page_offset(page_id: u64) -> u64 {
@@ -780,12 +778,48 @@ impl V3Backend {
         let data_page_index = page_id.saturating_sub(1);
         crate::backend::native::v3::constants::V3_HEADER_SIZE + data_page_index * crate::backend::native::v3::constants::DEFAULT_PAGE_SIZE
     }
-    
+
+    /// Rebuild kind and name indexes by scanning all nodes
+    ///
+    /// This is used as a fallback when index restoration from .v3index fails
+    /// or when opening a database without a sidecar index file.
+    fn rebuild_indexes(&self) {
+        self.kind_index.clear();
+        self.name_index.clear();
+
+        let header = self.header.read();
+        let node_count = header.node_count;
+        drop(header);
+
+        for id in 1..=node_count as i64 {
+            if let Ok(Some(record)) = self.get_node_internal(id) {
+                let data_bytes = if let Some(inline) = record.data_inline {
+                    inline
+                } else if let Some(offset) = record.data_external_offset {
+                    let actual_data_len = record.data_len & crate::backend::native::v3::node::record::constants::MAX_DATA_LEN;
+                    let mut buffer = vec![0u8; actual_data_len as usize];
+                    if let Ok(mut file) = OpenOptions::new().read(true).open(&self.db_path) {
+                        if file.seek(SeekFrom::Start(offset)).is_ok() {
+                            let _ = file.read_exact(&mut buffer);
+                        }
+                    }
+                    buffer
+                } else {
+                    Vec::new()
+                };
+
+                let (kind, name, _data) = Self::parse_node_data(&data_bytes, id);
+                self.kind_index.insert(kind, id);
+                self.name_index.insert(name, id);
+            }
+        }
+    }
+
     /// Insert edge without syncing (internal use only)
     ///
     /// Used by WriteBatchGuard to accumulate changes.
     fn insert_edge_inner(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
-        let mut edge_store = self.edge_store.write();
+        let edge_store = self.edge_store.write();
 
         let edge_type = if edge.edge_type.is_empty() {
             None
@@ -979,7 +1013,7 @@ impl GraphBackend for V3Backend {
             result.push(node_id);
             
             if current_depth < depth {
-                let mut edge_store = self.edge_store.write();
+                let edge_store = self.edge_store.write();
                 let neighbors = edge_store.outgoing(node_id)
                     .map_err(map_v3_error)?;
                 
@@ -1013,7 +1047,7 @@ impl GraphBackend for V3Backend {
         queue.push_back(start);
         
         while let Some(node_id) = queue.pop_front() {
-            let mut edge_store = self.edge_store.write();
+            let edge_store = self.edge_store.write();
             let neighbors = edge_store.outgoing(node_id)
                 .map_err(map_v3_error)?;
             
@@ -1051,7 +1085,7 @@ impl GraphBackend for V3Backend {
         _snapshot_id: SnapshotId,
         node: i64,
     ) -> Result<(usize, usize), SqliteGraphError> {
-        let mut edge_store = self.edge_store.write();
+        let edge_store = self.edge_store.write();
         
         let outgoing = edge_store.outgoing(node)
             .map_err(map_v3_error)?
@@ -1065,7 +1099,7 @@ impl GraphBackend for V3Backend {
     
     fn k_hop(
         &self,
-        snapshot_id: SnapshotId,
+        _snapshot_id: SnapshotId,
         start: i64,
         depth: u32,
         direction: BackendDirection,
@@ -1092,12 +1126,12 @@ impl GraphBackend for V3Backend {
             if current_depth < depth {
                 let neighbors = match direction {
                     BackendDirection::Outgoing => {
-                        let mut edge_store = self.edge_store.write();
+                        let edge_store = self.edge_store.write();
                         edge_store.outgoing(node_id)
                             .map_err(map_v3_error)?
                     }
                     BackendDirection::Incoming => {
-                        let mut edge_store = self.edge_store.write();
+                        let edge_store = self.edge_store.write();
                         edge_store.incoming(node_id)
                             .map_err(map_v3_error)?
                     }
@@ -1141,12 +1175,12 @@ impl GraphBackend for V3Backend {
             for &node_id in &current_nodes {
                 let neighbors = match step.direction {
                     BackendDirection::Outgoing => {
-                        let mut edge_store = self.edge_store.write();
+                        let edge_store = self.edge_store.write();
                         edge_store.outgoing(node_id)
                             .map_err(map_v3_error)?
                     }
                     BackendDirection::Incoming => {
-                        let mut edge_store = self.edge_store.write();
+                        let edge_store = self.edge_store.write();
                         edge_store.incoming(node_id)
                             .map_err(map_v3_error)?
                     }
@@ -1278,12 +1312,119 @@ impl GraphBackend for V3Backend {
     }
     
     fn snapshot_import(&self, import_dir: &Path) -> Result<crate::backend::ImportMetadata, SqliteGraphError> {
-        // TODO: Implement snapshot import
-        // For now, return placeholder
+        if !import_dir.is_dir() {
+            return Err(SqliteGraphError::connection(format!(
+                "Import path is not a directory: {}",
+                import_dir.display()
+            )));
+        }
+
+        // Find v3_snapshot_* files in the import directory
+        let mut snapshot_files: Vec<std::fs::DirEntry> = std::fs::read_dir(import_dir)
+            .map_err(|e| SqliteGraphError::connection(format!("Failed to read import dir: {}", e)))?
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry.file_name()
+                    .to_string_lossy()
+                    .starts_with("v3_snapshot_")
+            })
+            .collect();
+
+        snapshot_files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+        if snapshot_files.is_empty() {
+            return Err(SqliteGraphError::connection(format!(
+                "No v3_snapshot_* files found in {}",
+                import_dir.display()
+            )));
+        }
+
+        let latest_snapshot = &snapshot_files[snapshot_files.len() - 1];
+        let snapshot_path = latest_snapshot.path();
+
+        // Get entity count before import
+        let before_count = self.header.read().node_count;
+
+        // Copy the snapshot file to our db_path
+        std::fs::copy(&snapshot_path, &self.db_path)
+            .map_err(|e| SqliteGraphError::connection(format!("Failed to copy snapshot: {}", e)))?;
+
+        // Re-read header from the newly copied file
+        let mut file = File::open(&self.db_path)
+            .map_err(|e| SqliteGraphError::connection(format!("Failed to open imported DB: {}", e)))?;
+        let mut header_bytes = vec![0u8; V3_HEADER_SIZE as usize];
+        file.read_exact(&mut header_bytes)
+            .map_err(|e| SqliteGraphError::connection(format!("Failed to read imported header: {}", e)))?;
+        let imported_header = PersistentHeaderV3::from_bytes(&header_bytes)
+            .map_err(map_v3_error)?;
+        imported_header.validate().map_err(map_v3_error)?;
+        drop(file);
+
+        // Reinitialize all in-memory structures from the imported file
+        // The file on disk has changed, so our old BTree/page references are invalid
+        // Update allocator in place so new structures share the same Arc
+        *self.allocator.write() = PageAllocator::new(&imported_header);
+
+        let btree = BTreeManager::with_root(
+            Arc::clone(&self.allocator),
+            None,
+            imported_header.root_index_page,
+            imported_header.btree_height,
+            self.db_path.clone(),
+        );
+        let mut node_store = NodeStore::new(&imported_header, self.db_path.clone());
+        node_store.initialize(
+            BTreeManager::with_root(
+                Arc::clone(&self.allocator),
+                None,
+                imported_header.root_index_page,
+                imported_header.btree_height,
+                self.db_path.clone(),
+            ),
+            Arc::clone(&self.allocator),
+            None,
+        );
+        let edge_store = V3EdgeStore::with_path_and_allocator(
+            BTreeManager::with_root(
+                Arc::clone(&self.allocator),
+                None,
+                imported_header.edge_data_offset,
+                imported_header.btree_height,
+                self.db_path.clone(),
+            ),
+            None,
+            self.db_path.clone(),
+            Arc::clone(&self.allocator),
+        );
+        let _ = edge_store.restore_btree_from_metadata();
+
+        // Update in-memory state
+        *self.btree.write() = btree;
+        *self.node_store.write() = node_store;
+        *self.edge_store.write() = edge_store;
+        // Keep existing WAL (if any) — snapshot doesn't include WAL
+        *self.header.write() = imported_header.clone();
+
+        // Clear and rebuild indexes from the imported data
+        self.kind_index.clear();
+        self.name_index.clear();
+        self.rebuild_indexes();
+
+        // Persist the rebuilt indexes
+        let _ = crate::backend::native::v3::index_persistence::persist_indexes(
+            &self.db_path,
+            &self.kind_index,
+            &self.name_index,
+            imported_header.node_count,
+        );
+
+        let after_count = imported_header.node_count;
+        let edges_imported = imported_header.edge_count;
+
         Ok(crate::backend::ImportMetadata {
-            snapshot_path: import_dir.to_path_buf(),
-            entities_imported: 0,
-            edges_imported: 0,
+            snapshot_path,
+            entities_imported: after_count.saturating_sub(before_count),
+            edges_imported,
         })
     }
     
@@ -1293,10 +1434,7 @@ impl GraphBackend for V3Backend {
         kind: &str,
     ) -> Result<Vec<i64>, SqliteGraphError> {
         Self::require_current_snapshot(snapshot_id)?;
-        // TODO: Implement kind-based query using string table
-        // For now, return all nodes (placeholder)
-        let _ = kind;
-        self.entity_ids()
+        Ok(self.kind_index.get(kind))
     }
 
     fn query_nodes_by_name_pattern(
@@ -1305,10 +1443,27 @@ impl GraphBackend for V3Backend {
         pattern: &str,
     ) -> Result<Vec<i64>, SqliteGraphError> {
         Self::require_current_snapshot(snapshot_id)?;
-        // TODO: Implement pattern-based query
-        // For now, return all nodes (placeholder)
-        let _ = pattern;
-        self.entity_ids()
+
+        // Pattern dispatch based on wildcard position
+        // - "prefix*" → prefix search
+        // - "*substring" or "*substring*" → substring search
+        // - no wildcards → exact match
+        if pattern.ends_with('*') && !pattern.starts_with('*') {
+            // prefix* pattern
+            let prefix = &pattern[..pattern.len() - 1];
+            Ok(self.name_index.get_prefix(prefix))
+        } else if pattern.contains('*') {
+            // *suffix or *middle* pattern — strip all * and do substring search
+            let cleaned: String = pattern.chars().filter(|&c| c != '*').collect();
+            if cleaned.is_empty() {
+                Ok(Vec::new())
+            } else {
+                Ok(self.name_index.get_substring(&cleaned))
+            }
+        } else {
+            // Exact match (no wildcards)
+            Ok(self.name_index.get_exact(pattern))
+        }
     }
 
     fn kv_get(
@@ -1672,8 +1827,256 @@ mod tests {
     fn test_v3_backend_open_nonexistent() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("nonexistent.graph");
-        
+
         let result = V3Backend::open(&db_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_query_nodes_by_kind() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+
+        let backend = V3Backend::create(&db_path).unwrap();
+
+        // Insert nodes of different kinds
+        backend.insert_node(NodeSpec {
+            kind: "Function".to_string(),
+            name: "func_a".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Function".to_string(),
+            name: "func_b".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Class".to_string(),
+            name: "class_a".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        use crate::SnapshotId;
+        let snapshot = SnapshotId::current();
+
+        // Query by kind
+        let functions = backend.query_nodes_by_kind(snapshot, "Function").unwrap();
+        assert_eq!(functions.len(), 2);
+
+        let classes = backend.query_nodes_by_kind(snapshot, "Class").unwrap();
+        assert_eq!(classes.len(), 1);
+
+        let unknown = backend.query_nodes_by_kind(snapshot, "Unknown").unwrap();
+        assert!(unknown.is_empty());
+    }
+
+    #[test]
+    fn test_query_nodes_by_name_pattern_exact() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+
+        let backend = V3Backend::create(&db_path).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Function".to_string(),
+            name: "func_a".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Function".to_string(),
+            name: "func_b".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        use crate::SnapshotId;
+        let snapshot = SnapshotId::current();
+
+        // Exact match
+        let results = backend.query_nodes_by_name_pattern(snapshot, "func_a").unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_query_nodes_by_name_pattern_prefix() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+
+        let backend = V3Backend::create(&db_path).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Function".to_string(),
+            name: "func_a".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Function".to_string(),
+            name: "func_b".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Class".to_string(),
+            name: "class_a".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        use crate::SnapshotId;
+        let snapshot = SnapshotId::current();
+
+        // Prefix match
+        let results = backend.query_nodes_by_name_pattern(snapshot, "func*").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_query_nodes_by_name_pattern_substring() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+
+        let backend = V3Backend::create(&db_path).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Function".to_string(),
+            name: "my_func_a".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        backend.insert_node(NodeSpec {
+            kind: "Function".to_string(),
+            name: "my_func_b".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        }).unwrap();
+
+        use crate::SnapshotId;
+        let snapshot = SnapshotId::current();
+
+        // Substring match
+        let results = backend.query_nodes_by_name_pattern(snapshot, "*func*").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_index_persistence_across_open() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+
+        // Create and populate
+        {
+            let backend = V3Backend::create(&db_path).unwrap();
+            backend.insert_node(NodeSpec {
+                kind: "Function".to_string(),
+                name: "func_a".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            }).unwrap();
+            backend.flush_to_disk().unwrap();
+        }
+
+        // Verify .v3index sidecar was created
+        let index_path = crate::backend::native::v3::index_persistence::index_path_for_db(&db_path);
+        assert!(index_path.exists(), "Index sidecar should be created on flush");
+
+        // Reopen and query
+        {
+            let backend = V3Backend::open(&db_path).unwrap();
+            use crate::SnapshotId;
+            let snapshot = SnapshotId::current();
+
+            let results = backend.query_nodes_by_kind(snapshot, "Function").unwrap();
+            assert_eq!(results.len(), 1, "Kind index should be restored from sidecar");
+        }
+    }
+
+    #[test]
+    fn test_index_rebuild_on_open_without_sidecar() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+
+        // Create and populate
+        {
+            let backend = V3Backend::create(&db_path).unwrap();
+            backend.insert_node(NodeSpec {
+                kind: "Class".to_string(),
+                name: "class_a".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            }).unwrap();
+            backend.flush_to_disk().unwrap();
+        }
+
+        // Delete the sidecar
+        let index_path = crate::backend::native::v3::index_persistence::index_path_for_db(&db_path);
+        let _ = std::fs::remove_file(&index_path);
+
+        // Reopen — should rebuild indexes from node scan
+        {
+            let backend = V3Backend::open(&db_path).unwrap();
+            use crate::SnapshotId;
+            let snapshot = SnapshotId::current();
+
+            let results = backend.query_nodes_by_kind(snapshot, "Class").unwrap();
+            assert_eq!(results.len(), 1, "Kind index should be rebuilt from node scan");
+        }
+    }
+
+    #[test]
+    fn test_snapshot_import() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+        let import_dir = temp_dir.path().join("import");
+        std::fs::create_dir(&import_dir).unwrap();
+
+        // Create a snapshot file
+        {
+            let backend = V3Backend::create(&db_path).unwrap();
+            backend.insert_node(NodeSpec {
+                kind: "Function".to_string(),
+                name: "original".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            }).unwrap();
+            backend.flush_to_disk().unwrap();
+
+            // Export snapshot
+            backend.snapshot_export(&import_dir).unwrap();
+        }
+
+        // Create a fresh database and import
+        let fresh_db = temp_dir.path().join("fresh.graph");
+        let backend = V3Backend::create(&fresh_db).unwrap();
+
+        let metadata = backend.snapshot_import(&import_dir).unwrap();
+        assert_eq!(metadata.entities_imported, 1);
+
+        // Verify imported data is queryable
+        use crate::SnapshotId;
+        let snapshot = SnapshotId::current();
+        let results = backend.query_nodes_by_kind(snapshot, "Function").unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_snapshot_import_missing_dir_fails() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.graph");
+        let backend = V3Backend::create(&db_path).unwrap();
+
+        let missing_dir = temp_dir.path().join("nonexistent_import");
+        let result = backend.snapshot_import(&missing_dir);
         assert!(result.is_err());
     }
 }

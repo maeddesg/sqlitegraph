@@ -525,7 +525,6 @@ impl IndexPage {
             // Read next_leaf pointer
             let next_leaf = if data_offset + PAGE_ID_SIZE <= 4096 {
                 let ptr = u64::from_be_bytes(extract_array(bytes, data_offset, "next_leaf")?);
-                data_offset += PAGE_ID_SIZE;
                 ptr
             } else {
                 return Err(NativeBackendError::InvalidHeader {

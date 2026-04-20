@@ -271,6 +271,10 @@ impl NeighborhoodSearch {
         entry_points: &[u64],
         k: usize,
     ) -> Result<SearchResult, HnswError> {
+        if query_vector.is_empty() {
+            return Err(HnswError::Index(HnswIndexError::InvalidSearchParameters));
+        }
+
         if k == 0 {
             return Ok(SearchResult::new(vec![], vec![], 0, SearchMetrics::new()));
         }
@@ -382,37 +386,6 @@ impl NeighborhoodSearch {
         ))
     }
 
-    /// Validate search parameters
-    ///
-    /// # Arguments
-    ///
-    /// * `layer` - Target layer
-    /// * `k` - Number of neighbors to find
-    /// * `query_vector` - Query vector
-    ///
-    /// # Returns
-    ///
-    /// Ok(()) if valid, Err with details if invalid
-    fn validate_search_parameters(
-        &self,
-        layer: &HnswLayer,
-        k: usize,
-        query_vector: &[f32],
-    ) -> Result<(), HnswError> {
-        if k == 0 {
-            return Err(HnswError::Index(HnswIndexError::InvalidSearchParameters));
-        }
-
-        if query_vector.is_empty() {
-            return Err(HnswError::Index(HnswIndexError::InvalidSearchParameters));
-        }
-
-        if layer.node_count() == 0 {
-            return Err(HnswError::Index(HnswIndexError::IndexNotInitialized));
-        }
-
-        Ok(())
-    }
 }
 
 impl Default for NeighborhoodSearch {
@@ -552,7 +525,7 @@ mod tests {
     fn test_search_layer_empty_layer() {
         let search = NeighborhoodSearch::new(DistanceMetric::Cosine);
         let vectors = vec![];
-        let mut layer = HnswLayer::new(0, 4); // Empty layer
+        let layer = HnswLayer::new(0, 4); // Empty layer
         let query_vector = vec![1.0, 0.0, 0.0];
 
         let result = search.search_layer(&layer, &query_vector, &vectors, &[0], 3);
@@ -561,6 +534,25 @@ mod tests {
         assert!(matches!(
             result.unwrap_err(),
             HnswError::Index(HnswIndexError::IndexNotInitialized)
+        ));
+    }
+
+    #[test]
+    fn test_search_layer_empty_query_vector() {
+        let search = NeighborhoodSearch::new(DistanceMetric::Cosine);
+        let vectors = create_test_vectors();
+        let layer = create_test_layer();
+
+        let result = search.search_layer(&layer, &[], &vectors, &[0], 3);
+
+        assert!(
+            result.is_err(),
+            "search_layer should reject empty query_vector, got {:?}",
+            result
+        );
+        assert!(matches!(
+            result.unwrap_err(),
+            HnswError::Index(HnswIndexError::InvalidSearchParameters)
         ));
     }
 
@@ -589,7 +581,7 @@ mod tests {
 
     #[test]
     fn test_search_metrics() {
-        let mut metrics = SearchMetrics::new();
+        let metrics = SearchMetrics::new();
 
         assert_eq!(metrics.layers_visited(), 0);
         assert_eq!(metrics.entry_points_considered(), 0);

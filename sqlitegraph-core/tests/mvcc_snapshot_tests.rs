@@ -9,8 +9,8 @@
 //! Focus on safe, consistent reads during write activity.
 
 use sqlitegraph::{
-    CacheStats, GraphEdgeCreate, GraphEntityCreate, GraphQuery, SqliteGraph, SqliteGraphError,
-    add_label, add_property, bulk_insert_edges, bulk_insert_entities, cache_stats,
+    GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError,
+    add_label, add_property, cache_stats,
 };
 use std::time::Duration;
 
@@ -245,8 +245,8 @@ fn test_snapshot_neighbor_access() -> Result<(), SqliteGraphError> {
 fn test_snapshot_isolation_from_writes() -> Result<(), SqliteGraphError> {
     let graph = create_test_graph()?;
 
-    let initial_nodes = node_count(&graph)?;
-    let initial_edges = edge_count(&graph)?;
+    let _initial_nodes = node_count(&graph)?;
+    let _initial_edges = edge_count(&graph)?;
 
     // Create snapshot
     // let snapshot = graph.create_snapshot()?;
@@ -277,7 +277,7 @@ fn test_snapshot_consistency_during_modifications() -> Result<(), SqliteGraphErr
 
     // Get initial state
     let entity_ids = graph.list_entity_ids()?;
-    let initial_neighbors = if !entity_ids.is_empty() {
+    let _initial_neighbors = if !entity_ids.is_empty() {
         Some(get_neighbors(&graph, entity_ids[0])?)
     } else {
         None
@@ -328,7 +328,7 @@ fn test_cache_independence() -> Result<(), SqliteGraphError> {
         get_incoming(&graph, entity_ids[0])?;
     }
 
-    let initial_cache_stats = cache_stats(&graph);
+    let _initial_cache_stats = cache_stats(&graph);
 
     // Create snapshot
     // let snapshot = graph.create_snapshot()?;
@@ -358,7 +358,7 @@ fn test_cache_independence() -> Result<(), SqliteGraphError> {
     }
 
     // Verify main graph caches were invalidated
-    let final_cache_stats = cache_stats(&graph);
+    let _final_cache_stats = cache_stats(&graph);
     // Note: This test would need to verify cache miss behavior
 
     Ok(())
@@ -398,7 +398,7 @@ fn test_snapshot_transaction_boundaries() -> Result<(), SqliteGraphError> {
     // Create snapshot within explicit transaction
     // let _guard = graph.transaction_guard()?; // Not available in public API
 
-    let initial_nodes = node_count(&graph)?;
+    let _initial_nodes = node_count(&graph)?;
 
     // Create snapshot
     // let snapshot = graph.create_snapshot()?;
@@ -436,7 +436,7 @@ fn test_snapshot_commit_rollback_behavior() -> Result<(), SqliteGraphError> {
     // assert_eq!(snapshot.node_count(), initial_nodes);
 
     // Test rollback behavior
-    let nodes_before_rollback = node_count(&graph)?;
+    let _nodes_before_rollback = node_count(&graph)?;
 
     {
         // let _guard = graph.transaction_guard()?; // Not available in public API
@@ -463,7 +463,7 @@ fn test_snapshot_commit_rollback_behavior() -> Result<(), SqliteGraphError> {
 
 #[test]
 fn test_snapshot_resource_management() -> Result<(), SqliteGraphError> {
-    let graph = create_test_graph()?;
+    let _graph = create_test_graph()?;
 
     // Create multiple snapshots
     // let snapshot1 = graph.create_snapshot()?;
@@ -483,7 +483,7 @@ fn test_snapshot_resource_management() -> Result<(), SqliteGraphError> {
 
 #[test]
 fn test_read_only_enforcement() -> Result<(), SqliteGraphError> {
-    let graph = create_test_graph()?;
+    let _graph = create_test_graph()?;
 
     // Create snapshot
     // let snapshot = graph.create_snapshot()?;
@@ -532,7 +532,7 @@ fn test_repeatable_snapshot_results() -> Result<(), SqliteGraphError> {
 
 #[test]
 fn test_deterministic_query_results() -> Result<(), SqliteGraphError> {
-    let graph = create_test_graph()?;
+    let _graph = create_test_graph()?;
 
     // Create snapshot
     // let snapshot = graph.create_snapshot()?;
@@ -552,7 +552,7 @@ fn test_deterministic_query_results() -> Result<(), SqliteGraphError> {
 
 #[test]
 fn test_snapshot_ordering_consistency() -> Result<(), SqliteGraphError> {
-    let graph = create_test_graph()?;
+    let _graph = create_test_graph()?;
 
     // Create snapshot
     // let snapshot = graph.create_snapshot()?;
@@ -624,8 +624,8 @@ fn test_large_graph_snapshot() -> Result<(), SqliteGraphError> {
         }
     }
 
-    let total_nodes = node_count(&graph)?;
-    let total_edges = edge_count(&graph)?;
+    let _total_nodes = node_count(&graph)?;
+    let _total_edges = edge_count(&graph)?;
 
     // Create snapshot
     // let snapshot = graph.create_snapshot()?;
@@ -679,7 +679,7 @@ fn test_single_node_snapshot() -> Result<(), SqliteGraphError> {
         file_path: Some("single.rs".to_string()),
         data: serde_json::json!({}),
     };
-    let entity_id = insert_entity(&graph, entity)?;
+    let _entity_id = insert_entity(&graph, entity)?;
 
     // Create snapshot
     // let snapshot = graph.create_snapshot()?;

@@ -16,7 +16,7 @@ fn test_reopen_maintains_graph_integrity() {
     println!("=== PHASE 1: Initial graph creation ===");
 
     // Create graph
-    let mut graph =
+    let graph =
         open_graph(&db_path, &GraphConfig::native()).expect("Failed to create V2 native graph");
 
     // Create 300 nodes
@@ -100,7 +100,7 @@ fn test_reopen_maintains_graph_integrity() {
     println!("=== PHASE 2: Reopen and verify integrity ===");
 
     // Reopen the same graph file
-    let mut graph =
+    let graph =
         open_graph(&db_path, &GraphConfig::native()).expect("Failed to reopen V2 native graph");
 
     println!("✅ Graph reopened successfully");

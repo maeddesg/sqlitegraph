@@ -6,9 +6,6 @@
 //! Run with:
 //! cargo test --features native-v3,v3-forensics v3_forensics -- --nocapture
 
-use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec, native::v3::V3Backend};
-use sqlitegraph::snapshot::SnapshotId;
-use tempfile::TempDir;
 
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;

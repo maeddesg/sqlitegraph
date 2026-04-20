@@ -1124,7 +1124,7 @@ mod tests {
         };
         graph.insert_edge(&edge).ok();
 
-        let errors = validate_no_dangling_edges(&graph);
+        let _errors = validate_no_dangling_edges(&graph);
         // Note: Validation may not detect dangling edges due to implementation limitations
         // The test verifies the function runs without panicking
         // assert!(!errors.is_empty());

@@ -22,7 +22,7 @@ pub use page::{IndexPage, IndexPageType};
 
 /// Index page constants
 pub mod constants {
-    use super::page::constants::*;
+    
 
     /// Page header size in bytes (page_id, is_leaf, count, checksum, padding)
     pub const PAGE_HEADER_SIZE: usize = 32;

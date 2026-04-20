@@ -27,7 +27,6 @@ use crate::backend::native::v3::forensics::{
     FORENSIC_COUNTERS, PAGE_OWNERSHIP, PageType, Subsystem,
 };
 use crate::backend::native::v3::index::IndexPage;
-use crate::backend::native::v3::index::page::{MAX_ENTRIES, MAX_KEYS};
 use crate::backend::native::v3::wal::WALWriter;
 use crate::backend::native::v3::write_batch::WriteBatch;
 use std::collections::HashMap;
@@ -478,7 +477,7 @@ impl BTreeManager {
 
                 if child_page.needs_split_internal() || child_page.needs_split_leaf() {
                     // Split the child
-                    let (new_child_id, separator_key) = self.split_child(page_id, child_idx)?;
+                    let (_new_child_id, separator_key) = self.split_child(page_id, child_idx)?;
 
                     // Reload the parent (it was modified by split_child)
                     let updated_parent = self.load_page(page_id)?;
@@ -803,36 +802,6 @@ impl BTreeManager {
         }
     }
 
-    /// Split page when full
-    ///
-    /// Splits a full page into two pages and propagates the split
-    /// up the tree if necessary.
-    ///
-    /// # Arguments
-    ///
-    /// * `page_id` - Page ID to split
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Split successful
-    /// * `Err(...)` - Error during split
-    fn split_page(&mut self, page_id: u64) -> NativeResult<()> {
-        let page = self.load_page(page_id)?;
-
-        match page {
-            IndexPage::Leaf { .. } => {
-                // For leaf splits, we need the key and value
-                // This is handled by split_and_insert_leaf
-                Ok(())
-            }
-            IndexPage::Internal { .. } => {
-                // Handle internal page split
-                self.split_internal_page(page_id)?;
-                Ok(())
-            }
-        }
-    }
-
     //========================================================================
     // Private helper methods
     //========================================================================
@@ -868,46 +837,6 @@ impl BTreeManager {
         Ok(())
     }
 
-    /// Find leaf page for key, tracking path for potential splits
-    fn find_leaf_path(
-        &self,
-        root_page_id: u64,
-        search_key: u64,
-        path: &mut Vec<(u64, usize)>,
-    ) -> NativeResult<u64> {
-        let mut current_page_id = root_page_id;
-        let mut depth = 0;
-
-        while depth < MAX_TREE_HEIGHT as usize {
-            let page = self.load_page(current_page_id)?;
-
-            match &page {
-                IndexPage::Leaf { .. } => {
-                    return Ok(current_page_id);
-                }
-                IndexPage::Internal { keys, children, .. } => {
-                    let child_idx = IndexPage::find_child_index(keys, search_key);
-                    path.push((current_page_id, child_idx));
-                    if child_idx < children.len() {
-                        current_page_id = children[child_idx];
-                    } else {
-                        return Err(NativeBackendError::InvalidHeader {
-                            field: "btree_internal".to_string(),
-                            reason: format!("child index {} out of bounds", child_idx),
-                        });
-                    }
-                }
-            }
-
-            depth += 1;
-        }
-
-        Err(NativeBackendError::InvalidHeader {
-            field: "btree_depth".to_string(),
-            reason: format!("exceeded maximum depth {}", MAX_TREE_HEIGHT),
-        })
-    }
-
     /// Find leaf page for key (without tracking path)
     fn find_leaf(&self, root_page_id: u64, search_key: u64) -> NativeResult<u64> {
         let mut current_page_id = root_page_id;
@@ -940,199 +869,6 @@ impl BTreeManager {
             field: "btree_depth".to_string(),
             reason: format!("exceeded maximum depth {}", MAX_TREE_HEIGHT),
         })
-    }
-
-    /// Split leaf page and insert new key
-    fn split_and_insert_leaf(
-        &mut self,
-        leaf_page_id: u64,
-        key: u64,
-        value: u64,
-        path: &[(u64, usize)],
-    ) -> NativeResult<()> {
-        // Allocate new page for the split
-        let new_page_id = self.allocator.write().allocate()?;
-
-        // Load and modify the original leaf
-        let mut original_page = self.load_page(leaf_page_id)?;
-        let mut new_page = IndexPage::new_leaf(new_page_id);
-
-        if let (
-            IndexPage::Leaf {
-                entries: orig_entries,
-                next_leaf: orig_next,
-                ..
-            },
-            IndexPage::Leaf {
-                entries: new_entries,
-                next_leaf: new_next,
-                ..
-            },
-        ) = (&mut original_page, &mut new_page)
-        {
-            // Find split point (middle)
-            let split_idx = orig_entries.len() / 2;
-
-            // Move second half to new page
-            *new_entries = orig_entries.split_off(split_idx);
-            *new_next = *orig_next;
-
-            // Determine which page gets the new key
-            let split_key = new_entries[0].0;
-
-            if key < split_key {
-                // Insert into original page
-                let insert_idx = match IndexPage::binary_search_leaf(orig_entries, key) {
-                    Ok(idx) => idx,
-                    Err(idx) => idx,
-                };
-                orig_entries.insert(insert_idx, (key, value));
-            } else {
-                // Insert into new page
-                let insert_idx = match IndexPage::binary_search_leaf(new_entries, key) {
-                    Ok(idx) => idx,
-                    Err(idx) => idx,
-                };
-                new_entries.insert(insert_idx, (key, value));
-            }
-
-            // Link original page to new page
-            *orig_next = new_page_id;
-        }
-
-        // Write both pages
-        self.write_page(&original_page)?;
-        self.write_page(&new_page)?;
-
-        // Get the split key for parent update
-        let split_key = if let IndexPage::Leaf { entries, .. } = &new_page {
-            entries.first().map(|e| e.0).unwrap_or(key)
-        } else {
-            key
-        };
-
-        // Update parent or create new root
-        self.update_parent_after_split(path, split_key, new_page_id)?;
-
-        // Log to WAL
-        if let Some(ref wal) = self.wal {
-            let mut wal_guard = wal.write();
-            wal_guard.btree_split(leaf_page_id, new_page_id, split_key, true)?;
-        }
-
-        Ok(())
-    }
-
-    /// Split internal page
-    fn split_internal_page(&mut self, page_id: u64) -> NativeResult<u64> {
-        // Allocate new page
-        let new_page_id = self.allocator.write().allocate()?;
-
-        let mut original_page = self.load_page(page_id)?;
-        let mut new_page = IndexPage::new_internal(new_page_id);
-
-        if let (
-            IndexPage::Internal {
-                keys: orig_keys,
-                children: orig_children,
-                ..
-            },
-            IndexPage::Internal {
-                keys: new_keys,
-                children: new_children,
-                ..
-            },
-        ) = (&mut original_page, &mut new_page)
-        {
-            // Find split point
-            let split_idx = orig_keys.len() / 2;
-            let split_key = orig_keys[split_idx];
-
-            // Move keys and children after split point to new page
-            *new_keys = orig_keys.split_off(split_idx + 1);
-            *new_children = orig_children.split_off(split_idx + 1);
-
-            // The middle key (split_key) is promoted to parent
-            // Remove it from original keys
-            orig_keys.pop();
-
-            // Write both pages
-            self.write_page(&original_page)?;
-            self.write_page(&new_page)?;
-
-            // Log to WAL
-            if let Some(ref wal) = self.wal {
-                let mut wal_guard = wal.write();
-                wal_guard.btree_split(page_id, new_page_id, split_key, false)?;
-            }
-
-            return Ok(split_key);
-        }
-
-        Err(NativeBackendError::InvalidHeader {
-            field: "btree_split".to_string(),
-            reason: "failed to split internal page".to_string(),
-        })
-    }
-
-    /// Update parent after split (or create new root)
-    fn update_parent_after_split(
-        &mut self,
-        path: &[(u64, usize)],
-        split_key: u64,
-        new_page_id: u64,
-    ) -> NativeResult<()> {
-        if path.is_empty() {
-            // Creating new root
-            let new_root_id = self.allocator.write().allocate()?;
-            let mut new_root = IndexPage::new_internal(new_root_id);
-
-            if let IndexPage::Internal { keys, children, .. } = &mut new_root {
-                keys.push(split_key);
-                children.push(self.root_page_id);
-                children.push(new_page_id);
-            }
-
-            self.write_page(&new_root)?;
-
-            self.root_page_id = new_root_id;
-            self.tree_height += 1;
-
-            // Log to WAL
-            if let Some(ref wal) = self.wal {
-                let mut wal_guard = wal.write();
-                wal_guard.page_allocate(new_root_id)?;
-                let page_bytes = new_root.pack()?;
-                wal_guard.page_write(new_root_id, 0, page_bytes.to_vec())?;
-            }
-
-            return Ok(());
-        }
-
-        // Update existing parent
-        let (parent_id, child_idx) = path[path.len() - 1];
-        let mut parent = self.load_page(parent_id)?;
-
-        if let IndexPage::Internal { keys, children, .. } = &mut parent {
-            // Insert split key and new child
-            keys.insert(child_idx, split_key);
-            children.insert(child_idx + 1, new_page_id);
-
-            // Check if parent needs splitting
-            if keys.len() > MAX_KEYS {
-                // Parent is full, need to split it too
-                // For simplicity, we'll handle this recursively
-                // In a full implementation, we'd propagate splits upward
-                return Err(NativeBackendError::InvalidHeader {
-                    field: "btree_parent_split".to_string(),
-                    reason: "parent page full - recursive split not yet implemented".to_string(),
-                });
-            }
-
-            self.write_page(&parent)?;
-        }
-
-        Ok(())
     }
 
     /// Load page from cache or disk
@@ -1606,7 +1342,7 @@ mod tests {
     #[test]
     fn test_write_batch_basic() {
         let allocator = create_test_allocator();
-        let mut manager = BTreeManager::new(allocator, None, None::<PathBuf>);
+        let manager = BTreeManager::new(allocator, None, None::<PathBuf>);
 
         // Create batch and stage pages
         let mut batch = manager.create_write_batch();

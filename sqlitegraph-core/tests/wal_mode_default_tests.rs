@@ -270,8 +270,8 @@ fn test_wal_mode_database_file_characteristics() {
     assert!(db_path.exists(), "Database file should exist");
 
     // Check that WAL file might be created (may not exist immediately)
-    let wal_path = db_path.with_extension("-wal");
-    let shm_path = db_path.with_extension("-shm");
+    let _wal_path = db_path.with_extension("-wal");
+    let _shm_path = db_path.with_extension("-shm");
 
     // Files may or may not exist depending on SQLite's checkpointing behavior
     // This is normal behavior - we just verify the main database file exists

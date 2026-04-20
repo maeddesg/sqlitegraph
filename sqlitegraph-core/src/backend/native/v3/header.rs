@@ -40,7 +40,6 @@
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
 use crate::backend::native::constants;
-use crate::backend::native::v3;
 use crate::backend::native::v3::constants::{
     DEFAULT_PAGE_SIZE, DEFAULT_SCHEMA_VERSION, DEFAULT_V3_FEATURE_FLAGS, MAX_BTREE_HEIGHT,
     V2_MAGIC, V3_FORMAT_VERSION, V3_HEADER_SIZE, V3_MAGIC,

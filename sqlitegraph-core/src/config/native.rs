@@ -1,7 +1,6 @@
 //! Native backend configuration.
 
 use crate::backend::native::CpuProfile;
-use std::time::Duration;
 
 /// Configuration for native backend operations.
 #[derive(Clone, Debug)]

@@ -131,11 +131,6 @@ impl SqliteGraph {
         ))
     }
 
-    /// Get access to the underlying SQLite connection for advanced operations
-    pub(crate) fn underlying_connection(&self) -> Option<&rusqlite::Connection> {
-        self.pool.direct_connection()
-    }
-
     pub(crate) fn fetch_outgoing(&self, id: i64) -> Result<Vec<i64>, SqliteGraphError> {
         if let Some(cached) = self.outgoing_cache.get(id) {
             return Ok(cached);

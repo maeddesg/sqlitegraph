@@ -18,7 +18,7 @@ fn test_100_nodes_persistence() {
         let backend = V3Backend::create(&db_path).unwrap();
 
         for i in 0..100 {
-            let node_id = backend
+            let _node_id = backend
                 .insert_node(NodeSpec {
                     kind: "TestNode".to_string(),
                     name: format!("node_{}", i),

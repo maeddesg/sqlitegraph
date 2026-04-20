@@ -31,7 +31,7 @@
 //! - Prefetch based on block membership
 
 use super::NodePage;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Block size in nodes

@@ -158,7 +158,7 @@ fn flush_and_reopen(
 /// Test 1: Verify single edge cluster creation with clean Phase 34 pipeline
 #[test]
 fn test_single_edge_cluster_clean_creation() {
-    let (graph, source_id, target_id, temp_dir) = create_simple_v2_graph();
+    let (graph, source_id, target_id, _temp_dir) = create_simple_v2_graph();
 
     // Verify neighbors work through public API (Phase 35 routing)
     let neighbors = graph

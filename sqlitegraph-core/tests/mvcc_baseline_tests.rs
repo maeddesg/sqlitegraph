@@ -8,7 +8,7 @@
 //! tests. They document the current state even if buggy - this is intentional.
 
 use sqlitegraph::{
-    CacheStats, GraphEdgeCreate, GraphEntityCreate, GraphQuery, SqliteGraph, SqliteGraphError,
+    GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError,
     add_label, add_property, cache_stats,
 };
 use std::time::{Duration, Instant};

@@ -21,7 +21,7 @@ fn test_benchmark_iteration_isolation() {
         println!("Created temp directory: {:?}", temp_dir.path());
 
         // Create V2 native graph (exactly like benchmark)
-        let mut graph =
+        let graph =
             open_graph(&db_path, &GraphConfig::native()).expect("Failed to create V2 native graph");
 
         // Create exactly 300 nodes (crossing the 256 boundary like the benchmark)
@@ -74,7 +74,7 @@ fn test_direct_corruption_reproduction() {
     let db_path = temp_dir.path().join("test.db");
 
     // Create graph and nodes
-    let mut graph =
+    let graph =
         open_graph(&db_path, &GraphConfig::native()).expect("Failed to create V2 native graph");
 
     // Create 300 nodes

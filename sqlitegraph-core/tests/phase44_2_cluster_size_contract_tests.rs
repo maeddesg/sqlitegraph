@@ -14,7 +14,7 @@ fn test_cluster_size_contract_explicit() -> Result<(), SqliteGraphError> {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
     let config = GraphConfig::native();
-    let mut graph = open_graph(&db_path, &config).expect("Failed to create test graph");
+    let graph = open_graph(&db_path, &config).expect("Failed to create test graph");
 
     // Insert 2 nodes
     let node1_spec = NodeSpec {

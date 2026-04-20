@@ -523,7 +523,7 @@ mod tests {
     #[test]
     fn test_decode_varint_too_long() {
         // Create a varint longer than 10 bytes
-        let mut too_long = vec![0x80u8; 11];
+        let too_long = vec![0x80u8; 11];
         let result = decode_varint(&too_long);
         assert!(result.is_err());
     }

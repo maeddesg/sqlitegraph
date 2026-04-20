@@ -233,55 +233,6 @@ impl SqliteGraph {
         Self::open_in_memory_with_config(&cfg)
     }
 
-    /// Create a SqliteGraph from an existing connection.
-    ///
-    /// This is used internally for in-memory databases where pooling is skipped.
-    /// The connection is wrapped in a PoolManager that provides direct access.
-    fn from_connection(conn: Connection) -> Self {
-        let mut pool = PoolManager::from_connection(conn);
-
-        // Configure the connection
-        let _ = pool.configure_direct(|c| {
-            c.set_prepared_statement_cache_capacity(128);
-
-            // Configure WAL mode and performance optimizations for file-based databases
-            let is_mem = is_in_memory_connection(c);
-            if !is_mem {
-                // Enable WAL mode for better concurrency
-                let result = c.pragma_update(None, "journal_mode", "WAL");
-                if result.is_err() {
-                    // Fallback to DELETE mode if WAL fails
-                    let _ = c.pragma_update(None, "journal_mode", "DELETE");
-                }
-
-                // Performance optimizations
-                let _ = c.pragma_update(None, "synchronous", "NORMAL");
-                let _ = c.pragma_update(None, "cache_size", "-64000");
-                let _ = c.pragma_update(None, "temp_store", "MEMORY");
-                let _ = c.pragma_update(None, "mmap_size", "268435456");
-            }
-
-            Ok(())
-        });
-
-        // Load HNSW indexes
-        let hnsw_indexes = pool
-            .direct_connection()
-            .map(|conn| Self::load_hnsw_indexes(conn).unwrap_or_default())
-            .unwrap_or_default();
-
-        Self {
-            pool,
-            outgoing_cache: AdjacencyCache::new(),
-            incoming_cache: AdjacencyCache::new(),
-            query_cache: QueryCache::new(),
-            metrics: Arc::new(GraphMetrics::default()),
-            statement_tracker: Arc::new(StatementTracker::default()),
-            snapshot_manager: SnapshotManager::new(),
-            hnsw_indexes: RwLock::new(hnsw_indexes),
-        }
-    }
-
     /// Load HNSW indexes from database
     ///
     /// This is called during SqliteGraph construction to restore any

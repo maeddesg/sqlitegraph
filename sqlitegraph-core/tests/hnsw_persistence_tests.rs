@@ -148,7 +148,7 @@ fn test_hnsw_create_insert_close_reopen_search() {
         let results = hnsw.search(&query, 3).unwrap();
 
         assert!(!results.is_empty(), "Search should return results");
-        let (best_id, distance) = &results[0];
+        let (_best_id, distance) = &results[0];
         assert!(
             *distance < 5.0,
             "Distance should be small for similar vector"

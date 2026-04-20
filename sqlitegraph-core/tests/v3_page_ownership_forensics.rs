@@ -8,9 +8,6 @@
 //! cargo test --features native-v3,v3-forensics v3_page_ownership -- --nocapture
 //! ```
 
-use sqlitegraph::backend::native::v3::V3Backend;
-use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec};
-use tempfile::TempDir;
 
 #[test]
 #[cfg(feature = "v3-forensics")]

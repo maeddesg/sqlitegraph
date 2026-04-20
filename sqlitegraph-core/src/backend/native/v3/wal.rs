@@ -1538,7 +1538,7 @@ impl WALRecovery {
         use std::io::Read;
 
         // Import kv_store module types
-        use super::kv_store::store::KvStore;
+        
 
         // Check if WAL file exists
         if !self.wal_path.exists() {
@@ -1844,7 +1844,7 @@ pub fn read_kv_checkpoint(
             source: e,
         }
     })?;
-    let version = u32::from_le_bytes(version_bytes);
+    let _version = u32::from_le_bytes(version_bytes);
 
     // Read data length
     let mut len_bytes = [0u8; 4];

@@ -2,7 +2,7 @@
 //! Run with: cargo test --features native-v3 check_nodepages -- --nocapture
 
 use sqlitegraph::backend::native::v3::V3Backend;
-use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec};
+use sqlitegraph::backend::{GraphBackend, NodeSpec};
 use std::fs::File;
 use std::io::{Read, Seek};
 use tempfile::TempDir;

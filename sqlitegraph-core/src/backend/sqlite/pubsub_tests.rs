@@ -13,7 +13,7 @@ fn test_sqlite_pubsub_subscribe() {
 
     // Subscribe to all events
     let filter = SubscriptionFilter::all();
-    let (sub_id, receiver) = graph.subscribe(filter).unwrap();
+    let (sub_id, _receiver) = graph.subscribe(filter).unwrap();
 
     // Should get a valid subscriber ID
     assert!(sub_id > 0);

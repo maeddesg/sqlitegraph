@@ -432,7 +432,7 @@ mod tests {
         // Scenario: Diamond graph: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3, 0 -> 3
         // Expected: Edge 0 -> 3 is redundant (can go via 1 or 2)
         let graph = create_diamond_graph();
-        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        let _entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
         let result = transitive_reduction(&graph);
         assert!(result.is_ok(), "transitive_reduction failed");
@@ -453,7 +453,7 @@ mod tests {
         // Scenario: Complete DAG on 4 nodes
         // Expected: Only direct edges (i -> i+1) are essential, all others redundant
         let graph = create_fully_connected_graph();
-        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
+        let _entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
         let result = transitive_reduction(&graph);
         assert!(result.is_ok(), "transitive_reduction failed");

@@ -12,7 +12,6 @@
 use super::record::NodeRecordV3;
 use crate::backend::native::NativeBackendError;
 use crate::backend::native::NativeResult;
-use crate::backend::native::types::NodeFlags;
 use crate::backend::native::v3::compression;
 use crate::backend::native::v3::compression::delta::{decode_id_delta, encode_id_delta};
 use crate::backend::native::v3::compression::varint::{
@@ -22,7 +21,7 @@ use crate::backend::native::v3::constants as v3_constants;
 
 /// NodePage header and layout constants
 pub mod constants {
-    use super::NodeRecordV3;
+    
 
     /// Page header size in bytes
     ///
@@ -306,7 +305,7 @@ impl NodePage {
     /// - `None` if not found in this page
     pub fn find_node_lazy(page_data: &[u8], node_id: i64) -> NativeResult<Option<NodeRecordV3>> {
         use crate::backend::native::v3::compression::delta::decode_id_delta;
-        use crate::backend::native::v3::compression::varint::{decode_varint, decode_varint_u16};
+        use crate::backend::native::v3::compression::varint::decode_varint;
 
         // Read page header
         let node_count = u16::from_be_bytes(
@@ -579,7 +578,6 @@ impl NodePage {
                         reason: "invalid external offset byte array".to_string(),
                     })?,
             );
-            offset += 8;
             (None, Some(ext_offset))
         } else {
             // Inline data - copy remaining bytes
@@ -595,7 +593,6 @@ impl NodePage {
                 });
             }
             let inline_data = data[offset..data_end].to_vec();
-            offset = data_end;
             (Some(inline_data), None)
         };
 
@@ -762,58 +759,6 @@ impl NodePage {
     /// Calculate checksum for page data
     fn calculate_checksum(&self, data: &[u8]) -> u32 {
         v3_constants::checksum::xor_checksum(data) as u32
-    }
-
-    /// Estimate the compressed size of a node record using delta/varint encoding
-    ///
-    /// This estimates the size without actually serializing, for capacity planning.
-    fn estimate_compressed_size(&self, node: &NodeRecordV3) -> NativeResult<u16> {
-        let mut size: usize = 0;
-
-        // ID delta (varint, usually 1-4 bytes)
-        let delta = encode_id_delta(node.id(), self.base_id);
-        size += compression::varint::varint_size(delta as u64);
-
-        // Flags: 4 bytes (fixed)
-        size += 4;
-
-        // kind_offset: varint u16 (usually 1-2 bytes)
-        size += compression::varint::varint_size(node.kind_offset as u64);
-
-        // name_offset: varint u16 (usually 1-2 bytes)
-        size += compression::varint::varint_size(node.name_offset as u64);
-
-        // data_len: varint u16 (usually 1 byte for small data)
-        size += compression::varint::varint_size(node.data_len() as u64);
-
-        // outgoing_cluster_offset: varint u64 (1-10 bytes)
-        size += compression::varint::varint_size(node.outgoing_cluster_offset);
-
-        // outgoing_edge_count: varint u32 (usually 1-3 bytes)
-        size += compression::varint::varint_size(node.outgoing_edge_count as u64);
-
-        // incoming_cluster_offset: varint u64 (1-10 bytes)
-        size += compression::varint::varint_size(node.incoming_cluster_offset);
-
-        // incoming_edge_count: varint u32 (usually 1-3 bytes)
-        size += compression::varint::varint_size(node.incoming_edge_count as u64);
-
-        // Inline data OR external offset (8 bytes)
-        if let Some(ref data) = node.data_inline {
-            size += data.len();
-        } else if node.data_external_offset.is_some() {
-            size += 8; // External offset is u64 (8 bytes)
-        }
-
-        // Ensure we don't overflow u16
-        if size > u16::MAX as usize {
-            return Err(NativeBackendError::InvalidHeader {
-                field: "compressed_size".to_string(),
-                reason: format!("compressed size {} exceeds u16::MAX", size),
-            });
-        }
-
-        Ok(size as u16)
     }
 
     /// Pack nodes using delta/varint encoding
@@ -1234,7 +1179,7 @@ impl NodePage {
         }
 
         // Verify checksum
-        let mut page = NodePage {
+        let page = NodePage {
             page_id,
             next_page_id,
             nodes,

@@ -3,9 +3,6 @@ use std::fmt;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId(pub i64);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct EdgeId(pub i64);
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Label(pub String);
 

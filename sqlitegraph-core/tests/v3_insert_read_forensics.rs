@@ -4,10 +4,6 @@
 //!
 //! Run with: cargo test --features native-v3,v3-forensics --test v3_insert_read_forensics -- --nocapture
 
-use sqlitegraph::{
-    EdgeSpec, NodeSpec, SnapshotId, backend::GraphBackend, backend::native::v3::V3Backend,
-};
-use std::time::Instant;
 
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::forensics::{

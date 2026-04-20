@@ -34,7 +34,7 @@ fn test_name_index_exact_match() {
         })
         .unwrap();
 
-    let id3 = backend
+    let _id3 = backend
         .insert_node(NodeSpec {
             kind: "Function".to_string(),
             name: "other_func".to_string(),

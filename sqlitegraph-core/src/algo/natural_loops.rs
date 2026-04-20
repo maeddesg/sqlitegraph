@@ -1457,7 +1457,7 @@ mod tests {
     fn test_natural_loops_with_progress_reports() {
         // Scenario: Progress callback is invoked
         // Expected: Progress callback called during computation
-        use crate::progress::{NoProgress, ProgressCallback};
+        use crate::progress::NoProgress;
 
         let graph = create_single_loop_cfg();
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");

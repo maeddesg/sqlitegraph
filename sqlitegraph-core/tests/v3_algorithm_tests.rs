@@ -871,7 +871,7 @@ fn test_v3_edge_type_mixed_queries_after_reopen() {
     let db_path = temp_dir.path().join("test_v3_mixed.graph");
 
     // Create a more complex graph with mixed edge types
-    let (center, helper1, helper2, util1, util2) = {
+    let (center, _helper1, _helper2, _util1, _util2) = {
         let backend = V3Backend::create(&db_path).unwrap();
 
         let center = backend
@@ -1033,7 +1033,7 @@ fn test_v3_edge_type_incoming_after_reopen() {
     let db_path = temp_dir.path().join("test_v3_incoming.graph");
 
     // Create edges and test incoming direction filtering
-    let (center, helper, util) = {
+    let (center, helper, _util) = {
         let backend = V3Backend::create(&db_path).unwrap();
 
         let center = backend
@@ -1395,7 +1395,7 @@ fn test_v3_edge_type_aliasing_across_reopen() {
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test_aliasing.graph");
 
-    let (center, helper) = {
+    let (center, _helper) = {
         let backend = V3Backend::create(&db_path).unwrap();
 
         let center = backend

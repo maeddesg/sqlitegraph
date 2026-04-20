@@ -36,12 +36,6 @@ impl From<&VectorRecord> for StoredVectorRecord {
     }
 }
 
-impl StoredVectorRecord {
-    fn to_vector_record(&self) -> VectorRecord {
-        VectorRecord::new(self.id, self.data.clone(), self.metadata.clone())
-    }
-}
-
 /// Internal storage handle that uses unsafe to allow &V3Backend -> Box<dyn VectorStorage>
 ///
 /// SAFETY: This is safe because V3Backend uses interior mutability (RwLock) for all its fields.

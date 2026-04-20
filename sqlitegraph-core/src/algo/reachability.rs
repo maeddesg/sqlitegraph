@@ -1095,7 +1095,7 @@ mod tests {
         // Expected: Cycle nodes can reach each other
         let graph = create_cycle();
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
-        let node_0 = entity_ids[0];
+        let _node_0 = entity_ids[0];
         let node_1 = entity_ids[1];
         let node_2 = entity_ids[2];
 

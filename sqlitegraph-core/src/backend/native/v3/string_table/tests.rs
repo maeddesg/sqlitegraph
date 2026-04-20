@@ -9,7 +9,7 @@ const COMMON_TYPE_COUNT: usize = 16; // Number of pre-populated common edge type
 
 #[test]
 fn test_string_table_new_has_common_types() {
-    let mut table = StringTable::new();
+    let table = StringTable::new();
     // Table is pre-populated with common edge types
     assert!(!table.is_empty());
     assert_eq!(table.len(), COMMON_TYPE_COUNT);
@@ -45,7 +45,7 @@ fn test_get_string_by_offset() {
 
 #[test]
 fn test_get_string_invalid_offset() {
-    let mut table = StringTable::new();
+    let table = StringTable::new();
 
     // Invalid offset should return error
     let result = table.get_string(999);
@@ -157,7 +157,7 @@ fn test_round_trip_preserve_offsets() {
 
 #[test]
 fn test_serialize_includes_common_types() {
-    let mut table = StringTable::new();
+    let table = StringTable::new();
     let serialized = table.serialize();
 
     // Should have 4 bytes for count + entries for common types

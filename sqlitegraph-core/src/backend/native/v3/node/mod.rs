@@ -42,7 +42,7 @@ pub use block_cache::{
 
 /// Node record constants
 pub mod constants {
-    use super::record::constants::*;
+    
 
     /// Fixed metadata size in bytes
     pub const FIXED_METADATA_SIZE: usize = 44;

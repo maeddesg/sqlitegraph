@@ -539,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_simd_correctness_edge_cases() {
-        use crate::hnsw::simd::{cosine_similarity, dot_product, euclidean_distance};
+        use crate::hnsw::simd::{dot_product, euclidean_distance};
 
         // Test with small vectors
         let a = vec![1.0, 2.0];

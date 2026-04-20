@@ -452,7 +452,7 @@ fn test_corruption_recovery() {
     }
 
     let valid_bytes = page.pack().unwrap();
-    let valid_checksum = u32::from_be_bytes([
+    let _valid_checksum = u32::from_be_bytes([
         valid_bytes[28],
         valid_bytes[29],
         valid_bytes[30],
@@ -581,7 +581,7 @@ pub fn verify_round_trip(page: &NodePage) -> NativeResult<()> {
 #[test]
 fn test_end_to_end_node_storage() {
     // Test full flow: create page -> add nodes -> pack -> unpack -> verify
-    let mut page = create_test_page(1, 10);
+    let page = create_test_page(1, 10);
 
     assert!(page.node_count() > 0);
 

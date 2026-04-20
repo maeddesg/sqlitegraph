@@ -19,7 +19,7 @@
 //! - [`ImpactRadiusConfig`] - Configuration for impact radius (max_distance, max_hops, weight_fn)
 //! - [`ImpactRadiusResult`] - Result with blast_zone, distances, boundary, size
 //! - [`WeightCallback`] - Weight callback type for edge-weighted analysis
-//! - [`default_weight_fn`] - Default weight function returning 1.0 for all edges
+//! - Default weight function (`|_, _, _| 1.0`) - Returns 1.0 for all edges (hop count)
 //!
 //! # When to Use Happens-Before Analysis
 //!
@@ -612,7 +612,7 @@ pub type WeightCallback = dyn Fn(i64, i64, &Value) -> f64;
 /// # Example
 ///
 /// ```rust,ignore
-/// use sqlitegraph::{SqliteGraph, algo::observability::{impact_radius, default_weight_fn, ImpactRadiusConfig}};
+/// use sqlitegraph::{SqliteGraph, algo::observability::{impact_radius, ImpactRadiusConfig}};
 ///
 /// let graph = SqliteGraph::open_in_memory()?;
 /// // ... build unweighted graph ...
@@ -620,15 +620,12 @@ pub type WeightCallback = dyn Fn(i64, i64, &Value) -> f64;
 /// let config = ImpactRadiusConfig {
 ///     max_distance: 3.0,
 ///     max_hops: None,
-///     weight_fn: &default_weight_fn,
+///     weight_fn: &|_, _, _| 1.0,
 /// };
 ///
 /// let result = impact_radius(&graph, source, &config)?;
 /// println!("Blast zone: {} nodes within 3 hops", result.size);
 /// ```
-pub fn default_weight_fn(_from: i64, _to: i64, _edge_data: &Value) -> f64 {
-    1.0
-}
 
 /// Configuration for impact radius computation.
 ///
@@ -644,13 +641,13 @@ pub fn default_weight_fn(_from: i64, _to: i64, _edge_data: &Value) -> f64 {
 /// # Example
 ///
 /// ```rust,ignore
-/// use sqlitegraph::algo::observability::{impact_radius, ImpactRadiusConfig, default_weight_fn};
+/// use sqlitegraph::algo::observability::{impact_radius, ImpactRadiusConfig};
 ///
 /// // Unweighted: 3 hops
 /// let config = ImpactRadiusConfig {
 ///     max_distance: 3.0,
 ///     max_hops: None,
-///     weight_fn: &default_weight_fn,
+///     weight_fn: &|_, _, _| 1.0,
 /// };
 ///
 /// // Weighted with hop limit: 10.0 distance OR 5 hops
@@ -815,7 +812,7 @@ impl ImpactRadiusResult {
 /// let config = ImpactRadiusConfig {
 ///     max_distance: 3.0,
 ///     max_hops: None,
-///     weight_fn: &default_weight_fn,
+///     weight_fn: &|_, _, _| 1.0,
 /// };
 ///
 /// let result = impact_radius(&graph, source, &config)?;
@@ -949,14 +946,14 @@ pub fn impact_radius(
 ///
 /// ```rust,ignore
 /// use sqlitegraph::{
-///     algo::observability::{impact_radius_with_progress, ImpactRadiusConfig, default_weight_fn},
+///     algo::observability::{impact_radius_with_progress, ImpactRadiusConfig},
 ///     progress::ConsoleProgress
 /// };
 ///
 /// let config = ImpactRadiusConfig {
 ///     max_distance: 10.0,
 ///     max_hops: None,
-///     weight_fn: &default_weight_fn,
+///     weight_fn: &|_, _, _| 1.0,
 /// };
 ///
 /// let progress = ConsoleProgress::new();
@@ -1093,6 +1090,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn default_weight_fn(_from: i64, _to: i64, _edge_data: &Value) -> f64 {
+        1.0
+    }
 
     // Helper: Create a simple trace event
     fn make_event(

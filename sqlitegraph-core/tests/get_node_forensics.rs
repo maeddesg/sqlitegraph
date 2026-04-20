@@ -3,7 +3,6 @@
 //! This test measures the actual internal cost of get_node operations
 //! to identify where the 47-160x slowdown comes from.
 
-use sqlitegraph::backend::{GraphBackend, NodeSpec};
 
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::backend::V3Backend;

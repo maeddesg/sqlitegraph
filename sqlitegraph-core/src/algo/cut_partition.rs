@@ -301,12 +301,6 @@ impl FlowEdge {
         self.capacity - self.flow
     }
 
-    /// Add flow to edge (returns excess if capacity exceeded)
-    fn add_flow(&mut self, amount: usize) -> usize {
-        let can_add = self.residual().min(amount);
-        self.flow += can_add;
-        amount - can_add
-    }
 }
 
 /// Flow network for max-flow computation.
@@ -809,15 +803,6 @@ impl VertexSplitTransform {
             x // Source and sink are not split
         } else {
             x * 2 + 1
-        }
-    }
-
-    /// Check if a split node represents the original node.
-    fn is_original_node(&self, node_id: i64, original: i64) -> bool {
-        if original == self.source || original == self.sink {
-            node_id == original
-        } else {
-            node_id == original * 2 || node_id == original * 2 + 1
         }
     }
 
@@ -2752,7 +2737,7 @@ mod tests {
     fn test_partition_kway_balanced() {
         // Scenario: 10 nodes, k=2, max_size=5
         // Expected: Balanced partitions [5, 5]
-        let graph = create_path_graph(); // 5 nodes, will test with 10
+        let _graph = create_path_graph(); // 5 nodes, will test with 10
 
         // Create a larger graph for this test
         let large_graph = SqliteGraph::open_in_memory().expect("Failed to create graph");

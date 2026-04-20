@@ -11,15 +11,11 @@
 // NOTE: This test requires the native-v3 feature to access V3Backend
 #![cfg(feature = "native-v3")]
 
-use sqlitegraph::backend::GraphBackend;
-use sqlitegraph::backend::native::v3::V3Backend;
-use sqlitegraph::snapshot::SnapshotId;
-use std::time::Instant;
 
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;
 
-fn print_forensic_counters(prefix: &str) {
+fn print_forensic_counters(_prefix: &str) {
     #[cfg(feature = "v3-forensics")]
     {
         println!("\n=== {} ===", prefix);

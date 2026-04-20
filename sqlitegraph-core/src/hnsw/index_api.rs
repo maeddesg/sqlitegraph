@@ -381,6 +381,28 @@ impl HnswIndex {
     }
 }
 
+#[cfg(test)]
+mod index_api_tests {
+    use super::*;
+    use crate::hnsw::{config::HnswConfig, distance_metric::DistanceMetric};
+
+    #[test]
+    fn test_search_rejects_empty_query_vector() {
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Cosine);
+        let mut index = HnswIndex::new("test_empty_query", config).unwrap();
+
+        // Insert a vector so the index is not empty
+        index.insert_vector(&[1.0, 2.0, 3.0], None).unwrap();
+
+        let result = index.search(&[], 3);
+        assert!(
+            result.is_err(),
+            "search should reject empty query vector, got {:?}",
+            result
+        );
+    }
+}
+
 /// SQLiteGraph extension for HNSW vector search
 impl crate::SqliteGraph {
     /// Create or get an HNSW index with the specified name and configuration

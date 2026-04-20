@@ -15,7 +15,6 @@ use parking_lot::Mutex;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::sync::Arc;
 
 /// Coordinated file handle for all V3 main DB file I/O
 ///
@@ -78,7 +77,7 @@ impl FileCoordinator {
 
         // Calculate offset
         let offset = Self::page_offset(page_id);
-        let required_len = offset + data.len() as u64;
+        let _required_len = offset + data.len() as u64;
 
         // Seek to offset (extends file automatically if beyond EOF)
         coord

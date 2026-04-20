@@ -221,7 +221,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let mut hnsw_indexes = graph.hnsw_index("test_index", config).unwrap();
+        let hnsw_indexes = graph.hnsw_index("test_index", config).unwrap();
         let hnsw = hnsw_indexes.get("test_index").unwrap();
         let stats = hnsw.statistics().unwrap();
 
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_metadata_persistence() {
-        use rusqlite::Connection;
+        
         use std::fs;
 
         let test_dir = "/tmp/test_hnsw_metadata_persistence";
@@ -319,7 +319,7 @@ mod tests {
                 .build()
                 .unwrap();
 
-            let mut hnsw_indexes = graph.hnsw_index("persist_test", config).unwrap();
+            let hnsw_indexes = graph.hnsw_index("persist_test", config).unwrap();
             let hnsw = hnsw_indexes.get("persist_test").unwrap();
 
             // Verify index was created
@@ -412,7 +412,7 @@ mod tests {
             assert_eq!(hnsw_metadata.storage.vector_count().unwrap(), 0); // No vectors loaded
 
             // Load with vectors - this rebuilds the graph
-            let mut hnsw_loaded = HnswIndex::load_with_vectors(&conn2, "load_test").unwrap();
+            let hnsw_loaded = HnswIndex::load_with_vectors(&conn2, "load_test").unwrap();
             assert_eq!(hnsw_loaded.vector_count, 5);
             assert_eq!(hnsw_loaded.storage.vector_count().unwrap(), 5); // Vectors loaded
 
@@ -524,7 +524,7 @@ mod tests {
             multilayer_deterministic_seed: Some(42),
         };
 
-        let mut hnsw = HnswIndex::new("test_multilayer_dist", config).unwrap();
+        let hnsw = HnswIndex::new("test_multilayer_dist", config).unwrap();
 
         // Verify level distributor was initialized
         assert!(

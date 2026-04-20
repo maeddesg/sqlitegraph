@@ -163,7 +163,7 @@ fn test_v3_data_not_durable_without_flush() {
 
     // This test documents the current behavior
     // Data may be recoverable via WAL replay, but it's not guaranteed
-    let result = backend.get_node(SnapshotId::current(), node_id);
+    let _result = backend.get_node(SnapshotId::current(), node_id);
 
     // The current implementation MAY recover this data via WAL
     // but this is NOT guaranteed - flush_to_disk() is required for durability

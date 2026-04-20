@@ -207,7 +207,7 @@ fn scenario_b_10k_nodes_50k_edges() {
     let db_path = temp.path().join(&format!("scenario_b_{}.db", timestamp()));
 
     // Create phase
-    let (node_ids, edge_pairs) = {
+    let (node_ids, _edge_pairs) = {
         let backend = V3Backend::create(&db_path).unwrap();
         let mut ids = Vec::new();
         let mut edges = Vec::new();

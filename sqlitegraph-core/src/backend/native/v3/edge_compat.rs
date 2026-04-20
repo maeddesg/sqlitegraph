@@ -821,7 +821,7 @@ impl V3EdgeStore {
             }
         };
 
-        let mut dirty = self.dirty_clusters.write();
+        let dirty = self.dirty_clusters.write();
 
         if dirty.is_empty() {
             return Ok(()); // Nothing to flush
@@ -838,7 +838,7 @@ impl V3EdgeStore {
         drop(dirty);
 
         // Process each dirty cluster
-        for ((src, dir), mut cluster) in clusters_to_flush {
+        for ((src, dir), cluster) in clusters_to_flush {
             // Serialize cluster to bytes
             let cluster_bytes = cluster.serialize()?;
 
@@ -1147,7 +1147,7 @@ mod tests {
     use parking_lot::RwLock;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use std::time::Instant;
+    
     use tempfile::TempDir;
 
     #[test]
@@ -1239,7 +1239,7 @@ mod tests {
         let edge_store = if let Some(ref path) = db_path {
             // Create WAL writer
             let wal_path = path.with_extension("v3wal");
-            let mut writer = WALWriter::new(wal_path, 1).expect("Failed to create WAL writer");
+            let writer = WALWriter::new(wal_path, 1).expect("Failed to create WAL writer");
             writer.write_header().expect("Failed to write WAL header");
             V3EdgeStore::with_path_and_allocator(btree, Some(writer), path.clone(), allocator.clone())
         } else {

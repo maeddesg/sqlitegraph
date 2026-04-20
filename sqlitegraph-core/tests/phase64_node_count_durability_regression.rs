@@ -16,7 +16,7 @@ fn test_phase64_node_count_durability_regression() -> Result<(), Box<dyn std::er
     // Step 1: Create database and insert nodes ONLY (no edges)
     println!("STEP 1: Creating database and inserting nodes...");
     let config = GraphConfig::native();
-    let mut graph = open_graph(&db_path, &config)?;
+    let graph = open_graph(&db_path, &config)?;
 
     // Insert 3 nodes to test node_count advancement
     let mut node_ids = Vec::new();
@@ -78,7 +78,7 @@ fn test_phase64_node_count_durability_with_edges() -> Result<(), Box<dyn std::er
     let db_path = temp_dir.path().join("phase64_node_count_edges_test.db");
 
     let config = GraphConfig::native();
-    let mut graph = open_graph(&db_path, &config)?;
+    let graph = open_graph(&db_path, &config)?;
 
     // Create nodes
     let node1 = graph.insert_node(NodeSpec {
@@ -104,7 +104,7 @@ fn test_phase64_node_count_durability_with_edges() -> Result<(), Box<dyn std::er
     // Reopen and insert edges
     let mut reopen_config = GraphConfig::native();
     reopen_config.native.create_if_missing = false;
-    let mut graph_reopened = open_graph(&db_path, &reopen_config)?;
+    let graph_reopened = open_graph(&db_path, &reopen_config)?;
     println!("✅ Reopened database");
 
     // Verify nodes are accessible

@@ -378,7 +378,7 @@ impl NodeRecordV3 {
 
         // Check external data flag
         let is_external = (encoded_data_len & constants::EXTERNAL_DATA_FLAG) != 0;
-        let data_len = encoded_data_len & constants::MAX_DATA_LEN;
+        let _data_len = encoded_data_len & constants::MAX_DATA_LEN;
 
         // Skip reserved: 2 bytes
         offset += 2;

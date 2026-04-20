@@ -185,7 +185,7 @@ pub fn calculate_optimal_base_id(node_ids: &[i64]) -> i64 {
 /// let sequential_savings = estimate_delta_savings(1000, 1);
 /// assert_eq!(sequential_savings, 4000);
 /// ```
-pub fn estimate_delta_savings(node_count: usize, avg_delta: u32) -> usize {
+pub fn estimate_delta_savings(node_count: usize, _avg_delta: u32) -> usize {
     // Full i64 encoding: 8 bytes per node
     let full_size = node_count * 8;
 

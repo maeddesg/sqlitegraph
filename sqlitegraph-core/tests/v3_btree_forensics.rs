@@ -4,8 +4,6 @@
 //!
 //! Run with: cargo test --features native-v3,v3-forensics --test v3_btree_forensics -- --nocapture
 
-use sqlitegraph::{NodeSpec, SnapshotId, backend::GraphBackend, backend::native::v3::V3Backend};
-use std::time::Instant;
 
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;

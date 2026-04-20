@@ -4,7 +4,7 @@
 //! ensuring public API surface is clean and functional.
 
 use sqlitegraph::{
-    GraphEdge, GraphEntity, GraphQuery, PatternTriple, SqliteGraph, SqliteGraphError, TripleMatch,
+    GraphEdge, GraphEntity, GraphQuery, PatternTriple, SqliteGraph, SqliteGraphError,
     match_triples, match_triples_fast,
 };
 use tempfile::tempdir;

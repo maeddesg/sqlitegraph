@@ -133,7 +133,7 @@ fn test_read_unaligned_various_alignments() {
     }
 
     // Create buffer with offset to test unaligned reads
-    let mut buffer = vec![0u8; std::mem::size_of::<TestStruct>() + 8];
+    let buffer = vec![0u8; std::mem::size_of::<TestStruct>() + 8];
 
     for offset in 0..8 {
         let ptr = unsafe { buffer.as_ptr().add(offset) };

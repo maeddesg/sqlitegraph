@@ -188,7 +188,6 @@ pub struct NodeStore {
     file_coordinator: Option<Arc<FileCoordinator>>,
     root_page_id: u64,
     tree_height: u32,
-    total_pages: u64,
     /// Thread-safe node page cache - accessible from both read and write contexts
     /// This fixes the cache bypass bug where read-only lookups couldn't populate the cache.
     page_cache: Arc<RwLock<HashMap<u64, Vec<u8>>>>,
@@ -227,7 +226,6 @@ impl NodeStore {
             file_coordinator: None,
             root_page_id: header.root_index_page,
             tree_height: header.btree_height,
-            total_pages: header.total_pages,
             page_cache: Arc::new(RwLock::new(HashMap::with_capacity(PAGE_CACHE_SIZE))),
             unpacked_page_cache: Arc::new(RwLock::new(HashMap::with_capacity(PAGE_CACHE_SIZE))),
             cache_capacity: PAGE_CACHE_SIZE,
@@ -254,7 +252,6 @@ impl NodeStore {
             file_coordinator: None,
             root_page_id: header.root_index_page,
             tree_height: header.btree_height,
-            total_pages: header.total_pages,
             page_cache: Arc::new(RwLock::new(HashMap::with_capacity(cache_capacity))),
             unpacked_page_cache: Arc::new(RwLock::new(HashMap::with_capacity(cache_capacity))),
             cache_capacity,
@@ -439,16 +436,6 @@ impl NodeStore {
             })
     }
 
-    /// Get reference to BTreeManager
-    fn btree_manager(&self) -> NativeResult<&BTreeManager> {
-        self.btree_manager
-            .as_ref()
-            .ok_or_else(|| NativeBackendError::InvalidHeader {
-                field: "btree_manager".to_string(),
-                reason: "BTreeManager not initialized".to_string(),
-            })
-    }
-
     /// Get write lock on PageAllocator
     fn page_allocator_mut(&self) -> NativeResult<parking_lot::RwLockWriteGuard<'_, PageAllocator>> {
         self.page_allocator
@@ -458,17 +445,6 @@ impl NodeStore {
                 reason: "PageAllocator not initialized".to_string(),
             })
             .map(|arc| arc.write())
-    }
-
-    /// Get read lock on PageAllocator
-    fn page_allocator(&self) -> NativeResult<parking_lot::RwLockReadGuard<'_, PageAllocator>> {
-        self.page_allocator
-            .as_ref()
-            .ok_or_else(|| NativeBackendError::InvalidHeader {
-                field: "page_allocator".to_string(),
-                reason: "PageAllocator not initialized".to_string(),
-            })
-            .map(|arc| arc.read())
     }
 
     /// Get the next available node ID and increment
@@ -545,10 +521,8 @@ impl NodeStore {
 
                     // 6b. Sync NodeStore's root_page_id and tree_height from BTreeManager
                     // This ensures lookups work correctly after the tree structure changes
-                    // Need to read values before dropping the borrow
                     let new_root = btree.root_page_id();
                     let new_height = btree.tree_height();
-                    drop(btree);
                     self.root_page_id = new_root;
                     self.tree_height = new_height;
 
@@ -778,7 +752,7 @@ impl NodeStore {
         } else {
             // Fallback for backward compatibility
             let offset = Self::page_offset(new_page_id);
-            let required_len = offset + page_bytes.len() as u64;
+            let _required_len = offset + page_bytes.len() as u64;
 
             let file_exists = self.db_path.exists();
             let mut file = OpenOptions::new()
@@ -1111,7 +1085,7 @@ impl NodeStore {
                                 })
                             }
                         }
-                        Err(idx) => {
+                        Err(_idx) => {
                             if next_leaf == 0 {
                                 Ok(None)
                             } else {
@@ -1250,58 +1224,6 @@ impl NodeStore {
 
     /// Block-aware page cache eviction
     ///
-    /// PROTOTYPE: When cache is full, prefer evicting pages from blocks
-    /// different than the current access block. This keeps same-block pages
-    /// hot together, which should help for sequential block-aligned access.
-    fn evict_page_cache_if_needed(&mut self) {
-        let cache_len = self.page_cache.read().len();
-        if cache_len < self.cache_capacity {
-            return;
-        }
-
-        // Get current access block
-        let current_block = self
-            .current_access_block
-            .load(std::sync::atomic::Ordering::Relaxed);
-
-        // If no current block info, fall back to arbitrary eviction
-        if current_block < 0 {
-            let key_to_remove = {
-                let cache = self.page_cache.read();
-                cache.keys().next().copied()
-            };
-            if let Some(key) = key_to_remove {
-                let mut cache = self.page_cache.write();
-                cache.remove(&key);
-            }
-            return;
-        }
-
-        // Try to find a page from a different block to evict
-        let key_to_remove = {
-            let cache = self.page_cache.read();
-            let mut found_other_block = None;
-
-            // Look for a page NOT in the current block
-            for (&page_id, page_bytes) in cache.iter() {
-                if let Some(page_block) = Self::extract_block_id_from_page_bytes(page_bytes) {
-                    if page_block != current_block {
-                        found_other_block = Some(page_id);
-                        break;
-                    }
-                }
-            }
-
-            // If all pages are from current block, evict arbitrarily
-            found_other_block.or_else(|| cache.keys().next().copied())
-        };
-
-        if let Some(key) = key_to_remove {
-            let mut cache = self.page_cache.write();
-            cache.remove(&key);
-        }
-    }
-
     fn evict_index_cache_if_needed(&mut self) {
         if self.index_cache.len() >= self.cache_capacity {
             // Get first key by cloning a key from the map
@@ -1557,59 +1479,6 @@ impl NodeStore {
         Ok(None)
     }
 
-    /// Read-only page load - checks and populates cache via Arc<RwLock
-    fn load_page_from_disk_ro(&self, page_id: u64) -> NativeResult<Vec<u8>> {
-        #[cfg(feature = "v3-forensics")]
-        FORENSIC_COUNTERS
-            .page_read_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-        // Check cache first for read-only lookups too!
-        if let Some(cached) = self.page_cache_get(page_id) {
-            #[cfg(feature = "v3-forensics")]
-            FORENSIC_COUNTERS
-                .node_page_cache_hit_count
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            return Ok(cached);
-        }
-
-        #[cfg(feature = "v3-forensics")]
-        FORENSIC_COUNTERS
-            .node_page_cache_miss_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-        let mut buffer = vec![0u8; DEFAULT_PAGE_SIZE as usize];
-
-        // Use file_coordinator if available (FIXES 10K-node bug)
-        if let Some(coordinator) = &self.file_coordinator {
-            coordinator.read_page(page_id, &mut buffer)?;
-        } else {
-            // Fallback to original behavior
-            let page_offset = Self::page_offset(page_id);
-
-            let mut file = File::open(&self.db_path).map_err(|e| NativeBackendError::IoError {
-                context: format!("Failed to open database file: {}", self.db_path.display()),
-                source: e,
-            })?;
-
-            file.seek(SeekFrom::Start(page_offset))
-                .map_err(|e| NativeBackendError::IoError {
-                    context: format!("Failed to seek to page {}", page_id),
-                    source: e,
-                })?;
-
-            file.read_exact(&mut buffer)
-                .map_err(|e| NativeBackendError::IoError {
-                    context: format!("Failed to read page {}", page_id),
-                    source: e,
-                })?;
-        }
-
-        // Populate cache for subsequent reads (now possible via Arc<RwLock>)
-        self.page_cache_insert(page_id, buffer.clone());
-
-        Ok(buffer)
-    }
 }
 
 //=============================================================================
@@ -1933,7 +1802,7 @@ impl Default for TraversalCacheBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::native::types::NodeFlags;
+    
 
     fn test_page(page_id: u64) -> Arc<NodePage> {
         Arc::new(NodePage::new(page_id))
@@ -1970,7 +1839,7 @@ mod tests {
 
     #[test]
     fn test_page_loader_creation() {
-        let header = PersistentHeaderV3::new_v3();
+        let _header = PersistentHeaderV3::new_v3();
         let db_path = PathBuf::from("/tmp/test.db");
         let _ = std::fs::File::create(&db_path).unwrap();
         let file = Arc::new(File::open(&db_path).unwrap());

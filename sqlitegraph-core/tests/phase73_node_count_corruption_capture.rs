@@ -13,7 +13,7 @@ fn test_phase73_node_count_corruption_capture() -> Result<(), Box<dyn std::error
 
     // Create graph
     let cfg = GraphConfig::native();
-    let mut graph = open_graph(&db_path, &cfg)?;
+    let graph = open_graph(&db_path, &cfg)?;
 
     // === CHECKPOINT A: After node insertion, before edge tx ===
     println!("STEP 1: Insert 5 nodes");
@@ -138,7 +138,7 @@ fn test_phase73_node_count_corruption_capture() -> Result<(), Box<dyn std::error
 fn get_header_node_count_from_disk(
     db_path: &std::path::Path,
 ) -> Result<u64, Box<dyn std::error::Error>> {
-    use sqlitegraph::backend::native::constants::*;
+    
     use std::io::{Read, Seek, SeekFrom};
 
     let mut file = std::fs::File::open(db_path)?;

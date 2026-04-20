@@ -110,7 +110,7 @@ fn debug_scenario_c() {
     // Try to reopen
     drop(backend);
     println!("Reopening database...");
-    let backend2 = V3Backend::open(&db_path).unwrap();
+    let _backend2 = V3Backend::open(&db_path).unwrap();
     println!("✓ Database reopened successfully");
 
     println!("\n✓ Debug test passed!");

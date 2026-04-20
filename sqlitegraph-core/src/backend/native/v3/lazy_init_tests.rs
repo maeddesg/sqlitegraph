@@ -7,7 +7,7 @@
 //! 4. Lazy initialization works correctly
 
 use crate::backend::native::v3::{KvValue, V3Backend};
-use crate::backend::{EdgeSpec, GraphBackend, NodeSpec, PubSubEvent, SubscriptionFilter};
+use crate::backend::{EdgeSpec, GraphBackend, NodeSpec, SubscriptionFilter};
 use crate::snapshot::SnapshotId;
 use tempfile::TempDir;
 
@@ -185,7 +185,7 @@ fn test_pubsub_operations_after_lazy_init() {
 
     // Subscribe
     let filter = SubscriptionFilter::all();
-    let (sub_id, receiver) = backend.subscribe(filter).unwrap();
+    let (sub_id, _receiver) = backend.subscribe(filter).unwrap();
 
     // Unsubscribe
     let removed = backend.unsubscribe(sub_id).unwrap();

@@ -134,8 +134,6 @@ fn run_neighbors(
     id: i64,
     direction: Direction,
 ) -> Result<()> {
-    use sqlitegraph::backend::BackendDirection;
-
     let graph = client
         .sqlite_graph()
         .context("Neighbors requires SQLite backend")?;

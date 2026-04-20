@@ -10,8 +10,6 @@
 
 use crate::{GraphEdge, GraphEntity, errors::SqliteGraphError, graph::SqliteGraph};
 use serde_json::json;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::thread;
 
 // Import all algorithm functions from parent modules
 use super::{
@@ -263,7 +261,7 @@ fn test_nodes_by_degree_descending() {
 fn test_progress_callbacks_complete() {
     // Scenario: Progress callbacks are called correctly
     // Expected: on_complete is called for all progress variants
-    use crate::progress::{NoProgress, ProgressCallback};
+    use crate::progress::NoProgress;
 
     let graph = create_test_graph();
 
@@ -385,7 +383,7 @@ fn test_transitive_closure_bounded_pairs() {
 fn test_transitive_closure_with_progress_callback() {
     // Scenario: Progress callback is invoked correctly
     // Expected: Progress callback called for each source node
-    use crate::progress::{NoProgress, ProgressCallback};
+    use crate::progress::NoProgress;
 
     let graph = create_test_graph();
 
@@ -3277,7 +3275,7 @@ fn test_enumerate_paths_bounds_prevent_explosion() {
     nodes.push(entry);
 
     // Create 3 levels of branching (2^3 = 8 paths without loop)
-    for level in 0..3 {
+    for _level in 0..3 {
         let left = graph
             .insert_entity(&GraphEntity {
                 id: 0,
