@@ -306,11 +306,11 @@ pub struct V3EdgeStore {
     pub btree: parking_lot::RwLock<BTreeManager>,
     #[cfg(not(test))]
     btree: parking_lot::RwLock<BTreeManager>,
-    /// Optional WAL writer for durability
+    /// Optional WAL writer for durability (shared with V3Backend via Arc)
     #[cfg(test)]
-    pub wal: Option<RwLock<WALWriter>>,
+    pub wal: Option<Arc<RwLock<WALWriter>>>,
     #[cfg(not(test))]
-    wal: Option<RwLock<WALWriter>>,
+    wal: Option<Arc<RwLock<WALWriter>>>,
     /// In-memory cache of neighbor lists - using Arc<[i64]> for zero-copy reads
     /// This matches SQLite's AdjacencyCache pattern but with Arc for zero-copy
     cache: RwLock<HashMap<(i64, Direction), Arc<[i64]>>>,
@@ -359,7 +359,7 @@ impl V3EdgeStore {
     ) -> Self {
         Self {
             btree: parking_lot::RwLock::new(btree),
-            wal: wal.map(|w| RwLock::new(w)),
+            wal: wal.map(|w| Arc::new(RwLock::new(w))),
             cache: RwLock::new(HashMap::new()),
             edge_types: RwLock::new(HashMap::new()),
             cache_hits: AtomicU64::new(0),
@@ -382,7 +382,7 @@ impl V3EdgeStore {
     ) -> Self {
         Self {
             btree: parking_lot::RwLock::new(btree),
-            wal: wal.map(|w| RwLock::new(w)),
+            wal: wal.map(|w| Arc::new(RwLock::new(w))),
             cache: RwLock::new(HashMap::new()),
             edge_types: RwLock::new(HashMap::new()),
             cache_hits: AtomicU64::new(0),
@@ -405,7 +405,7 @@ impl V3EdgeStore {
         let header = PersistentHeaderV3::new_v3();
         Self {
             btree: parking_lot::RwLock::new(btree),
-            wal: wal.map(|w| RwLock::new(w)),
+            wal: wal.map(|w| Arc::new(RwLock::new(w))),
             cache: RwLock::new(HashMap::new()),
             edge_types: RwLock::new(HashMap::new()),
             cache_hits: AtomicU64::new(0),
@@ -1036,6 +1036,13 @@ impl V3EdgeStore {
     /// CRITICAL: Must be called during flush_to_disk to update header
     pub fn btree_height(&self) -> u32 {
         self.btree.read().tree_height()
+    }
+
+    /// Set the WAL writer for this edge store
+    ///
+    /// This is called after opening an existing database when a WAL is discovered.
+    pub fn set_wal(&mut self, wal: Arc<RwLock<WALWriter>>) {
+        self.wal = Some(wal);
     }
 }
 

@@ -81,7 +81,7 @@ fn test_v3_file_reopen_preserves_graph() {
 
         // CRITICAL: Call flush_to_disk() for durability
         // Without this, data is in WAL but not yet persisted to main DB
-        backend.flush_to_disk().expect("Flush should succeed");
+        backend.flush().expect("Flush should succeed");
     } // Backend closes here
 
     // Phase 2: Reopen and verify data persists
@@ -210,7 +210,7 @@ fn test_v3_bfs_correctness_after_reopen_cold_cache() {
                 .unwrap();
         }
 
-        backend.flush_to_disk().expect("Flush should succeed");
+        backend.flush().expect("Flush should succeed");
         node_ids = ids;
     } // Close and drop backend
 
@@ -315,7 +315,7 @@ fn test_v3_shortest_path_correctness_after_reopen_cold_cache() {
             })
             .unwrap();
 
-        backend.flush_to_disk().expect("Flush should succeed");
+        backend.flush().expect("Flush should succeed");
     } // Close graph
 
     // Reopen with cold cache
@@ -363,7 +363,7 @@ fn test_v3_large_dataset_reopen() {
 
         target_id = expected_count / 2;
 
-        backend.flush_to_disk().expect("Flush should succeed");
+        backend.flush().expect("Flush should succeed");
     }
 
     // Reopen and verify

@@ -67,8 +67,8 @@ pub struct V3Backend {
     edge_store: RwLock<V3EdgeStore>,
     /// Page allocator for dynamic page allocation (shared between BTreeManager and NodeStore)
     allocator: Arc<RwLock<PageAllocator>>,
-    /// Optional WAL writer for durability
-    wal: Option<RwLock<WALWriter>>,
+    /// Optional WAL writer for durability (shared with edge store via Arc)
+    wal: Option<Arc<RwLock<WALWriter>>>,
     /// Persistent header
     header: RwLock<PersistentHeaderV3>,
     /// KV store for key-value operations (lazy initialized)
@@ -297,9 +297,10 @@ impl V3Backend {
             Arc::clone(&allocator),
             None,
         );
-        let edge_store = V3EdgeStore::new(
+        let edge_store = V3EdgeStore::with_path_and_allocator(
             btree.clone(),
             None,
+            db_path.clone(),
             Arc::clone(&allocator),
         );
 
@@ -336,7 +337,7 @@ impl V3Backend {
                 .map_err(|e| SqliteGraphError::connection(format!("Failed to create WAL: {:?}", e)))?;
             wal_writer.write_header()
                 .map_err(|e| SqliteGraphError::connection(format!("Failed to write WAL header: {:?}", e)))?;
-            backend.wal = Some(RwLock::new(wal_writer));
+            backend.wal = Some(Arc::new(RwLock::new(wal_writer)));
         }
         
         Ok(backend)
@@ -405,28 +406,35 @@ impl V3Backend {
             Arc::clone(&allocator),
             None,
         );
-        let edge_store = V3EdgeStore::new(
+        let mut edge_store = V3EdgeStore::with_path_and_allocator(
             BTreeManager::with_root(
                 Arc::clone(&allocator),
                 None,
-                header.root_index_page,
+                header.edge_data_offset,
                 header.btree_height,
                 db_path.clone(),
             ),
             None,
+            db_path.clone(),
             Arc::clone(&allocator),
         );
-        
+        // Attempt to recover edge B+Tree from metadata sidecar
+        let _ = edge_store.restore_btree_from_metadata();
+
         // Check for existing WAL
         let wal_path = V3WALPaths::wal_file(&db_path);
-        let wal = if wal_path.exists() {
+        let wal: Option<Arc<RwLock<WALWriter>>> = if wal_path.exists() {
             let wal_writer = WALWriter::new(wal_path, 1)
                 .map_err(|e| SqliteGraphError::connection(format!("Failed to open WAL: {:?}", e)))?;
-            Some(RwLock::new(wal_writer))
+            Some(Arc::new(RwLock::new(wal_writer)))
         } else {
             None
         };
-        
+
+        if let Some(ref wal_arc) = wal {
+            edge_store.set_wal(Arc::clone(wal_arc));
+        }
+
         Ok(Self {
             db_path,
             btree: RwLock::new(btree),
@@ -601,7 +609,22 @@ impl V3Backend {
     }
     
     /// Flush any pending writes to disk
-    fn flush_to_disk(&self) -> Result<(), SqliteGraphError> {
+    pub fn flush_to_disk(&self) -> Result<(), SqliteGraphError> {
+        // Flush edge store dirty clusters to disk
+        let edge_store = self.edge_store.write();
+        edge_store.flush(None).map_err(map_v3_error)?;
+        drop(edge_store);
+
+        // Update header with edge store B+Tree root
+        let mut header = self.header.write();
+        if let Some(root_page) = self.edge_store.read().btree_root_page_id() {
+            header.edge_data_offset = root_page;
+        }
+        drop(header);
+
+        // Sync header so edge B+Tree root is durable
+        self.sync_header()?;
+
         if let Some(ref wal) = self.wal {
             wal.write().flush()
                 .map_err(|e| SqliteGraphError::connection(format!("WAL flush failed: {:?}", e)))?;
@@ -764,10 +787,10 @@ impl V3Backend {
     /// Used by WriteBatchGuard to accumulate changes.
     fn insert_edge_inner(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
         let mut edge_store = self.edge_store.write();
-        
-        edge_store.insert_edge(edge.from, edge.to, EdgeDirection::Outgoing, None)
+
+        edge_store.insert_edge(edge.from, edge.to, EdgeDirection::Outgoing, Some(edge.edge_type.clone()))
             .map_err(map_v3_error)?;
-        edge_store.insert_edge(edge.to, edge.from, EdgeDirection::Incoming, None)
+        edge_store.insert_edge(edge.to, edge.from, EdgeDirection::Incoming, Some(edge.edge_type.clone()))
             .map_err(map_v3_error)?;
         
         // Update header edge count (but don't sync yet)
@@ -781,18 +804,18 @@ impl V3Backend {
 
 impl GraphBackend for V3Backend {
     fn insert_node(&self, node: NodeSpec) -> Result<i64, SqliteGraphError> {
-        // Use inner method then sync (auto-commit mode)
+        // Use inner method - do NOT auto-flush to allow batching multiple nodes
+        // Caller must call flush() for durability
         let node_id = self.insert_node_inner(node)?;
         self.sync_header()?;
-        self.flush_to_disk()?;
         Ok(node_id)
     }
     
     fn insert_edge(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
-        // Use inner method then sync (auto-commit mode)
+        // Use inner method - do NOT auto-flush to allow batching multiple edges
+        // Caller must call flush() for durability
         let edge_id = self.insert_edge_inner(edge)?;
         self.sync_header()?;
-        self.flush_to_disk()?;
         Ok(edge_id)
     }
     
@@ -899,14 +922,23 @@ impl GraphBackend for V3Backend {
         // Use read() instead of write() - outgoing() and incoming() take &self
         let edge_store = self.edge_store.read();
 
-        let neighbors_arc = match query.direction {
-            BackendDirection::Outgoing => {
-                edge_store.outgoing(node)
-                    .map_err(map_v3_error)?
-            }
-            BackendDirection::Incoming => {
-                edge_store.incoming(node)
-                    .map_err(map_v3_error)?
+        let neighbors_arc = if let Some(ref edge_type) = query.edge_type {
+            let dir = match query.direction {
+                BackendDirection::Outgoing => EdgeDirection::Outgoing,
+                BackendDirection::Incoming => EdgeDirection::Incoming,
+            };
+            edge_store.neighbors_filtered(node, dir, edge_type)
+                .map_err(map_v3_error)?
+        } else {
+            match query.direction {
+                BackendDirection::Outgoing => {
+                    edge_store.outgoing(node)
+                        .map_err(map_v3_error)?
+                }
+                BackendDirection::Incoming => {
+                    edge_store.incoming(node)
+                        .map_err(map_v3_error)?
+                }
             }
         };
 
