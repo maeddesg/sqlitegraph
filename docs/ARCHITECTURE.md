@@ -39,7 +39,7 @@ SQLiteGraph is an embedded graph database with **three** storage backends:
            ▼                    ▼                    ▼
 ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
 │  SQLite Backend  │  │   Native V3      │  │  Native V2       │
-│  (Stable)        │  │   (Production)   │  │  (Deprecated)    │
+│  (Stable)        │  │   (Stable)       │  │  (Deprecated)    │
 ├──────────────────┤  ├──────────────────┤  ├──────────────────┤
 │ - SQL storage    │  │ - Binary format  │  │ - Binary format  │
 │ - ACID via SQL   │  │ - B+Tree index   │  │ - Clustered      │
@@ -53,7 +53,7 @@ SQLiteGraph is an embedded graph database with **three** storage backends:
 | Backend | Status | Use Case |
 |---------|--------|----------|
 | **SQLite** | ✅ Stable | Debuggable, familiar SQL ecosystem |
-| **Native V3** | ✅ Production | High performance, unlimited scale |
+| **Native V3** | ✅ Stable | High performance, unlimited scale |
 | **Native V2** | ⚠️ Deprecated | Being removed in v1.7.0 |
 
 ### Key Architectural Principles
@@ -80,7 +80,7 @@ sqlitegraph/
 │   │   │   ├── impl_.rs       # SqliteGraphBackend
 │   │   │   └── pubsub_tests.rs
 │   │   └── native/            # Native backends
-│   │       ├── v3/            # V3 backend (production)
+│   │       ├── v3/            # V3 backend (stable)
 │   │       │   ├── backend.rs # V3Backend implementation
 │   │       │   ├── btree/     # B+Tree index
 │   │       │   ├── kv_store/  # Lazy KV storage
@@ -197,13 +197,11 @@ pub fn parallel_bfs_traversal(
 ```
 
 **Performance Impact:**
-- **⚠️ WARNING:** Parallel BFS has thread-safety bugs and is **slower** than sequential BFS
-- **Actual Benchmarks (2026-04-23):** Sequential is 1.8-2× faster than parallel
-- **Issues Found:** Data race in `next_level`, mutex contention in visited set
-- **Status:** ❌ **NOT production-ready** - needs major refactoring
-- **Small graphs (<1K nodes):** Sequential (avoid parallelism overhead)
-- **Thread safety:** Arc<Mutex<HashSet>> for concurrent visited set (causes contention)
-- **Work distribution:** Level-wise (each BFS level processed in parallel)
+- **⚠️ WARNING (v2.1.0 and earlier):** Had thread-safety bugs and was slower than sequential
+- **Fixed in v2.1.1:** Chunked processing with zero shared state
+- **Current Performance:** 1.0-1.17× speedup on small graphs (100-500 nodes)
+- **Thread safety:** Thread-local collections, no locks during parallel phase
+- **Best for:** Graphs with wide levels (high branching factor)
 
 **Use Cases:**
 - Social network analysis (friend discovery)
@@ -252,7 +250,7 @@ pub trait VectorStorage {
 - Creates tables on-demand
 - No node limits
 
-### Native V3 Backend (Production)
+### Native V3 Backend (Stable)
 
 **Location:** `src/backend/native/v3/`
 
@@ -400,7 +398,7 @@ pub fn detect_media_type(db_path: &Path) -> MediaDetectorResult {
 - **Read operations:** Up to 58% faster with larger pages
 - **Write operations:** 4KB pages 25% better on SSD
 - **Detection overhead:** <0.001ms (negligible)
-- **Status:** ✅ **Production-ready** - validated with benchmarks
+- **Status:** ✅ Validated with benchmarks
 
 #### Delta Encoding (v2.1.0+)
 

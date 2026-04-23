@@ -14,7 +14,7 @@ This document provides a quick overview of the main API surface for all three ba
 | Backend | Status | Module | Best For |
 |---------|--------|--------|----------|
 | **SQLite** | ✅ Stable | `backend::sqlite` | Debuggable, SQL ecosystem |
-| **Native V3** | ✅ Production | `backend::native::v3` | Performance, unlimited scale |
+| **Native V3** | ✅ Stable | `backend::native::v3` | Performance, unlimited scale |
 | **Native V2** | ⚠️ Deprecated | `backend::native` | Do not use for new projects |
 
 ---
@@ -110,7 +110,7 @@ let storage = SQLiteVectorStorage::new(index_id, conn);
 
 ## Native V3 Backend API
 
-**Status:** Production-ready, recommended for new projects
+**Status:** Stable, recommended for new projects
 
 ```rust
 use sqlitegraph::backend::native::v3::V3Backend;
