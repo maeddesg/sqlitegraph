@@ -93,3 +93,5 @@ test_*_api
 
 # Internal development docs (kept for reference but not in git)
 docs/internal/
+# Note: internal/ folder IS tracked in git for team sharing
+# It's excluded from crates.io publication via package manifest

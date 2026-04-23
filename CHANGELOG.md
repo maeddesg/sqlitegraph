@@ -6,7 +6,7 @@
 - **Parallel BFS data races** - Implemented Minecraft-style chunked processing
   - Zero shared state during parallel phase
   - Removed DashMap dependency
-  - Expected 2-4× speedup (was 1.0-1.16×)
+  - Actual measured: 1.0-1.17× speedup on small graphs (100-500 nodes)
   - Eliminated all thread-safety bugs
   - Location: `sqlitegraph-core/src/backend/native/v3/algorithm/parallel_bfs.rs`
 
