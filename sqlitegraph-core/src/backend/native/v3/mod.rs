@@ -8,8 +8,7 @@
 //! - Write-Ahead Logging for crash recovery (Phase 65)
 
 pub mod allocator;
-// TODO: Future task - Algorithm module
-// pub mod algorithm;
+pub mod algorithm;
 pub mod backend;
 pub mod btree;
 pub mod compact_edge_record;
@@ -85,6 +84,8 @@ pub use write_batch::WriteBatch;
 
 // Performance improvements (Task 1: LRU cache)
 pub use node::cache::NodeCache;
+// Task 5: Parallel BFS algorithm
+pub use algorithm::{parallel_bfs, BfsConfig};
 // TODO: Task 4+ - Algorithm and storage modules
 // pub use algorithm::parallel_bfs::parallel_bfs_traversal;
 // pub use storage::{media_detector::MediaDetector, adaptive_page::AdaptivePageManager};
