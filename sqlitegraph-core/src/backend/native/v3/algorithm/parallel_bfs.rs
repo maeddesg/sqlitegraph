@@ -164,6 +164,44 @@ pub fn parallel_bfs(
     }
 }
 
+/// Partition a slice of nodes into chunks for parallel processing
+///
+/// # Arguments
+///
+/// * `nodes` - Nodes to partition
+/// * `num_chunks` - Number of chunks to create (typically number of CPU cores)
+///
+/// # Returns
+///
+/// Vector of chunks, where each chunk is a slice of the original nodes
+///
+/// # Example
+///
+/// ```ignore
+/// let nodes = vec![1, 2, 3, 4, 5];
+/// let chunks = partition_nodes(&nodes, 2);
+/// assert_eq!(chunks.len(), 2);
+/// assert_eq!(chunks[0], &[1, 2, 3]);  // First chunk gets remainder
+/// assert_eq!(chunks[1], &[4, 5]);
+/// ```
+fn partition_nodes<'a>(nodes: &'a [i64], num_chunks: usize) -> Vec<&'a [i64]> {
+    if num_chunks == 0 || nodes.is_empty() || nodes.len() <= num_chunks {
+        return vec![nodes];
+    }
+
+    let chunk_size = (nodes.len() + num_chunks - 1) / num_chunks; // Ceiling division
+    let mut chunks = Vec::with_capacity(num_chunks);
+
+    let mut start = 0;
+    while start < nodes.len() {
+        let end = (start + chunk_size).min(nodes.len());
+        chunks.push(&nodes[start..end]);
+        start = end;
+    }
+
+    chunks
+}
+
 /// Internal parallel BFS implementation
 fn parallel_bfs_impl(
     graph: &V3Backend,
@@ -474,5 +512,41 @@ mod tests {
         assert!(result.visited_order[1..3].contains(&node2));
         assert!(result.visited_order[1..3].contains(&node3));
         assert_eq!(result.visited_order[3], node4);
+    }
+
+    #[test]
+    fn test_partition_nodes_empty() {
+        let nodes: Vec<i64> = vec![];
+        let chunks = partition_nodes(&nodes, 4);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].len(), 0);
+    }
+
+    #[test]
+    fn test_partition_nodes_single() {
+        let nodes = vec![1, 2, 3];
+        let chunks = partition_nodes(&nodes, 4);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], &[1, 2, 3]);
+    }
+
+    #[test]
+    fn test_partition_nodes_even() {
+        let nodes = vec![1, 2, 3, 4, 5, 6];
+        let chunks = partition_nodes(&nodes, 3);
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0], &[1, 2]);
+        assert_eq!(chunks[1], &[3, 4]);
+        assert_eq!(chunks[2], &[5, 6]);
+    }
+
+    #[test]
+    fn test_partition_nodes_uneven() {
+        let nodes = vec![1, 2, 3, 4, 5];
+        let chunks = partition_nodes(&nodes, 3);
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0], &[1, 2]);  // 2 nodes
+        assert_eq!(chunks[1], &[3, 4]);  // 2 nodes
+        assert_eq!(chunks[2], &[5]);     // 1 node (remainder)
     }
 }
