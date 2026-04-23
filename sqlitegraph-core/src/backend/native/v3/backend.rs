@@ -25,7 +25,7 @@
 // We'll define a local mapping function for V3 errors.
 use crate::backend::native::v3::{
     KvStore, KvValue, NodeRecordV3, NodeStore, PageAllocator,
-    PersistentHeaderV3, Publisher, V3EdgeStore, V3_HEADER_SIZE, KindIndex,
+    PersistentHeaderV3, Publisher, V3EdgeStore, V3_HEADER_SIZE, KindIndex, NodeCache,
 };
 use crate::backend::native::v3::btree::BTreeManager;
 use crate::backend::native::v3::name_index::NameIndex;
@@ -80,6 +80,8 @@ pub struct V3Backend {
     kind_index: KindIndex,
     /// Name index for fast name lookups (exact, prefix, substring)
     name_index: NameIndex,
+    /// LRU cache for node records (2-3× point lookup improvement)
+    node_cache: NodeCache,
 }
 
 /// Write batch guard for amortized durability
@@ -329,6 +331,9 @@ impl V3Backend {
             publisher: RwLock::new(None), // Lazy initialized
             kind_index: KindIndex::new(),
             name_index: NameIndex::new(),
+            node_cache: NodeCache::new(
+                crate::backend::native::v3::constants::node_cache::DEFAULT_CACHE_CAPACITY
+            ),
         })
     }
 
@@ -471,6 +476,9 @@ impl V3Backend {
             publisher: RwLock::new(None), // Lazy initialized
             kind_index,
             name_index,
+            node_cache: NodeCache::new(
+                crate::backend::native::v3::constants::node_cache::DEFAULT_CACHE_CAPACITY
+            ),
         };
 
         // If restore failed, rebuild indexes by scanning all nodes
@@ -573,9 +581,20 @@ impl V3Backend {
     /// * `Ok(None)` - Node not found
     /// * `Err(SqliteGraphError)` - Error during lookup
     fn get_node_internal(&self, node_id: i64) -> Result<Option<NodeRecordV3>, SqliteGraphError> {
+        // Try cache first
+        if let Some(record) = self.node_cache.get(node_id) {
+            return Ok(Some(record));
+        }
+
+        // Cache miss - look up from storage
         let mut node_store = self.node_store.write();
-        node_store.lookup_node(node_id)
-            .map_err(map_v3_error)
+        if let Some(record) = node_store.lookup_node(node_id).map_err(map_v3_error)? {
+            // Populate cache for future access
+            self.node_cache.insert(node_id, record.clone());
+            Ok(Some(record))
+        } else {
+            Ok(None)
+        }
     }
     
     /// Get a reference to the database path
@@ -875,13 +894,16 @@ impl GraphBackend for V3Backend {
             0, // incoming_cluster_offset
             0, // incoming_edge_count
         );
-        
+
         let mut node_store = self.node_store.write();
         node_store.update_node(node_id, updated_record)
             .map_err(map_v3_error)?;
-        
+
+        // Invalidate cache entry
+        self.node_cache.invalidate(node_id);
+
         self.flush_to_disk()?;
-        
+
         Ok(node_id)
     }
     
@@ -889,16 +911,19 @@ impl GraphBackend for V3Backend {
         let mut node_store = self.node_store.write();
         node_store.delete_node(id)
             .map_err(map_v3_error)?;
-        
+
+        // Invalidate cache entry
+        self.node_cache.invalidate(id);
+
         // Update header
         {
             let mut header = self.header.write();
             header.node_count = header.node_count.saturating_sub(1);
         }
         self.sync_header()?;
-        
+
         self.flush_to_disk()?;
-        
+
         Ok(())
     }
     

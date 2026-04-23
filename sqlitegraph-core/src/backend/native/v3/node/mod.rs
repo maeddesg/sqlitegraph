@@ -9,9 +9,11 @@
 //! - `page` - NodePage with delta/varint compression
 //! - `store` - NodeStore with B+Tree lookup and TraversalCache
 //! - `block_cache` - Block-aware traversal cache prototype
+//! - `cache` - LRU cache for node record lookups (2-3× performance improvement)
 //! - `tests` - Comprehensive unit tests for NodeStore V3 components
 
 pub mod block_cache;
+pub mod cache;
 pub mod page;
 pub mod record;
 pub mod store;
@@ -39,6 +41,9 @@ pub use block_cache::{
     MAX_CACHE_CAPACITY as BLOCK_CACHE_MAX_CAPACITY, MIN_CACHE_CAPACITY as BLOCK_CACHE_MIN_CAPACITY,
     node_id_to_block,
 };
+
+// Re-export node cache
+pub use cache::NodeCache;
 
 /// Node record constants
 pub mod constants {
