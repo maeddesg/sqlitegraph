@@ -149,7 +149,7 @@ pub fn betweenness_centrality(
                 // Found another shortest path to w through v
                 if dist.get(&w) == Some(&(dist[&v] + 1)) {
                     *sigma.entry(w).or_insert(0.0) += sigma[&v];
-                    predecessors.entry(w).or_insert_with(Vec::new).push(v);
+                    predecessors.entry(w).or_default().push(v);
                 }
             }
         }

@@ -32,7 +32,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn run_decomposition(dataset_name: &str, node_count: usize) -> Result<(), Box<dyn std::error::Error>> {
+fn run_decomposition(
+    dataset_name: &str,
+    node_count: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", "=".repeat(70));
     println!("DATASET: {} ({} nodes)", dataset_name, node_count);
     println!("{}", "=".repeat(70));
@@ -58,7 +61,10 @@ fn run_decomposition(dataset_name: &str, node_count: usize) -> Result<(), Box<dy
 
     // Get file size for context
     let file_size = fs::metadata(&db_path)?.len();
-    println!("Done (file size: {:.2} MB)", file_size as f64 / 1024.0 / 1024.0);
+    println!(
+        "Done (file size: {:.2} MB)",
+        file_size as f64 / 1024.0 / 1024.0
+    );
     println!();
 
     // Reset forensic counters before measurements
@@ -135,7 +141,10 @@ fn run_decomposition(dataset_name: &str, node_count: usize) -> Result<(), Box<dy
     };
     let _ = backend.neighbors(SnapshotId::current(), (node_count / 3) as i64, query2);
     let second_neighbors_time = second_neighbors_start.elapsed();
-    println!("{:.2} µs", second_neighbors_time.as_secs_f64() * 1_000_000.0);
+    println!(
+        "{:.2} µs",
+        second_neighbors_time.as_secs_f64() * 1_000_000.0
+    );
 
     #[cfg(feature = "v3-forensics")]
     let _forensics_after_second_neighbors = read_forensics();
@@ -145,38 +154,100 @@ fn run_decomposition(dataset_name: &str, node_count: usize) -> Result<(), Box<dy
     println!("--- SUMMARY ---");
     println!("Operation                    | Time          | Speedup");
     println!("-----------------------------|---------------|----------");
-    println!("open()                       | {:>8.2} ms   | (baseline)", open_time.as_secs_f64() * 1000.0);
-    println!("first get_node               | {:>8.2} µs   | {:.1}x vs second", first_get_time.as_secs_f64() * 1_000_000.0, first_get_time.as_secs_f64() / second_get_time.as_secs_f64());
-    println!("second get_node (warm)       | {:>8.2} µs   | (baseline)", second_get_time.as_secs_f64() * 1_000_000.0);
-    println!("first neighbors              | {:>8.2} µs   | {:.1}x vs second", first_neighbors_time.as_secs_f64() * 1_000_000.0, first_neighbors_time.as_secs_f64() / second_neighbors_time.as_secs_f64());
-    println!("second neighbors (warm)      | {:>8.2} µs   | (baseline)", second_neighbors_time.as_secs_f64() * 1_000_000.0);
+    println!(
+        "open()                       | {:>8.2} ms   | (baseline)",
+        open_time.as_secs_f64() * 1000.0
+    );
+    println!(
+        "first get_node               | {:>8.2} µs   | {:.1}x vs second",
+        first_get_time.as_secs_f64() * 1_000_000.0,
+        first_get_time.as_secs_f64() / second_get_time.as_secs_f64()
+    );
+    println!(
+        "second get_node (warm)       | {:>8.2} µs   | (baseline)",
+        second_get_time.as_secs_f64() * 1_000_000.0
+    );
+    println!(
+        "first neighbors              | {:>8.2} µs   | {:.1}x vs second",
+        first_neighbors_time.as_secs_f64() * 1_000_000.0,
+        first_neighbors_time.as_secs_f64() / second_neighbors_time.as_secs_f64()
+    );
+    println!(
+        "second neighbors (warm)      | {:>8.2} µs   | (baseline)",
+        second_neighbors_time.as_secs_f64() * 1_000_000.0
+    );
 
     // === Forensic details ===
     #[cfg(feature = "v3-forensics")]
     {
         println!();
         println!("--- FORENSIC COUNTERS AFTER OPEN ---");
-        println!("  btree_lookups:             {}", forensics_after_open.btree_lookup_calls);
-        println!("  page_reads:                 {}", forensics_after_open.page_read_count);
-        println!("  node_page_unpacks:          {}", forensics_after_open.node_decode_count);
-        println!("  node_cache_hits:            {}", forensics_after_open.node_page_cache_hit_count);
-        println!("  node_cache_misses:          {}", forensics_after_open.node_page_cache_miss_count);
+        println!(
+            "  btree_lookups:             {}",
+            forensics_after_open.btree_lookup_calls
+        );
+        println!(
+            "  page_reads:                 {}",
+            forensics_after_open.page_read_count
+        );
+        println!(
+            "  node_page_unpacks:          {}",
+            forensics_after_open.node_decode_count
+        );
+        println!(
+            "  node_cache_hits:            {}",
+            forensics_after_open.node_page_cache_hit_count
+        );
+        println!(
+            "  node_cache_misses:          {}",
+            forensics_after_open.node_page_cache_miss_count
+        );
 
         println!();
         println!("--- FORENSIC COUNTERS: FIRST GET_NODE ---");
-        println!("  btree_lookups:             {}", forensics_after_first_get.btree_lookup_calls);
-        println!("  page_reads:                 {}", forensics_after_first_get.page_read_count);
-        println!("  node_page_unpacks:          {}", forensics_after_first_get.node_decode_count);
-        println!("  node_cache_hits:            {}", forensics_after_first_get.node_page_cache_hit_count);
-        println!("  node_cache_misses:          {}", forensics_after_first_get.node_page_cache_miss_count);
+        println!(
+            "  btree_lookups:             {}",
+            forensics_after_first_get.btree_lookup_calls
+        );
+        println!(
+            "  page_reads:                 {}",
+            forensics_after_first_get.page_read_count
+        );
+        println!(
+            "  node_page_unpacks:          {}",
+            forensics_after_first_get.node_decode_count
+        );
+        println!(
+            "  node_cache_hits:            {}",
+            forensics_after_first_get.node_page_cache_hit_count
+        );
+        println!(
+            "  node_cache_misses:          {}",
+            forensics_after_first_get.node_page_cache_miss_count
+        );
 
         println!();
         println!("--- FORENSIC COUNTERS: SECOND GET_NODE (WARM) ---");
-        println!("  btree_lookups:             {}", forensics_after_second_get.btree_lookup_calls);
-        println!("  page_reads:                 {}", forensics_after_second_get.page_read_count);
-        println!("  node_page_unpacks:          {}", forensics_after_second_get.node_decode_count);
-        println!("  node_cache_hits:            {}", forensics_after_second_get.node_page_cache_hit_count);
-        println!("  node_cache_misses:          {}", forensics_after_second_get.node_page_cache_miss_count);
+        println!(
+            "  btree_lookups:             {}",
+            forensics_after_second_get.btree_lookup_calls
+        );
+        println!(
+            "  page_reads:                 {}",
+            forensics_after_second_get.page_read_count
+        );
+        println!(
+            "  node_page_unpacks:          {}",
+            forensics_after_second_get.node_decode_count
+        );
+        println!(
+            "  node_cache_hits:            {}",
+            forensics_after_second_get.node_page_cache_hit_count
+        );
+        println!(
+            "  node_cache_misses:          {}",
+            forensics_after_second_get.node_page_cache_miss_count
+        );
     }
 
     println!();

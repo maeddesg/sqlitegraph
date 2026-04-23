@@ -26,9 +26,7 @@ use crate::backend::native::v3::btree::BTreeManager;
 use crate::backend::native::v3::constants::{DEFAULT_PAGE_SIZE, V3_HEADER_SIZE};
 use crate::backend::native::v3::file_coordinator::FileCoordinator;
 #[cfg(feature = "v3-forensics")]
-use crate::backend::native::v3::forensics::{
-    FORENSIC_COUNTERS, PAGE_OWNERSHIP, PageType, Subsystem,
-};
+use crate::backend::native::v3::forensics::{FORENSIC_COUNTERS, PageType, Subsystem};
 use crate::backend::native::v3::header::PersistentHeaderV3;
 use crate::backend::native::v3::index::IndexPage;
 use crate::backend::native::v3::node::{NodePage, NodeRecordV3};
@@ -78,7 +76,7 @@ pub struct TraversalCache {
 
 impl TraversalCache {
     pub fn new(capacity: usize) -> Self {
-        assert!(capacity >= MIN_CACHE_CAPACITY && capacity <= MAX_CACHE_CAPACITY);
+        assert!((MIN_CACHE_CAPACITY..=MAX_CACHE_CAPACITY).contains(&capacity));
         Self {
             cache: HashMap::with_capacity(capacity),
             access_order: Vec::with_capacity(capacity),
@@ -111,7 +109,7 @@ impl TraversalCache {
         }
         while self.cache.len() >= self.capacity {
             if let Some(oldest_id) = self.access_order.first() {
-                self.cache.remove(&oldest_id);
+                self.cache.remove(oldest_id);
                 self.access_order.remove(0);
             } else {
                 break;
@@ -799,10 +797,7 @@ impl NodeStore {
     /// PROTOTYPE: When a new page is allocated for a block, remember that
     /// pages from this block should prefer this page in the future.
     fn associate_page_with_block(&mut self, page_id: u64, block_id: i64) {
-        let pages = self
-            .block_preferred_pages
-            .entry(block_id)
-            .or_insert_with(Vec::new);
+        let pages = self.block_preferred_pages.entry(block_id).or_default();
 
         // Avoid duplicates
         if !pages.contains(&page_id) {
@@ -856,7 +851,7 @@ impl NodeStore {
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             // Track page ownership for forensics
-            let offset = if let Some(_) = &self.file_coordinator {
+            let offset = if self.file_coordinator.is_some() {
                 // FileCoordinator uses: V3_HEADER_SIZE + (page_id - 1) * PAGE_SIZE
                 V3_HEADER_SIZE + (page_id.saturating_sub(1)) * DEFAULT_PAGE_SIZE
             } else {
@@ -1478,7 +1473,6 @@ impl NodeStore {
         // No index available - node cannot be found
         Ok(None)
     }
-
 }
 
 //=============================================================================
@@ -1779,7 +1773,7 @@ impl TraversalCacheBuilder {
 
     pub fn build(self) -> NativeResult<TraversalCache> {
         let capacity = self.capacity.unwrap_or(DEFAULT_CACHE_CAPACITY);
-        if capacity < MIN_CACHE_CAPACITY || capacity > MAX_CACHE_CAPACITY {
+        if !(MIN_CACHE_CAPACITY..=MAX_CACHE_CAPACITY).contains(&capacity) {
             return Err(NativeBackendError::InvalidParameter {
                 context: "TraversalCache capacity".to_string(),
                 source: None,
@@ -1802,7 +1796,6 @@ impl Default for TraversalCacheBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     fn test_page(page_id: u64) -> Arc<NodePage> {
         Arc::new(NodePage::new(page_id))

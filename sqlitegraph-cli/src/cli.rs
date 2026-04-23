@@ -1,17 +1,12 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug, ValueEnum, Default)]
 pub enum BackendType {
+    #[default]
     Sqlite,
     #[cfg(feature = "native-v3")]
     V3,
-}
-
-impl Default for BackendType {
-    fn default() -> Self {
-        Self::Sqlite
-    }
 }
 
 #[derive(Parser)]

@@ -219,7 +219,10 @@ impl StringTable {
         // Safety check: prevent excessive allocation
         if string_count > MAX_STRING_COUNT {
             return Err(NativeBackendError::CorruptStringTable {
-                reason: format!("String count {} exceeds maximum {}", string_count, MAX_STRING_COUNT),
+                reason: format!(
+                    "String count {} exceeds maximum {}",
+                    string_count, MAX_STRING_COUNT
+                ),
             });
         }
 
@@ -257,11 +260,10 @@ impl StringTable {
 
             // Read string data
             let data = &bytes[offset..offset + string_len];
-            let string = std::str::from_utf8(data).map_err(|e| {
-                NativeBackendError::CorruptStringTable {
+            let string =
+                std::str::from_utf8(data).map_err(|e| NativeBackendError::CorruptStringTable {
                     reason: e.to_string(),
-                }
-            })?;
+                })?;
 
             // Store
             string_to_offset.insert(string.to_string(), string_offset as u16);
@@ -283,11 +285,7 @@ impl StringTable {
 
     /// Calculate serialized size in bytes
     pub fn serialized_size(&self) -> usize {
-        4 + self
-            .strings
-            .iter()
-            .map(|s| 4 + 2 + s.as_bytes().len())
-            .sum::<usize>()
+        4 + self.strings.iter().map(|s| 4 + 2 + s.len()).sum::<usize>()
     }
 
     /// Rebuild common type cache after deserialization

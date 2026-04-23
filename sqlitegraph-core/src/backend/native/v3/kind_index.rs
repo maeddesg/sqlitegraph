@@ -33,7 +33,7 @@ impl KindIndex {
     /// Add a node ID to the index for a given kind
     pub fn insert(&self, kind: String, node_id: i64) {
         let mut index = self.inner.write();
-        index.entry(kind).or_insert_with(Vec::new).push(node_id);
+        index.entry(kind).or_default().push(node_id);
     }
 
     /// Get all node IDs for a given kind

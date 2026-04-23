@@ -268,11 +268,9 @@ pub use recovery::{dump_graph_to_path, load_graph_from_path, load_graph_from_rea
 pub use snapshot::SnapshotId;
 
 // Re-export backend implementations
-pub use backend::{BackendDirection, ChainStep, GraphBackend};
-pub use backend::{
-    BackupResult, EdgeSpec, NeighborQuery, NodeSpec, SqliteGraphBackend,
-};
 pub use backend::native::v3::V3Backend as NativeGraphBackend;
+pub use backend::{BackendDirection, ChainStep, GraphBackend};
+pub use backend::{BackupResult, EdgeSpec, NeighborQuery, NodeSpec, SqliteGraphBackend};
 
 // Re-export configuration and factory
 pub use config::{BackendKind, GraphConfig, NativeConfig, SqliteConfig, open_graph};

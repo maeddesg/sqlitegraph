@@ -1,6 +1,5 @@
 //! Isolate the source of the 101 lookups bug
 
-
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::backend::V3Backend;
 #[cfg(feature = "v3-forensics")]

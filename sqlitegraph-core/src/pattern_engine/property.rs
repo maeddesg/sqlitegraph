@@ -16,17 +16,17 @@ pub fn matches_property_filters(
     pattern: &PatternTriple,
 ) -> Result<bool, SqliteGraphError> {
     // Check start node properties
-    if !pattern.start_props.is_empty() {
-        if !entity_has_properties(graph, triple_match.start_id, &pattern.start_props)? {
-            return Ok(false);
-        }
+    if !pattern.start_props.is_empty()
+        && !entity_has_properties(graph, triple_match.start_id, &pattern.start_props)?
+    {
+        return Ok(false);
     }
 
     // Check end node properties
-    if !pattern.end_props.is_empty() {
-        if !entity_has_properties(graph, triple_match.end_id, &pattern.end_props)? {
-            return Ok(false);
-        }
+    if !pattern.end_props.is_empty()
+        && !entity_has_properties(graph, triple_match.end_id, &pattern.end_props)?
+    {
+        return Ok(false);
     }
 
     Ok(true)

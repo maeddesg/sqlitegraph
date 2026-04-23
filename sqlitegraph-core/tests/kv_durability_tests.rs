@@ -9,10 +9,7 @@
 //!
 //! Tests are organized to prove each backend's durability honestly.
 
-use sqlitegraph::{
-    SnapshotId,
-    backend::GraphBackend,
-};
+use sqlitegraph::{SnapshotId, backend::GraphBackend};
 use std::io::Write;
 
 /// Helper: Convert bytes to hex string for display
@@ -241,7 +238,6 @@ fn test_v3_kv_multiple_keys_all_persist() {
 #[test]
 fn test_v3_kv_wal_replay_works() {
     use sqlitegraph::backend::native::v3::{KvValue, V3Backend};
-    
 
     let temp_dir = tempfile::tempdir().unwrap();
     let db_path = temp_dir.path().join("v3_kv_wal.graph");
@@ -788,7 +784,6 @@ fn test_v3_recovery_wal_precedence_over_checkpoint() {
     // We need to write a valid WAL header and a KV record
     {
         use sqlitegraph::backend::native::v3::wal::V3WALHeader;
-        
 
         // Create WAL file
         let mut wal_file = File::create(&wal_path).unwrap();
@@ -866,7 +861,6 @@ fn test_v3_recovery_wal_succeeds_despite_corrupt_checkpoint() {
     // Phase 2: Manually create WAL with newer data (simulating crash before flush)
     {
         use sqlitegraph::backend::native::v3::wal::V3WALHeader;
-        
 
         let mut wal_file = File::create(&wal_path).unwrap();
 
@@ -1133,7 +1127,6 @@ fn test_v3_recovery_comprehensive_lifecycle() {
 #[test]
 fn test_v3_recovery_wal_preserves_operation_order() {
     use sqlitegraph::backend::native::v3::{KvValue, V3Backend};
-    
 
     let temp_dir = tempfile::tempdir().unwrap();
     let db_path = temp_dir.path().join("v3_operation_order.graph");

@@ -3,7 +3,10 @@
 //! These tests verify the safety properties of unsafe code blocks identified
 //! in the unsafe code audit (docs/UNSAFE_CODE_AUDIT_REPORT.md).
 
-use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
 // ============================================================================
 // Test Category 1: V3 HNSW Storage Handle Safety
@@ -77,9 +80,7 @@ fn test_simd_edge_cases() {
 
     // Empty vectors should panic
     let empty: Vec<f32> = vec![];
-    let result = std::panic::catch_unwind(|| {
-        dot_product(&empty, &empty)
-    });
+    let result = std::panic::catch_unwind(|| dot_product(&empty, &empty));
     assert!(result.is_err() || result.unwrap() == 0.0);
 
     // Single element
@@ -113,7 +114,10 @@ fn test_simd_scalar_consistency() {
         assert!(
             diff < 1e-4,
             "Size {}: SIMD {} vs Scalar {} (diff {})",
-            size, simd_result, scalar_result, diff
+            size,
+            simd_result,
+            scalar_result,
+            diff
         );
     }
 }
@@ -139,9 +143,7 @@ fn test_read_unaligned_various_alignments() {
         let ptr = unsafe { buffer.as_ptr().add(offset) };
 
         // This should be safe due to read_unaligned
-        let _value = unsafe {
-            std::ptr::read_unaligned::<TestStruct>(ptr as *const TestStruct)
-        };
+        let _value = unsafe { std::ptr::read_unaligned::<TestStruct>(ptr as *const TestStruct) };
     }
 }
 

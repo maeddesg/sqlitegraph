@@ -3,7 +3,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use sqlitegraph::{
     BackendDirection, BackendKind, EdgeSpec, GraphConfig, NativeConfig, NeighborQuery, NodeSpec,
-    open_graph, SnapshotId,
+    SnapshotId, open_graph,
 };
 use std::time::Duration;
 use tempfile::TempDir;
@@ -135,7 +135,9 @@ fn benchmark_sqlitegraph_v2(c: &mut Criterion) {
                         direction: BackendDirection::Outgoing,
                         edge_type: None,
                     };
-                    let neighbors = graph.neighbors(SnapshotId::current(), node_id as i64, neighbor_query).unwrap();
+                    let neighbors = graph
+                        .neighbors(SnapshotId::current(), node_id as i64, neighbor_query)
+                        .unwrap();
                     black_box(neighbors);
                 });
             },

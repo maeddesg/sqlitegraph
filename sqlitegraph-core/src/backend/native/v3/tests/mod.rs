@@ -522,10 +522,18 @@ fn test_v3_bfs_chain_reaches_all() {
         .k_hop(snapshot, ids[0], 20, BackendDirection::Outgoing)
         .unwrap();
 
-    assert_eq!(reachable.len(), 9, "BFS from first node should reach all 9 other nodes in chain");
+    assert_eq!(
+        reachable.len(),
+        9,
+        "BFS from first node should reach all 9 other nodes in chain"
+    );
     // Verify they're in order
     for i in 1..10 {
-        assert!(reachable.contains(&ids[i]), "Should reach node at index {}", i);
+        assert!(
+            reachable.contains(&ids[i]),
+            "Should reach node at index {}",
+            i
+        );
     }
 }
 
@@ -546,10 +554,17 @@ fn test_v3_bfs_disconnected_stays_in_component() {
         .k_hop(snapshot, chain1[0], 10, BackendDirection::Outgoing)
         .unwrap();
 
-    assert_eq!(reachable.len(), 2, "BFS should only reach 2 nodes in same component");
+    assert_eq!(
+        reachable.len(),
+        2,
+        "BFS should only reach 2 nodes in same component"
+    );
     assert!(reachable.contains(&chain1[1]), "Should reach chain1[1]");
     assert!(reachable.contains(&chain1[2]), "Should reach chain1[2]");
-    assert!(!reachable.contains(&chain2[0]), "Should NOT reach chain2[0]");
+    assert!(
+        !reachable.contains(&chain2[0]),
+        "Should NOT reach chain2[0]"
+    );
 }
 
 /// Test: Star topology - center reaches all leaves
@@ -684,27 +699,71 @@ fn test_v3_node_degree_complex() {
     let backend = V3Backend::create(&db_path).unwrap();
 
     // Create a diamond: A -> B, A -> C, B -> D, C -> D
-    let a = backend.insert_node(NodeSpec {
-        kind: "Node".to_string(), name: "A".to_string(), file_path: None,
-        data: serde_json::json!({}),
-    }).unwrap();
-    let b = backend.insert_node(NodeSpec {
-        kind: "Node".to_string(), name: "B".to_string(), file_path: None,
-        data: serde_json::json!({}),
-    }).unwrap();
-    let c = backend.insert_node(NodeSpec {
-        kind: "Node".to_string(), name: "C".to_string(), file_path: None,
-        data: serde_json::json!({}),
-    }).unwrap();
-    let d = backend.insert_node(NodeSpec {
-        kind: "Node".to_string(), name: "D".to_string(), file_path: None,
-        data: serde_json::json!({}),
-    }).unwrap();
+    let a = backend
+        .insert_node(NodeSpec {
+            kind: "Node".to_string(),
+            name: "A".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    let b = backend
+        .insert_node(NodeSpec {
+            kind: "Node".to_string(),
+            name: "B".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    let c = backend
+        .insert_node(NodeSpec {
+            kind: "Node".to_string(),
+            name: "C".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    let d = backend
+        .insert_node(NodeSpec {
+            kind: "Node".to_string(),
+            name: "D".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
 
-    backend.insert_edge(EdgeSpec { from: a, to: b, edge_type: "E".to_string(), data: serde_json::json!({}) }).unwrap();
-    backend.insert_edge(EdgeSpec { from: a, to: c, edge_type: "E".to_string(), data: serde_json::json!({}) }).unwrap();
-    backend.insert_edge(EdgeSpec { from: b, to: d, edge_type: "E".to_string(), data: serde_json::json!({}) }).unwrap();
-    backend.insert_edge(EdgeSpec { from: c, to: d, edge_type: "E".to_string(), data: serde_json::json!({}) }).unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: a,
+            to: b,
+            edge_type: "E".to_string(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: a,
+            to: c,
+            edge_type: "E".to_string(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: b,
+            to: d,
+            edge_type: "E".to_string(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: c,
+            to: d,
+            edge_type: "E".to_string(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
 
     let snapshot = crate::snapshot::SnapshotId::current();
 
@@ -731,41 +790,88 @@ fn test_v3_edge_type_filtering() {
     let db_path = temp_dir.path().join("test.graph");
     let backend = V3Backend::create(&db_path).unwrap();
 
-    let node_a = backend.insert_node(NodeSpec {
-        kind: "Node".to_string(), name: "A".to_string(), file_path: None,
-        data: serde_json::json!({}),
-    }).unwrap();
-    let node_b = backend.insert_node(NodeSpec {
-        kind: "Node".to_string(), name: "B".to_string(), file_path: None,
-        data: serde_json::json!({}),
-    }).unwrap();
-    let node_c = backend.insert_node(NodeSpec {
-        kind: "Node".to_string(), name: "C".to_string(), file_path: None,
-        data: serde_json::json!({}),
-    }).unwrap();
+    let node_a = backend
+        .insert_node(NodeSpec {
+            kind: "Node".to_string(),
+            name: "A".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    let node_b = backend
+        .insert_node(NodeSpec {
+            kind: "Node".to_string(),
+            name: "B".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    let node_c = backend
+        .insert_node(NodeSpec {
+            kind: "Node".to_string(),
+            name: "C".to_string(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
 
-    backend.insert_edge(EdgeSpec { from: node_a, to: node_b, edge_type: "CALLS".to_string(), data: serde_json::json!({}) }).unwrap();
-    backend.insert_edge(EdgeSpec { from: node_a, to: node_c, edge_type: "USES".to_string(), data: serde_json::json!({}) }).unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: node_a,
+            to: node_b,
+            edge_type: "CALLS".to_string(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: node_a,
+            to: node_c,
+            edge_type: "USES".to_string(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
 
     let snapshot = crate::snapshot::SnapshotId::current();
 
     // All outgoing from A
-    let all = backend.neighbors(snapshot, node_a, NeighborQuery {
-        direction: BackendDirection::Outgoing, edge_type: None,
-    }).unwrap();
+    let all = backend
+        .neighbors(
+            snapshot,
+            node_a,
+            NeighborQuery {
+                direction: BackendDirection::Outgoing,
+                edge_type: None,
+            },
+        )
+        .unwrap();
     assert_eq!(all.len(), 2, "A should have 2 outgoing edges total");
 
     // Filter by CALLS
-    let calls = backend.neighbors(snapshot, node_a, NeighborQuery {
-        direction: BackendDirection::Outgoing, edge_type: Some("CALLS".to_string()),
-    }).unwrap();
+    let calls = backend
+        .neighbors(
+            snapshot,
+            node_a,
+            NeighborQuery {
+                direction: BackendDirection::Outgoing,
+                edge_type: Some("CALLS".to_string()),
+            },
+        )
+        .unwrap();
     assert_eq!(calls.len(), 1, "A should have 1 CALLS edge");
     assert!(calls.contains(&node_b), "CALLS edge should point to B");
 
     // Filter by USES
-    let uses = backend.neighbors(snapshot, node_a, NeighborQuery {
-        direction: BackendDirection::Outgoing, edge_type: Some("USES".to_string()),
-    }).unwrap();
+    let uses = backend
+        .neighbors(
+            snapshot,
+            node_a,
+            NeighborQuery {
+                direction: BackendDirection::Outgoing,
+                edge_type: Some("USES".to_string()),
+            },
+        )
+        .unwrap();
     assert_eq!(uses.len(), 1, "A should have 1 USES edge");
     assert!(uses.contains(&node_c), "USES edge should point to C");
 }
@@ -816,21 +922,40 @@ fn test_v3_large_graph_insert_and_query() {
     let reachable = backend
         .k_hop(snapshot, ids[0], 100, BackendDirection::Outgoing)
         .unwrap();
-    assert!(reachable.len() >= 100, "Should reach at least 100 nodes from start");
+    assert!(
+        reachable.len() >= 100,
+        "Should reach at least 100 nodes from start"
+    );
 
     // Verify last node has no outgoing
     let last_outgoing = backend
-        .neighbors(snapshot, ids[n - 1], NeighborQuery {
-            direction: BackendDirection::Outgoing, edge_type: None,
-        })
+        .neighbors(
+            snapshot,
+            ids[n - 1],
+            NeighborQuery {
+                direction: BackendDirection::Outgoing,
+                edge_type: None,
+            },
+        )
         .unwrap();
-    assert!(last_outgoing.is_empty(), "Last node should have no outgoing edges");
+    assert!(
+        last_outgoing.is_empty(),
+        "Last node should have no outgoing edges"
+    );
 
     // Verify first node has no incoming
     let first_incoming = backend
-        .neighbors(snapshot, ids[0], NeighborQuery {
-            direction: BackendDirection::Incoming, edge_type: None,
-        })
+        .neighbors(
+            snapshot,
+            ids[0],
+            NeighborQuery {
+                direction: BackendDirection::Incoming,
+                edge_type: None,
+            },
+        )
         .unwrap();
-    assert!(first_incoming.is_empty(), "First node should have no incoming edges");
+    assert!(
+        first_incoming.is_empty(),
+        "First node should have no incoming edges"
+    );
 }

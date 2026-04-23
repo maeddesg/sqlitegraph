@@ -21,7 +21,6 @@ use crate::backend::native::v3::constants as v3_constants;
 
 /// NodePage header and layout constants
 pub mod constants {
-    
 
     /// Page header size in bytes
     ///
@@ -944,17 +943,17 @@ impl NodePage {
                     });
                 }
                 let ext_offset = u64::from_be_bytes(
-                data.get(offset..offset + 8)
-                    .ok_or_else(|| NativeBackendError::InvalidHeader {
-                        field: "node.data_external_offset".to_string(),
-                        reason: "cannot read external offset bytes".to_string(),
-                    })?
-                    .try_into()
-                    .map_err(|_| NativeBackendError::InvalidHeader {
-                        field: "node.data_external_offset".to_string(),
-                        reason: "invalid external offset byte array".to_string(),
-                    })?,
-            );
+                    data.get(offset..offset + 8)
+                        .ok_or_else(|| NativeBackendError::InvalidHeader {
+                            field: "node.data_external_offset".to_string(),
+                            reason: "cannot read external offset bytes".to_string(),
+                        })?
+                        .try_into()
+                        .map_err(|_| NativeBackendError::InvalidHeader {
+                            field: "node.data_external_offset".to_string(),
+                            reason: "invalid external offset byte array".to_string(),
+                        })?,
+                );
                 offset += 8;
                 (None, Some(ext_offset))
             } else {

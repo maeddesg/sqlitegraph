@@ -9,8 +9,8 @@
 //! Focus on safe, consistent reads during write activity.
 
 use sqlitegraph::{
-    GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError,
-    add_label, add_property, cache_stats,
+    GraphEdgeCreate, GraphEntityCreate, SqliteGraph, SqliteGraphError, add_label, add_property,
+    cache_stats,
 };
 use std::time::Duration;
 

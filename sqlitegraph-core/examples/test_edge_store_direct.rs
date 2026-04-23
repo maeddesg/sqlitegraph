@@ -1,9 +1,9 @@
 //! Direct access to V3EdgeStore internals to isolate lock/lookup overhead
 
 use sqlitegraph::{
-    backend::native::v3::{V3Backend, V3EdgeStore, edge_compat::Direction},
-    backend::GraphBackend,
     EdgeSpec, NodeSpec,
+    backend::GraphBackend,
+    backend::native::v3::{V3Backend, V3EdgeStore, edge_compat::Direction},
 };
 use std::time::Instant;
 use tempfile::tempdir;
@@ -67,14 +67,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Each level acquires a RwLock read lock...");
 
     // Create a simple test to measure RwLock overhead
+    use parking_lot::RwLock;
     use std::collections::HashMap;
     use std::sync::Arc as StdArc;
-    use parking_lot::RwLock;
 
     let cache = RwLock::new(HashMap::<(i64, Direction), StdArc<[i64]>>::new());
     let key = (src_node, Direction::Outgoing);
-    let test_value: StdArc<[i64]> = StdArc::from(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20].into_boxed_slice());
+    let test_value: StdArc<[i64]> = StdArc::from(
+        vec![
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        ]
+        .into_boxed_slice(),
+    );
 
     // Pre-populate cache
     {
@@ -93,11 +97,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let lock_hash_time = start.elapsed();
     let lock_hash_ns = lock_hash_time.as_nanos() as f64 / ITERATIONS as f64;
-    println!("\n2. RwLock read + HashMap lookup: {:.2} ns/query", lock_hash_ns);
+    println!(
+        "\n2. RwLock read + HashMap lookup: {:.2} ns/query",
+        lock_hash_ns
+    );
     println!("   (found_count={})", found_count);
 
     // Test 3: Just HashMap lookup (no lock)
-    let simple_map = std::sync::Mutex::new(std::collections::HashMap::from([(key, test_value.clone())]));
+    let simple_map =
+        std::sync::Mutex::new(std::collections::HashMap::from([(key, test_value.clone())]));
     let start = Instant::now();
     let mut found_count = 0;
     for _ in 0..ITERATIONS {
@@ -108,7 +116,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let mutex_hash_time = start.elapsed();
     let mutex_hash_ns = mutex_hash_time.as_nanos() as f64 / ITERATIONS as f64;
-    println!("3. Mutex + Vec lookup:           {:.2} ns/query", mutex_hash_ns);
+    println!(
+        "3. Mutex + Vec lookup:           {:.2} ns/query",
+        mutex_hash_ns
+    );
     println!("   (found_count={})", found_count);
 
     // Test 4: Arc clone (no lock)

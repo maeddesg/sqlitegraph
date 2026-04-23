@@ -30,7 +30,10 @@ const LOOKUP_COUNT: usize = 100_000;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== get_node Cache Capacity Sweep Benchmark ===");
-    println!("Dataset: {} nodes, {} lookups per test", NODE_COUNT, LOOKUP_COUNT);
+    println!(
+        "Dataset: {} nodes, {} lookups per test",
+        NODE_COUNT, LOOKUP_COUNT
+    );
     println!();
 
     let mut results = Vec::new();
@@ -264,12 +267,7 @@ fn print_summary(results: &[(usize, BenchmarkStats)]) {
     println!("{:=<80}", "");
     println!(
         "{:>12} | {:>12} | {:>12} | {:>12} | {:>12} | {:>12}",
-        "Cache Size",
-        "Warm (μs)",
-        "Reopen (μs)",
-        "Warm Hit %",
-        "Reopen Hit %",
-        "Speedup"
+        "Cache Size", "Warm (μs)", "Reopen (μs)", "Warm Hit %", "Reopen Hit %", "Speedup"
     );
     println!("{:-<80}", "-");
 
@@ -333,17 +331,13 @@ fn print_summary(results: &[(usize, BenchmarkStats)]) {
 
     for &(cache_size, ref stats) in results {
         let reduction = if baseline_reads > 0 {
-            (baseline_reads as f64 - stats.reopen_page_reads as f64) / baseline_reads as f64
-                * 100.0
+            (baseline_reads as f64 - stats.reopen_page_reads as f64) / baseline_reads as f64 * 100.0
         } else {
             0.0
         };
         println!(
             "{:>12} | {:>12} | {:>12} | {:>11.1}%",
-            cache_size,
-            stats.warm_page_reads,
-            stats.reopen_page_reads,
-            reduction
+            cache_size, stats.warm_page_reads, stats.reopen_page_reads, reduction
         );
     }
 
@@ -374,13 +368,11 @@ fn print_summary(results: &[(usize, BenchmarkStats)]) {
     // Check for plateau
     let last_three = results.len().saturating_sub(3);
     if results.len() > 3 {
-        let plateau = results[last_three..]
-            .iter()
-            .all(|(_, s)| {
-                (s.reopen_time_per_lookup_ns - best_speedup.1.reopen_time_per_lookup_ns).abs()
-                    / best_speedup.1.reopen_time_per_lookup_ns
-                    < 0.05
-            });
+        let plateau = results[last_three..].iter().all(|(_, s)| {
+            (s.reopen_time_per_lookup_ns - best_speedup.1.reopen_time_per_lookup_ns).abs()
+                / best_speedup.1.reopen_time_per_lookup_ns
+                < 0.05
+        });
 
         if plateau {
             println!("2. Plateau detected: Last 3 cache sizes show <5% variance");
@@ -397,12 +389,9 @@ fn print_summary(results: &[(usize, BenchmarkStats)]) {
         .unwrap_or(0.0);
 
     if baseline_16 > 0.0 {
-        let improvement = (baseline_16 - best_speedup.1.reopen_time_per_lookup_ns) / baseline_16
-            * 100.0;
-        println!(
-            "3. Improvement from 16 pages: {:.1}% faster",
-            improvement
-        );
+        let improvement =
+            (baseline_16 - best_speedup.1.reopen_time_per_lookup_ns) / baseline_16 * 100.0;
+        println!("3. Improvement from 16 pages: {:.1}% faster", improvement);
     }
 
     // Check hit rate saturation
@@ -412,11 +401,20 @@ fn print_summary(results: &[(usize, BenchmarkStats)]) {
         .fold(0.0_f64, f64::max);
 
     if best_hit_rate > 0.95 {
-        println!("4. Hit rate saturation: {:.1}% - cache is highly effective", best_hit_rate * 100.0);
+        println!(
+            "4. Hit rate saturation: {:.1}% - cache is highly effective",
+            best_hit_rate * 100.0
+        );
     } else if best_hit_rate > 0.80 {
-        println!("4. Hit rate: {:.1}% - cache is working but not saturated", best_hit_rate * 100.0);
+        println!(
+            "4. Hit rate: {:.1}% - cache is working but not saturated",
+            best_hit_rate * 100.0
+        );
     } else {
-        println!("4. Hit rate: {:.1}% - significant thrashing remains", best_hit_rate * 100.0);
+        println!(
+            "4. Hit rate: {:.1}% - significant thrashing remains",
+            best_hit_rate * 100.0
+        );
     }
 
     println!("{}", "=".repeat(80));

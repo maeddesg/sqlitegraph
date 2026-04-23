@@ -14,8 +14,8 @@ pub mod v3;
 
 // Re-export public types for external use
 pub use types::{
-    CpuProfile, EdgeFlags, FileOffset, NativeBackendError, NativeEdgeId,
-    NativeNodeId, NativeResult, NodeFlags, RecordSize,
+    CpuProfile, EdgeFlags, FileOffset, NativeBackendError, NativeEdgeId, NativeNodeId,
+    NativeResult, NodeFlags, RecordSize,
 };
 
 pub use v3::V3Backend as NativeGraphBackend;

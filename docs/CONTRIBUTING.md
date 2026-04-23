@@ -150,7 +150,7 @@ cargo clippy --fix --allow-dirty --allow-staged
    ```
 
 4. **Module size limit**
-   - Maximum 300 LOC per module (600 with justification)
+   - Maximum 1,000 LOC per module
    - Split large modules into submodules
 
 5. **No state artifacts in src/**

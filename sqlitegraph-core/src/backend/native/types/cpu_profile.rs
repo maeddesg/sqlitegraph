@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 /// This enum allows application developers to choose CPU-specific optimizations
 /// while maintaining backwards compatibility. All profiles are safe and will
 /// gracefully degrade on unsupported hardware.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum CpuProfile {
     /// Generic profile compatible with all CPUs
     /// Uses portable optimizations without CPU-specific instructions
+    #[default]
     Generic,
     /// Auto-detect and use optimal profile
     /// Runtime detection selects the best available profile
@@ -24,12 +25,6 @@ pub enum CpuProfile {
     /// Optimized for Intel CPUs with AVX-512 support
     /// Target: Intel Xeon/Server with 512-bit vector instructions
     X86Avx512,
-}
-
-impl Default for CpuProfile {
-    fn default() -> Self {
-        Self::Generic
-    }
 }
 
 impl std::fmt::Display for CpuProfile {

@@ -59,7 +59,7 @@
 
 #[cfg(feature = "v3-forensics")]
 use crate::backend::native::v3::forensics::{
-    FORENSIC_COUNTERS, PAGE_OWNERSHIP, PageType as ForensicPageType, Subsystem,
+    FORENSIC_COUNTERS, PageType as ForensicPageType, Subsystem,
 };
 use crate::backend::native::v3::{
     allocator::PageAllocator, btree::BTreeManager, constants::DEFAULT_PAGE_SIZE,
@@ -217,7 +217,11 @@ impl V3EdgeCluster {
             // Source node ID (8 bytes, big-endian)
             result.extend_from_slice(&self.src.to_be_bytes());
             // Direction (1 byte): 0 = Outgoing, 1 = Incoming
-            result.push(if self.direction == Direction::Outgoing { 0 } else { 1 });
+            result.push(if self.direction == Direction::Outgoing {
+                0
+            } else {
+                1
+            });
         }
 
         // Edge count (4 bytes, big-endian)
@@ -261,12 +265,18 @@ impl V3EdgeCluster {
                 });
             }
             let src = i64::from_be_bytes(
-                bytes[pos..pos + 8].try_into().expect("bounds checked above"),
+                bytes[pos..pos + 8]
+                    .try_into()
+                    .expect("bounds checked above"),
             );
             pos += 8;
             let dir_byte = bytes[pos];
             pos += 1;
-            let direction = if dir_byte == 1 { Direction::Incoming } else { Direction::Outgoing };
+            let direction = if dir_byte == 1 {
+                Direction::Incoming
+            } else {
+                Direction::Outgoing
+            };
             (src, direction)
         } else {
             // v1: no src/direction in serialized data (legacy)
@@ -279,7 +289,8 @@ impl V3EdgeCluster {
                 context: "Edge cluster truncated at edge count".to_string(),
             });
         }
-        let count = u32::from_be_bytes([bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3]]) as usize;
+        let count = u32::from_be_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]])
+            as usize;
         pos += 4;
 
         let mut edges = Vec::with_capacity(count);
@@ -294,17 +305,23 @@ impl V3EdgeCluster {
             }
 
             let neighbor_id = i64::from_be_bytes(
-                bytes[pos..pos + 8].try_into().expect("bounds checked above"),
+                bytes[pos..pos + 8]
+                    .try_into()
+                    .expect("bounds checked above"),
             );
             pos += 8;
 
             let type_offset = u16::from_be_bytes(
-                bytes[pos..pos + 2].try_into().expect("bounds checked above"),
+                bytes[pos..pos + 2]
+                    .try_into()
+                    .expect("bounds checked above"),
             );
             pos += 2;
 
             let data_len = u16::from_be_bytes(
-                bytes[pos..pos + 2].try_into().expect("bounds checked above"),
+                bytes[pos..pos + 2]
+                    .try_into()
+                    .expect("bounds checked above"),
             ) as usize;
             pos += 2;
 
@@ -394,7 +411,11 @@ pub struct V3EdgeStore {
 ///
 /// Ordering: Incoming edges sort before Outgoing edges for the same node.
 fn edge_key(src: i64, dir: Direction) -> i64 {
-    let dir_bit = if dir == Direction::Outgoing { 0i64 } else { 1i64 };
+    let dir_bit = if dir == Direction::Outgoing {
+        0i64
+    } else {
+        1i64
+    };
     // Use zigzag encoding for src to handle negative node IDs
     // zigzag(n) = (n << 1) ^ (n >> 63) maps negatives to positive even numbers
     let zigzag_src = (src << 1) ^ (src >> 63);
@@ -403,8 +424,8 @@ fn edge_key(src: i64, dir: Direction) -> i64 {
     // We place zigzag_src in lower 63 bits and dir_bit in bit 63
     // But bit 63 makes it negative! Instead, interleave:
     // key = (dir_bit << 62) | (zigzag_src & 0x3FFF_FFFF_FFFF_FFFF)
-    let key = (dir_bit << 62) | (zigzag_src & 0x3FFF_FFFF_FFFF_FFFF);
-    key
+
+    (dir_bit << 62) | (zigzag_src & 0x3FFF_FFFF_FFFF_FFFF)
 }
 
 impl V3EdgeStore {
@@ -571,7 +592,7 @@ impl V3EdgeStore {
         };
         drop(btree);
 
-        let offset = V3_HEADER_SIZE as u64 + (page_id - 1) * DEFAULT_PAGE_SIZE;
+        let offset = V3_HEADER_SIZE + (page_id - 1) * DEFAULT_PAGE_SIZE;
 
         // Try to open file and read page
         let mut file = match File::open(db_path) {
@@ -580,7 +601,7 @@ impl V3EdgeStore {
         };
 
         // Seek to page offset
-        if let Err(_) = file.seek(SeekFrom::Start(offset)) {
+        if file.seek(SeekFrom::Start(offset)).is_err() {
             return Ok(Arc::from([]));
         }
 
@@ -718,7 +739,7 @@ impl V3EdgeStore {
             let mut dirty = self.dirty_clusters.write();
 
             // Check if cluster already exists in dirty_clusters
-            if !dirty.contains_key(&cache_key) {
+            dirty.entry(cache_key).or_insert_with(|| {
                 // Need to find or allocate page_id for new cluster
                 let key = edge_key(src, dir);
                 let btree = self.btree.read();
@@ -742,12 +763,14 @@ impl V3EdgeStore {
                 };
 
                 // Create new cluster with allocated page_id
-                dirty.insert(cache_key, V3EdgeCluster::new(src, dir, page_id_to_use));
-            }
+                V3EdgeCluster::new(src, dir, page_id_to_use)
+            });
 
             // Now get the cluster and add the edge
             // SAFETY: We just inserted the key above (line 682), or it already existed (checked at line 656)
-            let cluster = dirty.get_mut(&cache_key).expect("cluster must exist after insert");
+            let cluster = dirty
+                .get_mut(&cache_key)
+                .expect("cluster must exist after insert");
             let cluster_page_id = cluster.page_id;
             // CRITICAL: Pass edge_type to add_edge() so it gets serialized into edge_data
             cluster.add_edge(dst, edge_type);
@@ -882,24 +905,24 @@ impl V3EdgeStore {
         // This ensures WAL doesn't grow unbounded and data is durable
         if let Some(ref wal) = self.wal {
             let mut wal_guard = wal.write();
-            
+
             // Get current B+Tree state for checkpoint
             let btree = self.btree.read();
             let root_page_id = btree.root_page_id();
             let tree_height = btree.tree_height();
-            
+
             // Write checkpoint record
             let _ = wal_guard.checkpoint(
                 root_page_id,
                 0, // total_pages - not tracked in edge store
                 tree_height,
-                0, // free_page_list_head - not tracked in edge store
+                0,                             // free_page_list_head - not tracked in edge store
                 &PersistentHeaderV3::new_v3(), // header snapshot
             );
-            
+
             // Flush WAL to ensure checkpoint is on disk
             let _ = wal_guard.flush();
-            
+
             // Truncate WAL after successful checkpoint
             // Safe because main DB pages are now durable
             let _ = wal_guard.truncate();
@@ -914,7 +937,9 @@ impl V3EdgeStore {
 
     /// Get the path to the edge metadata file
     fn metadata_path(&self) -> Option<PathBuf> {
-        self.db_path.as_ref().map(|p| p.with_extension("v3edgemeta"))
+        self.db_path
+            .as_ref()
+            .map(|p| p.with_extension("v3edgemeta"))
     }
 
     /// Persist B+Tree root metadata to disk for recovery
@@ -935,7 +960,7 @@ impl V3EdgeStore {
         let mut data = Vec::with_capacity(24);
         data.extend_from_slice(b"V3EDGE\x00\x00"); // 8 bytes magic
         data.extend_from_slice(&root_page_id.to_le_bytes()); // 8 bytes
-        data.extend_from_slice(&(tree_height as u32).to_le_bytes()); // 4 bytes
+        data.extend_from_slice(&tree_height.to_le_bytes()); // 4 bytes
 
         // Simple checksum (XOR of bytes)
         let checksum: u32 = data.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
@@ -978,12 +1003,16 @@ impl V3EdgeStore {
         }
 
         // Parse values
-        let root_page_id = u64::from_le_bytes([data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15]]);
+        let root_page_id = u64::from_le_bytes([
+            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
+        ]);
         let tree_height = u32::from_le_bytes([data[16], data[17], data[18], data[19]]);
 
         // Verify checksum
         let stored_checksum = u32::from_le_bytes([data[20], data[21], data[22], data[23]]);
-        let computed_checksum: u32 = data[..20].iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
+        let computed_checksum: u32 = data[..20]
+            .iter()
+            .fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
 
         if stored_checksum != computed_checksum {
             return Ok(None); // Checksum mismatch
@@ -1019,7 +1048,7 @@ impl V3EdgeStore {
             let offset: u64 = if page_id == 0 {
                 0
             } else {
-                (V3_HEADER_SIZE as u64) + (page_id - 1) * DEFAULT_PAGE_SIZE
+                V3_HEADER_SIZE + (page_id - 1) * DEFAULT_PAGE_SIZE
             };
             crate::track_page_alloc!(page_id, Subsystem::EdgeStore, ForensicPageType::Edge);
             crate::track_page_write!(
@@ -1050,7 +1079,7 @@ impl V3EdgeStore {
         let offset: u64 = if page_id == 0 {
             0
         } else {
-            (V3_HEADER_SIZE as u64) + (page_id - 1) * DEFAULT_PAGE_SIZE
+            V3_HEADER_SIZE + (page_id - 1) * DEFAULT_PAGE_SIZE
         };
 
         // CRITICAL FIX: Do NOT use create(true) - it truncates the file!
@@ -1078,7 +1107,7 @@ impl V3EdgeStore {
                 })?;
         }
 
-        file.seek(SeekFrom::Start(offset as u64))
+        file.seek(SeekFrom::Start(offset))
             .map_err(|e| NativeBackendError::IoError {
                 context: format!("Failed to seek to page {} offset {}", page_id, offset),
                 source: e,
@@ -1147,7 +1176,7 @@ mod tests {
     use parking_lot::RwLock;
     use std::path::PathBuf;
     use std::sync::Arc;
-    
+
     use tempfile::TempDir;
 
     #[test]
@@ -1194,7 +1223,11 @@ mod tests {
 
         assert_eq!(deserialized.format_version, 2);
         assert_eq!(deserialized.src, 42, "src should survive roundtrip");
-        assert_eq!(deserialized.direction, Direction::Outgoing, "direction should survive roundtrip");
+        assert_eq!(
+            deserialized.direction,
+            Direction::Outgoing,
+            "direction should survive roundtrip"
+        );
         assert_eq!(deserialized.dsts(), vec![100, 200]);
         assert_eq!(deserialized.page_id, 100);
     }
@@ -1208,8 +1241,11 @@ mod tests {
         let deserialized = V3EdgeCluster::deserialize(&bytes, 50).unwrap();
 
         assert_eq!(deserialized.src, 99);
-        assert_eq!(deserialized.direction, Direction::Incoming,
-            "Incoming direction must survive serialization roundtrip");
+        assert_eq!(
+            deserialized.direction,
+            Direction::Incoming,
+            "Incoming direction must survive serialization roundtrip"
+        );
     }
 
     //========================================================================
@@ -1241,7 +1277,12 @@ mod tests {
             let wal_path = path.with_extension("v3wal");
             let writer = WALWriter::new(wal_path, 1).expect("Failed to create WAL writer");
             writer.write_header().expect("Failed to write WAL header");
-            V3EdgeStore::with_path_and_allocator(btree, Some(writer), path.clone(), allocator.clone())
+            V3EdgeStore::with_path_and_allocator(
+                btree,
+                Some(writer),
+                path.clone(),
+                allocator.clone(),
+            )
         } else {
             V3EdgeStore::new(btree, None, allocator.clone())
         };
@@ -1372,10 +1413,7 @@ mod tests {
         let lookup_key = edge_key(1, Direction::Outgoing);
         let lookup_result = btree.lookup(lookup_key);
 
-        assert!(
-            lookup_result.is_ok(),
-            "B+Tree lookup should succeed"
-        );
+        assert!(lookup_result.is_ok(), "B+Tree lookup should succeed");
         assert!(
             lookup_result.unwrap().is_some(),
             "B+Tree should contain edge page mapping for node 1 after flush"

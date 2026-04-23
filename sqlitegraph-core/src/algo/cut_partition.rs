@@ -300,7 +300,6 @@ impl FlowEdge {
     fn residual(&self) -> usize {
         self.capacity - self.flow
     }
-
 }
 
 /// Flow network for max-flow computation.
@@ -329,19 +328,19 @@ impl FlowNetwork {
         }
 
         // Forward edge index
-        let forward_idx = self.adjacency.entry(from).or_insert_with(Vec::new).len();
+        let forward_idx = self.adjacency.entry(from).or_default().len();
         // Reverse edge index
-        let reverse_idx = self.adjacency.entry(to).or_insert_with(Vec::new).len();
+        let reverse_idx = self.adjacency.entry(to).or_default().len();
 
         // Add forward edge
         self.adjacency
             .entry(from)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(FlowEdge::new(to, capacity));
         // Add reverse edge (for residual graph)
         self.adjacency
             .entry(to)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(FlowEdge::new(from, 0));
 
         // Track reverse edges for updates
@@ -1533,7 +1532,7 @@ fn select_seeds_by_degree(
     }
 
     // Sort by degree descending, take top k
-    node_degrees.sort_by(|a, b| b.1.cmp(&a.1));
+    node_degrees.sort_by_key(|b| std::cmp::Reverse(b.1));
     node_degrees.truncate(k);
     node_degrees.into_iter().map(|(node, _)| node).collect()
 }
@@ -1725,6 +1724,7 @@ pub fn partition_kway(
         let mut best_partition = 0;
         let mut best_distance = usize::MAX;
 
+        #[allow(clippy::needless_range_loop)]
         for pidx in 0..effective_k {
             // Get target nodes for this partition
             let target_nodes: AHashSet<i64> = partitions[pidx].iter().copied().collect();
@@ -1910,6 +1910,7 @@ where
         let mut best_partition = 0;
         let mut best_distance = usize::MAX;
 
+        #[allow(clippy::needless_range_loop)]
         for pidx in 0..effective_k {
             let target_nodes: AHashSet<i64> = partitions[pidx].iter().copied().collect();
             if target_nodes.is_empty() {

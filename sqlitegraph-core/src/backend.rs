@@ -430,13 +430,7 @@ pub trait GraphBackend {
         &self,
         snapshot_id: SnapshotId,
         prefix: &[u8],
-    ) -> Result<
-        Vec<(
-            Vec<u8>,
-            crate::backend::native::types::KvValue,
-        )>,
-        SqliteGraphError,
-    >;
+    ) -> Result<Vec<(Vec<u8>, crate::backend::native::types::KvValue)>, SqliteGraphError>;
 
     /// Query all nodes with a given kind
     ///
@@ -660,8 +654,7 @@ where
         &self,
         snapshot_id: SnapshotId,
         key: &[u8],
-    ) -> Result<Option<crate::backend::native::types::KvValue>, SqliteGraphError>
-    {
+    ) -> Result<Option<crate::backend::native::types::KvValue>, SqliteGraphError> {
         (*self).kv_get(snapshot_id, key)
     }
 
@@ -693,13 +686,7 @@ where
         &self,
         snapshot_id: SnapshotId,
         prefix: &[u8],
-    ) -> Result<
-        Vec<(
-            Vec<u8>,
-            crate::backend::native::types::KvValue,
-        )>,
-        SqliteGraphError,
-    > {
+    ) -> Result<Vec<(Vec<u8>, crate::backend::native::types::KvValue)>, SqliteGraphError> {
         (*self).kv_prefix_scan(snapshot_id, prefix)
     }
 

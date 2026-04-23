@@ -338,10 +338,7 @@ pub fn dominance_frontiers(
                 }
 
                 // Add n to DF(runner)
-                frontiers
-                    .entry(runner)
-                    .or_insert_with(AHashSet::new)
-                    .insert(n);
+                frontiers.entry(runner).or_default().insert(n);
 
                 // Move runner up to its idom
                 if let Some(next_runner) = idom_of_runner {
@@ -453,10 +450,7 @@ where
                 }
 
                 // Add n to DF(runner)
-                frontiers
-                    .entry(runner)
-                    .or_insert_with(AHashSet::new)
-                    .insert(n);
+                frontiers.entry(runner).or_default().insert(n);
 
                 // Move runner up to its idom
                 if let Some(next_runner) = idom_of_runner {

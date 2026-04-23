@@ -933,7 +933,7 @@ fn apply_single_rewrite(
                                 data: serde_json::json!({}),
                             };
                             if new_graph.insert_edge(&edge).is_ok() {
-                                operations.push(RewriteOperation::EdgeAdded { from: from, to: to });
+                                operations.push(RewriteOperation::EdgeAdded { from, to });
                             }
                         }
                     }

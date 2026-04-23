@@ -145,6 +145,9 @@ mod tests {
         let detector = MediaDetector::default();
         let media_type = detector.detect("/tmp");
         // Will return Unknown or detected type depending on platform
-        assert!(matches!(media_type, MediaType::SSD | MediaType::HDD | MediaType::Unknown));
+        assert!(matches!(
+            media_type,
+            MediaType::SSD | MediaType::HDD | MediaType::Unknown
+        ));
     }
 }

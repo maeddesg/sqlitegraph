@@ -233,7 +233,7 @@ impl FileCoordinator {
         if page_id == 0 {
             0
         } else {
-            V3_HEADER_SIZE as u64 + (page_id - 1) * DEFAULT_PAGE_SIZE
+            V3_HEADER_SIZE + (page_id - 1) * DEFAULT_PAGE_SIZE
         }
     }
 

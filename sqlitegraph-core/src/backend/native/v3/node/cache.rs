@@ -29,8 +29,7 @@ impl NodeCache {
     ///
     /// Panics if capacity is 0
     pub fn new(capacity: usize) -> Self {
-        let capacity = NonZeroUsize::new(capacity.max(1))
-            .expect("capacity must be at least 1");
+        let capacity = NonZeroUsize::new(capacity.max(1)).expect("capacity must be at least 1");
         Self {
             inner: Mutex::new(LruCache::new(capacity)),
         }
@@ -85,13 +84,13 @@ mod tests {
         NodeRecordV3::new_inline(
             node_id,
             NodeFlags::empty(),
-            0, // kind_offset
-            0, // name_offset
+            0,                // kind_offset
+            0,                // name_offset
             vec![1, 2, 3, 4], // data
-            0, // outgoing_cluster_offset
-            0, // outgoing_edge_count
-            0, // incoming_cluster_offset
-            0, // incoming_edge_count
+            0,                // outgoing_cluster_offset
+            0,                // outgoing_edge_count
+            0,                // incoming_cluster_offset
+            0,                // incoming_edge_count
         )
     }
 

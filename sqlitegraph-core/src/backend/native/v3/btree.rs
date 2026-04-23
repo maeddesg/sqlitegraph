@@ -23,9 +23,7 @@ use crate::backend::native::v3::allocator::PageAllocator;
 use crate::backend::native::v3::constants::{DEFAULT_PAGE_SIZE, V3_HEADER_SIZE};
 use crate::backend::native::v3::file_coordinator::FileCoordinator;
 #[cfg(feature = "v3-forensics")]
-use crate::backend::native::v3::forensics::{
-    FORENSIC_COUNTERS, PAGE_OWNERSHIP, PageType, Subsystem,
-};
+use crate::backend::native::v3::forensics::{FORENSIC_COUNTERS, PageType, Subsystem};
 use crate::backend::native::v3::index::IndexPage;
 use crate::backend::native::v3::wal::WALWriter;
 use crate::backend::native::v3::write_batch::WriteBatch;
@@ -997,12 +995,13 @@ impl BTreeManager {
                 let offset = V3_HEADER_SIZE + (page_id - 1) * self.page_size;
                 let required_len = offset + page_bytes.len() as u64;
 
-                let db_path = self.db_path.as_ref().ok_or_else(|| {
-                    NativeBackendError::InvalidHeader {
-                        field: "db_path".to_string(),
-                        reason: "Cannot write page to disk without db_path".to_string(),
-                    }
-                })?;
+                let db_path =
+                    self.db_path
+                        .as_ref()
+                        .ok_or_else(|| NativeBackendError::InvalidHeader {
+                            field: "db_path".to_string(),
+                            reason: "Cannot write page to disk without db_path".to_string(),
+                        })?;
                 let mut file = OpenOptions::new()
                     .read(true)
                     .write(true)

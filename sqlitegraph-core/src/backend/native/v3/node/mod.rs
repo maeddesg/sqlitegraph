@@ -47,7 +47,6 @@ pub use cache::NodeCache;
 
 /// Node record constants
 pub mod constants {
-    
 
     /// Fixed metadata size in bytes
     pub const FIXED_METADATA_SIZE: usize = 44;

@@ -387,13 +387,10 @@ pub fn control_dependence_graph(
             // Check if this edge is control-dependent
             if is_control_dependent(from, to, post_dom, ipdom) {
                 // Add to forward mapping: from controls to
-                cdg.entry(from).or_insert_with(AHashSet::new).insert(to);
+                cdg.entry(from).or_default().insert(to);
 
                 // Add to reverse mapping: to depends on from
-                reverse_cdg
-                    .entry(to)
-                    .or_insert_with(AHashSet::new)
-                    .insert(from);
+                reverse_cdg.entry(to).or_default().insert(from);
             }
         }
     }

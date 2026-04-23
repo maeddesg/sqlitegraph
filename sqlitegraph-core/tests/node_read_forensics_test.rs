@@ -11,7 +11,6 @@
 // NOTE: This test requires the native-v3 feature to access V3Backend
 #![cfg(feature = "native-v3")]
 
-
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;
 

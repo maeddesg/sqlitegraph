@@ -13,7 +13,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test both small and medium datasets
     for (name, node_count) in [("small", 1_000), ("medium", 10_000)] {
-        println!("--- {} DATASET ({} nodes) ---", name.to_uppercase(), node_count);
+        println!(
+            "--- {} DATASET ({} nodes) ---",
+            name.to_uppercase(),
+            node_count
+        );
 
         let temp_dir = tempfile::tempdir()?;
         let db_path = temp_dir.path().join("test.db");
@@ -39,7 +43,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _backend = V3Backend::open(&db_path)?;
         let open_total = open_total.elapsed();
 
-        println!("Total open() time: {:.2} ms", open_total.as_secs_f64() * 1000.0);
+        println!(
+            "Total open() time: {:.2} ms",
+            open_total.as_secs_f64() * 1000.0
+        );
         println!();
     }
 

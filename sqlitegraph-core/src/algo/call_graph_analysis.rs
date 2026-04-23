@@ -364,7 +364,7 @@ pub fn collapse_sccs(graph: &SqliteGraph) -> Result<SccCollapseResult, SqliteGra
 
         supernode_members
             .entry(supernode_id)
-            .or_insert_with(AHashSet::new)
+            .or_default()
             .insert(node);
     }
 
@@ -476,7 +476,7 @@ where
 
         supernode_members
             .entry(supernode_id)
-            .or_insert_with(AHashSet::new)
+            .or_default()
             .insert(node);
     }
 

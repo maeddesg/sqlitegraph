@@ -93,7 +93,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Calculate remaining overhead
     let remaining = full_ns - vec_ns - snap_ns;
-    println!("\n4. Remaining overhead:             {:.2} ns/query", remaining);
+    println!(
+        "\n4. Remaining overhead:             {:.2} ns/query",
+        remaining
+    );
 
     println!("\n=== BREAKDOWN PERCENTAGES ===");
     println!("Vec copy:    {:.1}%", (vec_ns / full_ns) * 100.0);
@@ -102,7 +105,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n=== ANALYSIS ===");
     if remaining > 20000.0 {
-        println!("⚠️  BOTTLENECK: Remaining overhead is {:.2} µs/query", remaining / 1000.0);
+        println!(
+            "⚠️  BOTTLENECK: Remaining overhead is {:.2} µs/query",
+            remaining / 1000.0
+        );
         println!("   This includes: lock acquisition, HashMap lookup, Arc clone");
         println!("   Possible causes:");
         println!("   - RwLock read() overhead (even though uncontended)");

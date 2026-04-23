@@ -63,8 +63,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse header to get node_count field
     // node_count is at offset 16 (based on V3 header layout)
     let node_count_in_header = u64::from_be_bytes([
-        header_bytes[16], header_bytes[17], header_bytes[18], header_bytes[19],
-        header_bytes[20], header_bytes[21], header_bytes[22], header_bytes[23],
+        header_bytes[16],
+        header_bytes[17],
+        header_bytes[18],
+        header_bytes[19],
+        header_bytes[20],
+        header_bytes[21],
+        header_bytes[22],
+        header_bytes[23],
     ]);
     println!("  Node count in DB header: {}", node_count_in_header);
 

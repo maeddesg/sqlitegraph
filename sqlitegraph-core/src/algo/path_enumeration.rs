@@ -474,11 +474,11 @@ fn dfs_enumerate(
     let is_exit = config
         .exit_nodes
         .as_ref()
-        .map_or(false, |exits| exits.contains(&node));
+        .is_some_and(|exits| exits.contains(&node));
     let is_error = config
         .error_nodes
         .as_ref()
-        .map_or(false, |errors| errors.contains(&node));
+        .is_some_and(|errors| errors.contains(&node));
     let is_terminal = is_exit || is_error || hit_max_depth;
 
     // Determine path classification
@@ -585,11 +585,11 @@ fn dfs_enumerate_with_progress<P: ProgressCallback>(
     let is_exit = config
         .exit_nodes
         .as_ref()
-        .map_or(false, |exits| exits.contains(&node));
+        .is_some_and(|exits| exits.contains(&node));
     let is_error = config
         .error_nodes
         .as_ref()
-        .map_or(false, |errors| errors.contains(&node));
+        .is_some_and(|errors| errors.contains(&node));
     let is_terminal = is_exit || is_error || hit_max_depth;
 
     // Determine path classification
@@ -1041,6 +1041,7 @@ pub fn enumerate_paths_with_dominance_progress<P: ProgressCallback>(
 }
 
 /// DFS with backtracking, revisit counting, and constraint checking.
+#[allow(clippy::too_many_arguments)]
 fn dfs_with_constraints(
     graph: &SqliteGraph,
     node: i64,
@@ -1078,12 +1079,12 @@ fn dfs_with_constraints(
         .base
         .exit_nodes
         .as_ref()
-        .map_or(false, |exits| exits.contains(&node));
+        .is_some_and(|exits| exits.contains(&node));
     let is_error = config
         .base
         .error_nodes
         .as_ref()
-        .map_or(false, |errors| errors.contains(&node));
+        .is_some_and(|errors| errors.contains(&node));
     let is_terminal = is_exit || is_error || hit_max_depth;
 
     // Determine path classification
@@ -1197,6 +1198,7 @@ fn dfs_with_constraints(
 }
 
 /// DFS with backtracking, constraint checking, and progress reporting.
+#[allow(clippy::too_many_arguments)]
 fn dfs_with_constraints_progress<P: ProgressCallback>(
     graph: &SqliteGraph,
     node: i64,
@@ -1235,12 +1237,12 @@ fn dfs_with_constraints_progress<P: ProgressCallback>(
         .base
         .exit_nodes
         .as_ref()
-        .map_or(false, |exits| exits.contains(&node));
+        .is_some_and(|exits| exits.contains(&node));
     let is_error = config
         .base
         .error_nodes
         .as_ref()
-        .map_or(false, |errors| errors.contains(&node));
+        .is_some_and(|errors| errors.contains(&node));
     let is_terminal = is_exit || is_error || hit_max_depth;
 
     // Determine path classification

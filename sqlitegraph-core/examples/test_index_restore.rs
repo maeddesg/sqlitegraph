@@ -1,8 +1,8 @@
 use sqlitegraph::backend::GraphBackend;
 use sqlitegraph::backend::NodeSpec;
 use sqlitegraph::backend::native::v3::V3Backend;
-use std::time::Instant;
 use std::fs;
+use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;

@@ -311,7 +311,7 @@ impl SqliteGraph {
             None
         } else {
             self.get_database_path()
-                .and_then(|path| crate::introspection::get_file_size(path))
+                .and_then(crate::introspection::get_file_size)
         };
 
         // Get WAL size (if WAL is enabled)
@@ -319,7 +319,7 @@ impl SqliteGraph {
             None
         } else {
             self.get_database_path()
-                .and_then(|path| crate::introspection::get_wal_size(path))
+                .and_then(crate::introspection::get_wal_size)
         };
 
         // Memory usage is not directly available for SQLite backend
@@ -406,7 +406,7 @@ impl SqliteGraph {
 
         Ok(EdgeCount::Estimate {
             count: estimate as usize,
-            min: ((estimate as f64 - margin).floor() as usize).max(0),
+            min: ((estimate as f64 - margin).floor() as usize),
             max: ((estimate as f64 + margin).ceil() as usize),
             sample_size,
         })

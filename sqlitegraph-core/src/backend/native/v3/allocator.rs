@@ -600,7 +600,10 @@ mod tests {
 
         // Free list now empty - next allocation should be brand new
         let new_page = allocator.allocate().unwrap();
-        assert_eq!(new_page, 7, "After exhausting free list, should allocate new page 7");
+        assert_eq!(
+            new_page, 7,
+            "After exhausting free list, should allocate new page 7"
+        );
     }
 
     #[test]
@@ -617,7 +620,10 @@ mod tests {
 
         let (allocated, free, total) = allocator.stats();
         // Pages 0, 1 (reserved) + 2, 3, 4 (allocated) = 5 allocated
-        assert_eq!(allocated, 5, "Should have 5 allocated pages (2 reserved + 3 new)");
+        assert_eq!(
+            allocated, 5,
+            "Should have 5 allocated pages (2 reserved + 3 new)"
+        );
         assert_eq!(free, 0, "No free pages yet");
         assert_eq!(total, 5, "Total pages should be 5");
 
@@ -655,6 +661,9 @@ mod tests {
 
         // This should fail (double-free)
         let result = allocator.deallocate(page);
-        assert!(result.is_err(), "Double-free of freed page should be detected");
+        assert!(
+            result.is_err(),
+            "Double-free of freed page should be detected"
+        );
     }
 }

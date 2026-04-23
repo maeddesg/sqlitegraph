@@ -5,4 +5,4 @@
 
 pub mod parallel_bfs;
 
-pub use parallel_bfs::{parallel_bfs, BfsConfig};
+pub use parallel_bfs::{BfsConfig, parallel_bfs};

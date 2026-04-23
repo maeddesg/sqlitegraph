@@ -249,10 +249,22 @@ fn test_common_edge_types_accessible() {
 
     // All common edge types should be accessible
     let common_types = vec![
-        "calls", "imports", "defines", "uses",
-        "contains", "implements", "extends", "references",
-        "declares", "exports", "inherits", "overrides",
-        "depends_on", "relates_to", "includes", "aliases",
+        "calls",
+        "imports",
+        "defines",
+        "uses",
+        "contains",
+        "implements",
+        "extends",
+        "references",
+        "declares",
+        "exports",
+        "inherits",
+        "overrides",
+        "depends_on",
+        "relates_to",
+        "includes",
+        "aliases",
     ];
 
     for edge_type in &common_types {

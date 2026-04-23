@@ -105,12 +105,21 @@ pub enum IndexPage {
 
 /// Helper function to extract a fixed-size byte array from a slice
 /// Returns an error if the slice is too small
-fn extract_array<const N: usize>(bytes: &[u8], offset: usize, field: &str) -> NativeResult<[u8; N]> {
+fn extract_array<const N: usize>(
+    bytes: &[u8],
+    offset: usize,
+    field: &str,
+) -> NativeResult<[u8; N]> {
     let end = offset + N;
     if end > bytes.len() {
         return Err(NativeBackendError::InvalidHeader {
             field: field.to_string(),
-            reason: format!("insufficient bytes at offset {}: need {}, have {}", offset, N, bytes.len()),
+            reason: format!(
+                "insufficient bytes at offset {}: need {}, have {}",
+                offset,
+                N,
+                bytes.len()
+            ),
         });
     }
     let mut arr = [0u8; N];
@@ -492,15 +501,21 @@ impl IndexPage {
         }
 
         // Read page header
-        let page_id = u64::from_be_bytes(extract_array(bytes, constants::PAGE_ID_OFFSET, "page_id")?);
+        let page_id =
+            u64::from_be_bytes(extract_array(bytes, constants::PAGE_ID_OFFSET, "page_id")?);
 
         let is_leaf = bytes[constants::IS_LEAF_OFFSET] == 1;
 
         let is_root = bytes[constants::IS_ROOT_OFFSET] == 1;
 
-        let count = u16::from_be_bytes(extract_array(bytes, constants::COUNT_OFFSET, "count")?) as usize;
+        let count =
+            u16::from_be_bytes(extract_array(bytes, constants::COUNT_OFFSET, "count")?) as usize;
 
-        let checksum = u32::from_be_bytes(extract_array(bytes, constants::CHECKSUM_OFFSET, "checksum")?);
+        let checksum = u32::from_be_bytes(extract_array(
+            bytes,
+            constants::CHECKSUM_OFFSET,
+            "checksum",
+        )?);
 
         // Read data based on page type
         let mut data_offset = constants::DATA_START_OFFSET;
@@ -524,8 +539,7 @@ impl IndexPage {
 
             // Read next_leaf pointer
             let next_leaf = if data_offset + PAGE_ID_SIZE <= 4096 {
-                let ptr = u64::from_be_bytes(extract_array(bytes, data_offset, "next_leaf")?);
-                ptr
+                u64::from_be_bytes(extract_array(bytes, data_offset, "next_leaf")?)
             } else {
                 return Err(NativeBackendError::InvalidHeader {
                     field: "leaf_page".to_string(),

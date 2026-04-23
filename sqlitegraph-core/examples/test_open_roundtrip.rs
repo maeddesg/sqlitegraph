@@ -35,7 +35,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let index_path = db_path.with_extension("v3index");
     assert!(index_path.exists(), "Index file should exist after flush");
     let index_size = std::fs::metadata(&index_path)?.len();
-    println!("  ✓ Index file created: {:.2} KB", index_size as f64 / 1024.0);
+    println!(
+        "  ✓ Index file created: {:.2} KB",
+        index_size as f64 / 1024.0
+    );
 
     // STEP 3: Reopen database and verify indexes are restored
     println!("\nSTEP 2: Reopening database...");
@@ -58,7 +61,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for i in [0, 100, 1000, 5000, 9999] {
         let name = format!("node_{:05}", i);
         let results = backend.query_nodes_by_name_pattern(snapshot_id, &name)?;
-        assert_eq!(results.len(), 1, "Should find exactly one node for {}", name);
+        assert_eq!(
+            results.len(),
+            1,
+            "Should find exactly one node for {}",
+            name
+        );
     }
     println!("  ✓ Multiple name lookups working correctly");
 

@@ -7,8 +7,8 @@
 //! - Page allocator (Phase 64)
 //! - Write-Ahead Logging for crash recovery (Phase 65)
 
-pub mod allocator;
 pub mod algorithm;
+pub mod allocator;
 pub mod backend;
 pub mod btree;
 pub mod compact_edge_record;
@@ -24,10 +24,10 @@ pub mod index_persistence;
 pub mod kind_index;
 pub mod kv_store;
 pub mod name_index;
-pub mod string_table;
 pub mod node;
 pub mod pubsub;
 pub mod storage;
+pub mod string_table;
 pub mod wal;
 pub mod write_batch;
 
@@ -84,9 +84,9 @@ pub use write_batch::WriteBatch;
 // Performance improvements (Task 1: LRU cache)
 pub use node::cache::NodeCache;
 // Task 5: Parallel BFS algorithm
-pub use algorithm::{parallel_bfs, BfsConfig};
+pub use algorithm::{BfsConfig, parallel_bfs};
 // Task 4: Storage module
-pub use storage::{MediaDetector, MediaType, AdaptivePageManager, PageConfig};
+pub use storage::{AdaptivePageManager, MediaDetector, MediaType, PageConfig};
 
 // Algorithm integration tests
 #[cfg(test)]

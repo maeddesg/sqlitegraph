@@ -56,7 +56,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    println!("Opening database for read-only profiling with cache capacity {}...", cache_capacity);
+    println!(
+        "Opening database for read-only profiling with cache capacity {}...",
+        cache_capacity
+    );
     let backend = V3Backend::open(db_path)?;
     let snapshot_id = SnapshotId::current();
 
@@ -83,7 +86,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "v3-forensics")]
     {
         use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;
-        println!("\n=== FORENSIC COUNTERS (cache_capacity: {}) ===", cache_capacity);
+        println!(
+            "\n=== FORENSIC COUNTERS (cache_capacity: {}) ===",
+            cache_capacity
+        );
         println!(
             "logical_get_node_calls:    {}",
             FORENSIC_COUNTERS

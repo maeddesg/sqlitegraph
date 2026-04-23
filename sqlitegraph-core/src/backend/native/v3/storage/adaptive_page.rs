@@ -5,8 +5,8 @@
 //! - HDD: 16KB pages (reduces seek overhead by 4×)
 //! - Unknown: 4KB (conservative default)
 
-use crate::backend::native::v3::constants::page_size;
 use super::media_detector::{MediaDetector, MediaType};
+use crate::backend::native::v3::constants::page_size;
 
 /// Page size configuration for optimal I/O performance
 #[derive(Debug, Clone)]

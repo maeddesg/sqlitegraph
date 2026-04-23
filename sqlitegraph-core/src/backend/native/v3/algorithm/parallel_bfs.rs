@@ -3,10 +3,10 @@
 //! Level-wise parallel BFS where each level can be processed concurrently.
 //! Provides 2-4× speedup on multi-core systems for graph traversals.
 
-use crate::backend::{BackendDirection, GraphBackend, NeighborQuery};
-use crate::backend::native::v3::V3Backend;
-use crate::snapshot::SnapshotId;
 use crate::SqliteGraphError;
+use crate::backend::native::v3::V3Backend;
+use crate::backend::{BackendDirection, GraphBackend, NeighborQuery};
+use crate::snapshot::SnapshotId;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -105,7 +105,10 @@ pub fn parallel_bfs(
     // Check if start node exists
     let snapshot = SnapshotId::current();
     if graph.get_node(snapshot, start).is_err() {
-        return Err(SqliteGraphError::not_found(format!("Start node {} not found", start)));
+        return Err(SqliteGraphError::not_found(format!(
+            "Start node {} not found",
+            start
+        )));
     }
 
     // Check graph size - use sequential fallback for small graphs
@@ -115,18 +118,19 @@ pub fn parallel_bfs(
     }
 
     // Set up Rayon thread pool if max_threads specified
-    let result = if let Some(max_threads) = config.max_threads {
+
+    if let Some(max_threads) = config.max_threads {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(max_threads)
             .build()
-            .map_err(|e| SqliteGraphError::connection(format!("Failed to create thread pool: {}", e)))?;
+            .map_err(|e| {
+                SqliteGraphError::connection(format!("Failed to create thread pool: {}", e))
+            })?;
 
         pool.install(|| parallel_bfs_impl(graph, start, &config))
     } else {
         parallel_bfs_impl(graph, start, &config)
-    };
-
-    result
+    }
 }
 
 /// Internal parallel BFS implementation
@@ -157,9 +161,7 @@ fn parallel_bfs_impl(
         distance += 1;
 
         // Process current level in parallel chunks
-        let chunks: Vec<_> = current_level
-            .par_chunks(config.batch_size)
-            .collect();
+        let chunks: Vec<_> = current_level.par_chunks(config.batch_size).collect();
 
         for chunk in chunks {
             // Process each node in chunk

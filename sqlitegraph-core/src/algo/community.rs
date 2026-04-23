@@ -130,10 +130,7 @@ pub fn label_propagation(
     // Group nodes by final label
     let mut communities_map: AHashMap<i64, Vec<i64>> = AHashMap::new();
     for (node, label) in &labels {
-        communities_map
-            .entry(*label)
-            .or_insert_with(Vec::new)
-            .push(*node);
+        communities_map.entry(*label).or_default().push(*node);
     }
 
     // Convert to sorted vector of communities
@@ -299,10 +296,7 @@ pub fn louvain_communities(
     // Group nodes by final community
     let mut communities_map: AHashMap<i64, Vec<i64>> = AHashMap::new();
     for (node, community) in &communities {
-        communities_map
-            .entry(*community)
-            .or_insert_with(Vec::new)
-            .push(*node);
+        communities_map.entry(*community).or_default().push(*node);
     }
 
     // Convert to sorted vector of communities
@@ -467,10 +461,7 @@ where
     // Group nodes by final community
     let mut communities_map: AHashMap<i64, Vec<i64>> = AHashMap::new();
     for (node, community) in &communities {
-        communities_map
-            .entry(*community)
-            .or_insert_with(Vec::new)
-            .push(*node);
+        communities_map.entry(*community).or_default().push(*node);
     }
 
     // Convert to sorted vector of communities

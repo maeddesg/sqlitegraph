@@ -287,9 +287,7 @@ impl NaturalLoopsResult {
                     });
 
                     if is_direct {
-                        tree.entry(potential_parent)
-                            .or_insert_with(Vec::new)
-                            .push(header);
+                        tree.entry(potential_parent).or_default().push(header);
                     }
                 }
             }
@@ -465,7 +463,7 @@ pub fn natural_loops_from_exit(
     }
 
     if entries.len() > 1 {
-        return Err(SqliteGraphError::query(&format!(
+        return Err(SqliteGraphError::query(format!(
             "Cannot compute natural loops: graph has {} entry nodes (expected 1)",
             entries.len()
         )));

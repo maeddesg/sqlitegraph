@@ -12,12 +12,10 @@ use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, 
 use std::time::Duration;
 use tempfile::TempDir;
 
-use sqlitegraph::backend::native::v3::{
-    PageAllocator, PersistentHeaderV3, V3Backend,
-};
-use sqlitegraph::backend::native::v3::btree::BTreeManager;
-use sqlitegraph::backend::{BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec};
 use parking_lot::RwLock;
+use sqlitegraph::backend::native::v3::btree::BTreeManager;
+use sqlitegraph::backend::native::v3::{PageAllocator, PersistentHeaderV3, V3Backend};
+use sqlitegraph::backend::{BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec};
 use std::sync::Arc;
 
 // ============================================================================
@@ -90,20 +88,16 @@ fn bench_btree_insert_lookup(c: &mut Criterion) {
     for size in [100, 1_000, 10_000] {
         // Insert benchmark
         group.throughput(Throughput::Elements(size as u64));
-        group.bench_with_input(
-            BenchmarkId::new("insert", size),
-            &size,
-            |b, &size| {
-                b.iter(|| {
-                    let header = PersistentHeaderV3::new_v3();
-                    let allocator = Arc::new(RwLock::new(PageAllocator::new(&header)));
-                    let mut btree = BTreeManager::new(allocator, None, db_path.clone());
-                    for i in 0..size {
-                        black_box(btree.insert(i as i64, (i + 1) as u64).unwrap());
-                    }
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("insert", size), &size, |b, &size| {
+            b.iter(|| {
+                let header = PersistentHeaderV3::new_v3();
+                let allocator = Arc::new(RwLock::new(PageAllocator::new(&header)));
+                let mut btree = BTreeManager::new(allocator, None, db_path.clone());
+                for i in 0..size {
+                    black_box(btree.insert(i as i64, (i + 1) as u64).unwrap());
+                }
+            });
+        });
 
         // Lookup benchmark (pre-populate then measure lookups)
         let header = PersistentHeaderV3::new_v3();
@@ -114,17 +108,13 @@ fn bench_btree_insert_lookup(c: &mut Criterion) {
         }
 
         group.throughput(Throughput::Elements(size as u64));
-        group.bench_with_input(
-            BenchmarkId::new("lookup", size),
-            &size,
-            |b, &size| {
-                b.iter(|| {
-                    for i in 0..size {
-                        black_box(btree.lookup(i as i64).unwrap());
-                    }
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("lookup", size), &size, |b, &size| {
+            b.iter(|| {
+                for i in 0..size {
+                    black_box(btree.lookup(i as i64).unwrap());
+                }
+            });
+        });
     }
     group.finish();
 }

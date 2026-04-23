@@ -56,10 +56,11 @@ use std::fmt;
 /// | Euclidean      | Yes         | General similarity        | Optional              |
 /// | DotProduct     | Yes         | Fast approximate cosine   | Required              |
 /// | Manhattan      | Yes         | Robust similarity         | Optional              |
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DistanceMetric {
     /// Cosine similarity (1 - normalized dot product)
     /// Range: [0, 2] where 0 = identical, 2 = opposite
+    #[default]
     Cosine,
 
     /// Euclidean (L2) distance
@@ -73,12 +74,6 @@ pub enum DistanceMetric {
     /// Manhattan (L1) distance
     /// Range: [0, ∞) where 0 = identical
     Manhattan,
-}
-
-impl Default for DistanceMetric {
-    fn default() -> Self {
-        DistanceMetric::Cosine
-    }
 }
 
 impl DistanceMetric {
@@ -137,16 +132,16 @@ pub fn compute_distance(metric: DistanceMetric, a: &[f32], b: &[f32]) -> f32 {
         DistanceMetric::Cosine => {
             // Convert cosine similarity to distance: (1 - similarity) / 2
             // This gives range [0, 1] where 0 = identical
-            let similarity = cosine_similarity(a, &b);
+            let similarity = cosine_similarity(a, b);
             (1.0 - similarity) / 2.0
         }
-        DistanceMetric::Euclidean => euclidean_distance(a, &b),
+        DistanceMetric::Euclidean => euclidean_distance(a, b),
         DistanceMetric::DotProduct => {
             // Convert dot product to distance: -dot_product
             // This assumes higher dot products indicate greater similarity
-            -dot_product(a, &b)
+            -dot_product(a, b)
         }
-        DistanceMetric::Manhattan => manhattan_distance(a, &b),
+        DistanceMetric::Manhattan => manhattan_distance(a, b),
     }
 }
 

@@ -175,7 +175,9 @@ fn bench_traversal_performance(criterion: &mut Criterion) {
                 |(temp_dir, graph, node_ids)| {
                     let start = std::time::Instant::now();
                     // Perform BFS to specified depth
-                    let _results = graph.bfs(SnapshotId::current(), node_ids[0], d as u32).unwrap();
+                    let _results = graph
+                        .bfs(SnapshotId::current(), node_ids[0], d as u32)
+                        .unwrap();
                     let duration = start.elapsed();
 
                     drop(graph);

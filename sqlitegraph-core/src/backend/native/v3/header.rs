@@ -282,8 +282,7 @@ impl PersistentHeaderV3 {
 
         // Validate cluster offset ordering (these are still byte offsets for V2 compat)
         // The cluster offsets are compared against V3_HEADER_SIZE as byte offsets
-        if self.outgoing_cluster_offset > 0 && self.outgoing_cluster_offset < V3_HEADER_SIZE as u64
-        {
+        if self.outgoing_cluster_offset > 0 && self.outgoing_cluster_offset < V3_HEADER_SIZE {
             return Err(NativeBackendError::InvalidHeader {
                 field: "outgoing_cluster_offset".to_string(),
                 reason: format!("must be 0 or >= header_size ({})", V3_HEADER_SIZE),

@@ -298,7 +298,6 @@ mod tests {
 
     #[test]
     fn test_metadata_persistence() {
-        
         use std::fs;
 
         let test_dir = "/tmp/test_hnsw_metadata_persistence";

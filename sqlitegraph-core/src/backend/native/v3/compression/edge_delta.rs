@@ -21,9 +21,7 @@
 //!
 //! Small deltas (positive or negative) encode efficiently in 1 byte.
 
-use crate::backend::native::v3::compression::varint::{
-    decode_varint, encode_varint,
-};
+use crate::backend::native::v3::compression::varint::{decode_varint, encode_varint};
 
 /// Encode a signed i64 value using zigzag encoding
 ///
@@ -142,10 +140,7 @@ pub fn compress_edge_ids(edge_ids: &[i64]) -> Vec<u8> {
 /// let decompressed = decompress_edge_ids(&compressed, original.len()).unwrap();
 /// assert_eq!(decompressed, original);
 /// ```
-pub fn decompress_edge_ids(
-    compressed: &[u8],
-    count: usize,
-) -> Result<Vec<i64>, String> {
+pub fn decompress_edge_ids(compressed: &[u8], count: usize) -> Result<Vec<i64>, String> {
     if count == 0 {
         return Ok(Vec::new());
     }
@@ -158,7 +153,8 @@ pub fn decompress_edge_ids(
         if pos >= compressed.len() {
             return Err(format!(
                 "Insufficient data: expected {} values, but only {} bytes available",
-                count, compressed.len()
+                count,
+                compressed.len()
             ));
         }
 
@@ -169,7 +165,12 @@ pub fn decompress_edge_ids(
                 edge_ids.push(prev_id);
                 pos += bytes_read;
             }
-            Err(e) => return Err(format!("Failed to decode varint at position {}: {:?}", pos, e)),
+            Err(e) => {
+                return Err(format!(
+                    "Failed to decode varint at position {}: {:?}",
+                    pos, e
+                ));
+            }
         }
     }
 
@@ -271,7 +272,11 @@ mod tests {
         let ratio = compression_ratio(&ids, &compressed);
 
         // Should achieve significant compression for sequential IDs
-        assert!(ratio < 0.5, "Compression ratio {} should be < 0.5 for sequential IDs", ratio);
+        assert!(
+            ratio < 0.5,
+            "Compression ratio {} should be < 0.5 for sequential IDs",
+            ratio
+        );
     }
 
     #[test]
@@ -366,7 +371,11 @@ mod tests {
         // Each delta is 1, which zigzag-encodes to 2 (1 byte)
         // Original: 100 * 8 = 800 bytes
         // Compressed: ~100 bytes
-        assert!(compressed.len() < 150, "Sequential IDs should compress to < 150 bytes, got {}", compressed.len());
+        assert!(
+            compressed.len() < 150,
+            "Sequential IDs should compress to < 150 bytes, got {}",
+            compressed.len()
+        );
     }
 
     #[test]

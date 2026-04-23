@@ -24,6 +24,12 @@ pub struct NameIndex {
     inner: Arc<RwLock<HashMap<String, Vec<i64>>>>,
 }
 
+impl Default for NameIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NameIndex {
     pub fn new() -> Self {
         Self {

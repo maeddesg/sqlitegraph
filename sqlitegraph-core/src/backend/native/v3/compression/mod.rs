@@ -12,7 +12,7 @@ pub mod varint;
 
 // Re-export compression utilities
 pub use delta::{DeltaDecodeError, decode_id_delta, encode_id_delta};
-pub use edge_delta::{compression_ratio, compress_edge_ids, decompress_edge_ids};
+pub use edge_delta::{compress_edge_ids, compression_ratio, decompress_edge_ids};
 pub use varint::{MAX_VARINT_BYTES, VarintError, decode_varint, encode_varint};
 
 /// Compression statistics for tracking space savings

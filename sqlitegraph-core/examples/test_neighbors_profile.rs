@@ -64,7 +64,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = graph.neighbors(snapshot, node_ids[0], query.clone())?;
     }
     let full_time = start.elapsed();
-    println!("1. Full neighbors() call:     {:.2} ns/query", full_time.as_nanos() as f64 / ITERATIONS as f64);
+    println!(
+        "1. Full neighbors() call:     {:.2} ns/query",
+        full_time.as_nanos() as f64 / ITERATIONS as f64
+    );
 
     // Now let's profile the internal stages by creating a more detailed test
     // We'll need to access the backend directly
@@ -84,19 +87,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = test_data.to_vec();
     }
     let vec_copy_time = start.elapsed();
-    println!("2. Baseline Vec copy (20 el): {:.2} ns/query", vec_copy_time.as_nanos() as f64 / ITERATIONS as f64);
+    println!(
+        "2. Baseline Vec copy (20 el): {:.2} ns/query",
+        vec_copy_time.as_nanos() as f64 / ITERATIONS as f64
+    );
 
     // Calculate time spent outside Vec copy
     let other_overhead = full_time.as_nanos() as f64 - vec_copy_time.as_nanos() as f64;
-    println!("\n3. Other overhead (lock + lookup): {:.2} ns/query", other_overhead / ITERATIONS as f64);
+    println!(
+        "\n3. Other overhead (lock + lookup): {:.2} ns/query",
+        other_overhead / ITERATIONS as f64
+    );
 
     println!("\n=== ANALYSIS ===");
     let vec_copy_pct = (vec_copy_time.as_nanos() as f64 / full_time.as_nanos() as f64) * 100.0;
     println!("Vec copy accounts for: {:.1}% of total time", vec_copy_pct);
-    println!("Other overhead accounts for: {:.1}% of total time", 100.0 - vec_copy_pct);
+    println!(
+        "Other overhead accounts for: {:.1}% of total time",
+        100.0 - vec_copy_pct
+    );
 
     if other_overhead / ITERATIONS as f64 > 20000.0 {
-        println!("\n⚠️  WARNING: Other overhead is {:.2} µs/query - this is the bottleneck!", other_overhead / ITERATIONS as f64 / 1000.0);
+        println!(
+            "\n⚠️  WARNING: Other overhead is {:.2} µs/query - this is the bottleneck!",
+            other_overhead / ITERATIONS as f64 / 1000.0
+        );
     }
 
     Ok(())

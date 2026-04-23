@@ -1523,7 +1523,10 @@ fn test_v3_snapshot_all_accepted() {
             edge_type: None,
         },
     );
-    assert!(neighbors_result.is_ok(), "V3 neighbors accepts all snapshots");
+    assert!(
+        neighbors_result.is_ok(),
+        "V3 neighbors accepts all snapshots"
+    );
 }
 
 /// Test that SnapshotId::current() works correctly in V3

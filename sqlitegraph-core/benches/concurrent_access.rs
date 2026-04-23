@@ -6,10 +6,10 @@
 use std::sync::Arc;
 use std::thread;
 
-use criterion::{black_box, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
-use sqlitegraph::{GraphBackend, NativeGraphBackend, NodeSpec};
 use sqlitegraph::snapshot::SnapshotId;
+use sqlitegraph::{GraphBackend, NativeGraphBackend, NodeSpec};
 
 mod bench_utils;
 use bench_utils::{MEASURE, WARM_UP};
@@ -31,12 +31,14 @@ fn bench_concurrent_reads(criterion: &mut Criterion) {
 
                 // Insert nodes
                 for i in 0..size {
-                    graph.insert_node(NodeSpec {
-                        kind: "Node".to_string(),
-                        name: format!("node_{}", i),
-                        file_path: None,
-                        data: serde_json::json!({}),
-                    }).unwrap();
+                    graph
+                        .insert_node(NodeSpec {
+                            kind: "Node".to_string(),
+                            name: format!("node_{}", i),
+                            file_path: None,
+                            data: serde_json::json!({}),
+                        })
+                        .unwrap();
                 }
 
                 // Spawn 4 reader threads
@@ -47,7 +49,7 @@ fn bench_concurrent_reads(criterion: &mut Criterion) {
                         thread::spawn(move || {
                             let snapshot = SnapshotId::current();
                             // Read random nodes
-                            for i in 0..size/10 {
+                            for i in 0..size / 10 {
                                 let node_id = (i * 7) % size;
                                 let _ = black_box(graph.get_node(snapshot, node_id as i64));
                             }
@@ -82,12 +84,14 @@ fn bench_mixed_workload(criterion: &mut Criterion) {
 
                 // Initial population
                 for i in 0..size {
-                    graph.insert_node(NodeSpec {
-                        kind: "Node".to_string(),
-                        name: format!("node_{}", i),
-                        file_path: None,
-                        data: serde_json::json!({}),
-                    }).unwrap();
+                    graph
+                        .insert_node(NodeSpec {
+                            kind: "Node".to_string(),
+                            name: format!("node_{}", i),
+                            file_path: None,
+                            data: serde_json::json!({}),
+                        })
+                        .unwrap();
                 }
 
                 let handles: Vec<_> = (0..4)

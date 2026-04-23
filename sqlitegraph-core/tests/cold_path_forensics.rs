@@ -10,7 +10,6 @@
 //!
 //! Run with: cargo test --features native-v3,v3-forensics --test cold_path_forensics -- --nocapture
 
-
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;
 #[cfg(feature = "v3-forensics")]

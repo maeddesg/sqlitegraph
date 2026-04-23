@@ -23,7 +23,7 @@
 ### 1. **File Organization Rules**
 
 ```rust
-// Every source file must be ≤ 300 LOC
+// Every source file must be ≤ 1,000 LOC
 // Every file must have comprehensive documentation
 // Every public method must have doc comments
 // Every function call must be traceable
@@ -109,14 +109,14 @@ For EVERY source file created:
 ### 1. **Folder Organization**
 ```
 sqlitegraph/src/hnsw/
-├── mod.rs                 # Public API, ≤ 300 LOC
-├── index.rs              # HNSW index management, ≤ 300 LOC
-├── search.rs             # Search algorithms, ≤ 300 LOC
-├── construction.rs       # Index construction, ≤ 300 LOC
-├── distance.rs           # SIMD distance calculations, ≤ 300 LOC
-├── storage.rs            # Vector storage abstraction, ≤ 300 LOC
-├── config.rs             # Configuration types, ≤ 300 LOC
-├── errors.rs             # HNSW-specific errors, ≤ 300 LOC
+├── mod.rs                 # Public API, ≤ 1,000 LOC
+├── index.rs              # HNSW index management, ≤ 1,000 LOC
+├── search.rs             # Search algorithms, ≤ 1,000 LOC
+├── construction.rs       # Index construction, ≤ 1,000 LOC
+├── distance.rs           # SIMD distance calculations, ≤ 1,000 LOC
+├── storage.rs            # Vector storage abstraction, ≤ 1,000 LOC
+├── config.rs             # Configuration types, ≤ 1,000 LOC
+├── errors.rs             # HNSW-specific errors, ≤ 1,000 LOC
 └── tests/
     ├── integration.rs    # Integration tests
     ├── regression.rs     # Regression tests
@@ -125,8 +125,8 @@ sqlitegraph/src/hnsw/
 
 ### 2. **File Size Enforcement**
 ```
-- Every .rs file ≤ 300 LOC (including comments/tests)
-- No exceptions to 300 LOC limit
+- Every .rs file ≤ 1,000 LOC (including comments/tests)
+- No exceptions to 1,000 LOC limit
 - Split files if exceeding limit
 - Each file must have single responsibility
 ```
@@ -450,7 +450,7 @@ TodoWrite::todos(vec![
 Before committing ANY code, verify:
 
 - [ ] No mocks, stubs, or placeholders
-- [ ] All code ≤ 300 LOC per file
+- [ ] All code ≤ 1,000 LOC per file
 - [ ] Comprehensive documentation for all public APIs
 - [ ] Tests written BEFORE implementation
 - [ ] Integration tests pass

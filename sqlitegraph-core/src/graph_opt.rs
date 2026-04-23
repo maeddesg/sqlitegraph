@@ -204,7 +204,7 @@ pub fn bulk_insert_edges_with_config(
                 if !seen.insert((entry.from_id, entry.to_id, entry.edge_type.clone())) {
                     continue;
                 }
-                validate_endpoints_exist(&conn, entry.from_id, entry.to_id)?;
+                validate_endpoints_exist(conn, entry.from_id, entry.to_id)?;
                 let payload = serde_json::to_string(&entry.data)
                     .map_err(|e| SqliteGraphError::invalid_input(e.to_string()))?;
                 stmt.execute(rusqlite::params![
@@ -232,7 +232,7 @@ pub fn adjacency_fetch_outgoing_batch(
     for &id in ids {
         results.push((id, graph.fetch_outgoing(id)?));
     }
-    results.sort_by(|a, b| a.0.cmp(&b.0));
+    results.sort_by_key(|a| a.0);
     Ok(results)
 }
 
@@ -244,7 +244,7 @@ pub fn adjacency_fetch_incoming_batch(
     for &id in ids {
         results.push((id, graph.fetch_incoming(id)?));
     }
-    results.sort_by(|a, b| a.0.cmp(&b.0));
+    results.sort_by_key(|a| a.0);
     Ok(results)
 }
 

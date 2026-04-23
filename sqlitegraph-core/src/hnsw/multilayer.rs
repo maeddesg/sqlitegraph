@@ -134,10 +134,7 @@ impl LayerMappings {
         }
 
         // Update global → local mapping
-        let entry = self
-            .global_to_local
-            .entry(global_id)
-            .or_insert_with(Vec::new);
+        let entry = self.global_to_local.entry(global_id).or_default();
         while entry.len() <= layer_id {
             entry.push(None);
         }
@@ -299,8 +296,8 @@ impl LayerMappings {
         let global_to_local_size = self.global_to_local.len()
             * (mem::size_of::<u64>() + // key
             mem::size_of::<Vec<Option<u64>>>() + // value type overhead
-            self.global_to_local.iter()
-                .map(|(_, v)| v.len() * mem::size_of::<Option<u64>>())
+            self.global_to_local.values()
+                .map(|v| v.len() * mem::size_of::<Option<u64>>())
                 .sum::<usize>());
 
         let local_to_global_size = self
@@ -657,8 +654,8 @@ impl MultiLayerNodeManager {
         let mut layer_counts = vec![0; max_layers];
 
         // Count vectors in each layer
-        for level in 0..max_layers {
-            layer_counts[level] = self.mappings.get_layer_vectors(level).len();
+        for (level, count) in layer_counts.iter_mut().enumerate().take(max_layers) {
+            *count = self.mappings.get_layer_vectors(level).len();
         }
 
         let memory_usage = self.mappings.memory_usage();

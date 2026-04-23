@@ -386,9 +386,7 @@ fn maximum_common_subgraph(g1: &PgDiGraph, g2: &PgDiGraph, bounds: &SimilarityBo
     }
 
     // Bounded enumeration for MCS
-    let _timeout = bounds
-        .timeout_ms
-        .map(|ms| std::time::Duration::from_millis(ms));
+    let _timeout = bounds.timeout_ms.map(std::time::Duration::from_millis);
     let mut max_size = 0usize;
     let mut matches_checked = 0usize;
 

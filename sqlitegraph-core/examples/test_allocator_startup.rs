@@ -24,13 +24,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _allocator = PageAllocator::new(&header);
         let elapsed = start.elapsed();
 
-        println!("  PageAllocator::new(): {:.2} µs", elapsed.as_secs_f64() * 1_000_000.0);
+        println!(
+            "  PageAllocator::new(): {:.2} µs",
+            elapsed.as_secs_f64() * 1_000_000.0
+        );
 
         // Verify bitmap is sparse (only 2 entries for pages 0 and 1)
         let (allocated, _free, _total) = _allocator.stats();
         println!("  Allocated in bitmap: {}", allocated);
         println!("  Expected: 2 (pages 0 and 1 only)");
-        assert_eq!(allocated, 2, "Sparse bitmap should only track pages 0 and 1");
+        assert_eq!(
+            allocated, 2,
+            "Sparse bitmap should only track pages 0 and 1"
+        );
         println!("  ✓ Sparse bitmap verified\n");
     }
 

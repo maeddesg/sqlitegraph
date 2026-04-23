@@ -96,7 +96,7 @@ impl VectorRecord {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs() as u64;
+            .as_secs();
 
         Self {
             id,
@@ -148,7 +148,7 @@ impl VectorRecord {
         self.updated_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs() as u64;
+            .as_secs();
     }
 
     /// Validate the vector record

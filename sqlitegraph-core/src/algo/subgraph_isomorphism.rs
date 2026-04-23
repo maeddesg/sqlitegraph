@@ -369,9 +369,7 @@ pub fn find_subgraph_patterns(
     let mut matches = Vec::new();
     let mut bounded_hit = false;
 
-    let timeout = bounds
-        .timeout_ms
-        .map(|ms| std::time::Duration::from_millis(ms));
+    let timeout = bounds.timeout_ms.map(std::time::Duration::from_millis);
 
     // petgraph's subgraph_isomorphisms_iter requires double references (&&Graph)
     // because IntoEdgesDirected is implemented for &Graph, not Graph itself
@@ -506,9 +504,7 @@ where
     );
 
     let start_time = Instant::now();
-    let timeout = bounds
-        .timeout_ms
-        .map(|ms| std::time::Duration::from_millis(ms));
+    let timeout = bounds.timeout_ms.map(std::time::Duration::from_millis);
 
     let mut matches = Vec::new();
     let mut bounded_hit = false;

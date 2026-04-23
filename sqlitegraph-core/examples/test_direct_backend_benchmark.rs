@@ -5,8 +5,8 @@
 //! 2. Compare to baseline RwLock+HashMap performance
 
 use sqlitegraph::{
-    backend::native::v3::V3Backend,
     BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, SnapshotId,
+    backend::native::v3::V3Backend,
 };
 use std::time::Instant;
 use tempfile::tempdir;
@@ -46,7 +46,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Reopen to test cached behavior
     let backend = V3Backend::open(&db_path)?;
 
-    println!("Graph created with {} nodes and 20 edges from node_0\n", node_ids.len());
+    println!(
+        "Graph created with {} nodes and 20 edges from node_0\n",
+        node_ids.len()
+    );
 
     const ITERATIONS: usize = 10000;
     let src_node = node_ids[0];
@@ -75,14 +78,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("1. V3Backend::neighbors():       {:.2} ns/query", ns1);
 
     // Test 2: Baseline comparison with simple RwLock+HashMap
+    use parking_lot::RwLock;
     use std::collections::HashMap;
     use std::sync::Arc as StdArc;
-    use parking_lot::RwLock;
 
     let cache = RwLock::new(HashMap::<i64, StdArc<[i64]>>::new());
-    let test_value: StdArc<[i64]> = StdArc::from(
-        (1..=20).collect::<Vec<i64>>().into_boxed_slice()
-    );
+    let test_value: StdArc<[i64]> = StdArc::from((1..=20).collect::<Vec<i64>>().into_boxed_slice());
     {
         let mut cache_write = cache.write();
         cache_write.insert(src_node, test_value.clone());
@@ -107,7 +108,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if ns1 > 10000.0 {
         println!("\n⚠️  BOTTLENECK CONFIRMED:");
         println!("   V3Backend::neighbors() is {:.2} µs/query", ns1 / 1000.0);
-        println!("   This is {:.1}x slower than baseline lock+hash", ns1 / ns2);
+        println!(
+            "   This is {:.1}x slower than baseline lock+hash",
+            ns1 / ns2
+        );
         println!("\n   Next: Need to profile V3Backend::neighbors() internals");
         println!("   - validate_snapshot_for_v3() call");
         println!("   - edge_store.read() acquisition");

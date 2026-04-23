@@ -280,7 +280,9 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         // Emit event if publisher is initialized
         let pub_guard = self.publisher.read();
         if let Some(ref publisher) = *pub_guard {
-            publisher.emit(PubSubEvent::EdgeChanged { from_node: edge.from, to_node: edge.to,
+            publisher.emit(PubSubEvent::EdgeChanged {
+                from_node: edge.from,
+                to_node: edge.to,
                 edge_id: id,
                 snapshot_id: 0, // SQLite doesn't use snapshot IDs
             });
@@ -593,8 +595,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         &self,
         snapshot_id: crate::snapshot::SnapshotId,
         key: &[u8],
-    ) -> Result<Option<crate::backend::native::types::KvValue>, crate::SqliteGraphError>
-    {
+    ) -> Result<Option<crate::backend::native::types::KvValue>, crate::SqliteGraphError> {
         validate_snapshot_for_sqlite(snapshot_id)?;
         use std::time::SystemTime;
 
@@ -756,13 +757,8 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         &self,
         snapshot_id: crate::snapshot::SnapshotId,
         prefix: &[u8],
-    ) -> Result<
-        Vec<(
-            Vec<u8>,
-            crate::backend::native::types::KvValue,
-        )>,
-        crate::SqliteGraphError,
-    > {
+    ) -> Result<Vec<(Vec<u8>, crate::backend::native::types::KvValue)>, crate::SqliteGraphError>
+    {
         validate_snapshot_for_sqlite(snapshot_id)?;
         self.ensure_kv_table()?;
         let conn = self.graph.connection();
@@ -838,9 +834,7 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
 }
 
 /// Convert KvValue to serde_json::Value for serialization
-fn kv_value_to_json(
-    value: &crate::backend::native::types::KvValue,
-) -> serde_json::Value {
+fn kv_value_to_json(value: &crate::backend::native::types::KvValue) -> serde_json::Value {
     use crate::backend::native::types::KvValue;
 
     match value {

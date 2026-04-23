@@ -7,7 +7,7 @@ This document provides the comprehensive refactoring plan for Phase 7 — implem
 
 ### Files and Size
 - **Current**: `src/backend/native/graph_impl.rs` is 707 lines (user estimated 575, actual is 707)
-- **Target**: Split into 3 modules, each <300 LOC
+- **Target**: Split into 3 modules, each <1,000 LOC
 
 ### Test Status
 - **Backend Trait Tests**: 44/44 passing ✅ (interface compliance)
@@ -190,7 +190,7 @@ Based on SQLite backend behavior:
 
 ### ✅ Primary Requirements
 - **Interior Mutability**: RwLock-based GraphBackend implementation
-- **Module Split**: 3 files <300 LOC each, clear responsibilities
+- **Module Split**: 3 files <1,000 LOC each, clear responsibilities
 - **Test Parity**: 29/29 tests passing
 - **API Compatibility**: Zero changes to GraphBackend trait contract
 

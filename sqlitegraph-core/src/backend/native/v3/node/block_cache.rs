@@ -103,7 +103,7 @@ pub struct BlockAwareTraversalCache {
 
 impl BlockAwareTraversalCache {
     pub fn new(capacity: usize) -> Self {
-        assert!(capacity >= MIN_CACHE_CAPACITY && capacity <= MAX_CACHE_CAPACITY);
+        assert!((MIN_CACHE_CAPACITY..=MAX_CACHE_CAPACITY).contains(&capacity));
         Self {
             cache: HashMap::with_capacity(capacity),
             block_access: HashMap::new(),

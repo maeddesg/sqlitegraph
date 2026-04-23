@@ -209,30 +209,36 @@ impl V3WALHeader {
 
         // Helper to safely convert byte slices to fixed-size arrays
         let extract_u32 = |offset: usize| -> NativeResult<u32> {
-            let slice = bytes.get(offset..offset + 4).ok_or_else(|| {
-                NativeBackendError::InvalidHeader {
+            let slice =
+                bytes
+                    .get(offset..offset + 4)
+                    .ok_or_else(|| NativeBackendError::InvalidHeader {
+                        field: format!("offset_{}", offset),
+                        reason: format!("expected 4 bytes at offset {}", offset),
+                    })?;
+            let arr: [u8; 4] = slice
+                .try_into()
+                .map_err(|_| NativeBackendError::InvalidHeader {
                     field: format!("offset_{}", offset),
-                    reason: format!("expected 4 bytes at offset {}", offset),
-                }
-            })?;
-            let arr: [u8; 4] = slice.try_into().map_err(|_| NativeBackendError::InvalidHeader {
-                field: format!("offset_{}", offset),
-                reason: "failed to convert to u32 array".to_string(),
-            })?;
+                    reason: "failed to convert to u32 array".to_string(),
+                })?;
             Ok(u32::from_le_bytes(arr))
         };
 
         let extract_u64 = |offset: usize| -> NativeResult<u64> {
-            let slice = bytes.get(offset..offset + 8).ok_or_else(|| {
-                NativeBackendError::InvalidHeader {
+            let slice =
+                bytes
+                    .get(offset..offset + 8)
+                    .ok_or_else(|| NativeBackendError::InvalidHeader {
+                        field: format!("offset_{}", offset),
+                        reason: format!("expected 8 bytes at offset {}", offset),
+                    })?;
+            let arr: [u8; 8] = slice
+                .try_into()
+                .map_err(|_| NativeBackendError::InvalidHeader {
                     field: format!("offset_{}", offset),
-                    reason: format!("expected 8 bytes at offset {}", offset),
-                }
-            })?;
-            let arr: [u8; 8] = slice.try_into().map_err(|_| NativeBackendError::InvalidHeader {
-                field: format!("offset_{}", offset),
-                reason: "failed to convert to u64 array".to_string(),
-            })?;
+                    reason: "failed to convert to u64 array".to_string(),
+                })?;
             Ok(u64::from_le_bytes(arr))
         };
 
@@ -557,7 +563,7 @@ impl V3WALRecord {
     pub fn to_bytes(&self) -> NativeResult<Vec<u8>> {
         let bytes: Result<Vec<u8>, _> = bincode::serialize(self);
         bytes
-            .map_err(|e| NativeBackendError::BincodeError(e.into()))
+            .map_err(NativeBackendError::BincodeError)
             .and_then(|bytes: Vec<u8>| {
                 if bytes.len() > MAX_RECORD_SIZE {
                     Err(NativeBackendError::RecordTooLarge {
@@ -572,7 +578,7 @@ impl V3WALRecord {
 
     /// Deserialize record from bytes using bincode
     pub fn from_bytes(bytes: &[u8]) -> NativeResult<Self> {
-        bincode::deserialize(bytes).map_err(|e| NativeBackendError::BincodeError(e.into()))
+        bincode::deserialize(bytes).map_err(NativeBackendError::BincodeError)
     }
 
     /// Calculate checksum for the serialized record
@@ -878,7 +884,6 @@ impl WALWriter {
         }
 
         let mut file = std::fs::OpenOptions::new()
-            .write(true)
             .create(true)
             .append(true)
             .open(&self.wal_path)
@@ -1538,7 +1543,6 @@ impl WALRecovery {
         use std::io::Read;
 
         // Import kv_store module types
-        
 
         // Check if WAL file exists
         if !self.wal_path.exists() {
@@ -1824,7 +1828,7 @@ pub fn read_kv_checkpoint(
     })?;
 
     // Check magic prefix (first 6 bytes)
-    if &magic_bytes[0..6] != &[b'V', b'3', b'K', b'V', b'C', b'K'] {
+    if magic_bytes[0..6] != [b'V', b'3', b'K', b'V', b'C', b'K'] {
         cleanup_corrupt_checkpoint(&checkpoint_path);
         return Err(NativeBackendError::InvalidHeader {
             field: "magic".to_string(),
@@ -1892,7 +1896,7 @@ pub fn read_kv_checkpoint(
             cleanup_corrupt_checkpoint(&checkpoint_path);
             return Err(NativeBackendError::InvalidHeader {
                 field: "checksum".to_string(),
-                reason: format!("checkpoint checksum mismatch - data may be corrupt"),
+                reason: "checkpoint checksum mismatch - data may be corrupt".to_string(),
             });
         }
     }

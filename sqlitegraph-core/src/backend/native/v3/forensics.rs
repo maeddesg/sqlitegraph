@@ -294,10 +294,9 @@ impl PageOwnershipRegistry {
 
     /// Register a page allocation (first claim)
     pub fn register_allocation(&mut self, page_id: u64, subsystem: Subsystem, page_type: PageType) {
-        if !self.pages.contains_key(&page_id) {
-            let record = PageOwnershipRecord::new(page_id, subsystem, page_type);
-            self.pages.insert(page_id, record);
-        }
+        self.pages
+            .entry(page_id)
+            .or_insert_with(|| PageOwnershipRecord::new(page_id, subsystem, page_type));
     }
 
     /// Register a page write
@@ -1334,7 +1333,7 @@ pub fn reset_page_ownership() {
 /// identify page types, then checks for inconsistencies in the registry.
 pub fn scan_database_pages(db_path: &std::path::Path) -> Result<PageScanReport, std::io::Error> {
     use std::fs::File;
-    use std::io::{Read, Seek, SeekFrom};
+    use std::io::{Read, Seek};
 
     let mut file = File::open(db_path)?;
     let metadata = file.metadata()?;

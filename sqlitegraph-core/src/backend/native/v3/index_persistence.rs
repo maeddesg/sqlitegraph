@@ -211,8 +211,9 @@ pub fn restore_indexes(
     let bulk_read_start = std::time::Instant::now();
 
     let mut remaining_data = Vec::new();
-    file.read_to_end(&mut remaining_data)
-        .map_err(|e| IndexPersistenceError::Corrupted(format!("Failed to read index data: {}", e)))?;
+    file.read_to_end(&mut remaining_data).map_err(|e| {
+        IndexPersistenceError::Corrupted(format!("Failed to read index data: {}", e))
+    })?;
 
     #[cfg(feature = "v3-forensics")]
     let bulk_read_elapsed = bulk_read_start.elapsed();
@@ -325,13 +326,37 @@ pub fn restore_indexes(
         use std::io::Write;
         let _ = std::io::stderr().flush();
         eprintln!("    [restore_indexes breakdown]");
-        eprintln!("      - File::open() syscall:    {:.2} µs", file_open_syscall_elapsed.as_secs_f64() * 1_000_000.0);
-        eprintln!("      - read/verify header:      {:.2} µs", file_open_elapsed.as_secs_f64() * 1_000_000.0);
-        eprintln!("      - bulk_read() all data:    {:.2} µs ({:.2} KB)", bulk_read_elapsed.as_secs_f64() * 1_000_000.0, remaining_data.len() as f64 / 1024.0);
-        eprintln!("      - kind_loop ({}, entries):   {:.2} µs", kind_count, kind_loop_elapsed.as_secs_f64() * 1_000_000.0);
-        eprintln!("      - name_loop ({}, entries):   {:.2} µs", name_count, name_loop_elapsed.as_secs_f64() * 1_000_000.0);
-        eprintln!("      - index creation (2 objs):  {:.2} µs", index_creation_elapsed.as_secs_f64() * 1_000_000.0);
-        eprintln!("      - hashmap import:            {:.2} µs", hashmap_import_elapsed.as_secs_f64() * 1_000_000.0);
+        eprintln!(
+            "      - File::open() syscall:    {:.2} µs",
+            file_open_syscall_elapsed.as_secs_f64() * 1_000_000.0
+        );
+        eprintln!(
+            "      - read/verify header:      {:.2} µs",
+            file_open_elapsed.as_secs_f64() * 1_000_000.0
+        );
+        eprintln!(
+            "      - bulk_read() all data:    {:.2} µs ({:.2} KB)",
+            bulk_read_elapsed.as_secs_f64() * 1_000_000.0,
+            remaining_data.len() as f64 / 1024.0
+        );
+        eprintln!(
+            "      - kind_loop ({}, entries):   {:.2} µs",
+            kind_count,
+            kind_loop_elapsed.as_secs_f64() * 1_000_000.0
+        );
+        eprintln!(
+            "      - name_loop ({}, entries):   {:.2} µs",
+            name_count,
+            name_loop_elapsed.as_secs_f64() * 1_000_000.0
+        );
+        eprintln!(
+            "      - index creation (2 objs):  {:.2} µs",
+            index_creation_elapsed.as_secs_f64() * 1_000_000.0
+        );
+        eprintln!(
+            "      - hashmap import:            {:.2} µs",
+            hashmap_import_elapsed.as_secs_f64() * 1_000_000.0
+        );
         let _ = std::io::stderr().flush();
     }
 

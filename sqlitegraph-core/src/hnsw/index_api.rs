@@ -65,7 +65,7 @@ impl HnswIndex {
 
         // Get the index_id
         let index_id = Self::get_index_id(&conn, name)?
-            .ok_or_else(|| crate::hnsw::errors::HnswError::Storage(
+            .ok_or(crate::hnsw::errors::HnswError::Storage(
                 crate::hnsw::errors::HnswStorageError::VectorNotFound(0)
             ))?;
 
@@ -100,7 +100,7 @@ impl HnswIndex {
             } else {
                 (config.m / 2usize.pow(level as u32)).max(1)
             };
-            layers.push(crate::hnsw::layer::HnswLayer::new(level as u8, max_connections));
+            layers.push(crate::hnsw::layer::HnswLayer::new(level, max_connections));
         }
 
         let search_engine = crate::hnsw::neighborhood::NeighborhoodSearch::new(config.distance_metric);
@@ -524,7 +524,7 @@ impl crate::SqliteGraph {
             // Get the index_id from the database
             let index_id = HnswIndex::get_index_id(conn_ref, name)
                 .map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to get index_id: {}", e)))?
-                .ok_or_else(|| crate::SqliteGraphError::invalid_input(format!("Failed to get index_id after saving metadata")))?;
+                .ok_or_else(|| crate::SqliteGraphError::invalid_input("Failed to get index_id after saving metadata".to_string()))?;
 
             // Get database path to open a new connection for storage
             let db_path = conn_ref.pragma_query_value(None, "database_list", |row| {

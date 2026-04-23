@@ -242,7 +242,7 @@ pub fn transitive_closure(
     let sources: Vec<i64> = all_ids.into_iter().take(max_sources).collect();
 
     // For each source node, run BFS to find reachable nodes
-    for (_source_idx, &source) in sources.iter().enumerate() {
+    for &source in sources.iter() {
         // Self-reachability: every node can reach itself
         closure.insert((source, source), true);
 

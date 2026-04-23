@@ -138,7 +138,6 @@ fn test_phase73_node_count_corruption_capture() -> Result<(), Box<dyn std::error
 fn get_header_node_count_from_disk(
     db_path: &std::path::Path,
 ) -> Result<u64, Box<dyn std::error::Error>> {
-    
     use std::io::{Read, Seek, SeekFrom};
 
     let mut file = std::fs::File::open(db_path)?;

@@ -385,7 +385,6 @@ impl NeighborhoodSearch {
             target_vector,
         ))
     }
-
 }
 
 impl Default for NeighborhoodSearch {

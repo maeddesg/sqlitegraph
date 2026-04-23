@@ -55,7 +55,7 @@ impl HnswIndex {
         let node_id = if let Some(manager) = &mut self.multi_layer_manager {
             // Multi-layer mode: use LayerMappings to get local ID
             manager.get_local_id(vector_id, level)
-                .ok_or_else(|| HnswError::Index(HnswIndexError::NodeNotFound(vector_id)))?
+                .ok_or(HnswError::Index(HnswIndexError::NodeNotFound(vector_id)))?
         } else {
             // Single-layer mode: direct 1-based to 0-based conversion
             vector_id - 1
@@ -241,7 +241,7 @@ impl HnswIndex {
 
         if let Some(manager) = &self.multi_layer_manager {
             manager.get_local_id(vector_id, layer_id)
-                .ok_or_else(|| HnswError::Index(HnswIndexError::NodeNotFound(vector_id)))
+                .ok_or(HnswError::Index(HnswIndexError::NodeNotFound(vector_id)))
         } else {
             // Single-layer mode: direct conversion
             Ok(vector_id - 1)
@@ -266,7 +266,7 @@ impl HnswIndex {
 
         if let Some(manager) = &self.multi_layer_manager {
             manager.get_global_id(layer_id, local_id)
-                .ok_or_else(|| HnswError::Index(HnswIndexError::InvalidNodeId(local_id)))
+                .ok_or(HnswError::Index(HnswIndexError::InvalidNodeId(local_id)))
         } else {
             // Single-layer mode: direct conversion
             Ok(local_id + 1)

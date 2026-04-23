@@ -215,7 +215,7 @@ impl HnswIndex {
         use crate::hnsw::errors::HnswStorageError;
 
         let index_id = Self::get_index_id(conn, &self.name)?
-            .ok_or_else(|| {
+            .ok_or({
                 crate::hnsw::errors::HnswError::Storage(HnswStorageError::VectorNotFound(0))
             })?;
 

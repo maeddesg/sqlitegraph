@@ -14,6 +14,7 @@ use std::{
 use crate::SqliteGraphError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[allow(clippy::enum_variant_names)]
 pub enum FaultPoint {
     BulkInsertEntitiesBeforeCommit,
     BulkInsertEdgesBeforeCommit,

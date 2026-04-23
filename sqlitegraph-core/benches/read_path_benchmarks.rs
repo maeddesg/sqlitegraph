@@ -14,7 +14,9 @@ use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rand::{Rng, SeedableRng};
-use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+};
 
 mod bench_utils;
 use bench_utils::{BENCHMARK_SIZES, create_benchmark_temp_dir};
@@ -97,7 +99,9 @@ fn bench_get_node(criterion: &mut Criterion) {
 
                 // Lookup random node
                 let lookup_id = node_ids[size / 2];
-                let _node = graph.get_node(SnapshotId::current(), lookup_id).expect("Failed to get node");
+                let _node = graph
+                    .get_node(SnapshotId::current(), lookup_id)
+                    .expect("Failed to get node");
             });
         });
     }
@@ -317,7 +321,9 @@ fn bench_bfs_depth_1(criterion: &mut Criterion) {
                 }
 
                 // Perform 1-hop BFS
-                let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 1).expect("Failed to perform BFS");
+                let _bfs_result = graph
+                    .bfs(SnapshotId::current(), node_ids[0], 1)
+                    .expect("Failed to perform BFS");
             });
         });
     }
@@ -368,7 +374,9 @@ fn bench_bfs_depth_3(criterion: &mut Criterion) {
                 }
 
                 // Perform 3-hop BFS
-                let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 3).expect("Failed to perform BFS");
+                let _bfs_result = graph
+                    .bfs(SnapshotId::current(), node_ids[0], 3)
+                    .expect("Failed to perform BFS");
             });
         });
     }
@@ -419,7 +427,9 @@ fn bench_bfs_depth_5(criterion: &mut Criterion) {
                 }
 
                 // Perform 5-hop BFS
-                let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 5).expect("Failed to perform BFS");
+                let _bfs_result = graph
+                    .bfs(SnapshotId::current(), node_ids[0], 5)
+                    .expect("Failed to perform BFS");
             });
         });
     }
@@ -477,7 +487,9 @@ fn bench_k_hop_10_nodes(criterion: &mut Criterion) {
             let mut total_visited = 0;
             for i in 0..10 {
                 let start_node = node_ids[i * 10];
-                let bfs_result = graph.bfs(SnapshotId::current(), start_node, 2).expect("Failed to perform BFS");
+                let bfs_result = graph
+                    .bfs(SnapshotId::current(), start_node, 2)
+                    .expect("Failed to perform BFS");
                 total_visited += bfs_result.len();
             }
 
@@ -592,7 +604,11 @@ fn bench_cache_hit_random(criterion: &mut Criterion) {
             for _ in 0..100 {
                 let idx = rng.gen_range(0..100);
                 let _neighbors = graph
-                    .neighbors(SnapshotId::current(), node_ids[idx], NeighborQuery::default())
+                    .neighbors(
+                        SnapshotId::current(),
+                        node_ids[idx],
+                        NeighborQuery::default(),
+                    )
                     .expect("Failed to get neighbors");
             }
         });
@@ -817,7 +833,9 @@ fn bench_cache_hit_ratio_bfs(criterion: &mut Criterion) {
             }
 
             // Perform 3-hop BFS (traversal workload)
-            let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 3).expect("Failed to perform BFS");
+            let _bfs_result = graph
+                .bfs(SnapshotId::current(), node_ids[0], 3)
+                .expect("Failed to perform BFS");
         });
     });
 
@@ -932,7 +950,9 @@ fn bench_prefetch_bfs(criterion: &mut Criterion) {
             }
 
             // Perform BFS (should benefit from prefetch in cache implementation)
-            let _bfs_result = graph.bfs(SnapshotId::current(), node_ids[0], 3).expect("Failed to perform BFS");
+            let _bfs_result = graph
+                .bfs(SnapshotId::current(), node_ids[0], 3)
+                .expect("Failed to perform BFS");
         });
     });
 
