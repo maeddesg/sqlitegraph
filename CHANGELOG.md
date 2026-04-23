@@ -1,5 +1,25 @@
 # SQLiteGraph Changelog
 
+## [2.1.2] - 2026-04-24
+
+### Changed
+- **Documentation cleanup** - Removed LLM marketing language and non-existent backend references
+  - Remove all "production-ready" terminology → "stable" or factual statements
+  - Remove non-existent Native V2 backend from all user-facing docs
+  - Update README to reflect only SQLite and Native V3 backends exist
+  - Add LRU Cache and Parallel BFS to backend feature table
+  - Update version references from 2.0 to 2.1
+  - Add v2.1.1 verified benchmark summary
+  - Fix broken documentation links (moved internal docs to internal/)
+
+### Fixed
+- **README inaccuracies**
+  - Native V3 status: "Beta" → "Stable"
+  - Parallel BFS warning removed (fixed in v2.1.1)
+  - Backend table now accurate with actual codebase structure
+
+---
+
 ## [2.1.1] - 2026-04-23
 
 ### Fixed
