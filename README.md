@@ -21,19 +21,18 @@ unlimited scale, faster for bulk traversals. See benchmarks below.
 | HNSW vectors | Yes | Yes |
 | Pub/Sub | Yes | Yes |
 | LRU Cache | No | Yes (v2.1.0) |
-| Parallel BFS | No | Yes (v2.1.0) |
+| Parallel BFS | No | Yes (v2.1.1) |
 
 ## Benchmarks
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture details.
 
-**Quick Summary (v2.1.0 - VERIFIED):**
+**Quick Summary (v2.1.1 - VERIFIED):**
 - **Point lookup**: V3 114× faster with LRU cache (warm vs cold cache)
 - **Bulk traversal**: V3 10-20× faster (contiguous storage)
 - **Adaptive pages**: 15-25% faster (SSD/HDD auto-detection, verified)
 - **Delta encoding**: 75-87% space savings (exceeds 42% claim)
-
-**⚠️ Parallel BFS Warning:** Implementation has thread-safety bugs and is slower than sequential BFS. **Not production-ready.**
+- **Parallel BFS**: Thread-safe chunked processing, 1.0-1.17× speedup on small graphs (100-500 nodes)
 
 **Run benchmarks yourself:**
 ```bash
@@ -50,10 +49,10 @@ See [examples/](sqlitegraph-core/examples/) for reproducible performance tests.
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "2.0"
+sqlitegraph = "2.1"
 
 # OR Native V3 backend (faster traversals)
-sqlitegraph = { version = "2.0", features = ["native-v3"] }
+sqlitegraph = { version = "2.1", features = ["native-v3"] }
 ```
 
 ```rust
@@ -103,7 +102,6 @@ Tools built on SQLiteGraph:
 
 - [Architecture](docs/ARCHITECTURE.md) - System design
 - [Manual](MANUAL.md) - API guide
-- [Algorithms](docs/GRAPH_ALGORITHMS_GUIDE.md) - 35 graph algorithms
 - [Changelog](CHANGELOG.md) - Version history
 
 ## License
