@@ -159,3 +159,15 @@ required-features = ["native-v3", "memory_profiling"]
 name = "real_datasets"
 harness = false
 required-features = ["native-v3"]
+
+# Parallel BFS benchmarks (requires native-v3 feature)
+[[bench]]
+name = "parallel_bfs"
+harness = false
+required-features = ["native-v3"]
+
+# Adaptive page sizing benchmarks (requires native-v3 feature)
+[[bench]]
+name = "adaptive_page_simple"
+harness = false
+required-features = ["native-v3"]
