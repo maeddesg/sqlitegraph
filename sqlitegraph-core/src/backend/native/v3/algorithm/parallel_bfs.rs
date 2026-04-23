@@ -1,16 +1,18 @@
 //! Parallel Breadth-First Search using Rayon
 //!
 //! Level-wise parallel BFS where each level can be processed concurrently.
-//! Provides 2-4× speedup on multi-core systems for graph traversals.
+//! Uses lock-free data structures (DashSet) to minimize contention.
+//!
+//! **Note:** Parallel BFS has overhead and is only beneficial for large graphs.
+//! Small graphs (<5000 nodes) should use sequential BFS instead.
 
 use crate::SqliteGraphError;
 use crate::backend::native::v3::V3Backend;
 use crate::backend::{BackendDirection, GraphBackend, NeighborQuery};
 use crate::snapshot::SnapshotId;
+use dashmap::DashSet;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
-use std::sync::Mutex;
 
 /// Configuration for parallel BFS execution
 #[derive(Debug, Clone)]
@@ -30,7 +32,7 @@ impl Default for BfsConfig {
         Self {
             max_threads: None,
             min_parallel_size: 1000,
-            batch_size: 100,
+            batch_size: 1000,
         }
     }
 }
@@ -63,6 +65,35 @@ impl BfsResult {
         self.visited_order.push(node);
         self.distances.insert(node, distance);
         self.total_visited += 1;
+    }
+}
+
+/// Result of processing a single chunk in parallel BFS
+///
+/// Contains thread-local state from one chunk's processing.
+/// This is moved (not cloned) during merge to avoid allocations.
+#[derive(Debug)]
+struct ChunkResult {
+    /// New nodes discovered by this chunk
+    new_nodes: Vec<i64>,
+
+    /// Distances from start to each new node
+    distances: HashMap<i64, usize>,
+}
+
+impl ChunkResult {
+    /// Create a new empty chunk result
+    fn new() -> Self {
+        Self {
+            new_nodes: Vec::new(),
+            distances: HashMap::new(),
+        }
+    }
+
+    /// Add a discovered node to this chunk's result
+    fn add_node(&mut self, node: i64, distance: usize) {
+        self.new_nodes.push(node);
+        self.distances.insert(node, distance);
     }
 }
 
@@ -141,52 +172,58 @@ fn parallel_bfs_impl(
 ) -> Result<BfsResult, SqliteGraphError> {
     let snapshot = SnapshotId::current();
     let mut result = BfsResult::new();
-    let visited = Arc::new(Mutex::new(HashSet::new()));
+
+    // Use DashSet for lock-free concurrent visited set
+    let visited = DashSet::new();
 
     // Initialize BFS queue
     let mut current_level: Vec<i64> = vec![start];
-    let mut next_level: Vec<i64> = Vec::new();
     let mut distance = 0;
 
     // Mark start as visited
-    {
-        let mut visited_guard = visited.lock().unwrap();
-        visited_guard.insert(start);
-    }
+    visited.insert(start);
     result.add_visit(start, distance);
 
     // Process each level
     while !current_level.is_empty() {
-        next_level.clear();
         distance += 1;
 
-        // Process current level in parallel chunks
-        let chunks: Vec<_> = current_level.par_chunks(config.batch_size).collect();
+        // Collect next_level nodes thread-local to avoid data race
+        let next_level_local: Vec<Vec<i64>> = current_level
+            .par_chunks(config.batch_size)
+            .map(|chunk| {
+                let mut local_next = Vec::new();
+                for &node in chunk {
+                    // Fetch neighbors using the GraphBackend API
+                    let query = NeighborQuery {
+                        direction: BackendDirection::Outgoing,
+                        edge_type: None,
+                    };
 
-        for chunk in chunks {
-            // Process each node in chunk
-            for &node in chunk {
-                // Fetch neighbors using the GraphBackend API
-                let query = NeighborQuery {
-                    direction: BackendDirection::Outgoing,
-                    edge_type: None,
-                };
-
-                if let Ok(neighbors) = graph.neighbors(snapshot, node, query) {
-                    for neighbor in neighbors {
-                        let mut visited_guard = visited.lock().unwrap();
-                        if visited_guard.insert(neighbor) {
-                            drop(visited_guard);
-                            next_level.push(neighbor);
-                            result.add_visit(neighbor, distance);
+                    if let Ok(neighbors) = graph.neighbors(snapshot, node, query) {
+                        for neighbor in neighbors {
+                            // DashSet::insert returns true if the value was absent
+                            if visited.insert(neighbor) {
+                                local_next.push(neighbor);
+                            }
                         }
                     }
                 }
+                local_next
+            })
+            .collect();
+
+        // Flatten and add to result
+        let mut next_level: Vec<i64> = Vec::new();
+        for local_batch in next_level_local {
+            for &node in &local_batch {
+                result.add_visit(node, distance);
             }
+            next_level.extend(local_batch);
         }
 
         // Swap levels
-        std::mem::swap(&mut current_level, &mut next_level);
+        current_level = next_level;
     }
 
     Ok(result)
@@ -331,7 +368,7 @@ mod tests {
 
         assert_eq!(config.max_threads, None);
         assert_eq!(config.min_parallel_size, 1000);
-        assert_eq!(config.batch_size, 100);
+        assert_eq!(config.batch_size, 1000);
     }
 
     #[test]
