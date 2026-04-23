@@ -49,3 +49,56 @@ This ensures sequential subagents build on verified graph state rather than stal
 - Maximum 1,000 LOC per module (split into submodules if larger).
 - No `unwrap()` in production; use `?` or `.expect("detailed reason")`.
 - Document all public APIs with `# Examples` and `# Errors`.
+
+## Parallel Execution Safety
+
+**CRITICAL:** Never use `std::thread::available_parallelism().unwrap().get()` directly - returns ALL CPU cores and can crash systems.
+
+**Safe pattern:**
+```rust
+let num_cpus = std::cmp::min(
+    std::thread::available_parallelism().unwrap().get(),
+    4  // Maximum 4 threads for safety
+);
+```
+
+**Testing:** Always run tests sequentially: `cargo test -- --test-threads=1`
+**Benchmarks:** Limit parallelism to prevent system overload
+
+## Feature Verification Workflow
+
+Use `.claude/skills/verify-feature/run.sh <feature-name>` to verify features are actually wired (not just declared).
+
+Checks:
+- Feature is exported (declaration)
+- Feature is instantiated (integration)
+- Data flow complete (output is read)
+- No hardcoded bypasses in I/O code
+
+Prevents "declared but not working" implementations.
+
+## Thread Safety Verification
+
+Use thread sanitizer to detect data races:
+
+```bash
+cargo clean
+RUSTFLAGS="-Z sanitizer=thread" cargo test --lib --features native-v3 --target x86_64-unknown-linux-gnu
+```
+
+Expect zero warnings. If data races found, fix before marking work complete.
+
+## Subagent-Driven Development
+
+For complex multi-file tasks, use subagent-driven development (superpowers:subagent-driven-development):
+
+1. Read implementation plan once
+2. Extract all tasks with full text
+3. Dispatch fresh subagent per task
+4. Two-stage review: spec compliance → code quality
+5. Review loops until approved
+
+**Benefits:** Higher quality, fresh context per task, verification gates.
+**Cost:** More invocations but catches issues early.
+
+Use for: Implementation plans with >5 tasks or complex refactors.
