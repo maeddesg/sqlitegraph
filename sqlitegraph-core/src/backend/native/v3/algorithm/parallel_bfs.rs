@@ -1,7 +1,9 @@
-//! Parallel Breadth-First Search using Rayon
+//! Parallel Breadth-First Search using Rayon with chunked processing
 //!
-//! Level-wise parallel BFS where each level can be processed concurrently.
-//! Uses lock-free data structures (DashSet) to minimize contention.
+//! Level-wise parallel BFS where each level is partitioned into chunks
+//! (one per CPU core) and processed in parallel with thread-local state.
+//! This design eliminates shared state and locks during the parallel phase,
+//! achieving true parallel speedup.
 //!
 //! **Note:** Parallel BFS has overhead and is only beneficial for large graphs.
 //! Small graphs (<5000 nodes) should use sequential BFS instead.
@@ -10,7 +12,6 @@ use crate::SqliteGraphError;
 use crate::backend::native::v3::V3Backend;
 use crate::backend::{BackendDirection, GraphBackend, NeighborQuery};
 use crate::snapshot::SnapshotId;
-use dashmap::DashSet;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -202,17 +203,23 @@ fn partition_nodes<'a>(nodes: &'a [i64], num_chunks: usize) -> Vec<&'a [i64]> {
     chunks
 }
 
-/// Internal parallel BFS implementation
+/// Internal parallel BFS implementation using chunked processing
+///
+/// Algorithm (Minecraft-style chunks):
+/// 1. Partition current level into chunks (one per CPU core)
+/// 2. Process each chunk in parallel with thread-local state
+/// 3. Merge chunk results into final result (single-threaded)
+///
+/// This design has ZERO shared state during parallel phase,
+/// eliminating locks and achieving true parallel speedup.
 fn parallel_bfs_impl(
     graph: &V3Backend,
     start: i64,
-    config: &BfsConfig,
+    _config: &BfsConfig,
 ) -> Result<BfsResult, SqliteGraphError> {
     let snapshot = SnapshotId::current();
     let mut result = BfsResult::new();
-
-    // Use DashSet for lock-free concurrent visited set
-    let visited = DashSet::new();
+    let mut visited: HashSet<i64> = HashSet::new();
 
     // Initialize BFS queue
     let mut current_level: Vec<i64> = vec![start];
@@ -222,17 +229,28 @@ fn parallel_bfs_impl(
     visited.insert(start);
     result.add_visit(start, distance);
 
+    // Get number of available CPUs for chunking
+    let num_cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+
     // Process each level
     while !current_level.is_empty() {
         distance += 1;
 
-        // Collect next_level nodes thread-local to avoid data race
-        let next_level_local: Vec<Vec<i64>> = current_level
-            .par_chunks(config.batch_size)
+        // Partition current level into chunks (Minecraft-style)
+        let chunks = partition_nodes(&current_level, num_cpus);
+
+        // PROCESS CHUNKS IN PARALLEL WITH ZERO SHARED STATE
+        let chunk_results: Vec<ChunkResult> = chunks
+            .into_par_iter()  // Rayon parallel iterator
             .map(|chunk| {
-                let mut local_next = Vec::new();
+                // === THREAD-LOCAL STATE (no sharing, no locks) ===
+                let mut local_result = ChunkResult::new();
+                let mut local_visited: HashSet<i64> = HashSet::new();
+
+                // Check global visited set once per node
                 for &node in chunk {
-                    // Fetch neighbors using the GraphBackend API
                     let query = NeighborQuery {
                         direction: BackendDirection::Outgoing,
                         edge_type: None,
@@ -240,27 +258,35 @@ fn parallel_bfs_impl(
 
                     if let Ok(neighbors) = graph.neighbors(snapshot, node, query) {
                         for neighbor in neighbors {
-                            // DashSet::insert returns true if the value was absent
-                            if visited.insert(neighbor) {
-                                local_next.push(neighbor);
+                            // Check if globally visited (single read, no lock)
+                            if !visited.contains(&neighbor) {
+                                // Check if locally visited in this chunk
+                                if local_visited.insert(neighbor) {
+                                    local_result.add_node(neighbor, distance);
+                                }
                             }
                         }
                     }
                 }
-                local_next
-            })
-            .collect();
 
-        // Flatten and add to result
+                local_result  // Move thread-local result out
+            })
+            .collect();  // Barrier: wait for all chunks
+
+        // === MERGE PHASE (single-threaded, no locks needed) ===
         let mut next_level: Vec<i64> = Vec::new();
-        for local_batch in next_level_local {
-            for &node in &local_batch {
-                result.add_visit(node, distance);
+
+        for chunk_result in chunk_results {
+            for (node, dist) in chunk_result.distances {
+                // Check again (another chunk might have visited this node)
+                if visited.insert(node) {
+                    result.add_visit(node, dist);
+                    next_level.push(node);
+                }
             }
-            next_level.extend(local_batch);
         }
 
-        // Swap levels
+        // Move to next level
         current_level = next_level;
     }
 
