@@ -5,7 +5,7 @@
 
 The complete API documentation is available at **[docs.rs/sqlitegraph](https://docs.rs/sqlitegraph)**.
 
-This document provides a quick overview of the main API surface for all three backends.
+This document provides a quick overview of the main API surface.
 
 ---
 
@@ -15,7 +15,6 @@ This document provides a quick overview of the main API surface for all three ba
 |---------|--------|--------|----------|
 | **SQLite** | ✅ Stable | `backend::sqlite` | Debuggable, SQL ecosystem |
 | **Native V3** | ✅ Stable | `backend::native::v3` | Performance, unlimited scale |
-| **Native V2** | ⚠️ Deprecated | `backend::native` | Do not use for new projects |
 
 ---
 
@@ -24,7 +23,6 @@ This document provides a quick overview of the main API surface for all three ba
 - [GraphBackend Trait (Unified API)](#graphbackend-trait-unified-api)
 - [SQLite Backend API](#sqlite-backend-api)
 - [Native V3 Backend API](#native-v3-backend-api)
-- [Native V2 Backend API (Deprecated)](#native-v2-backend-api-deprecated)
 - [Graph Algorithms API](#graph-algorithms-api)
 - [HNSW Vector Search API](#hnsw-vector-search-api)
 - [KV Store API](#kv-store-api)
@@ -256,24 +254,6 @@ let (sub_id, rx) = backend.subscribe(SubscriptionFilter::all())?;
 
 ---
 
-## Native V2 Backend API (Deprecated)
-
-**Status:** Deprecated, will be removed in v1.7.0
-
-**Limitation:** Hard 2048 node limit (8MB node region)
-
-**Migration:** Use V3 backend instead (same features, unlimited capacity)
-
-```rust
-// DEPRECATED - Do not use for new code
-use sqlitegraph::{GraphConfig, open_graph};
-
-let config = GraphConfig::native();
-let graph = open_graph("graph.db", &config)?; // Uses V2 backend
-```
-
----
-
 ## Graph Algorithms API
 
 All algorithms work with any backend via `&dyn GraphBackend`:
@@ -353,7 +333,6 @@ for (id, distance) in results {
 |---------|--------|-------|
 | **V3** | ✅ Full | Lazy initialization |
 | **SQLite** | ✅ Full | SQL table |
-| **V2** | ✅ Full | In-memory |
 
 ### V3 Native Methods (Recommended)
 
@@ -399,9 +378,6 @@ fn set_config(backend: &dyn GraphBackend) -> Result<(), SqliteGraphError> {
 |---------|--------|-------|
 | **V3** | ✅ Full | Lazy initialization |
 | **SQLite** | ✅ Full | In-memory publisher |
-| **V2** | ✅ Full | In-memory publisher |
-
-**Note:** Before v2.0.0, Pub/Sub was documented as "V2 only" - this is now fixed.
 
 ### Basic Usage
 

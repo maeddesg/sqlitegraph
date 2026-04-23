@@ -21,7 +21,7 @@ This document describes the architecture of SQLiteGraph from a developer's persp
 
 ## High-Level Overview
 
-SQLiteGraph is an embedded graph database with **three** storage backends:
+SQLiteGraph is an embedded graph database with **two** storage backends:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -34,18 +34,18 @@ SQLiteGraph is an embedded graph database with **three** storage backends:
 │     - insert_node, insert_edge, neighbors, subscribe, etc.          │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │
-           ┌────────────────────┼────────────────────┐
-           │                    │                    │
-           ▼                    ▼                    ▼
-┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│  SQLite Backend  │  │   Native V3      │  │  Native V2       │
-│  (Stable)        │  │   (Stable)       │  │  (Deprecated)    │
-├──────────────────┤  ├──────────────────┤  ├──────────────────┤
-│ - SQL storage    │  │ - Binary format  │  │ - Binary format  │
-│ - ACID via SQL   │  │ - B+Tree index   │  │ - Clustered      │
-│ - Debuggable     │  │ - Unlimited      │  │ - 2048 limit     │
-│                  │  │   capacity       │  │                  │
-└──────────────────┘  └──────────────────┘  └──────────────────┘
+           ┌────────────────────┴────────────────────┐
+           │                                         │
+           ▼                                         ▼
+┌──────────────────┐                    ┌──────────────────┐
+│  SQLite Backend  │                    │   Native V3      │
+│  (Stable)        │                    │   (Stable)       │
+├──────────────────┤                    ├──────────────────┤
+│ - SQL storage    │                    │ - Binary format  │
+│ - ACID via SQL   │                    │ - B+Tree index   │
+│ - Debuggable     │                    │ - Unlimited      │
+│                  │                    │   capacity       │
+└──────────────────┘                    └──────────────────┘
 ```
 
 ### Backend Status
@@ -54,7 +54,6 @@ SQLiteGraph is an embedded graph database with **three** storage backends:
 |---------|--------|----------|
 | **SQLite** | ✅ Stable | Debuggable, familiar SQL ecosystem |
 | **Native V3** | ✅ Stable | High performance, unlimited scale |
-| **Native V2** | ⚠️ Deprecated | Being removed in v1.7.0 |
 
 ### Key Architectural Principles
 
@@ -86,7 +85,6 @@ sqlitegraph/
 │   │       │   ├── kv_store/  # Lazy KV storage
 │   │       │   ├── pubsub/    # Publisher implementation
 │   │       │   └── wal/       # Write-ahead logging
-│   │       └── v2/            # V2 backend (deprecated)
 │   ├── algo/                  # Graph algorithms (backend-agnostic)
 │   │   ├── backend/           # Generic algorithms for &dyn GraphBackend
 │   │   └── ...                # 35+ algorithms
@@ -434,28 +432,11 @@ impl GraphBackend for V3Backend {
 }
 ```
 
-### Native V2 Backend (Deprecated)
-
-**Location:** `src/backend/native/v2/`
-
-**Status:** Deprecated, will be removed in v1.7.0
-
-| Aspect | Implementation |
-|--------|----------------|
-| **Max Nodes** | ~2048 (8MB region limit) |
-| **Status** | Do not use for new projects |
-
-**Migration Path:**
-- V2 → SQLite: Export/import via JSON
-- V2 → V3: Direct migration tools (planned)
-
----
-
 ## Key Design Decisions
 
 ### 1. Why Lazy Initialization in V3?
 
-**Problem:** V2 always allocated KV store and Publisher even when unused.
+**Problem:** Native backends always allocated KV store and Publisher even when unused.
 
 **Solution:** V3 uses `Option<T>` with lazy initialization.
 
@@ -466,7 +447,7 @@ impl GraphBackend for V3Backend {
 
 ### 2. Why Generic Pub/Sub Types?
 
-**Problem:** Pub/Sub types were tied to `native-v2` feature, breaking compilation without it.
+**Problem:** Pub/Sub types were tied to native feature, breaking compilation without it.
 
 **Solution:** Moved generic `PubSubEvent` and `SubscriptionFilter` to `backend/mod.rs`.
 
@@ -478,19 +459,7 @@ impl GraphBackend for V3Backend {
 
 **Solution:** New algorithms use `&dyn GraphBackend`.
 
-**Result:** Same algorithms work with SQLite, V2, and V3 backends.
-
-### 4. Why Deprecate V2?
-
-**Reasons:**
-- Hard 2048 node limit (architectural constraint)
-- V3 has same features with unlimited capacity
-- Maintenance burden of two native backends
-- V3 has cleaner architecture (B+Tree vs clustered)
-
-**Timeline:**
-- v2.0.0: V3 stable, V2 removed
-- v1.7.0: V2 removed, V3 becomes primary native backend
+**Result:** Same algorithms work with SQLite and V3 backends.
 
 ---
 
@@ -549,11 +518,9 @@ cargo test --features native-v3 --lib hnsw::v3_storage
 
 ## Future Directions
 
-1. **V3 becomes primary native backend** (v1.7.0)
-2. **V2 removal** - Simplifies codebase
-3. **Migration tools** - V2 → V3 direct conversion
-4. **Performance benchmarks** - Comprehensive V3 vs SQLite comparison
-5. **Distributed features** - Optional clustering layer
+1. **Performance benchmarks** - Comprehensive V3 vs SQLite comparison
+2. **Distributed features** - Optional clustering layer
+3. **Additional algorithms** - More graph algorithms from research literature
 
 ---
 

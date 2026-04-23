@@ -14,7 +14,7 @@ unlimited scale, faster for bulk traversals. See benchmarks below.
 
 | Feature | SQLite | Native V3 |
 |---------|--------|-----------|
-| Status | Stable | Production |
+| Status | Stable | Stable |
 | Storage | `.db` file | `.graph` file |
 | Max nodes | Unlimited | Unlimited |
 | Graph algorithms | 35+ | 35+ |
