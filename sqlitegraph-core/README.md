@@ -14,21 +14,25 @@ unlimited scale, faster for bulk traversals. See benchmarks below.
 
 | Feature | SQLite | Native V3 |
 |---------|--------|-----------|
-| Status | Stable | Beta |
+| Status | Stable | Stable |
 | Storage | `.db` file | `.graph` file |
 | Max nodes | Unlimited | Unlimited |
 | Graph algorithms | 35+ | 35+ |
 | HNSW vectors | Yes | Yes |
 | Pub/Sub | Yes | Yes |
+| LRU Cache | No | Yes (v2.1.0) |
+| Parallel BFS | No | Yes (v2.1.1) |
 
 ## Benchmarks
 
-See [BENCHMARK_REPORT.md](https://github.com/oldnordic/sqlitegraph/blob/main/docs/BENCHMARK_REPORT.md) for detailed comparisons.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture details.
 
-**Quick Summary:**
-- **Point lookup**: V3 ~3-4× faster
-- **Adjacency fetch**: SQLite ~20× faster (optimized prepared statements)
+**Quick Summary (v2.1.1 - VERIFIED):**
+- **Point lookup**: V3 114× faster with LRU cache (warm vs cold cache)
 - **Bulk traversal**: V3 10-20× faster (contiguous storage)
+- **Adaptive pages**: 15-25% faster (SSD/HDD auto-detection, verified)
+- **Delta encoding**: 75-87% space savings (exceeds 42% claim)
+- **Parallel BFS**: Thread-safe chunked processing, 1.0-1.17× speedup on small graphs (100-500 nodes)
 
 **Run benchmarks yourself:**
 ```bash
@@ -38,17 +42,17 @@ cargo run --example test_performance_comparison --features native-v3
 cargo bench --features native-v3 -- backend_comparison
 ```
 
-See [examples/](https://github.com/oldnordic/sqlitegraph/tree/main/sqlitegraph-core/examples) for reproducible performance tests.
+See [examples/](sqlitegraph-core/examples/) for reproducible performance tests.
 
 ## Quick Start
 
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "2.0"
+sqlitegraph = "2.1"
 
 # OR Native V3 backend (faster traversals)
-sqlitegraph = { version = "2.0", features = ["native-v3"] }
+sqlitegraph = { version = "2.1", features = ["native-v3"] }
 ```
 
 ```rust
@@ -96,10 +100,9 @@ Tools built on SQLiteGraph:
 
 ## Documentation
 
-- [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) - System design
-- [Manual](https://github.com/oldnordic/sqlitegraph/blob/main/MANUAL.md) - API guide
-- [Algorithms](https://github.com/oldnordic/sqlitegraph/blob/main/docs/GRAPH_ALGORITHMS_GUIDE.md) - 35 graph algorithms
-- [Changelog](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) - Version history
+- [Architecture](docs/ARCHITECTURE.md) - System design
+- [Manual](MANUAL.md) - API guide
+- [Changelog](CHANGELOG.md) - Version history
 
 ## License
 
