@@ -38,6 +38,12 @@ rayon = "1.10"
 petgraph = "0.6"
 sha2 = "0.10"
 
+[dependencies.lru]
+version = "0.12"
+
+[dependencies.sysinfo]
+version = "0.30"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 assert_cmd = "2"
@@ -61,6 +67,7 @@ v3-bench = ["native-v3"]     # Enable V3 backend benchmarks
 dependency-monitoring = []   # Enable dependency health monitoring
 v3-forensics = []            # Enable forensic instrumentation for V3 backend performance analysis
 v3-page-overflow-debug = []  # Enable detailed page overflow diagnostics in node page packing
+memory_profiling = []        # Enable memory profiling for benchmarks
 
 # Legacy compatibility
 
@@ -129,5 +136,26 @@ required-features = ["native-v3"]
 # V3 Algorithm benchmarks (requires native-v3 feature)
 [[bench]]
 name = "v3_algorithm_benchmarks"
+harness = false
+required-features = ["native-v3"]
+
+# Performance improvements benchmarks (Task 1)
+[[bench]]
+name = "concurrent_access"
+harness = false
+required-features = ["native-v3"]
+
+[[bench]]
+name = "cold_cache"
+harness = false
+required-features = ["native-v3"]
+
+[[bench]]
+name = "memory_profiling"
+harness = false
+required-features = ["native-v3", "memory_profiling"]
+
+[[bench]]
+name = "real_datasets"
 harness = false
 required-features = ["native-v3"]

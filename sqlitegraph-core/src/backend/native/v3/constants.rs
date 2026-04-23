@@ -103,6 +103,36 @@ pub mod compression {
     pub const VARINT_SMALL_VALUE_SAVINGS: usize = 1;
 }
 
+/// Adaptive page size configuration
+pub mod page_size {
+    /// Default page size (4KB - optimal for SSDs)
+    pub const DEFAULT_PAGE_SIZE: u32 = 4096;
+
+    /// HDD-optimized page size (16KB - reduces seeks)
+    pub const HDD_PAGE_SIZE: u32 = 16384;
+
+    /// SSD page size (4KB - matches SSD block size)
+    pub const SSD_PAGE_SIZE: u32 = 4096;
+
+    /// Minimum page size allowed
+    pub const MIN_PAGE_SIZE: u32 = 2048;
+
+    /// Maximum page size allowed
+    pub const MAX_PAGE_SIZE: u32 = 65536;
+}
+
+/// Node cache configuration
+pub mod node_cache {
+    /// Default LRU cache capacity (number of node records)
+    pub const DEFAULT_CACHE_CAPACITY: usize = 1000;
+
+    /// Maximum cache capacity
+    pub const MAX_CACHE_CAPACITY: usize = 10000;
+
+    /// Minimum cache capacity
+    pub const MIN_CACHE_CAPACITY: usize = 100;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

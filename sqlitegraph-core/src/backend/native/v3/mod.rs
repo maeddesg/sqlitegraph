@@ -8,6 +8,7 @@
 //! - Write-Ahead Logging for crash recovery (Phase 65)
 
 pub mod allocator;
+pub mod algorithm;
 pub mod backend;
 pub mod btree;
 pub mod compact_edge_record;
@@ -26,6 +27,7 @@ pub mod name_index;
 pub mod string_table;
 pub mod node;
 pub mod pubsub;
+pub mod storage;
 pub mod wal;
 pub mod write_batch;
 
@@ -78,6 +80,12 @@ pub use backend::V3Backend;
 
 // Re-export WriteBatch
 pub use write_batch::WriteBatch;
+
+// Performance improvements (Task 1)
+pub use node::cache::NodeCache;
+pub use algorithm::parallel_bfs::parallel_bfs_traversal;
+pub use storage::{media_detector::MediaDetector, adaptive_page::AdaptivePageManager};
+pub use compression::edge_delta::DeltaEncodedEdgeStorage;
 
 // Algorithm integration tests
 #[cfg(test)]
