@@ -27,8 +27,7 @@ pub mod name_index;
 pub mod string_table;
 pub mod node;
 pub mod pubsub;
-// TODO: Future task - Storage module
-// pub mod storage;
+pub mod storage;
 pub mod wal;
 pub mod write_batch;
 
@@ -86,10 +85,8 @@ pub use write_batch::WriteBatch;
 pub use node::cache::NodeCache;
 // Task 5: Parallel BFS algorithm
 pub use algorithm::{parallel_bfs, BfsConfig};
-// TODO: Task 4+ - Algorithm and storage modules
-// pub use algorithm::parallel_bfs::parallel_bfs_traversal;
-// pub use storage::{media_detector::MediaDetector, adaptive_page::AdaptivePageManager};
-// pub use compression::edge_delta::DeltaEncodedEdgeStorage;
+// Task 4: Storage module
+pub use storage::{MediaDetector, MediaType, AdaptivePageManager, PageConfig};
 
 // Algorithm integration tests
 #[cfg(test)]
