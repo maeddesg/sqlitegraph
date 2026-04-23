@@ -517,7 +517,9 @@ impl BTreeManager {
 
         match &old_root {
             IndexPage::Internal { keys, children, .. } => {
-                let split_idx = keys.len() / 2;
+                // For internal nodes, split at (len - 1) / 2 to ensure both halves
+                // have at least MIN_KEYS after removing the separator
+                let split_idx = (keys.len() - 1) / 2;
                 let separator_key = keys[split_idx];
 
                 // Create the new sibling internal node
@@ -649,7 +651,9 @@ impl BTreeManager {
 
         match &child {
             IndexPage::Internal { keys, children, .. } => {
-                let split_idx = keys.len() / 2;
+                // For internal nodes, split at (len - 1) / 2 to ensure both halves
+                // have at least MIN_KEYS after removing the separator
+                let split_idx = (keys.len() - 1) / 2;
                 let separator_key = keys[split_idx];
 
                 // Create sibling internal node

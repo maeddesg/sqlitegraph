@@ -1,7 +1,7 @@
 # Testing Guide
 
-**Last Updated:** 2026-01-26
-**Version:** v1.4.2
+**Last Updated:** 2026-04-23
+**Version:** v2.1.0
 
 This guide covers testing patterns, utilities, and best practices for SQLiteGraph.
 
@@ -395,6 +395,37 @@ criterion_main!(benches);
 | `regression_memory.rs` | Detect memory usage regressions |
 | `regression_non_chain_patterns.rs` | Validate traversal performance |
 | `regression_pubsub_*.rs` | Pub/Sub overhead validation |
+
+### v2.1.0 Performance Benchmarks
+
+**Location:** `benches/cold_cache.rs`, `benches/concurrent_access.rs`, `benches/memory_profiling.rs`
+
+| Benchmark | Purpose | Feature |
+|-----------|---------|---------|
+| `cold_cache` | BFS/point lookup on cold cache | LRU cache validation |
+| `concurrent_access` | Multi-threaded read/write workloads | Thread safety validation |
+| `memory_profiling` | Memory per 1000 nodes, traversal memory | Memory usage tracking |
+
+**Running v2.1.0 Benchmarks:**
+
+```bash
+# Cold cache benchmarks (requires Linux)
+cargo bench --bench cold_cache --features native-v3
+
+# Concurrent access benchmarks
+cargo bench --bench concurrent_access --features native-v3
+
+# Memory profiling (requires Linux)
+cargo bench --bench memory_profiling --features native-v3
+```
+
+**Note:** Some benchmarks require Linux for:
+- `drop_caches()` - Clears OS page cache via `/proc/sys/vm/drop_caches`
+- `get_rss_bytes()` - Reads memory usage from `/proc/self/status`
+
+**Platform Requirements:**
+- **Linux**: Full benchmark support
+- **macOS/Windows**: Benchmarks run without cache clearing/memory profiling
 
 ---
 

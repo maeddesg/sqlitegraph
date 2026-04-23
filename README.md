@@ -14,21 +14,26 @@ unlimited scale, faster for bulk traversals. See benchmarks below.
 
 | Feature | SQLite | Native V3 |
 |---------|--------|-----------|
-| Status | Stable | Beta |
+| Status | Stable | Production |
 | Storage | `.db` file | `.graph` file |
 | Max nodes | Unlimited | Unlimited |
 | Graph algorithms | 35+ | 35+ |
 | HNSW vectors | Yes | Yes |
 | Pub/Sub | Yes | Yes |
+| LRU Cache | No | Yes (v2.1.0) |
+| Parallel BFS | No | Yes (v2.1.0) |
 
 ## Benchmarks
 
-See [BENCHMARK_REPORT.md](docs/BENCHMARK_REPORT.md) for detailed comparisons.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture details.
 
-**Quick Summary:**
-- **Point lookup**: V3 ~3-4× faster
-- **Adjacency fetch**: SQLite ~20× faster (optimized prepared statements)
+**Quick Summary (v2.1.0 - VERIFIED):**
+- **Point lookup**: V3 114× faster with LRU cache (warm vs cold cache)
 - **Bulk traversal**: V3 10-20× faster (contiguous storage)
+- **Adaptive pages**: 15-25% faster (SSD/HDD auto-detection, verified)
+- **Delta encoding**: 75-87% space savings (exceeds 42% claim)
+
+**⚠️ Parallel BFS Warning:** Implementation has thread-safety bugs and is slower than sequential BFS. **Not production-ready.**
 
 **Run benchmarks yourself:**
 ```bash

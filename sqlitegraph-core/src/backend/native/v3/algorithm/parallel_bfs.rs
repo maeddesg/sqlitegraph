@@ -254,10 +254,13 @@ fn parallel_bfs_impl(
     visited.insert(start);
     result.add_visit(start, distance);
 
-    // Get number of available CPUs for chunking
-    let num_cpus = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4);
+    // CRITICAL: Cap at 4 threads to prevent system overload
+    let num_cpus = std::cmp::min(
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4),
+        4  // Maximum 4 threads - prevents desktop crash
+    );
 
     // Process each level
     while !current_level.is_empty() {

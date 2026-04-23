@@ -62,9 +62,10 @@ use crate::backend::native::v3::forensics::{
     FORENSIC_COUNTERS, PageType as ForensicPageType, Subsystem,
 };
 use crate::backend::native::v3::{
-    allocator::PageAllocator, btree::BTreeManager, constants::DEFAULT_PAGE_SIZE,
+    allocator::PageAllocator, btree::BTreeManager,
     file_coordinator::FileCoordinator, header::PersistentHeaderV3, wal::WALWriter,
 };
+use crate::backend::native::v3::compression::edge_delta::{compress_edge_ids, decompress_edge_ids};
 use crate::backend::native::{
     types::{NativeBackendError, NativeResult},
     v3::compact_edge_record::{CompactEdgeRecord, Direction as V2Direction},
@@ -150,7 +151,7 @@ impl V3EdgeCluster {
             src,
             edges: Vec::new(),
             direction,
-            format_version: 2, // v2 includes src+direction for recovery
+            format_version: 3, // v3 includes delta compression for edge IDs
             page_id,
         }
     }
@@ -204,6 +205,7 @@ impl V3EdgeCluster {
     }
 
     /// Serialize to bytes for page storage
+    /// Format v3: [version: 1 byte] [src: 8 bytes] [dir: 1 byte] [compressed: 1 byte] [edge_count: 4 bytes] [compressed_ids...][edge_metadata...]
     /// Format v2: [version: 1 byte] [src: 8 bytes] [dir: 1 byte] [edge_count: 4 bytes] [edges...]
     /// Format v1: [version: 1 byte] [edge_count: 4 bytes] [edges...]  (legacy, no src/dir)
     pub fn serialize(&self) -> NativeResult<Vec<u8>> {
@@ -212,7 +214,7 @@ impl V3EdgeCluster {
         // Header: format_version (1 byte)
         result.push(self.format_version);
 
-        // v2 format: embed src and direction for recovery
+        // v2+ format: embed src and direction for recovery
         if self.format_version >= 2 {
             // Source node ID (8 bytes, big-endian)
             result.extend_from_slice(&self.src.to_be_bytes());
@@ -228,10 +230,34 @@ impl V3EdgeCluster {
         let count = self.edges.len() as u32;
         result.extend_from_slice(&count.to_be_bytes());
 
-        // Serialize each edge using V2 CompactEdgeRecord format
-        for edge in &self.edges {
-            let edge_bytes = edge.serialize();
-            result.extend_from_slice(&edge_bytes);
+        // v3 format: use delta compression for edge IDs
+        if self.format_version >= 3 {
+            // Compression flag (1 byte): 1 = compressed, 0 = uncompressed
+            result.push(1); // Always compress in v3
+
+            // Extract and compress neighbor IDs
+            let neighbor_ids: Vec<i64> = self.edges.iter().map(|e| e.neighbor_id).collect();
+            let compressed_ids = compress_edge_ids(&neighbor_ids);
+
+            // Store compressed ID count (4 bytes) and data
+            result.extend_from_slice(&(compressed_ids.len() as u32).to_be_bytes());
+            result.extend_from_slice(&compressed_ids);
+
+            // Store edge metadata (type_offset and edge_data) separately
+            for edge in &self.edges {
+                // type_offset (2 bytes)
+                result.extend_from_slice(&edge.edge_type_offset.to_be_bytes());
+                // edge_data_len (2 bytes) + edge_data
+                let data_len = edge.edge_data.len() as u16;
+                result.extend_from_slice(&data_len.to_be_bytes());
+                result.extend_from_slice(&edge.edge_data);
+            }
+        } else {
+            // v2 format: serialize each edge using V2 CompactEdgeRecord format
+            for edge in &self.edges {
+                let edge_bytes = edge.serialize();
+                result.extend_from_slice(&edge_bytes);
+            }
         }
 
         Ok(result)
@@ -249,7 +275,7 @@ impl V3EdgeCluster {
 
         let format_version = bytes[0];
 
-        if format_version > 2 {
+        if format_version > 3 {
             return Err(NativeBackendError::DeserializationError {
                 context: format!("Unknown edge cluster format version: {}", format_version),
             });
@@ -295,49 +321,129 @@ impl V3EdgeCluster {
 
         let mut edges = Vec::with_capacity(count);
 
-        // Deserialize each edge
-        // CompactEdgeRecord format: [neighbor_id: 8 bytes] [type_offset: 2 bytes] [data_len: 2 bytes] [data: variable]
-        for _ in 0..count {
-            if pos + 12 > bytes.len() {
+        // v3 format: delta-compressed edge IDs
+        if format_version >= 3 {
+            // Check compression flag (1 byte)
+            if pos >= bytes.len() {
                 return Err(NativeBackendError::DeserializationError {
-                    context: "Edge data truncated".to_string(),
+                    context: "Missing compression flag".to_string(),
                 });
             }
+            let compressed_flag = bytes[pos];
+            pos += 1;
 
-            let neighbor_id = i64::from_be_bytes(
-                bytes[pos..pos + 8]
-                    .try_into()
-                    .expect("bounds checked above"),
-            );
-            pos += 8;
+            if compressed_flag == 1 {
+                // Read compressed IDs
+                if pos + 4 > bytes.len() {
+                    return Err(NativeBackendError::DeserializationError {
+                        context: "Missing compressed ID length".to_string(),
+                    });
+                }
+                let compressed_len = u32::from_be_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]]) as usize;
+                pos += 4;
 
-            let type_offset = u16::from_be_bytes(
-                bytes[pos..pos + 2]
-                    .try_into()
-                    .expect("bounds checked above"),
-            );
-            pos += 2;
+                if pos + compressed_len > bytes.len() {
+                    return Err(NativeBackendError::DeserializationError {
+                        context: "Compressed IDs truncated".to_string(),
+                    });
+                }
+                let compressed_data = &bytes[pos..pos + compressed_len];
+                pos += compressed_len;
 
-            let data_len = u16::from_be_bytes(
-                bytes[pos..pos + 2]
-                    .try_into()
-                    .expect("bounds checked above"),
-            ) as usize;
-            pos += 2;
+                // Decompress neighbor IDs
+                let neighbor_ids = decompress_edge_ids(compressed_data, count)
+                    .map_err(|e| NativeBackendError::DeserializationError {
+                        context: format!("Failed to decompress edge IDs: {}", e),
+                    })?;
 
-            let edge_data = if data_len > 0 {
-                if pos + data_len > bytes.len() {
+                // Read edge metadata for each ID
+                for neighbor_id in neighbor_ids {
+                    if pos + 4 > bytes.len() {
+                        return Err(NativeBackendError::DeserializationError {
+                            context: "Edge metadata truncated".to_string(),
+                        });
+                    }
+
+                    let type_offset = u16::from_be_bytes(
+                        bytes[pos..pos + 2]
+                            .try_into()
+                            .expect("bounds checked above"),
+                    );
+                    pos += 2;
+
+                    let data_len = u16::from_be_bytes(
+                        bytes[pos..pos + 2]
+                            .try_into()
+                            .expect("bounds checked above"),
+                    ) as usize;
+                    pos += 2;
+
+                    let edge_data = if data_len > 0 {
+                        if pos + data_len > bytes.len() {
+                            return Err(NativeBackendError::DeserializationError {
+                                context: "Edge data truncated".to_string(),
+                            });
+                        }
+                        let data = bytes[pos..pos + data_len].to_vec();
+                        pos += data_len;
+                        data
+                    } else {
+                        Vec::new()
+                    };
+
+                    edges.push(CompactEdgeRecord::new(neighbor_id, type_offset, edge_data));
+                }
+            } else {
+                // Uncompressed v3 - shouldn't happen but handle gracefully
+                // Fall through to v2 format handling
+            }
+        }
+
+        // v1/v2 format: deserialize each edge
+        // CompactEdgeRecord format: [neighbor_id: 8 bytes] [type_offset: 2 bytes] [data_len: 2 bytes] [data: variable]
+        if edges.is_empty() {
+            for _ in 0..count {
+                if pos + 12 > bytes.len() {
                     return Err(NativeBackendError::DeserializationError {
                         context: "Edge data truncated".to_string(),
                     });
                 }
-                bytes[pos..pos + data_len].to_vec()
-            } else {
-                Vec::new()
-            };
-            pos += data_len;
 
-            edges.push(CompactEdgeRecord::new(neighbor_id, type_offset, edge_data));
+                let neighbor_id = i64::from_be_bytes(
+                    bytes[pos..pos + 8]
+                        .try_into()
+                        .expect("bounds checked above"),
+                );
+                pos += 8;
+
+                let type_offset = u16::from_be_bytes(
+                    bytes[pos..pos + 2]
+                        .try_into()
+                        .expect("bounds checked above"),
+                );
+                pos += 2;
+
+                let data_len = u16::from_be_bytes(
+                    bytes[pos..pos + 2]
+                        .try_into()
+                        .expect("bounds checked above"),
+                ) as usize;
+                pos += 2;
+
+                let edge_data = if data_len > 0 {
+                    if pos + data_len > bytes.len() {
+                        return Err(NativeBackendError::DeserializationError {
+                            context: "Edge data truncated".to_string(),
+                        });
+                    }
+                    bytes[pos..pos + data_len].to_vec()
+                } else {
+                    Vec::new()
+                };
+                pos += data_len;
+
+                edges.push(CompactEdgeRecord::new(neighbor_id, type_offset, edge_data));
+            }
         }
 
         Ok(Self {
@@ -397,6 +503,8 @@ pub struct V3EdgeStore {
     /// Page allocator for edge page allocation
     /// CRITICAL: Shared with NodeStore to prevent page ID collisions
     allocator: Arc<RwLock<PageAllocator>>,
+    /// Page size for I/O operations (detected from storage media)
+    page_size: u32,
     /// Coordinated file handle for all main DB I/O (optional for backward compat)
     /// When set, all file writes go through this coordinator to prevent race conditions
     file_coordinator: Option<Arc<FileCoordinator>>,
@@ -435,6 +543,7 @@ impl V3EdgeStore {
         btree: BTreeManager,
         wal: Option<WALWriter>,
         allocator: Arc<RwLock<PageAllocator>>,
+        page_size: u32,
     ) -> Self {
         Self {
             btree: parking_lot::RwLock::new(btree),
@@ -448,6 +557,7 @@ impl V3EdgeStore {
             dirty_clusters: RwLock::new(HashMap::new()),
             db_path: None,
             allocator,
+            page_size,
             file_coordinator: None,
         }
     }
@@ -459,6 +569,7 @@ impl V3EdgeStore {
         wal: Option<WALWriter>,
         db_path: PathBuf,
         allocator: Arc<RwLock<PageAllocator>>,
+        page_size: u32,
     ) -> Self {
         Self {
             btree: parking_lot::RwLock::new(btree),
@@ -472,6 +583,7 @@ impl V3EdgeStore {
             dirty_clusters: RwLock::new(HashMap::new()),
             db_path: Some(db_path),
             allocator,
+            page_size,
             file_coordinator: None,
         }
     }
@@ -496,6 +608,7 @@ impl V3EdgeStore {
             dirty_clusters: RwLock::new(HashMap::new()),
             db_path: Some(db_path),
             allocator: Arc::new(RwLock::new(PageAllocator::new(&header))),
+            page_size: header.page_size,
             file_coordinator: None,
         }
     }
@@ -592,7 +705,7 @@ impl V3EdgeStore {
         };
         drop(btree);
 
-        let offset = V3_HEADER_SIZE + (page_id - 1) * DEFAULT_PAGE_SIZE;
+        let offset = V3_HEADER_SIZE + (page_id - 1) * (self.page_size as u64);
 
         // Try to open file and read page
         let mut file = match File::open(db_path) {
@@ -606,7 +719,7 @@ impl V3EdgeStore {
         }
 
         // Read page data
-        let mut buffer = vec![0u8; 4096]; // Read a full page
+        let mut buffer = vec![0u8; self.page_size as usize]; // Read a full page
         match file.read(&mut buffer) {
             Ok(n) if n > 0 => {
                 // Try to deserialize cluster from page
@@ -1048,7 +1161,7 @@ impl V3EdgeStore {
             let offset: u64 = if page_id == 0 {
                 0
             } else {
-                V3_HEADER_SIZE + (page_id - 1) * DEFAULT_PAGE_SIZE
+                V3_HEADER_SIZE + (page_id - 1) * (self.page_size as u64)
             };
             crate::track_page_alloc!(page_id, Subsystem::EdgeStore, ForensicPageType::Edge);
             crate::track_page_write!(
@@ -1063,9 +1176,9 @@ impl V3EdgeStore {
         // Use FileCoordinator when available to prevent race conditions
         if let Some(ref coordinator) = self.file_coordinator {
             // Pad data to full page size if needed for page-aligned writes
-            let page_data = if data.len() < DEFAULT_PAGE_SIZE as usize {
+            let page_data = if data.len() < self.page_size as usize {
                 let mut padded = data.to_vec();
-                padded.resize(DEFAULT_PAGE_SIZE as usize, 0);
+                padded.resize(self.page_size as usize, 0);
                 padded
             } else {
                 data.to_vec()
@@ -1079,7 +1192,7 @@ impl V3EdgeStore {
         let offset: u64 = if page_id == 0 {
             0
         } else {
-            V3_HEADER_SIZE + (page_id - 1) * DEFAULT_PAGE_SIZE
+            V3_HEADER_SIZE + (page_id - 1) * (self.page_size as u64)
         };
 
         // CRITICAL FIX: Do NOT use create(true) - it truncates the file!
@@ -1201,7 +1314,7 @@ mod tests {
         assert!(cluster.edges.is_empty());
         assert_eq!(cluster.direction, Direction::Outgoing);
         assert_eq!(cluster.page_id, 100);
-        assert_eq!(cluster.format_version, 2);
+        assert_eq!(cluster.format_version, 3);
     }
 
     #[test]
@@ -1221,7 +1334,7 @@ mod tests {
         let bytes = cluster.serialize().unwrap();
         let deserialized = V3EdgeCluster::deserialize(&bytes, 100).unwrap();
 
-        assert_eq!(deserialized.format_version, 2);
+        assert_eq!(deserialized.format_version, 3);
         assert_eq!(deserialized.src, 42, "src should survive roundtrip");
         assert_eq!(
             deserialized.direction,
@@ -1282,9 +1395,10 @@ mod tests {
                 Some(writer),
                 path.clone(),
                 allocator.clone(),
+                header.page_size,
             )
         } else {
-            V3EdgeStore::new(btree, None, allocator.clone())
+            V3EdgeStore::new(btree, None, allocator.clone(), header.page_size)
         };
 
         // CRITICAL FIX: Restore B+Tree metadata if it exists

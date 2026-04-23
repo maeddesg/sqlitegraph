@@ -503,33 +503,40 @@ Full benchmark results (CSV format) available in `target/criterion/` after runni
 
 ### Node Record Caching
 - **Feature**: LRU cache for V3Backend node lookups
-- **Improvement**: 2.8× faster point lookups
-- **Benchmark**: Point lookup benchmark
+- **Improvement**: 114× faster point lookups (warm cache vs cold cache)
+- **Benchmark**: Verified with cache_perf_test example (2026-04-23)
 - **Details**:
-  - Cache hit rate: 87% (1000 node cache)
-  - Lookup time: 0.03ms → 0.011ms
+  - Cold cache lookup: 149.967µs per lookup
+  - Warm cache lookup: 1.311µs per lookup
+  - Cache hit rate: 95%+ (1000 node default capacity)
   - Memory overhead: ~200KB for 1000 nodes
 
 ### Parallel BFS
 - **Feature**: Multi-threaded BFS using Rayon
-- **Improvement**: 3.2× faster on 4-core systems
-- **Benchmark**: Parallel BFS benchmark
+- **Improvement**: **NOT VERIFIED** - Benchmark not yet implemented
+- **Status**: Algorithm implementation exists, but performance not yet measured
+- **Note**: Documentation previously claimed "3.2× faster" but this was a projection, not measured
+
+### Cold Cache BFS (VERIFIED)
+- **Feature**: BFS traversal on cold cache (no OS page cache)
+- **Benchmark**: cold_cache BFS benchmark (2026-04-23, B+Tree fix applied)
 - **Details**:
-  - Graph size: 100K nodes
-  - Sequential: 147ms
-  - Parallel (4 threads): 46ms
-  - Scalability: Near-linear up to 8 threads
+  - 1K nodes: 4.8ms
+  - 10K nodes: 39.7ms
+  - 100K nodes: 1.19s (now works after B+Tree MIN_KEYS fix)
+  - **Previously failed** at 100K nodes due to B+Tree bug
 
 ### Adaptive Page Sizing
 - **Feature**: Automatic SSD vs HDD detection
-- **Improvement**: 15% faster on HDDs
-- **Benchmark**: Backend comparison with adaptive pages
-- **Details**:
-  - SSD: 4KB pages (no change)
-  - HDD: 16KB pages (15% throughput improvement)
-  - Detection: Automatic via /sys/block
+- **Improvement**: **NOT VERIFIED** - Requires SSD vs HDD hardware comparison
+- **Status**: Implementation exists, but performance impact not yet measured
+- **Note**: Documentation previously claimed "15% faster" but this was a projection
 
 ### Delta-Encoded Edges
+- **Feature**: Edge ID compression using delta encoding
+- **Improvement**: **NOT VERIFIED** - Compression ratio not yet measured
+- **Status**: Implementation exists, but space savings not yet verified
+- **Note**: Documentation previously claimed "42% space savings" but this was a projection
 - **Feature**: Delta encoding for edge ID storage
 - **Improvement**: 42% space savings for sequential IDs
 - **Benchmark**: Edge compression benchmark

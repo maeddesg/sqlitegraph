@@ -33,6 +33,7 @@ use crate::backend::native::v3::{
     KindIndex, KvStore, KvValue, NodeCache, NodeRecordV3, NodeStore, PageAllocator,
     PersistentHeaderV3, Publisher, V3_HEADER_SIZE, V3EdgeStore,
 };
+use crate::backend::native::v3::storage::AdaptivePageManager;
 use crate::backend::{
     BackendDirection, ChainStep, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, PatternMatch,
     PatternQuery,
@@ -298,8 +299,13 @@ impl V3Backend {
     pub fn create<P: AsRef<Path>>(path: P) -> Result<Self, SqliteGraphError> {
         let db_path = path.as_ref().to_path_buf();
 
-        // Create initial header
-        let header = PersistentHeaderV3::new_v3();
+        // Detect optimal page size based on storage media (SSD vs HDD)
+        let mut adaptive_manager = AdaptivePageManager::new(&db_path);
+        let page_config = adaptive_manager.get_config();
+
+        // Create initial header with detected page size
+        let mut header = PersistentHeaderV3::new_v3();
+        header.page_size = page_config.page_size;
 
         // Write header to file
         let mut file = OpenOptions::new()
@@ -328,6 +334,7 @@ impl V3Backend {
             None,
             db_path.clone(),
             Arc::clone(&allocator),
+            header.page_size,
         );
 
         Ok(Self {
@@ -452,6 +459,7 @@ impl V3Backend {
             None,
             db_path.clone(),
             Arc::clone(&allocator),
+            header.page_size,
         );
         // Attempt to recover edge B+Tree from metadata sidecar
         let _ = edge_store.restore_btree_from_metadata();
@@ -1476,6 +1484,7 @@ impl GraphBackend for V3Backend {
             None,
             self.db_path.clone(),
             Arc::clone(&self.allocator),
+            imported_header.page_size,
         );
         let _ = edge_store.restore_btree_from_metadata();
 

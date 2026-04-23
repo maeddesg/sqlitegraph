@@ -13,13 +13,12 @@ fn main() {
     let db_path = temp_dir.path().join("test.graph");
 
     // Create minimal V3 components
+    let header = sqlitegraph::backend::native::v3::PersistentHeaderV3::new_v3();
     let allocator = std::sync::Arc::new(parking_lot::RwLock::new(
-        sqlitegraph::backend::native::v3::PageAllocator::new(
-            &sqlitegraph::backend::native::v3::PersistentHeaderV3::new_v3(),
-        ),
+        sqlitegraph::backend::native::v3::PageAllocator::new(&header),
     ));
     let btree = BTreeManager::new(allocator.clone(), None, db_path.clone());
-    let mut store = V3EdgeStore::new(btree, None, allocator);
+    let mut store = V3EdgeStore::new(btree, None, allocator, header.page_size);
 
     println!("═══════════════════════════════════════════════════════════════");
     println!("  V3EdgeStore Performance Test (RwLock + Vec<i64> cache)");

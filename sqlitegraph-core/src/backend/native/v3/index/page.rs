@@ -34,18 +34,20 @@ pub mod constants {
     pub const DATA_START_OFFSET: usize = PAGE_HEADER_SIZE;
 }
 
-/// Maximum keys per internal page (252 allows even 126/126 splits)
+/// Maximum keys per internal page (252 allows 125/126 splits after separator)
 /// Page layout: 32 header + 252*8 keys + 253*8 children = 32 + 2016 + 2024 = 4072 bytes < 4096
 pub const MAX_KEYS: usize = 252;
 
-/// Minimum keys for non-root internal nodes (ceil(MAX_KEYS / 2))
-pub const MIN_KEYS: usize = 126;
+/// Minimum keys for non-root internal nodes (floor(MAX_KEYS / 2))
+/// When splitting 252 keys at index 125: old node gets 125, sibling gets 126
+pub const MIN_KEYS: usize = 125;
 
 /// Maximum entries per leaf page (same as MAX_KEYS for consistency)
 /// Page layout: 32 header + 252*16 entries + 8 next_leaf = 32 + 4032 + 8 = 4072 bytes < 4096
 pub const MAX_ENTRIES: usize = 252;
 
-/// Minimum entries for non-root leaf nodes
+/// Minimum entries for non-root leaf nodes (floor(MAX_ENTRIES / 2))
+/// When splitting 252 entries at index 126: old node gets 126, sibling gets 126
 pub const MIN_ENTRIES: usize = 126;
 
 /// Maximum children per internal page
