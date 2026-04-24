@@ -1,7 +1,7 @@
 use sqlitegraph::backend::native::v3::backend::V3Backend;
-use tempfile::tempdir;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+use tempfile::tempdir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempdir()?;
@@ -20,14 +20,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let page_size = u32::from_be_bytes(buffer);
 
     println!("Page size: {} bytes", page_size);
-    println!("Media type: {:?}",
-        if page_size == 4096 { "SSD (or unknown)" }
-        else if page_size == 16384 { "HDD" }
-        else { "Unknown" });
+    println!(
+        "Media type: {:?}",
+        if page_size == 4096 {
+            "SSD (or unknown)"
+        } else if page_size == 16384 {
+            "HDD"
+        } else {
+            "Unknown"
+        }
+    );
 
     // Verify page size is valid
-    assert!(page_size == 4096 || page_size == 16384,
-        "Invalid page size: {}", page_size);
+    assert!(
+        page_size == 4096 || page_size == 16384,
+        "Invalid page size: {}",
+        page_size
+    );
 
     println!("✓ Adaptive page sizing is working!");
     Ok(())

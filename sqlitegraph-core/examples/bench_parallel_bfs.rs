@@ -2,11 +2,11 @@
 //!
 //! Compares sequential vs parallel BFS performance on different graph sizes.
 
-use std::time::Instant;
 use sqlitegraph::GraphBackend;
-use sqlitegraph::backend::native::v3::algorithm::parallel_bfs::{parallel_bfs, BfsConfig};
 use sqlitegraph::backend::native::v3::V3Backend;
-use sqlitegraph::{NodeSpec, EdgeSpec};
+use sqlitegraph::backend::native::v3::algorithm::parallel_bfs::{BfsConfig, parallel_bfs};
+use sqlitegraph::{EdgeSpec, NodeSpec};
+use std::time::Instant;
 use tempfile::TempDir;
 
 /// Create a chain graph: 0 -> 1 -> 2 -> ... -> (n-1)
@@ -72,7 +72,10 @@ fn create_star_graph(backend: &V3Backend, n: usize) -> Vec<i64> {
 fn benchmark_chain_graphs() {
     println!("=== Chain Graph Benchmark ===");
     println!("Testing sequential vs parallel BFS on chain topology");
-    println!("{:<10} {:<15} {:<15} {:<10} {:<15}", "Size", "Sequential", "Parallel", "Speedup", "Nodes visited");
+    println!(
+        "{:<10} {:<15} {:<15} {:<10} {:<15}",
+        "Size", "Sequential", "Parallel", "Speedup", "Nodes visited"
+    );
     println!("{}", "-".repeat(70));
 
     let sizes = vec![100, 500, 1_000, 5_000, 10_000];
@@ -91,8 +94,8 @@ fn benchmark_chain_graphs() {
         };
 
         let start_seq = Instant::now();
-        let result_seq = parallel_bfs(&backend1, node_ids1[0], Some(config_seq))
-            .expect("Failed to perform BFS");
+        let result_seq =
+            parallel_bfs(&backend1, node_ids1[0], Some(config_seq)).expect("Failed to perform BFS");
         let time_seq = start_seq.elapsed();
 
         // Parallel BFS (4 threads)
@@ -108,20 +111,18 @@ fn benchmark_chain_graphs() {
         };
 
         let start_par = Instant::now();
-        let result_par = parallel_bfs(&backend2, node_ids2[0], Some(config_par))
-            .expect("Failed to perform BFS");
+        let result_par =
+            parallel_bfs(&backend2, node_ids2[0], Some(config_par)).expect("Failed to perform BFS");
         let time_par = start_par.elapsed();
 
         assert_eq!(result_seq.total_visited, result_par.total_visited);
 
         let speedup = time_seq.as_secs_f64() / time_par.as_secs_f64();
 
-        println!("{:<10} {:<15.2?} {:<15.2?} {:<10.2}× {:<15}",
-                 size,
-                 time_seq,
-                 time_par,
-                 speedup,
-                 result_seq.total_visited);
+        println!(
+            "{:<10} {:<15.2?} {:<15.2?} {:<10.2}× {:<15}",
+            size, time_seq, time_par, speedup, result_seq.total_visited
+        );
     }
 
     println!();
@@ -131,7 +132,10 @@ fn benchmark_star_graphs() {
     println!("=== Star Graph Benchmark ===");
     println!("Testing sequential vs parallel BFS on star topology");
     println!("Star graphs have wide levels that benefit from parallelization");
-    println!("{:<10} {:<15} {:<15} {:<10} {:<15}", "Size", "Sequential", "Parallel", "Speedup", "Nodes visited");
+    println!(
+        "{:<10} {:<15} {:<15} {:<10} {:<15}",
+        "Size", "Sequential", "Parallel", "Speedup", "Nodes visited"
+    );
     println!("{}", "-".repeat(70));
 
     let sizes = vec![100, 500, 1_000, 5_000, 10_000];
@@ -150,8 +154,8 @@ fn benchmark_star_graphs() {
         };
 
         let start_seq = Instant::now();
-        let result_seq = parallel_bfs(&backend1, node_ids1[0], Some(config_seq))
-            .expect("Failed to perform BFS");
+        let result_seq =
+            parallel_bfs(&backend1, node_ids1[0], Some(config_seq)).expect("Failed to perform BFS");
         let time_seq = start_seq.elapsed();
 
         // Parallel BFS (4 threads)
@@ -167,20 +171,18 @@ fn benchmark_star_graphs() {
         };
 
         let start_par = Instant::now();
-        let result_par = parallel_bfs(&backend2, node_ids2[0], Some(config_par))
-            .expect("Failed to perform BFS");
+        let result_par =
+            parallel_bfs(&backend2, node_ids2[0], Some(config_par)).expect("Failed to perform BFS");
         let time_par = start_par.elapsed();
 
         assert_eq!(result_seq.total_visited, result_par.total_visited);
 
         let speedup = time_seq.as_secs_f64() / time_par.as_secs_f64();
 
-        println!("{:<10} {:<15.2?} {:<15.2?} {:<10.2}× {:<15}",
-                 size,
-                 time_seq,
-                 time_par,
-                 speedup,
-                 result_seq.total_visited);
+        println!(
+            "{:<10} {:<15.2?} {:<15.2?} {:<10.2}× {:<15}",
+            size, time_seq, time_par, speedup, result_seq.total_visited
+        );
     }
 
     println!();
@@ -189,7 +191,10 @@ fn benchmark_star_graphs() {
 fn benchmark_crossover_point() {
     println!("=== Crossover Point Analysis ===");
     println!("Finding the graph size where parallel becomes faster than sequential");
-    println!("{:<10} {:<15} {:<15} {:<10} {:<10}", "Size", "Sequential", "Parallel", "Speedup", "Winner");
+    println!(
+        "{:<10} {:<15} {:<15} {:<10} {:<10}",
+        "Size", "Sequential", "Parallel", "Speedup", "Winner"
+    );
     println!("{}", "-".repeat(65));
 
     let sizes = vec![100, 200, 500, 700, 1_000, 1_500, 2_000, 3_000, 5_000];
@@ -208,8 +213,8 @@ fn benchmark_crossover_point() {
         };
 
         let start_seq = Instant::now();
-        let _result_seq = parallel_bfs(&backend1, node_ids1[0], Some(config_seq))
-            .expect("Failed to perform BFS");
+        let _result_seq =
+            parallel_bfs(&backend1, node_ids1[0], Some(config_seq)).expect("Failed to perform BFS");
         let time_seq = start_seq.elapsed();
 
         // Parallel BFS (default config)
@@ -219,8 +224,8 @@ fn benchmark_crossover_point() {
         let node_ids2 = create_chain_graph(&backend2, size);
 
         let start_par = Instant::now();
-        let _result_par = parallel_bfs(&backend2, node_ids2[0], None)
-            .expect("Failed to perform BFS");
+        let _result_par =
+            parallel_bfs(&backend2, node_ids2[0], None).expect("Failed to perform BFS");
         let time_par = start_par.elapsed();
 
         let speedup = time_seq.as_secs_f64() / time_par.as_secs_f64();
@@ -233,12 +238,10 @@ fn benchmark_crossover_point() {
             "Tie"
         };
 
-        println!("{:<10} {:<15.2?} {:<15.2?} {:<10.2}× {:<10}",
-                 size,
-                 time_seq,
-                 time_par,
-                 speedup,
-                 winner);
+        println!(
+            "{:<10} {:<15.2?} {:<15.2?} {:<10.2}× {:<10}",
+            size, time_seq, time_par, speedup, winner
+        );
     }
 
     println!();

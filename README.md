@@ -7,8 +7,8 @@ Embedded graph database with dual backend architecture.
 
 **Positioning:** Single-binary embedded database (no server). Persistent storage with
 atomic batch commits. Graph algorithms + HNSW vector search in one engine.
-SQLite: stable, mature, excellent for adjacency queries. V3: high-performance, 
-unlimited scale, faster for bulk traversals. See benchmarks below.
+SQLite: stable, mature, excellent for adjacency queries. V3: high-performance,
+designed for large-scale graphs, faster for bulk traversals. See benchmarks below.
 
 ## Backends
 
@@ -27,12 +27,12 @@ unlimited scale, faster for bulk traversals. See benchmarks below.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture details.
 
-**Quick Summary (v2.1.1 - VERIFIED):**
+**Quick Summary (v2.1.2 - VERIFIED):**
 - **Point lookup**: V3 114× faster with LRU cache (warm vs cold cache)
 - **Bulk traversal**: V3 10-20× faster (contiguous storage)
-- **Adaptive pages**: 15-25% faster (SSD/HDD auto-detection, verified)
+- **Adaptive pages**: 15-25% faster (SSD/HWD auto-detection, verified)
 - **Delta encoding**: 75-87% space savings (exceeds 42% claim)
-- **Parallel BFS**: Thread-safe chunked processing, 1.0-1.17× speedup on small graphs (100-500 nodes)
+- **Parallel BFS**: Thread-safe implementation, sequential fallback for <1K nodes, experimental for larger graphs
 
 **Run benchmarks yourself:**
 ```bash
@@ -103,6 +103,7 @@ Tools built on SQLiteGraph:
 - [Architecture](docs/ARCHITECTURE.md) - System design
 - [Manual](MANUAL.md) - API guide
 - [Changelog](CHANGELOG.md) - Version history
+- [SnapshotId Migration Guide](docs/SNAPSHOTID_MIGRATION.md) - v2.1.2 API changes
 
 ## License
 

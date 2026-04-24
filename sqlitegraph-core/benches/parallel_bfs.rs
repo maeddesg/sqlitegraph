@@ -5,15 +5,11 @@
 
 use std::time::Duration;
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rand::SeedableRng;
-use sqlitegraph::{
-    GraphBackend,
-    NodeSpec,
-    EdgeSpec,
-};
-use sqlitegraph::backend::native::v3::algorithm::parallel_bfs::{parallel_bfs, BfsConfig};
 use sqlitegraph::backend::native::v3::V3Backend;
+use sqlitegraph::backend::native::v3::algorithm::parallel_bfs::{BfsConfig, parallel_bfs};
+use sqlitegraph::{EdgeSpec, GraphBackend, NodeSpec};
 use tempfile::TempDir;
 
 /// Create a chain graph: 0 -> 1 -> 2 -> ... -> (n-1)
@@ -147,38 +143,46 @@ fn bench_bfs_chain(criterion: &mut Criterion) {
         });
 
         // Parallel BFS with default config
-        group.bench_with_input(BenchmarkId::new("parallel_default", size), &size, |b, &size| {
-            b.iter(|| {
-                let temp_dir = TempDir::new().expect("Failed to create temp dir");
-                let db_path = temp_dir.path().join("benchmark.db");
-                let backend = V3Backend::create(&db_path).expect("Failed to create backend");
+        group.bench_with_input(
+            BenchmarkId::new("parallel_default", size),
+            &size,
+            |b, &size| {
+                b.iter(|| {
+                    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+                    let db_path = temp_dir.path().join("benchmark.db");
+                    let backend = V3Backend::create(&db_path).expect("Failed to create backend");
 
-                let node_ids = create_chain_graph(&backend, size);
+                    let node_ids = create_chain_graph(&backend, size);
 
-                let _result = parallel_bfs(&backend, node_ids[0], None)
-                    .expect("Failed to perform BFS");
-            });
-        });
+                    let _result =
+                        parallel_bfs(&backend, node_ids[0], None).expect("Failed to perform BFS");
+                });
+            },
+        );
 
         // Parallel BFS with 4 threads
-        group.bench_with_input(BenchmarkId::new("parallel_4threads", size), &size, |b, &size| {
-            b.iter(|| {
-                let temp_dir = TempDir::new().expect("Failed to create temp dir");
-                let db_path = temp_dir.path().join("benchmark.db");
-                let backend = V3Backend::create(&db_path).expect("Failed to create backend");
+        group.bench_with_input(
+            BenchmarkId::new("parallel_4threads", size),
+            &size,
+            |b, &size| {
+                b.iter(|| {
+                    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+                    let db_path = temp_dir.path().join("benchmark.db");
+                    let backend = V3Backend::create(&db_path).expect("Failed to create backend");
 
-                let node_ids = create_chain_graph(&backend, size);
+                    let node_ids = create_chain_graph(&backend, size);
 
-                let config = BfsConfig {
-                    max_threads: Some(4),
-                    min_parallel_size: 1000,
-                    batch_size: 100,
-                };
+                    let config = BfsConfig {
+                        max_threads: Some(4),
+                        min_parallel_size: 1000,
+                        batch_size: 100,
+                    };
 
-                let _result = parallel_bfs(&backend, node_ids[0], Some(config))
-                    .expect("Failed to perform BFS");
-            });
-        });
+                    let _result = parallel_bfs(&backend, node_ids[0], Some(config))
+                        .expect("Failed to perform BFS");
+                });
+            },
+        );
     }
 
     group.finish();
@@ -215,24 +219,28 @@ fn bench_bfs_star(criterion: &mut Criterion) {
         });
 
         // Parallel BFS with 4 threads
-        group.bench_with_input(BenchmarkId::new("parallel_4threads", size), &size, |b, &size| {
-            b.iter(|| {
-                let temp_dir = TempDir::new().expect("Failed to create temp dir");
-                let db_path = temp_dir.path().join("benchmark.db");
-                let backend = V3Backend::create(&db_path).expect("Failed to create backend");
+        group.bench_with_input(
+            BenchmarkId::new("parallel_4threads", size),
+            &size,
+            |b, &size| {
+                b.iter(|| {
+                    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+                    let db_path = temp_dir.path().join("benchmark.db");
+                    let backend = V3Backend::create(&db_path).expect("Failed to create backend");
 
-                let node_ids = create_star_graph(&backend, size);
+                    let node_ids = create_star_graph(&backend, size);
 
-                let config = BfsConfig {
-                    max_threads: Some(4),
-                    min_parallel_size: 1000,
-                    batch_size: 100,
-                };
+                    let config = BfsConfig {
+                        max_threads: Some(4),
+                        min_parallel_size: 1000,
+                        batch_size: 100,
+                    };
 
-                let _result = parallel_bfs(&backend, node_ids[0], Some(config))
-                    .expect("Failed to perform BFS");
-            });
-        });
+                    let _result = parallel_bfs(&backend, node_ids[0], Some(config))
+                        .expect("Failed to perform BFS");
+                });
+            },
+        );
     }
 
     group.finish();
@@ -269,24 +277,28 @@ fn bench_bfs_random(criterion: &mut Criterion) {
         });
 
         // Parallel BFS with 4 threads
-        group.bench_with_input(BenchmarkId::new("parallel_4threads", size), &size, |b, &size| {
-            b.iter(|| {
-                let temp_dir = TempDir::new().expect("Failed to create temp dir");
-                let db_path = temp_dir.path().join("benchmark.db");
-                let backend = V3Backend::create(&db_path).expect("Failed to create backend");
+        group.bench_with_input(
+            BenchmarkId::new("parallel_4threads", size),
+            &size,
+            |b, &size| {
+                b.iter(|| {
+                    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+                    let db_path = temp_dir.path().join("benchmark.db");
+                    let backend = V3Backend::create(&db_path).expect("Failed to create backend");
 
-                let node_ids = create_random_graph(&backend, size, edge_count);
+                    let node_ids = create_random_graph(&backend, size, edge_count);
 
-                let config = BfsConfig {
-                    max_threads: Some(4),
-                    min_parallel_size: 1000,
-                    batch_size: 100,
-                };
+                    let config = BfsConfig {
+                        max_threads: Some(4),
+                        min_parallel_size: 1000,
+                        batch_size: 100,
+                    };
 
-                let _result = parallel_bfs(&backend, node_ids[0], Some(config))
-                    .expect("Failed to perform BFS");
-            });
-        });
+                    let _result = parallel_bfs(&backend, node_ids[0], Some(config))
+                        .expect("Failed to perform BFS");
+                });
+            },
+        );
     }
 
     group.finish();
@@ -331,8 +343,8 @@ fn bench_crossover_analysis(criterion: &mut Criterion) {
 
                 let node_ids = create_chain_graph(&backend, size);
 
-                let _result = parallel_bfs(&backend, node_ids[0], None)
-                    .expect("Failed to perform BFS");
+                let _result =
+                    parallel_bfs(&backend, node_ids[0], None).expect("Failed to perform BFS");
             });
         });
     }

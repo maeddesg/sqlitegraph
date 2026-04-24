@@ -2,6 +2,20 @@
 
 ## [2.1.2] - 2026-04-24
 
+### Fixed
+- **Critical SnapshotId bug** - Fixed SQLite backend incompatibility causing 53 Magellan test failures
+  - `SnapshotId::current()` now returns `SnapshotId(0)` for all backends (SQLite compatibility)
+  - Added `SnapshotId::new_incrementing()` for native-v3 backend when explicit incrementing IDs are needed
+  - SQLite backend only accepts `SnapshotId(0)` as "current" snapshot (no historical snapshots)
+  - **Impact:** All existing code using `SnapshotId::current()` now works correctly with SQLite backend
+  - **Location:** `sqlitegraph-core/src/snapshot.rs`, `sqlitegraph-core/src/backend/sqlite/impl_.rs`
+  - **See:** `sqlitegraph-core/BUG_SNAPSHOTID_SQLITE_BACKEND.md` for detailed analysis
+
+- **README inaccuracies**
+  - Native V3 status: "Beta" → "Stable"
+  - Parallel BFS warning removed (fixed in v2.1.1)
+  - Backend table now accurate with actual codebase structure
+
 ### Changed
 - **Documentation cleanup** - Removed LLM marketing language and non-existent backend references
   - Remove all "production-ready" terminology → "stable" or factual statements
@@ -11,12 +25,6 @@
   - Update version references from 2.0 to 2.1
   - Add v2.1.1 verified benchmark summary
   - Fix broken documentation links (moved internal docs to internal/)
-
-### Fixed
-- **README inaccuracies**
-  - Native V3 status: "Beta" → "Stable"
-  - Parallel BFS warning removed (fixed in v2.1.1)
-  - Backend table now accurate with actual codebase structure
 
 ---
 

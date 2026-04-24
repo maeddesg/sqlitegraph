@@ -6,14 +6,14 @@
 //! by simulating the I/O patterns that would be affected.
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use std::time::Duration;
-use tempfile::TempDir;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::time::Duration;
+use tempfile::TempDir;
 
-use sqlitegraph::backend::native::v3::storage::{AdaptivePageManager, PageConfig, MediaDetector};
-use sqlitegraph::{config::GraphConfig, open_graph, snapshot::SnapshotId};
+use sqlitegraph::backend::native::v3::storage::{AdaptivePageManager, MediaDetector, PageConfig};
 use sqlitegraph::backend::{BackendDirection, EdgeSpec, NeighborQuery, NodeSpec};
+use sqlitegraph::{config::GraphConfig, open_graph, snapshot::SnapshotId};
 
 // ============================================================================
 // RAW I/O BENCHMARKS (Simulating different page sizes)
@@ -51,10 +51,7 @@ fn bench_sequential_read_page_size(c: &mut Criterion) {
 
                     // Benchmark sequential read
                     b.iter(|| {
-                        let mut file = OpenOptions::new()
-                            .read(true)
-                            .open(&file_path)
-                            .unwrap();
+                        let mut file = OpenOptions::new().read(true).open(&file_path).unwrap();
 
                         let mut buffer = vec![0u8; page_size];
                         for _ in 0..data_size {
@@ -108,10 +105,7 @@ fn bench_random_read_page_size(c: &mut Criterion) {
 
                     // Benchmark random read
                     b.iter(|| {
-                        let mut file = OpenOptions::new()
-                            .read(true)
-                            .open(&file_path)
-                            .unwrap();
+                        let mut file = OpenOptions::new().read(true).open(&file_path).unwrap();
 
                         let mut buffer = vec![0u8; page_size];
                         for &idx in &random_indices {
@@ -330,50 +324,50 @@ fn bench_graph_neighbor_queries(c: &mut Criterion) {
     group.sample_size(20);
 
     for &size in &[100, 1000, 5000] {
-        group.bench_with_input(
-            BenchmarkId::new("v3_backend", size),
-            &size,
-            |b, &size| {
-                let temp_dir = TempDir::new().unwrap();
-                let db_path = temp_dir.path().join("graph.db");
+        group.bench_with_input(BenchmarkId::new("v3_backend", size), &size, |b, &size| {
+            let temp_dir = TempDir::new().unwrap();
+            let db_path = temp_dir.path().join("graph.db");
 
-                let config = GraphConfig::native();
-                let graph = open_graph(&db_path, &config).unwrap();
+            let config = GraphConfig::native();
+            let graph = open_graph(&db_path, &config).unwrap();
 
-                // Create a chain graph
-                for i in 0..size {
-                    let node_spec = NodeSpec {
-                        kind: "test".to_string(),
-                        name: format!("node_{}", i),
-                        file_path: None,
-                        data: serde_json::json!({"id": i}),
+            // Create a chain graph
+            for i in 0..size {
+                let node_spec = NodeSpec {
+                    kind: "test".to_string(),
+                    name: format!("node_{}", i),
+                    file_path: None,
+                    data: serde_json::json!({"id": i}),
+                };
+                graph.insert_node(node_spec).unwrap();
+            }
+
+            // Create edges
+            for i in 0..size - 1 {
+                let edge_spec = EdgeSpec {
+                    edge_type: "chain".to_string(),
+                    from: i as i64,
+                    to: (i + 1) as i64,
+                    data: serde_json::json!({}),
+                };
+                graph.insert_edge(edge_spec).unwrap();
+            }
+
+            // Benchmark neighbor queries
+            b.iter(|| {
+                for i in 0..size.min(100) {
+                    let query = NeighborQuery {
+                        edge_type: Some("chain".to_string()),
+                        direction: BackendDirection::Outgoing,
                     };
-                    graph.insert_node(node_spec).unwrap();
+                    black_box(
+                        graph
+                            .neighbors(SnapshotId::current(), i as i64, query)
+                            .unwrap(),
+                    );
                 }
-
-                // Create edges
-                for i in 0..size - 1 {
-                    let edge_spec = EdgeSpec {
-                        edge_type: "chain".to_string(),
-                        from: i as i64,
-                        to: (i + 1) as i64,
-                        data: serde_json::json!({}),
-                    };
-                    graph.insert_edge(edge_spec).unwrap();
-                }
-
-                // Benchmark neighbor queries
-                b.iter(|| {
-                    for i in 0..size.min(100) {
-                        let query = NeighborQuery {
-                            edge_type: Some("chain".to_string()),
-                            direction: BackendDirection::Outgoing,
-                        };
-                        black_box(graph.neighbors(SnapshotId::current(), i as i64, query).unwrap());
-                    }
-                });
-            },
-        );
+            });
+        });
     }
     group.finish();
 }

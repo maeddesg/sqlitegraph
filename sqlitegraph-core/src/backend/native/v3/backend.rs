@@ -28,12 +28,12 @@ use crate::backend::native::types::NativeBackendError;
 use crate::backend::native::v3::btree::BTreeManager;
 use crate::backend::native::v3::edge_compat::Direction as EdgeDirection;
 use crate::backend::native::v3::name_index::NameIndex;
+use crate::backend::native::v3::storage::AdaptivePageManager;
 use crate::backend::native::v3::wal::{V3WALPaths, V3WALRecord, WALWriter};
 use crate::backend::native::v3::{
     KindIndex, KvStore, KvValue, NodeCache, NodeRecordV3, NodeStore, PageAllocator,
     PersistentHeaderV3, Publisher, V3_HEADER_SIZE, V3EdgeStore,
 };
-use crate::backend::native::v3::storage::AdaptivePageManager;
 use crate::backend::{
     BackendDirection, ChainStep, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec, PatternMatch,
     PatternQuery,

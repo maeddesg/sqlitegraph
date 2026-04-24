@@ -1,8 +1,8 @@
 //! Test chunked BFS performance on various graph topologies
 
+use sqlitegraph::backend::native::v3::V3Backend;
 use sqlitegraph::backend::native::v3::algorithm::parallel_bfs;
 use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec};
-use sqlitegraph::backend::native::v3::V3Backend;
 use std::time::Instant;
 
 fn create_star_graph(backend: &V3Backend, size: i64) -> Vec<i64> {
@@ -65,7 +65,10 @@ fn main() {
         let result = parallel_bfs(&backend, start, None).unwrap();
         let elapsed = start_time.elapsed();
 
-        println!("Size: {:>5} | Time: {:>8.2?} | Visited: {}", size, elapsed, result.total_visited);
+        println!(
+            "Size: {:>5} | Time: {:>8.2?} | Visited: {}",
+            size, elapsed, result.total_visited
+        );
     }
 
     println!("\n✓ Chunked BFS test complete");

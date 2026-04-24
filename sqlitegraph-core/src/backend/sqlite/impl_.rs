@@ -84,7 +84,12 @@ impl Publisher {
 /// Validate snapshot_id for SQLite backend
 ///
 /// SQLite backend does not support historical snapshot isolation.
-/// Only SnapshotId::current() (which has as_lsn() == 0) is supported.
+/// Only SnapshotId(0) is supported, which is returned by SnapshotId::current().
+///
+/// # Snapshot ID Contract
+///
+/// - `SnapshotId::current()` returns SnapshotId(0) - the "current" sentinel
+/// - Any non-zero snapshot ID represents a historical snapshot (not supported)
 ///
 /// Historical snapshot isolation would require:
 /// - WAL-based versioning with timestamp/LSN indexing
@@ -100,7 +105,7 @@ fn validate_snapshot_for_sqlite(
     }
     Err(SqliteGraphError::query(format!(
         "SQLite backend does not support historical snapshots (requested: {}). \
-        Only SnapshotId::current() is supported. \
+        Only SnapshotId::current() (which returns SnapshotId(0)) is supported. \
         Historical snapshot isolation requires AS OF queries or MVCC which are not implemented.",
         snapshot_id.as_lsn()
     )))

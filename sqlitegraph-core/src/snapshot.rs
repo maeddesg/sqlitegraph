@@ -51,23 +51,50 @@ pub struct SnapshotId(pub u64);
 impl SnapshotId {
     /// The "current" snapshot - sees only committed data
     ///
-    /// This returns the most recent committed transaction ID.
-    /// All reads using this snapshot are guaranteed to see only
-    /// data that has been durably committed.
+    /// This returns a special sentinel value (0) that represents "all committed data".
+    /// All reads using this snapshot are guaranteed to see only data that has been
+    /// durably committed.
     ///
-    /// # Implementation Note
+    /// # Backend Behavior
     ///
-    /// - For native-v3 backend: Returns an auto-incrementing snapshot counter
-    /// - For SQLite backend: Returns 0 to indicate "all committed data"
+    /// - **SQLite backend**: Uses SnapshotId(0) to indicate "current" (no historical snapshots)
+    /// - **Native-v3 backend**: May use SnapshotId(0) or use `new_incrementing()` for sequential snapshots
+    ///
+    /// # Why SnapshotId(0)?
+    ///
+    /// SQLite backend does not support historical snapshots (no AS OF queries or MVCC).
+    /// Only the current committed state is accessible, which we represent as SnapshotId(0).
     ///
     /// # Example
     ///
     /// ```rust
     /// # use sqlitegraph::snapshot::SnapshotId;
     /// let snapshot = SnapshotId::current();
-    /// // snapshot now points to the most recent committed transaction
+    /// // snapshot is now SnapshotId(0) - "current committed data"
     /// ```
     pub fn current() -> Self {
+        SnapshotId(0)
+    }
+
+    /// Create a new incrementing snapshot ID
+    ///
+    /// This generates a new snapshot ID using a global atomic counter.
+    /// Each call returns a unique, monotonically increasing snapshot ID.
+    ///
+    /// # When to Use
+    ///
+    /// - **Native-v3 backend**: Use this when you need unique snapshot IDs for MVCC
+    /// - **SQLite backend**: Do NOT use this - SQLite only supports SnapshotId(0)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use sqlitegraph::snapshot::SnapshotId;
+    /// let snapshot1 = SnapshotId::new_incrementing();
+    /// let snapshot2 = SnapshotId::new_incrementing();
+    /// assert!(snapshot2.as_u64() > snapshot1.as_u64());
+    /// ```
+    pub fn new_incrementing() -> Self {
         let lsn = SNAPSHOT_COUNTER.fetch_add(1, Ordering::SeqCst);
         SnapshotId(lsn)
     }
@@ -198,8 +225,23 @@ mod tests {
     #[test]
     fn test_snapshot_id_current() {
         let current = SnapshotId::current();
-        // Current snapshot should always be valid
+        // Current snapshot should always be SnapshotId(0) - the "current" sentinel
+        assert_eq!(current, SnapshotId(0));
         assert!(current.is_valid());
+    }
+
+    #[test]
+    fn test_snapshot_id_new_incrementing() {
+        let snapshot1 = SnapshotId::new_incrementing();
+        let snapshot2 = SnapshotId::new_incrementing();
+        let snapshot3 = SnapshotId::new_incrementing();
+
+        // Each call should return a unique, incrementing ID
+        assert!(snapshot2.as_u64() > snapshot1.as_u64());
+        assert!(snapshot3.as_u64() > snapshot2.as_u64());
+        assert!(snapshot1.is_valid());
+        assert!(snapshot2.is_valid());
+        assert!(snapshot3.is_valid());
     }
 
     #[test]

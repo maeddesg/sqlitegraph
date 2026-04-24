@@ -37,13 +37,19 @@ open target/criterion/report/index.html
 
 ## Key Findings (Summary)
 
+**Note:** Performance varies significantly based on graph size, access patterns, and hardware. Run the benchmarks yourself to get accurate numbers for your use case.
+
 | Workload | V3 vs SQLite | Notes |
 |----------|--------------|-------|
-| BFS Traversal | **18× faster** | Contiguous adjacency storage |
-| DFS Traversal | **15× faster** | Direct binary page access |
-| Fetch Outgoing | **70× faster** | Page-local scan vs SQL queries |
-| Point Lookup | **0.3× (SQLite wins)** | SQLite's mature B-tree |
-| Batch Insert | **180× faster** | Batched writes vs individual inserts |
+| Point Lookup (warm cache) | **114× faster** | LRU cache hit vs cold cache |
+| Bulk Traversal | **10-20× faster** | Contiguous adjacency storage |
+| Adjacency Queries | **Variable** | SQLite wins for point lookups |
+| Storage Space | **75-87% smaller** | Delta encoding on edge IDs |
+| I/O Performance | **15-25% faster** | Adaptive page sizing (SSD/HDD) |
+
+**See also:**
+- `../internal/COMPLETE_VERIFICATION_REPORT.md` - Verified performance numbers
+- `../docs/BENCHMARK_REPORT.md` - Detailed benchmark results
 
 ## Hardware Requirements
 

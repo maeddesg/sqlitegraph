@@ -26,13 +26,23 @@ fn main() {
     println!("Positive deltas (encoding as 2*delta):");
     for delta in [0, 1, 2, 10, 42, 127, 128, 1000] {
         let zigzag = (delta << 1) ^ (delta >> 63);
-        println!("  delta={:4} -> zigzag={:5} -> {} bytes", delta, zigzag, varint_size(zigzag));
+        println!(
+            "  delta={:4} -> zigzag={:5} -> {} bytes",
+            delta,
+            zigzag,
+            varint_size(zigzag)
+        );
     }
 
     println!("\nNegative deltas (encoding as 2*|delta|-1):");
     for delta in [-1i64, -2, -10, -42, -127, -128, -1000] {
         let zigzag = ((delta << 1) ^ (delta >> 63)) as u64;
-        println!("  delta={:4} -> zigzag={:5} -> {} bytes", delta, zigzag, varint_size(zigzag));
+        println!(
+            "  delta={:4} -> zigzag={:5} -> {} bytes",
+            delta,
+            zigzag,
+            varint_size(zigzag)
+        );
     }
 
     println!("\n=== Expected Space Savings ===\n");

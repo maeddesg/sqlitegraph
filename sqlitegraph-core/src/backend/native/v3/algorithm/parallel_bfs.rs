@@ -49,9 +49,9 @@ pub struct BfsConfig {
 impl Default for BfsConfig {
     fn default() -> Self {
         Self {
-            max_threads: None,  // Use Rayon default (all CPUs)
-            min_parallel_size: 1000,  // Chunks need enough work to justify overhead
-            batch_size: 1000,  // Deprecated, kept for API compatibility
+            max_threads: None,       // Use Rayon default (all CPUs)
+            min_parallel_size: 1000, // Chunks need enough work to justify overhead
+            batch_size: 1000,        // Deprecated, kept for API compatibility
         }
     }
 }
@@ -259,7 +259,7 @@ fn parallel_bfs_impl(
         std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(4),
-        4  // Maximum 4 threads - prevents desktop crash
+        4, // Maximum 4 threads - prevents desktop crash
     );
 
     // Process each level
@@ -271,7 +271,7 @@ fn parallel_bfs_impl(
 
         // PROCESS CHUNKS IN PARALLEL WITH ZERO SHARED STATE
         let chunk_results: Vec<ChunkResult> = chunks
-            .into_par_iter()  // Rayon parallel iterator
+            .into_par_iter() // Rayon parallel iterator
             .map(|chunk| {
                 // === THREAD-LOCAL STATE (no sharing, no locks) ===
                 let mut local_result = ChunkResult::new();
@@ -297,9 +297,9 @@ fn parallel_bfs_impl(
                     }
                 }
 
-                local_result  // Move thread-local result out
+                local_result // Move thread-local result out
             })
-            .collect();  // Barrier: wait for all chunks
+            .collect(); // Barrier: wait for all chunks
 
         // === MERGE PHASE (single-threaded, no locks needed) ===
         let mut next_level: Vec<i64> = Vec::new();
@@ -599,8 +599,8 @@ mod tests {
         let nodes = vec![1, 2, 3, 4, 5];
         let chunks = partition_nodes(&nodes, 3);
         assert_eq!(chunks.len(), 3);
-        assert_eq!(chunks[0], &[1, 2]);  // 2 nodes
-        assert_eq!(chunks[1], &[3, 4]);  // 2 nodes
-        assert_eq!(chunks[2], &[5]);     // 1 node (remainder)
+        assert_eq!(chunks[0], &[1, 2]); // 2 nodes
+        assert_eq!(chunks[1], &[3, 4]); // 2 nodes
+        assert_eq!(chunks[2], &[5]); // 1 node (remainder)
     }
 }

@@ -11,7 +11,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Serialize with delta encoding
     let serialized = cluster.serialize()?;
-    println!("Serialized {} edges with delta encoding", cluster.edges.len());
+    println!(
+        "Serialized {} edges with delta encoding",
+        cluster.edges.len()
+    );
     println!("Total size: {} bytes", serialized.len());
 
     // Calculate what the size would be without compression
@@ -36,7 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(deserialized.format_version, 3);
 
     println!("\n✓ Delta encoding is working!");
-    println!("✓ Roundtrip successful: {} edges preserved", deserialized.dsts().len());
+    println!(
+        "✓ Roundtrip successful: {} edges preserved",
+        deserialized.dsts().len()
+    );
 
     Ok(())
 }

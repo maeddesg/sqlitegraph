@@ -1,10 +1,10 @@
 //! Quick LRU cache performance test
 //! Run with: cargo run --example cache_perf_test --features native-v3
 
-use std::time::Instant;
-use tempfile::TempDir;
 use sqlitegraph::backend::GraphBackend;
 use sqlitegraph::snapshot::SnapshotId;
+use std::time::Instant;
+use tempfile::TempDir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("SQLiteGraph v2.1.0 - LRU Cache Performance Test");

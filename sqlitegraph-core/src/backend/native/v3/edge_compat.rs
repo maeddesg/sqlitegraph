@@ -57,15 +57,15 @@
 //! Insert edge: load cluster (or create), append, maybe split if page full
 //! ```
 
+use crate::backend::native::v3::compression::edge_delta::{compress_edge_ids, decompress_edge_ids};
 #[cfg(feature = "v3-forensics")]
 use crate::backend::native::v3::forensics::{
     FORENSIC_COUNTERS, PageType as ForensicPageType, Subsystem,
 };
 use crate::backend::native::v3::{
-    allocator::PageAllocator, btree::BTreeManager,
-    file_coordinator::FileCoordinator, header::PersistentHeaderV3, wal::WALWriter,
+    allocator::PageAllocator, btree::BTreeManager, file_coordinator::FileCoordinator,
+    header::PersistentHeaderV3, wal::WALWriter,
 };
-use crate::backend::native::v3::compression::edge_delta::{compress_edge_ids, decompress_edge_ids};
 use crate::backend::native::{
     types::{NativeBackendError, NativeResult},
     v3::compact_edge_record::{CompactEdgeRecord, Direction as V2Direction},
@@ -339,7 +339,12 @@ impl V3EdgeCluster {
                         context: "Missing compressed ID length".to_string(),
                     });
                 }
-                let compressed_len = u32::from_be_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]]) as usize;
+                let compressed_len = u32::from_be_bytes([
+                    bytes[pos],
+                    bytes[pos + 1],
+                    bytes[pos + 2],
+                    bytes[pos + 3],
+                ]) as usize;
                 pos += 4;
 
                 if pos + compressed_len > bytes.len() {
@@ -351,10 +356,11 @@ impl V3EdgeCluster {
                 pos += compressed_len;
 
                 // Decompress neighbor IDs
-                let neighbor_ids = decompress_edge_ids(compressed_data, count)
-                    .map_err(|e| NativeBackendError::DeserializationError {
+                let neighbor_ids = decompress_edge_ids(compressed_data, count).map_err(|e| {
+                    NativeBackendError::DeserializationError {
                         context: format!("Failed to decompress edge IDs: {}", e),
-                    })?;
+                    }
+                })?;
 
                 // Read edge metadata for each ID
                 for neighbor_id in neighbor_ids {

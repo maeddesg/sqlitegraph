@@ -8,7 +8,7 @@
 //!
 //! Goal: Verify the "42% space savings" claim with real data.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use sqlitegraph::backend::native::v3::compression::edge_delta::{
     compress_edge_ids, compression_ratio, decompress_edge_ids,
 };
@@ -119,9 +119,13 @@ fn benchmark_compression_throughput(c: &mut Criterion) {
 
         // Sparse IDs (gap of 10)
         let sparse_ids = generate_sparse_ids(size, 10);
-        group.bench_with_input(BenchmarkId::new("sparse_gap_10", size), &sparse_ids, |b, ids| {
-            b.iter(|| compress_edge_ids(black_box(ids)));
-        });
+        group.bench_with_input(
+            BenchmarkId::new("sparse_gap_10", size),
+            &sparse_ids,
+            |b, ids| {
+                b.iter(|| compress_edge_ids(black_box(ids)));
+            },
+        );
 
         // Random IDs
         let random_ids = generate_random_ids(size, 42);
@@ -220,7 +224,10 @@ fn analyze_compression_patterns() {
         ("Sparse IDs (gap=10)", generate_sparse_ids(10000, 10)),
         ("Sparse IDs (gap=100)", generate_sparse_ids(10000, 100)),
         ("Random IDs (worst case)", generate_random_ids(10000, 42)),
-        ("Social Network Pattern", generate_social_network_pattern(1000)),
+        (
+            "Social Network Pattern",
+            generate_social_network_pattern(1000),
+        ),
         ("Web Graph Pattern", generate_web_graph_pattern(1000)),
     ];
 
@@ -256,7 +263,11 @@ fn analyze_compression_patterns() {
         println!("    Avg delta:     {:.1}", avg_delta);
         println!("    Min delta:     {}", min_delta);
         println!("    Max delta:     {}", max_delta);
-        println!("    Small deltas (≤127): {} ({:.1}%)", small_deltas, small_deltas as f64 / deltas.len() as f64 * 100.0);
+        println!(
+            "    Small deltas (≤127): {} ({:.1}%)",
+            small_deltas,
+            small_deltas as f64 / deltas.len() as f64 * 100.0
+        );
         println!();
     }
 
@@ -271,7 +282,10 @@ fn analyze_compression_patterns() {
         let compressed = compress_edge_ids(&ids);
         let ratio = compression_ratio(&ids, &compressed);
         let savings_pct = (1.0 - ratio) * 100.0;
-        println!("  {:6} edges: {:.1}% savings (ratio: {:.3})", size, savings_pct, ratio);
+        println!(
+            "  {:6} edges: {:.1}% savings (ratio: {:.3})",
+            size, savings_pct, ratio
+        );
     }
 
     println!("\nSocial Network Pattern (realistic):");
@@ -295,7 +309,10 @@ fn analyze_compression_patterns() {
         let compressed = compress_edge_ids(&ids);
         let ratio = compression_ratio(&ids, &compressed);
         let savings_pct = (1.0 - ratio) * 100.0;
-        println!("  {:6} edges: {:.1}% savings (ratio: {:.3})", size, savings_pct, ratio);
+        println!(
+            "  {:6} edges: {:.1}% savings (ratio: {:.3})",
+            size, savings_pct, ratio
+        );
     }
 }
 

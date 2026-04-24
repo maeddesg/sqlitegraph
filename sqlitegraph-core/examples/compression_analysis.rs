@@ -100,7 +100,11 @@ fn analyze_pattern(name: &str, ids: &[i64]) {
 
     println!("  Delta stats:");
     println!("    Avg delta:           {:.1}", avg_delta);
-    println!("    Small deltas (≤127): {} ({:.1}%)", small_deltas, small_deltas as f64 / deltas.len() as f64 * 100.0);
+    println!(
+        "    Small deltas (≤127): {} ({:.1}%)",
+        small_deltas,
+        small_deltas as f64 / deltas.len() as f64 * 100.0
+    );
     println!();
 }
 
@@ -110,11 +114,17 @@ fn main() {
     // Test different patterns with 10,000 edges
     println!("--- 10,000 Edges ---\n");
 
-    analyze_pattern("Sequential IDs (best case)", &generate_sequential_ids(10000));
+    analyze_pattern(
+        "Sequential IDs (best case)",
+        &generate_sequential_ids(10000),
+    );
     analyze_pattern("Sparse IDs (gap=10)", &generate_sparse_ids(10000, 10));
     analyze_pattern("Sparse IDs (gap=100)", &generate_sparse_ids(10000, 100));
     analyze_pattern("Random IDs (worst case)", &generate_random_ids(10000, 42));
-    analyze_pattern("Social Network Pattern", &generate_social_network_pattern(2000));
+    analyze_pattern(
+        "Social Network Pattern",
+        &generate_social_network_pattern(2000),
+    );
     analyze_pattern("Web Graph Pattern", &generate_web_graph_pattern(1000));
 
     // Verify the 42% claim
@@ -126,7 +136,10 @@ fn main() {
         let compressed = compress_edge_ids(&ids);
         let ratio = compression_ratio(&ids, &compressed);
         let savings_pct = (1.0 - ratio) * 100.0;
-        println!("  {:6} edges: {:.1}% savings (ratio: {:.3})", size, savings_pct, ratio);
+        println!(
+            "  {:6} edges: {:.1}% savings (ratio: {:.3})",
+            size, savings_pct, ratio
+        );
     }
 
     println!("\nSocial Network Pattern (realistic):");
@@ -150,7 +163,10 @@ fn main() {
         let compressed = compress_edge_ids(&ids);
         let ratio = compression_ratio(&ids, &compressed);
         let savings_pct = (1.0 - ratio) * 100.0;
-        println!("  {:6} edges: {:.1}% savings (ratio: {:.3})", size, savings_pct, ratio);
+        println!(
+            "  {:6} edges: {:.1}% savings (ratio: {:.3})",
+            size, savings_pct, ratio
+        );
     }
 
     println!("\n=== CONCLUSION ===\n");
@@ -160,5 +176,7 @@ fn main() {
     println!("  - CONSERVATIVE for best case (sequential IDs achieve 93%+ savings)");
     println!("  - OPTIMISTIC for random data (random IDs achieve 15-25% savings)");
     println!("\nRecommendation: Delta encoding is WORTH IT for most real-world graphs");
-    println!("where edge IDs exhibit local sequential patterns (social networks, web graphs, etc.)");
+    println!(
+        "where edge IDs exhibit local sequential patterns (social networks, web graphs, etc.)"
+    );
 }
