@@ -49,7 +49,7 @@ See [examples/](sqlitegraph-core/examples/) for reproducible performance tests.
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "2.1"
+sqlitegraph = "2.1.3"
 
 # OR Native V3 backend (faster traversals)
 sqlitegraph = { version = "2.1", features = ["native-v3"] }

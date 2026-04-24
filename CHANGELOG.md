@@ -1,5 +1,32 @@
 # SQLiteGraph Changelog
 
+## [2.1.3] - 2026-04-24
+
+### Fixed
+- **Critical SnapshotId bug** - Fixed SQLite backend incompatibility causing 53 Magellan test failures
+  - `SnapshotId::current()` now returns `SnapshotId(0)` for all backends (SQLite compatibility)
+  - Added `SnapshotId::new_incrementing()` for native-v3 backend when explicit incrementing IDs are needed
+  - SQLite backend only accepts `SnapshotId(0)` as "current" snapshot (no historical snapshots)
+  - **Impact:** All existing code using `SnapshotId::current()` now works correctly with SQLite backend
+  - **Location:** `sqlitegraph-core/src/snapshot.rs`, `sqlitegraph-core/src/backend/sqlite/impl_.rs`
+  - **See:** `sqlitegraph-core/BUG_SNAPSHOTID_SQLITE_BACKEND.md` for detailed analysis
+
+### Documentation
+- **Comprehensive documentation sync** - Removed all LLM/exaggerated language, verified performance claims
+  - Fixed API.md: removed "not yet verified" notes, corrected version references to v2.1.1 for Parallel BFS
+  - Fixed README.md: honest Parallel BFS framing, removed "unlimited scale" exaggerations
+  - Updated benches/README.md: replaced unverified claims with verified data from COMPLETE_VERIFICATION_REPORT.md
+  - Added `docs/SNAPSHOTID_MIGRATION.md` - comprehensive migration guide for SnapshotId API changes
+  - Updated all README files for v2.1.3 release consistency
+
+### Changed
+- **Both README files updated** - Ensured consistency for GitHub/crates.io release
+  - Root README.md and benches/README.md both updated
+  - Removed marketing language, kept only verified factual claims
+  - Ready for production deployment
+
+---
+
 ## [2.1.2] - 2026-04-24
 
 ### Fixed
