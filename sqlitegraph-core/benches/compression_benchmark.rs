@@ -83,11 +83,11 @@ fn generate_web_graph_pattern(page_count: usize) -> Vec<i64> {
     }
 
     // Leaf pages (90% of total) link to 1-5 pages
-    for leaf_id in (hub_count + 1)..=page_count as i64 {
+    for leaf_id in (hub_count + 1)..=page_count {
         let links_per_leaf = 1 + (leaf_id % 5);
 
         for i in 0..links_per_leaf {
-            let target_id = leaf_id + i;
+            let target_id = (leaf_id + i) as i64;
             ids.push(target_id);
         }
     }
