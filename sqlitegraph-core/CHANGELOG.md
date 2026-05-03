@@ -157,7 +157,7 @@ if !source.is_file() {
 
 ### ⚡ Performance Improvements
 
-#### V2 Cluster Architecture Production-Ready
+#### V2 Cluster Architecture Stable
 - **10-20x I/O Improvement**: Clustered adjacency with direct edge scanning
 - **Sub-millisecond Operations**: Fast path for common graph operations
 - **Storage Efficiency**: >70% improvement over V1 format
@@ -243,7 +243,7 @@ if !source.is_file() {
 
 ## [0.2.4] - 2025-12-19
 
-### 🚀 Production-Ready WAL Mode Implementation (SQLite Backend Only)
+### 🚀 Stable WAL Mode Implementation (SQLite Backend Only)
 
 **Write-Ahead Logging (WAL) mode is now fully documented and validated for production use**
 
