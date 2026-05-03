@@ -12,7 +12,7 @@
   - **See:** `sqlitegraph-core/BUG_SNAPSHOTID_SQLITE_BACKEND.md` for detailed analysis
 
 ### Documentation
-- **Comprehensive documentation sync** - Removed all LLM/exaggerated language, verified performance claims
+- **Comprehensive documentation sync** - Removed all exaggerated language, verified performance claims
   - Fixed API.md: removed "not yet verified" notes, corrected version references to v2.1.1 for Parallel BFS
   - Fixed README.md: honest Parallel BFS framing, removed "unlimited scale" exaggerations
   - Updated benches/README.md: replaced unverified claims with verified data from COMPLETE_VERIFICATION_REPORT.md
@@ -44,7 +44,7 @@
   - Backend table now accurate with actual codebase structure
 
 ### Changed
-- **Documentation cleanup** - Removed LLM marketing language and non-existent backend references
+- **Documentation cleanup** - Removed marketing language and non-existent backend references
   - Remove all "production-ready" terminology → "stable" or factual statements
   - Remove non-existent Native V2 backend from all user-facing docs
   - Update README to reflect only SQLite and Native V3 backends exist
@@ -1144,7 +1144,7 @@ Projects using `Rc<SqliteGraphBackend>` can now migrate to `Rc<dyn GraphBackend>
 - **Test Results**: 27/27 algorithm tests passing (100%)
 
 ### Phase 9: Developer Tooling
-- **GraphIntrospection API**: JSON-serializable statistics for LLM tooling
+- **GraphIntrospection API**: JSON-serializable statistics for tooling
   - `node_count()`, `edge_count_estimate()`, `backend_info()`
   - `to_json()` for structured output
   - Exact vs sampled edge counting strategies
