@@ -45,7 +45,7 @@
 
 ### Changed
 - **Documentation cleanup** - Removed marketing language and non-existent backend references
-  - Remove all "production-ready" terminology → "stable" or factual statements
+  - Remove all exaggerated terminology → "stable" or factual statements
   - Remove non-existent Native V2 backend from all user-facing docs
   - Update README to reflect only SQLite and Native V3 backends exist
   - Add LRU Cache and Parallel BFS to backend feature table
