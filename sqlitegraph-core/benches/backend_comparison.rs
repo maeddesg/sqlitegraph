@@ -10,9 +10,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 // Import graph types
-use sqlitegraph::algo::backend::{
-    bfs_traversal, dfs_traversal, k_hop_neighbors, shortest_path,
-};
+use sqlitegraph::algo::backend::{bfs_traversal, dfs_traversal, k_hop_neighbors, shortest_path};
 use sqlitegraph::backend::native::v3::V3Backend;
 use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec, SqliteGraphBackend};
 use sqlitegraph::snapshot::SnapshotId;

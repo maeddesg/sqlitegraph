@@ -3,7 +3,6 @@
 //! Compares multi-hop traversal performance (depth 1, 2, 3) across different
 //! graph topologies using the criterion benchmarking framework.
 
-
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sqlitegraph::{BackendDirection, EdgeSpec, NodeSpec, SnapshotId};
 

@@ -2,8 +2,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use sqlitegraph::{
-    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec,
-    SnapshotId, open_graph,
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
 };
 use std::time::Duration;
 use tempfile::TempDir;

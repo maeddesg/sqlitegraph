@@ -3,7 +3,6 @@
 //! Measures write-path cost with pub/sub event emission to ensure ≤+10% increase vs baseline.
 //! This validates that publisher.emit() on the commit path doesn't degrade write performance.
 
-
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sqlitegraph::backend::SubscriptionFilter;
 use sqlitegraph::{EdgeSpec, NodeSpec, open_graph};

@@ -607,9 +607,6 @@ fn benchmark_pagerank(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
 // ============================================================================
 
 fn benchmark_label_propagation(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
-    
-    
-
     benchmark_both("label_propagation", nodes, edges, |backend| {
         // This requires SqliteGraph, not GraphBackend
         // For now, skip this test for V3
@@ -623,9 +620,6 @@ fn benchmark_label_propagation(nodes: usize, edges: usize) -> Vec<BenchmarkResul
 // ============================================================================
 
 fn benchmark_connected_components(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
-    
-    
-
     benchmark_both("connected_components", nodes, edges, |backend| {
         let _ = backend;
         Err("Requires SqliteGraph - skipped".to_string())
@@ -633,9 +627,6 @@ fn benchmark_connected_components(nodes: usize, edges: usize) -> Vec<BenchmarkRe
 }
 
 fn benchmark_weakly_connected(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
-    
-    
-
     benchmark_both("weakly_connected_components", nodes, edges, |backend| {
         let _ = backend;
         Err("Requires SqliteGraph - skipped".to_string())

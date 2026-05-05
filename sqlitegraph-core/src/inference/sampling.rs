@@ -31,14 +31,8 @@ pub fn sample_token(logits: &[f32], temperature: f32, top_p: f32) -> usize {
     };
 
     // Softmax: exp(x - max) for numerical stability
-    let max_val = scaled
-        .iter()
-        .cloned()
-        .fold(f32::NEG_INFINITY, f32::max);
-    let mut probs: Vec<f32> = scaled
-        .iter()
-        .map(|&x| (x - max_val).exp())
-        .collect();
+    let max_val = scaled.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let mut probs: Vec<f32> = scaled.iter().map(|&x| (x - max_val).exp()).collect();
 
     // Normalize
     let sum: f32 = probs.iter().sum();
@@ -57,7 +51,8 @@ pub fn sample_token(logits: &[f32], temperature: f32, top_p: f32) -> usize {
     // Top-p (nucleus) sampling
     if top_p < 1.0 {
         // Create index-probability pairs, sort descending
-        let mut indexed: Vec<(usize, f32)> = probs.iter().enumerate().map(|(i, &p)| (i, p)).collect();
+        let mut indexed: Vec<(usize, f32)> =
+            probs.iter().enumerate().map(|(i, &p)| (i, p)).collect();
         indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         // Find cutoff
@@ -78,10 +73,13 @@ pub fn sample_token(logits: &[f32], temperature: f32, top_p: f32) -> usize {
 
         // Rebuild probs with only top-p tokens
         let mut new_probs = vec![0.0f32; vocab_size];
-        let new_sum: f32 = indexed[..cutoff_idx].iter().map(|&(i, p)| {
-            new_probs[i] = p;
-            p
-        }).sum();
+        let new_sum: f32 = indexed[..cutoff_idx]
+            .iter()
+            .map(|&(i, p)| {
+                new_probs[i] = p;
+                p
+            })
+            .sum();
 
         if new_sum > 0.0 {
             for p in new_probs.iter_mut() {

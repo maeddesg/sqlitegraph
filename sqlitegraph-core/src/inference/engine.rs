@@ -21,7 +21,7 @@
 //! The graph IS the memory: no context window limit, no KV cache truncation.
 //! HNSW indices grow with each token. Hebbian forgetting (future) prunes old entries.
 
-use crate::hnsw::{config::HnswConfig, distance_metric::DistanceMetric, HnswIndex};
+use crate::hnsw::{HnswIndex, config::HnswConfig, distance_metric::DistanceMetric};
 use crate::inference::sampling::sample_token;
 use crate::inference::simd;
 
@@ -93,7 +93,6 @@ struct LayerData {
     ffn_norm: Vec<f32>,
 
     // ── Attention weights (row-major: [out_dim, in_dim]) ──────
-
     /// Query projection [hidden_dim, hidden_dim]
     wq: Vec<f32>,
 
@@ -107,7 +106,6 @@ struct LayerData {
     wo: Vec<f32>,
 
     // ── Attention biases (optional — Qwen2 GGUF stores them) ──
-
     /// Query bias [hidden_dim] or empty
     bq: Vec<f32>,
 
@@ -118,7 +116,6 @@ struct LayerData {
     bv: Vec<f32>,
 
     // ── FFN weights (row-major: [n_neurons, hidden_dim]) ──────
-
     /// Gate weights [ffn_dim, hidden_dim]
     ffn_gate: Vec<f32>,
 
@@ -129,7 +126,6 @@ struct LayerData {
     ffn_down: Vec<f32>,
 
     // ── Attention state ───────────────────────────────────────
-
     /// One HNSW index per KV head — stores K vectors for graph attention.
     attn_hnsw: Vec<HnswIndex>,
 
@@ -262,7 +258,12 @@ impl SparseInferenceEngine {
                 &format!("attn_L{}_kv{}", layer_idx, kv_h),
                 HnswConfig::new(head_dim, 8, 50, DistanceMetric::DotProduct),
             )
-            .unwrap_or_else(|e| panic!("Failed to create attention HNSW for layer {} kv {}: {}", layer_idx, kv_h, e));
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to create attention HNSW for layer {} kv {}: {}",
+                    layer_idx, kv_h, e
+                )
+            });
             attn_hnsw.push(hnsw);
             attn_v_store.push(Vec::new());
         }
@@ -458,10 +459,20 @@ impl SparseInferenceEngine {
         // 3. Apply RoPE to Q (per head) and K (per KV head)
         let mut k = k_proj;
         for h in 0..n_heads {
-            apply_rope(&mut q[h * head_dim..(h + 1) * head_dim], head_dim, pos, self.config.rope_base);
+            apply_rope(
+                &mut q[h * head_dim..(h + 1) * head_dim],
+                head_dim,
+                pos,
+                self.config.rope_base,
+            );
         }
         for h in 0..n_kv_heads {
-            apply_rope(&mut k[h * head_dim..(h + 1) * head_dim], head_dim, pos, self.config.rope_base);
+            apply_rope(
+                &mut k[h * head_dim..(h + 1) * head_dim],
+                head_dim,
+                pos,
+                self.config.rope_base,
+            );
         }
 
         // 4. Store K and V for future attention (per KV head)
@@ -470,7 +481,12 @@ impl SparseInferenceEngine {
             let v_slice = &v_proj[kv_h * head_dim..(kv_h + 1) * head_dim];
             self.layers[layer_idx].attn_hnsw[kv_h]
                 .insert_vector(&k_slice, None)
-                .unwrap_or_else(|e| panic!("HNSW insert failed at layer {} kv {}: {}", layer_idx, kv_h, e));
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "HNSW insert failed at layer {} kv {}: {}",
+                        layer_idx, kv_h, e
+                    )
+                });
             self.layers[layer_idx].attn_v_store[kv_h].extend_from_slice(v_slice);
         }
         self.layers[layer_idx].attn_n_stored += 1;
@@ -481,10 +497,7 @@ impl SparseInferenceEngine {
 
         // Read V store once to avoid repeated borrow conflicts
         // (We need the HNSW search results first, then look up V vectors)
-        let v_stores: Vec<&Vec<f32>> = self.layers[layer_idx]
-            .attn_v_store
-            .iter()
-            .collect();
+        let v_stores: Vec<&Vec<f32>> = self.layers[layer_idx].attn_v_store.iter().collect();
 
         for q_head in 0..n_heads {
             let kv_head = q_head / heads_ratio;
@@ -503,10 +516,7 @@ impl SparseInferenceEngine {
             // HNSW distance = -dot(Q, K), so dot(Q, K) = -distance.
             // Standard attention: score = dot(Q, K) / sqrt(head_dim)
             let inv_sqrt_d = 1.0 / (head_dim as f32).sqrt();
-            let mut scores: Vec<f32> = results
-                .iter()
-                .map(|(_, dist)| -dist * inv_sqrt_d)
-                .collect();
+            let mut scores: Vec<f32> = results.iter().map(|(_, dist)| -dist * inv_sqrt_d).collect();
 
             // Softmax over scores
             softmax(&mut scores);
@@ -519,15 +529,19 @@ impl SparseInferenceEngine {
                 let v_start = (v_id - 1) * head_dim;
                 for d in 0..head_dim {
                     unsafe {
-                        attn_concat[out_start + d] +=
-                            score * *v_store.get_unchecked(v_start + d);
+                        attn_concat[out_start + d] += score * *v_store.get_unchecked(v_start + d);
                     }
                 }
             }
         }
 
         // 6. Attention output projection + residual
-        let attn_out = simd::matmul(&self.layers[layer_idx].wo, &attn_concat, hidden_dim, hidden_dim);
+        let attn_out = simd::matmul(
+            &self.layers[layer_idx].wo,
+            &attn_concat,
+            hidden_dim,
+            hidden_dim,
+        );
         for i in 0..hidden_dim {
             unsafe {
                 *x.get_unchecked_mut(i) += attn_out[i];
@@ -610,10 +624,7 @@ fn softmax(scores: &mut [f32]) {
     if scores.is_empty() {
         return;
     }
-    let max = scores
-        .iter()
-        .cloned()
-        .fold(f32::NEG_INFINITY, f32::max);
+    let max = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     let mut sum = 0.0f32;
     for s in scores.iter_mut() {
         *s = (*s - max).exp();
@@ -638,6 +649,11 @@ fn embed_token(token_embd: &[f32], token_id: usize, hidden_dim: usize) -> Vec<f3
 
 /// Project hidden state to vocabulary logits — delegates to SIMD module.
 /// output_proj is [vocab_size, hidden_dim], so logits[i] = dot(row_i, x).
-fn project_to_logits(output_proj: &[f32], x: &[f32], vocab_size: usize, hidden_dim: usize) -> Vec<f32> {
+fn project_to_logits(
+    output_proj: &[f32],
+    x: &[f32],
+    vocab_size: usize,
+    hidden_dim: usize,
+) -> Vec<f32> {
     simd::matmul(output_proj, x, vocab_size, hidden_dim)
 }

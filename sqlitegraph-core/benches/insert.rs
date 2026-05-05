@@ -3,7 +3,6 @@
 //! Compares node and edge insertion throughput across different batch sizes
 //! and graph topologies using the criterion benchmarking framework.
 
-
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::{RngCore, SeedableRng};
 use sqlitegraph::{EdgeSpec, NodeSpec, open_graph};

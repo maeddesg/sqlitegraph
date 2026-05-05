@@ -674,7 +674,8 @@ fn bench_query_by_kind(c: &mut Criterion) {
                     backend
                 },
                 |backend| {
-                    let _ = black_box(backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind"));
+                    let _ =
+                        black_box(backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind"));
                 },
                 criterion::BatchSize::SmallInput,
             );
@@ -775,8 +776,6 @@ fn bench_query_by_name_pattern(c: &mut Criterion) {
 /// Run with: cargo test --features native-v3 --benches file_size_reporting -- --nocapture
 #[cfg(test)]
 mod file_size_tests {
-    
-    
 
     #[test]
     #[ignore] // Run explicitly with cargo test --ignored

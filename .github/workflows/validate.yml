@@ -45,9 +45,17 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: cargo fmt
+        run: cargo fmt --all --check
 
       - name: cargo check
-        run: cargo check --all-targets
+        run: RUSTFLAGS="-D warnings" cargo check --all-targets
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: cargo test
-        run: cargo test --all-targets
+        run: cargo test --all-targets -- --test-threads=1

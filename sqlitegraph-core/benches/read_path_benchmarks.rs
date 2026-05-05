@@ -14,9 +14,7 @@ use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::{Rng, SeedableRng};
-use sqlitegraph::{
-    EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
-};
+use sqlitegraph::{EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph};
 
 mod bench_utils;
 use bench_utils::{BENCHMARK_SIZES, create_benchmark_temp_dir};

@@ -3,7 +3,6 @@
 //! Compares BFS traversal performance across different graph sizes and topologies
 //! using the criterion benchmarking framework.
 
-
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::SeedableRng;
 use sqlitegraph::{EdgeSpec, NodeSpec, SnapshotId};
