@@ -99,7 +99,7 @@ fn test_offset_u16_limit() {
     for i in 0..1000 {
         let s = format!("string_{}", i);
         let offset = table.get_or_add_offset(&s).unwrap();
-        assert!(offset <= u16::MAX);
+        // offset is u16, so it is always <= u16::MAX by definition
     }
 }
 

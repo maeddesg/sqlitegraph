@@ -1148,7 +1148,7 @@ fn test_v3_recovery_wal_preserves_operation_order() {
         backend.kv_delete_v3(b"key1");
 
         // Set key3
-        backend.kv_set_v3(b"key3".to_vec(), KvValue::Float(3.14), None);
+        backend.kv_set_v3(b"key3".to_vec(), KvValue::Float(std::f64::consts::PI), None);
 
         // DON'T flush - all operations in WAL
     }
@@ -1173,7 +1173,7 @@ fn test_v3_recovery_wal_preserves_operation_order() {
     // key3 should exist
     let result = backend.kv_get_v3(SnapshotId::current(), b"key3");
     match result {
-        Some(KvValue::Float(f)) => assert!((f - 3.14).abs() < 0.001, "key3 should be 3.14"),
+        Some(KvValue::Float(f)) => assert!((f - std::f64::consts::PI).abs() < 0.001, "key3 should be PI"),
         _ => panic!("key3 should be Float(3.14)"),
     }
 

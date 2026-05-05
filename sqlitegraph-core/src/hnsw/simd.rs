@@ -1016,10 +1016,10 @@ mod tests {
     fn test_cosine_similarity_normalized() {
         // Pre-normalized vectors should have cosine similarity equal to dot product
         let a = vec![1.0, 0.0, 0.0];
-        let b = vec![0.70710678, 0.70710678, 0.0]; // Unit vector at 45 degrees
+        let b = vec![std::f32::consts::FRAC_1_SQRT_2, std::f32::consts::FRAC_1_SQRT_2, 0.0]; // Unit vector at 45 degrees
 
         let similarity = cosine_similarity(&a, &b);
-        assert!((similarity - 0.70710678).abs() < 0.0001);
+        assert!((similarity - std::f32::consts::FRAC_1_SQRT_2).abs() < 0.0001);
     }
 
     #[test]
@@ -1141,7 +1141,7 @@ mod tests {
         let a = [0.0, 0.0];
         let b = [1.0, 1.0];
         let distance = euclidean_distance_scalar(&a, &b);
-        assert!((distance - 1.41421356).abs() < f32::EPSILON);
+        assert!((distance - std::f32::consts::SQRT_2).abs() < f32::EPSILON);
     }
 
     #[test]

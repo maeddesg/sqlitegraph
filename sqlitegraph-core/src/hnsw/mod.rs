@@ -300,7 +300,7 @@ mod tests {
         let dot_dist = compute_distance(DistanceMetric::DotProduct, &a, &b);
 
         assert!((cosine_dist - 0.5).abs() < f32::EPSILON); // (1 - 0) / 2
-        assert!((euclidean_dist - 1.41421356).abs() < f32::EPSILON);
+        assert!((euclidean_dist - std::f32::consts::SQRT_2).abs() < f32::EPSILON);
         assert_eq!(manhattan_dist, 2.0);
         assert_eq!(dot_dist, 0.0); // -dot_product
     }

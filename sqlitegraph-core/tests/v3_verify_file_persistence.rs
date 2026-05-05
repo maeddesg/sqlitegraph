@@ -50,7 +50,7 @@ fn test_persistence_across_reopen() {
     use std::io::Read;
     let mut file = std::fs::File::open(&db_path).unwrap();
     let mut buffer = vec![0u8; 1024];
-    file.read(&mut buffer).unwrap();
+    file.read_exact(&mut buffer).unwrap();
     println!("First 100 bytes of file:");
     for i in 0..100 {
         print!("{:02x} ", buffer[i]);

@@ -596,7 +596,7 @@ mod tests {
 
         let distance = search.compute_distance(&query, &target).unwrap();
 
-        assert!((distance - 1.41421356).abs() < f32::EPSILON);
+        assert!((distance - std::f32::consts::SQRT_2).abs() < f32::EPSILON);
     }
 
     #[test]
