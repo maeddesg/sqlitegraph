@@ -105,6 +105,12 @@ pub struct V3WALHeader {
     pub reserved: [u64; 3],
 }
 
+impl Default for V3WALHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl V3WALHeader {
     /// Create a new WAL header with defaults
     pub fn new() -> Self {

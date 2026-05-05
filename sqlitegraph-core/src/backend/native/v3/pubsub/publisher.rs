@@ -7,6 +7,9 @@ use crate::backend::native::v3::pubsub::types::{PubSubEvent, SubscriberId, Subsc
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
+/// Type alias for subscriber channel entries.
+type SubscriberEntry = (SubscriberId, Sender<PubSubEvent>, SubscriptionFilter);
+
 /// Publishes events to subscribers via channels
 ///
 /// The Publisher maintains a list of subscribers with their channels and filters.
@@ -24,7 +27,7 @@ use std::sync::{Arc, Mutex};
 pub struct Publisher {
     /// Channel senders for each subscriber
     /// Each tuple contains: (SubscriberId, Sender, SubscriptionFilter)
-    senders: Arc<Mutex<Vec<(SubscriberId, Sender<PubSubEvent>, SubscriptionFilter)>>>,
+    senders: Arc<Mutex<Vec<SubscriberEntry>>>,
     /// Next subscriber ID
     next_id: Arc<Mutex<u64>>,
 }

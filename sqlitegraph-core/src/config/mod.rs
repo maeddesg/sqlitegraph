@@ -1,14 +1,14 @@
 //! Configuration for backend selection and backend-specific options.
 
 // Re-export public types
-pub use config::GraphConfig;
+pub use graph_config::GraphConfig;
 pub use factory::open_graph;
 pub use kinds::BackendKind;
 pub use native::NativeConfig;
 pub use sqlite::SqliteConfig;
 
 // Private modules
-mod config;
+mod graph_config;
 mod factory;
 mod kinds;
 mod native;

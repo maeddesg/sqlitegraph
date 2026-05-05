@@ -782,6 +782,7 @@ impl V3Backend {
             let mut file = OpenOptions::new()
                 .write(true)
                 .create(true)
+                .truncate(false)
                 .open(&self.db_path)
                 .map_err(|e| {
                     SqliteGraphError::ConnectionError(format!("Failed to open file: {}", e))

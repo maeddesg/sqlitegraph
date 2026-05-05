@@ -92,6 +92,7 @@ pub mod constants {
     /// - outgoing_edge_count: 1 byte (varint u32, small values)
     /// - incoming_cluster_offset: 1 byte (varint, small values)
     /// - incoming_edge_count: 1 byte (varint u32, small values)
+    ///
     /// Total: ~12 bytes minimum + inline data
     pub const MIN_COMPRESSED_RECORD_SIZE: usize = 12;
 }
@@ -290,6 +291,7 @@ impl NodePage {
     ///
     /// # Parameters
     /// - `page_data`: Raw page bytes (must be MAX_PAGE_SIZE)
+    ///
     /// Find a node by ID using lazy linear scan.
     ///
     /// For ~100-node pages, linear scan is simpler and nearly as fast as binary search.
@@ -1008,9 +1010,8 @@ impl NodePage {
         data.extend_from_slice(&[0u8; 4]); // checksum placeholder
 
         // Serialize nodes using compressed format
-        match self.pack_nodes() {
-            Ok(node_data) => data.extend_from_slice(&node_data),
-            Err(_) => {} // Skip if packing fails
+        if let Ok(node_data) = self.pack_nodes() {
+            data.extend_from_slice(&node_data);
         }
 
         v3_constants::checksum::xor_checksum(&data) as u32

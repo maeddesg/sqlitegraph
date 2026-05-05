@@ -200,7 +200,7 @@ pub fn parallel_bfs(
 /// assert_eq!(chunks[0], &[1, 2, 3]);  // First chunk gets remainder
 /// assert_eq!(chunks[1], &[4, 5]);
 /// ```
-fn partition_nodes<'a>(nodes: &'a [i64], num_chunks: usize) -> Vec<&'a [i64]> {
+fn partition_nodes(nodes: &[i64], num_chunks: usize) -> Vec<&[i64]> {
     if num_chunks == 0 || nodes.is_empty() || nodes.len() <= num_chunks {
         return vec![nodes];
     }

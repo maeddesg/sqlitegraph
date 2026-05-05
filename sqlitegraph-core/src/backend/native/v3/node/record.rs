@@ -21,6 +21,7 @@ pub mod constants {
     /// - outgoing_edge_count: 4 bytes (u32)
     /// - incoming_cluster_offset: 8 bytes (u64)
     /// - incoming_edge_count: 4 bytes (u32)
+    ///
     /// Total: 8 + 4 + 2 + 2 + 2 + 8 + 4 + 8 + 4 = 42 bytes + 2 reserved = 44
     pub const FIXED_METADATA_SIZE: usize = 44;
 

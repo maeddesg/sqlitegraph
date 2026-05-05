@@ -626,7 +626,6 @@ pub type WeightCallback = dyn Fn(i64, i64, &Value) -> f64;
 /// let result = impact_radius(&graph, source, &config)?;
 /// println!("Blast zone: {} nodes within 3 hops", result.size);
 /// ```
-
 /// Configuration for impact radius computation.
 ///
 /// Controls the blast zone computation by specifying distance limits,

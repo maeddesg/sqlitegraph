@@ -43,10 +43,18 @@ impl PageConfig {
     }
 
     /// Get conservative default page size
-    pub fn default() -> Self {
+    pub fn conservative() -> Self {
         Self::for_media(MediaType::Unknown)
     }
+}
 
+impl Default for PageConfig {
+    fn default() -> Self {
+        Self::conservative()
+    }
+}
+
+impl PageConfig {
     /// Check if page size is valid
     pub fn is_valid(&self) -> bool {
         self.page_size >= page_size::MIN_PAGE_SIZE

@@ -44,7 +44,8 @@ impl FileCoordinator {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
-            .create(true) // Create if doesn't exist, no-op if exists
+            .create(true)
+            .truncate(false) // Create if doesn't exist, no-op if exists
             .open(db_path)
             .map_err(|e| NativeBackendError::IoError {
                 context: format!(

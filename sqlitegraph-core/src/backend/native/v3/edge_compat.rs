@@ -929,8 +929,8 @@ impl V3EdgeStore {
         } else {
             0.0
         };
-        let avg_hit_ns = if hits > 0 { hit_ns / hits } else { 0 };
-        let avg_miss_ns = if misses > 0 { miss_ns / misses } else { 0 };
+        let avg_hit_ns = hit_ns.checked_div(hits).unwrap_or(0);
+        let avg_miss_ns = miss_ns.checked_div(misses).unwrap_or(0);
 
         println!("Cache stats:");
         println!("  Entries: {}", cache_size);
