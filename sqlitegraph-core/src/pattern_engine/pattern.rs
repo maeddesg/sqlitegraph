@@ -24,25 +24,16 @@ pub struct PatternTriple {
     pub direction: BackendDirection,
 }
 
-impl Default for PatternTriple {
-    fn default() -> Self {
-        Self {
-            start_label: None,
-            edge_type: String::new(),
-            end_label: None,
-            start_props: HashMap::new(),
-            end_props: HashMap::new(),
-            direction: BackendDirection::Outgoing,
-        }
-    }
-}
-
 impl PatternTriple {
     /// Create a new pattern triple with the given edge type.
     pub fn new(edge_type: impl Into<String>) -> Self {
         Self {
+            start_label: None,
             edge_type: edge_type.into(),
-            ..Self::default()
+            end_label: None,
+            start_props: HashMap::new(),
+            end_props: HashMap::new(),
+            direction: BackendDirection::Outgoing,
         }
     }
 
