@@ -51,11 +51,17 @@ jobs:
       - name: cargo fmt
         run: cargo fmt --all --check
 
-      - name: cargo check
-        run: RUSTFLAGS="-D warnings" cargo check --all-targets
+      - name: cargo check (lib + bins)
+        run: RUSTFLAGS="-D warnings" cargo check --lib --bins
 
-      - name: cargo clippy
-        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo check (tests + benches)
+        run: cargo check --tests --benches
+
+      - name: cargo clippy (lib + bins)
+        run: cargo clippy --lib --bins
+
+      - name: cargo clippy (tests + benches)
+        run: cargo clippy --tests --benches
 
       - name: cargo test
         run: cargo test --all-targets -- --test-threads=1
