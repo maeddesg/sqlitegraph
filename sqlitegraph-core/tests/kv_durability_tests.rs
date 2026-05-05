@@ -1173,7 +1173,10 @@ fn test_v3_recovery_wal_preserves_operation_order() {
     // key3 should exist
     let result = backend.kv_get_v3(SnapshotId::current(), b"key3");
     match result {
-        Some(KvValue::Float(f)) => assert!((f - std::f64::consts::PI).abs() < 0.001, "key3 should be PI"),
+        Some(KvValue::Float(f)) => assert!(
+            (f - std::f64::consts::PI).abs() < 0.001,
+            "key3 should be PI"
+        ),
         _ => panic!("key3 should be Float(3.14)"),
     }
 
