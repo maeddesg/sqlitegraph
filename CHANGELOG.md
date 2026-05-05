@@ -1,5 +1,16 @@
 # SQLiteGraph Changelog
 
+## [2.1.4] - 2026-05-05
+
+### Fixed
+- **`PatternTriple::default()` removed** — Invalid `Default` implementation on `PatternTriple` could produce semantically incorrect triple patterns
+- **Type mismatch in web graph pattern generation** — `usize` vs `i64` mismatch in pattern edge indexing
+- **Missing `use super::*` in benchmark test module** — `graph_generators.rs` test module lacked scope import for `GraphTopology`
+- **Lib-level compiler warnings resolved** — 210 warnings reduced across core library, benches, and tests
+- **Tracked lib clippy warnings resolved** — All clippy warnings in published library code cleaned
+
+---
+
 ## [2.1.3] - 2026-04-24
 
 ### Fixed
