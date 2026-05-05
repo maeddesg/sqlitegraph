@@ -86,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             to_idx = (to_idx + 1) % node_count;
         }
 
-        let edge_id = graph.insert_edge(EdgeSpec {
+        let _edge_id = graph.insert_edge(EdgeSpec {
             from: node_ids[from_idx],
             to: node_ids[to_idx],
             edge_type: "test_edge".to_string(),

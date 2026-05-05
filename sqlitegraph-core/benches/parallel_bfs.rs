@@ -134,7 +134,6 @@ fn bench_bfs_chain(criterion: &mut Criterion) {
                 let config = BfsConfig {
                     max_threads: None,
                     min_parallel_size: size * 10, // Force sequential
-                    batch_size: 100,
                 };
 
                 let _result = parallel_bfs(&backend, node_ids[0], Some(config))
@@ -175,8 +174,7 @@ fn bench_bfs_chain(criterion: &mut Criterion) {
                     let config = BfsConfig {
                         max_threads: Some(4),
                         min_parallel_size: 1000,
-                        batch_size: 100,
-                    };
+                        };
 
                     let _result = parallel_bfs(&backend, node_ids[0], Some(config))
                         .expect("Failed to perform BFS");
@@ -210,7 +208,6 @@ fn bench_bfs_star(criterion: &mut Criterion) {
                 let config = BfsConfig {
                     max_threads: None,
                     min_parallel_size: size * 10, // Force sequential
-                    batch_size: 100,
                 };
 
                 let _result = parallel_bfs(&backend, node_ids[0], Some(config))
@@ -233,8 +230,7 @@ fn bench_bfs_star(criterion: &mut Criterion) {
                     let config = BfsConfig {
                         max_threads: Some(4),
                         min_parallel_size: 1000,
-                        batch_size: 100,
-                    };
+                        };
 
                     let _result = parallel_bfs(&backend, node_ids[0], Some(config))
                         .expect("Failed to perform BFS");
@@ -268,7 +264,6 @@ fn bench_bfs_random(criterion: &mut Criterion) {
                 let config = BfsConfig {
                     max_threads: None,
                     min_parallel_size: size * 10, // Force sequential
-                    batch_size: 100,
                 };
 
                 let _result = parallel_bfs(&backend, node_ids[0], Some(config))
@@ -291,8 +286,7 @@ fn bench_bfs_random(criterion: &mut Criterion) {
                     let config = BfsConfig {
                         max_threads: Some(4),
                         min_parallel_size: 1000,
-                        batch_size: 100,
-                    };
+                        };
 
                     let _result = parallel_bfs(&backend, node_ids[0], Some(config))
                         .expect("Failed to perform BFS");
@@ -326,7 +320,6 @@ fn bench_crossover_analysis(criterion: &mut Criterion) {
                 let config = BfsConfig {
                     max_threads: None,
                     min_parallel_size: size * 10, // Force sequential
-                    batch_size: 100,
                 };
 
                 let _result = parallel_bfs(&backend, node_ids[0], Some(config))

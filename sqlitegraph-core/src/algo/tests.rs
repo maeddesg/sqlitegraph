@@ -1908,7 +1908,7 @@ fn test_control_dependence_linear_chain() {
     // doesn't post-dominate the target (different nodes)
     // The CDG will have edges reflecting this control dependence structure
     assert!(
-        cdg_result.cdg.len() >= 0,
+        !cdg_result.cdg.is_empty(),
         "CDG should be computed for linear chain"
     );
 }

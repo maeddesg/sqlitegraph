@@ -2,7 +2,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use sqlitegraph::{
-    BackendDirection, BackendKind, EdgeSpec, GraphConfig, NativeConfig, NeighborQuery, NodeSpec,
+    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec,
     SnapshotId, open_graph,
 };
 use std::time::Duration;
@@ -45,7 +45,7 @@ fn benchmark_sqlitegraph_v2(c: &mut Criterion) {
     for &num_nodes in DATASET_SIZES {
         let edge_multiplier =
             EDGE_MULTIPLIERS[DATASET_SIZES.iter().position(|&n| n == num_nodes).unwrap()];
-        let num_edges = (num_nodes as f64 * edge_multiplier) as usize;
+        let _num_edges = (num_nodes as f64 * edge_multiplier) as usize;
 
         group.throughput(Throughput::Elements(num_nodes as u64));
 
@@ -195,7 +195,7 @@ fn benchmark_dense_graphs(c: &mut Criterion) {
 
     let num_nodes = 1000;
     let edge_multiplier = DENSE_EDGE_MULTIPLIER;
-    let num_edges = (num_nodes as f64 * edge_multiplier) as usize;
+    let _num_edges = (num_nodes as f64 * edge_multiplier) as usize;
 
     group.throughput(Throughput::Elements(num_nodes as u64));
 

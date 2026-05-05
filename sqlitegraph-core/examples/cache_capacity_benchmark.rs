@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Benchmark node insertion throughput
 fn benchmark_insert(
     node_count: usize,
-    cache_size: usize,
+    _cache_size: usize,
 ) -> Result<f64, Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("cache_bench.db");
@@ -94,7 +94,7 @@ fn benchmark_insert(
 /// Benchmark sequential get_node access
 fn benchmark_get_node(
     node_count: usize,
-    cache_size: usize,
+    _cache_size: usize,
 ) -> Result<(f64, f64), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("cache_bench.db");
@@ -132,7 +132,7 @@ fn benchmark_get_node(
 /// Benchmark neighbors query
 fn benchmark_neighbors(
     node_count: usize,
-    cache_size: usize,
+    _cache_size: usize,
 ) -> Result<(f64, f64), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("cache_bench.db");
@@ -181,7 +181,7 @@ fn benchmark_neighbors(
 /// Benchmark BFS traversal
 fn benchmark_bfs(
     node_count: usize,
-    cache_size: usize,
+    _cache_size: usize,
 ) -> Result<(f64, f64), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("cache_bench.db");

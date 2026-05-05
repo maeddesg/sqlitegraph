@@ -1,7 +1,6 @@
 use sqlitegraph::backend::GraphBackend;
 use sqlitegraph::backend::NodeSpec;
 use sqlitegraph::backend::native::v3::V3Backend;
-use std::fs;
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -51,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     print!("Second open... ");
     let start = Instant::now();
-    let backend = V3Backend::open(&db_path)?;
+    let _backend = V3Backend::open(&db_path)?;
     let second_open = start.elapsed();
     println!("{:.2} ms", second_open.as_secs_f64() * 1000.0);
 

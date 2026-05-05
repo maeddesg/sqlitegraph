@@ -947,7 +947,6 @@ mod tests {
             .expect("Failed to compute IDF");
 
         // Should converge
-        assert!(idf_result.iterations >= 0, "IDF should complete");
 
         // phi_nodes should be valid
         for &node in &idf_result.phi_nodes {
@@ -1068,7 +1067,7 @@ mod tests {
         // Algorithm should handle self-loop without errors
         // The specific result depends on dominance structure
         assert!(
-            df_result.frontiers.len() >= 0,
+            !df_result.frontiers.is_empty(),
             "Should compute DF successfully"
         );
     }

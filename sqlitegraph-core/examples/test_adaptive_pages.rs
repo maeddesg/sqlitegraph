@@ -1,6 +1,6 @@
 use sqlitegraph::backend::native::v3::backend::V3Backend;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek};
 use tempfile::tempdir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

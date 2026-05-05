@@ -11,7 +11,7 @@ use tempfile::TempDir;
 
 // Import graph types
 use sqlitegraph::algo::backend::{
-    bfs, bfs_traversal, dfs_traversal, k_hop_neighbors, shortest_path,
+    bfs_traversal, dfs_traversal, k_hop_neighbors, shortest_path,
 };
 use sqlitegraph::backend::native::v3::V3Backend;
 use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec, SqliteGraphBackend};
@@ -19,7 +19,6 @@ use sqlitegraph::snapshot::SnapshotId;
 
 // Graph topology generators
 mod graph_generators;
-use graph_generators::*;
 
 /// Hardware and environment information
 #[derive(Debug, Clone)]

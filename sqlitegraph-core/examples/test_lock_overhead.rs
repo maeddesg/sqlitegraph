@@ -1,7 +1,7 @@
 //! Test to isolate RwLock overhead
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 use std::time::Instant;
 
 fn main() {

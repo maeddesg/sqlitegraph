@@ -6,7 +6,6 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use sqlitegraph::hnsw::{DistanceMetric, HnswConfig, HnswIndex};
 
 mod bench_utils;
-use bench_utils::{MEASURE, WARM_UP};
 
 /// Benchmark HNSW search scaling with dataset size
 fn bench_hnsw_search_scaling(criterion: &mut Criterion) {

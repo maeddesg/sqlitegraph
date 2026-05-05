@@ -52,7 +52,7 @@ fn test_capture_buffer_too_small_error() -> Result<(), Box<dyn std::error::Error
     let mut reopen_config = GraphConfig::native();
     reopen_config.native.create_if_missing = false;
 
-    let mut graph_reopened = open_graph(&db_path, &reopen_config)?;
+    let graph_reopened = open_graph(&db_path, &reopen_config)?;
     println!("✅ Database reopened");
 
     // Step 5: Try neighbor queries to trigger error

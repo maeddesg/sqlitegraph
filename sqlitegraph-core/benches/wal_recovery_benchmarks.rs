@@ -5,7 +5,6 @@
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use sqlitegraph::{GraphConfig, NodeSpec, open_graph};
-use std::fs;
 use std::time::Duration;
 use tempfile::TempDir;
 

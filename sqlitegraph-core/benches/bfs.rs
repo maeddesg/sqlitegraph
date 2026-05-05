@@ -3,11 +3,10 @@
 //! Compares BFS traversal performance across different graph sizes and topologies
 //! using the criterion benchmarking framework.
 
-use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::SeedableRng;
-use sqlitegraph::{BackendDirection, BackendKind, EdgeSpec, NeighborQuery, NodeSpec, SnapshotId};
+use sqlitegraph::{EdgeSpec, NodeSpec, SnapshotId};
 
 mod bench_utils;
 use bench_utils::{
@@ -147,10 +146,7 @@ fn bfs_chain(criterion: &mut Criterion) {
                 let mut visited = vec![false; graph.node_count()];
                 let mut queue = vec![0u32];
                 visited[0] = true;
-                let mut visited_count = 0;
-
                 while let Some(node) = queue.pop() {
-                    visited_count += 1;
                     for &neighbor in graph.neighbors(node) {
                         if !visited[neighbor as usize] {
                             visited[neighbor as usize] = true;
@@ -267,10 +263,7 @@ fn bfs_star(criterion: &mut Criterion) {
                 let mut visited = vec![false; graph.node_count()];
                 let mut queue = vec![0u32];
                 visited[0] = true;
-                let mut visited_count = 0;
-
                 while let Some(node) = queue.pop() {
-                    visited_count += 1;
                     for &neighbor in graph.neighbors(node) {
                         if !visited[neighbor as usize] {
                             visited[neighbor as usize] = true;
@@ -408,10 +401,7 @@ fn bfs_random(criterion: &mut Criterion) {
                 let mut visited = vec![false; graph.node_count()];
                 let mut queue = vec![0u32];
                 visited[0] = true;
-                let mut visited_count = 0;
-
                 while let Some(node) = queue.pop() {
-                    visited_count += 1;
                     for &neighbor in graph.neighbors(node) {
                         if !visited[neighbor as usize] {
                             visited[neighbor as usize] = true;

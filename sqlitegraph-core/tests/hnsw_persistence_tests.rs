@@ -328,7 +328,6 @@ fn test_hnsw_graph_autoload() {
         graph
             .get_hnsw_index_ref("autoload_test", |hnsw| {
                 assert_eq!(hnsw.vector_count(), 2);
-                Ok::<(), sqlitegraph::SqliteGraphError>(())
             })
             .unwrap();
     }

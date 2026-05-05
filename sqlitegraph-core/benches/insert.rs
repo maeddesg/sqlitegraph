@@ -3,11 +3,10 @@
 //! Compares node and edge insertion throughput across different batch sizes
 //! and graph topologies using the criterion benchmarking framework.
 
-use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::{RngCore, SeedableRng};
-use sqlitegraph::{BackendDirection, EdgeSpec, NodeSpec, open_graph};
+use sqlitegraph::{EdgeSpec, NodeSpec, open_graph};
 
 mod bench_utils;
 use bench_utils::{BENCHMARK_SIZES, MEASURE, WARM_UP, create_benchmark_temp_dir};

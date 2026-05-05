@@ -2,8 +2,6 @@ use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fs::File;
-use std::io::Write;
 use std::time::Duration;
 
 const DATASET_SIZES: &[usize] = &[100, 1000, 10000];
@@ -28,7 +26,7 @@ impl SimpleAdjList {
         }
     }
 
-    fn add_node(&mut self, name: &str) -> u64 {
+    fn add_node(&mut self, _name: &str) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         self.nodes.push(id);

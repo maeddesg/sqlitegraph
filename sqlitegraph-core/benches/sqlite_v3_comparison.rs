@@ -674,7 +674,7 @@ fn bench_query_by_kind(c: &mut Criterion) {
                     backend
                 },
                 |backend| {
-                    black_box(backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind"));
+                    let _ = black_box(backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind"));
                 },
                 criterion::BatchSize::SmallInput,
             );
@@ -731,7 +731,7 @@ fn bench_query_by_name_pattern(c: &mut Criterion) {
                 },
                 |backend| {
                     // SQLite GLOB prefix pattern: "target*" matches "target_node_0", etc.
-                    black_box(
+                    let _ = black_box(
                         backend.query_nodes_by_name_pattern(SnapshotId::current(), "target*"),
                     );
                 },
@@ -753,7 +753,7 @@ fn bench_query_by_name_pattern(c: &mut Criterion) {
                 |(backend, _temp_dir)| {
                     // V3 prefix match: "target*" matches "target_node_0", etc.
                     // Same semantics as SQLite GLOB "target*"
-                    black_box(
+                    let _ = black_box(
                         backend.query_nodes_by_name_pattern(SnapshotId::current(), "target*"),
                     );
                 },
@@ -775,8 +775,8 @@ fn bench_query_by_name_pattern(c: &mut Criterion) {
 /// Run with: cargo test --features native-v3 --benches file_size_reporting -- --nocapture
 #[cfg(test)]
 mod file_size_tests {
-    use super::*;
-    use std::fs::metadata;
+    
+    
 
     #[test]
     #[ignore] // Run explicitly with cargo test --ignored

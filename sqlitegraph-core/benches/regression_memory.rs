@@ -3,7 +3,6 @@
 //! Measures memory usage during Chain(500) traversal with telemetry enabled.
 //! Validates that telemetry adds ≤+5% memory overhead vs v1.6 baseline.
 
-use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};

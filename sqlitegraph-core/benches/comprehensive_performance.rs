@@ -7,7 +7,7 @@
 //!   cargo bench --bench comprehensive_performance -- --save-baseline main
 //!   cargo bench --bench comprehensive_performance -- --baseline main
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 use std::time::Duration;
 

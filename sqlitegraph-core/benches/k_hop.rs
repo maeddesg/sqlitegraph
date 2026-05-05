@@ -3,11 +3,9 @@
 //! Compares multi-hop traversal performance (depth 1, 2, 3) across different
 //! graph topologies using the criterion benchmarking framework.
 
-use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use rand::SeedableRng;
-use sqlitegraph::{BackendDirection, BackendKind, EdgeSpec, NodeSpec, SnapshotId};
+use sqlitegraph::{BackendDirection, EdgeSpec, NodeSpec, SnapshotId};
 
 mod bench_utils;
 use bench_utils::{

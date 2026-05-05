@@ -797,7 +797,6 @@ mod tests {
         let (level2, assignments2) = manager.insert_vector(2).unwrap();
         let (level3, assignments3) = manager.insert_vector(3).unwrap();
 
-        assert!(level1 >= 0);
         assert!(level1 <= 7); // max_layers-1
 
         // Verify each vector is in all required layers

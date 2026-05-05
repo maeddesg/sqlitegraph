@@ -3,7 +3,7 @@
 use sqlitegraph::{
     EdgeSpec, NodeSpec,
     backend::GraphBackend,
-    backend::native::v3::{V3Backend, V3EdgeStore, edge_compat::Direction},
+    backend::native::v3::{V3Backend, edge_compat::Direction},
 };
 use std::time::Instant;
 use tempfile::tempdir;

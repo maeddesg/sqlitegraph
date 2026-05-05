@@ -527,7 +527,7 @@ fn benchmark_insert_edge(nodes: usize) -> Vec<BenchmarkResult> {
 
 fn benchmark_edge_exists(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
     benchmark_both("edge_exists", nodes, edges, |backend| {
-        let snapshot = SnapshotId::current();
+        let _snapshot = SnapshotId::current();
         // Check if edge from 1 to 2 exists
         let outgoing = backend.fetch_outgoing(1).map_err(|e| e.to_string())?;
         let _exists = outgoing.contains(&2);
@@ -607,8 +607,8 @@ fn benchmark_pagerank(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
 // ============================================================================
 
 fn benchmark_label_propagation(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
-    use sqlitegraph::algo::label_propagation;
-    use sqlitegraph::graph::SqliteGraph;
+    
+    
 
     benchmark_both("label_propagation", nodes, edges, |backend| {
         // This requires SqliteGraph, not GraphBackend
@@ -623,8 +623,8 @@ fn benchmark_label_propagation(nodes: usize, edges: usize) -> Vec<BenchmarkResul
 // ============================================================================
 
 fn benchmark_connected_components(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
-    use sqlitegraph::algo::connected_components;
-    use sqlitegraph::graph::SqliteGraph;
+    
+    
 
     benchmark_both("connected_components", nodes, edges, |backend| {
         let _ = backend;
@@ -633,8 +633,8 @@ fn benchmark_connected_components(nodes: usize, edges: usize) -> Vec<BenchmarkRe
 }
 
 fn benchmark_weakly_connected(nodes: usize, edges: usize) -> Vec<BenchmarkResult> {
-    use sqlitegraph::algo::weakly_connected_components;
-    use sqlitegraph::graph::SqliteGraph;
+    
+    
 
     benchmark_both("weakly_connected_components", nodes, edges, |backend| {
         let _ = backend;

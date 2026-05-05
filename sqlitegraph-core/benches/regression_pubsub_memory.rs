@@ -3,7 +3,6 @@
 //! Measures memory usage of Publisher and channel infrastructure with subscribers.
 //! Validates that pub/sub adds ≤+5% memory overhead vs baseline.
 
-use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use sqlitegraph::backend::SubscriptionFilter;

@@ -3,7 +3,6 @@
 //! Measures write-path cost with cluster metadata to ensure ≤+5% increase vs v1.6 baseline.
 //! This validates that the observe_with_cluster() optimization doesn't degrade write performance.
 
-use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sqlitegraph::{EdgeSpec, NodeSpec, open_graph};

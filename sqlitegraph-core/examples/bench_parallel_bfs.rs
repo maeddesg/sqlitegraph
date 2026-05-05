@@ -90,7 +90,6 @@ fn benchmark_chain_graphs() {
         let config_seq = BfsConfig {
             max_threads: None,
             min_parallel_size: size * 10, // Force sequential
-            batch_size: 100,
         };
 
         let start_seq = Instant::now();
@@ -107,7 +106,6 @@ fn benchmark_chain_graphs() {
         let config_par = BfsConfig {
             max_threads: Some(4),
             min_parallel_size: 1000,
-            batch_size: 100,
         };
 
         let start_par = Instant::now();
@@ -150,7 +148,6 @@ fn benchmark_star_graphs() {
         let config_seq = BfsConfig {
             max_threads: None,
             min_parallel_size: size * 10, // Force sequential
-            batch_size: 100,
         };
 
         let start_seq = Instant::now();
@@ -167,7 +164,6 @@ fn benchmark_star_graphs() {
         let config_par = BfsConfig {
             max_threads: Some(4),
             min_parallel_size: 1000,
-            batch_size: 100,
         };
 
         let start_par = Instant::now();
@@ -209,7 +205,6 @@ fn benchmark_crossover_point() {
         let config_seq = BfsConfig {
             max_threads: None,
             min_parallel_size: size * 10, // Force sequential
-            batch_size: 100,
         };
 
         let start_seq = Instant::now();

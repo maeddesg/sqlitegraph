@@ -12,10 +12,10 @@
 
 use std::time::Duration;
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::{Rng, SeedableRng};
 use sqlitegraph::{
-    BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
+    EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
 };
 
 mod bench_utils;

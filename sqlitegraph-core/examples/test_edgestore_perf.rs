@@ -18,7 +18,7 @@ fn main() {
         sqlitegraph::backend::native::v3::PageAllocator::new(&header),
     ));
     let btree = BTreeManager::new(allocator.clone(), None, db_path.clone());
-    let mut store = V3EdgeStore::new(btree, None, allocator, header.page_size);
+    let store = V3EdgeStore::new(btree, None, allocator, header.page_size);
 
     println!("═══════════════════════════════════════════════════════════════");
     println!("  V3EdgeStore Performance Test (RwLock + Vec<i64> cache)");

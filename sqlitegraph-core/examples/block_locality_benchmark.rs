@@ -221,7 +221,7 @@ fn generate_access_sequence(count: usize, pattern: &AccessPattern) -> Vec<i64> {
             // This tests whether cache retains pages from "distant" blocks
             const BLOCK_SIZE: i64 = 128;
             let mut sequence = Vec::new();
-            let num_repeats = (count as i64 + BLOCK_SIZE - 1) / BLOCK_SIZE; // Approximate
+            let _num_repeats = (count as i64 + BLOCK_SIZE - 1) / BLOCK_SIZE; // Approximate
 
             for _ in 0..2 {
                 let mut block_start = 1;

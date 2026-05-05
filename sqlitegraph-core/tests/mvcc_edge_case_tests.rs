@@ -771,7 +771,7 @@ fn test_snapshot_outlives_graph() -> Result<(), SqliteGraphError> {
     assert!(count > 0, "Snapshot should remain valid");
 
     // Verify snapshot data is still accessible
-    assert!(snapshot.edge_count() >= 0);
+    let _ = snapshot.edge_count();
 
     Ok(())
 }

@@ -45,7 +45,6 @@ use rusqlite::Connection;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tempfile::TempDir;
 
 mod bench_utils;
 use bench_utils::create_benchmark_temp_dir;

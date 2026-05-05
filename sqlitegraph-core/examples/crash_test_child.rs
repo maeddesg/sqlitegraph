@@ -8,8 +8,7 @@
 use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
 use std::env;
 use std::fs;
-use std::path::Path;
-use std::process::{Command, exit};
+use std::process::exit;
 use std::time::{Duration, Instant};
 
 fn main() {

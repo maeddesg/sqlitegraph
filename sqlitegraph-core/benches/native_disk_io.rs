@@ -26,7 +26,7 @@ fn bench_sequential_node_access(c: &mut Criterion) {
             let db_path = temp_dir.path().join("seq_access.db");
 
             let config = GraphConfig::native();
-            let mut graph = open_graph(&db_path, &config).unwrap();
+            let graph = open_graph(&db_path, &config).unwrap();
 
             // Create sequential graph
             for i in 1..=size {
@@ -66,7 +66,7 @@ fn bench_cache_thrashing(c: &mut Criterion) {
                 let db_path = temp_dir.path().join("cache_thrash.db");
 
                 let config = GraphConfig::native();
-                let mut graph = open_graph(&db_path, &config).unwrap();
+                let graph = open_graph(&db_path, &config).unwrap();
 
                 // Create graph with more nodes than cache size
                 for i in 1..=cache_test_size {
@@ -107,7 +107,7 @@ fn bench_corruption_boundary(c: &mut Criterion) {
                 let db_path = temp_dir.path().join("boundary_test.db");
 
                 let config = GraphConfig::native();
-                let mut graph = open_graph(&db_path, &config).unwrap();
+                let graph = open_graph(&db_path, &config).unwrap();
 
                 // Create enough nodes to reach boundary
                 for i in 1..=boundary_node.max(300) {
@@ -151,7 +151,7 @@ fn bench_edge_insertion_boundary(c: &mut Criterion) {
                 let db_path = temp_dir.path().join("edge_boundary.db");
 
                 let config = GraphConfig::native();
-                let mut graph = open_graph(&db_path, &config).unwrap();
+                let graph = open_graph(&db_path, &config).unwrap();
 
                 // Create nodes
                 for i in 1..=edge_count {
@@ -201,7 +201,7 @@ fn bench_space_efficiency(c: &mut Criterion) {
                     let db_path = temp_dir.path().join("space_test.db");
 
                     let config = GraphConfig::native();
-                    let mut graph = open_graph(&db_path, &config).unwrap();
+                    let graph = open_graph(&db_path, &config).unwrap();
 
                     // Create nodes
                     for i in 1..=node_count {

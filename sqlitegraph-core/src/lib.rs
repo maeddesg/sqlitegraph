@@ -323,6 +323,7 @@ pub mod bench_regression; // Public for tests
 pub mod bench_utils; // Public for tests
 pub mod dsl; // Public for examples
 pub mod hnsw;
+pub mod inference; // Sparse inference engine
 pub mod pattern; // Public for binary // HNSW vector search capabilities
 
 // Dependency monitoring module (feature-gated)

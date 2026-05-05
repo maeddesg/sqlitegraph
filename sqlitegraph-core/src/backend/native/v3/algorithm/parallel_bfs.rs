@@ -36,14 +36,6 @@ pub struct BfsConfig {
 
     /// Minimum graph size to use parallel processing (node count)
     pub min_parallel_size: usize,
-
-    /// ⚠️ **DEPRECATED:** Not used in chunked implementation
-    ///
-    /// The chunked implementation automatically determines optimal
-    /// chunk size based on CPU count. This field is kept for
-    /// API compatibility but has no effect.
-    #[deprecated(since = "2.1.1", note = "Chunk size is auto-determined from CPU count")]
-    pub batch_size: usize,
 }
 
 impl Default for BfsConfig {
@@ -51,7 +43,6 @@ impl Default for BfsConfig {
         Self {
             max_threads: None,       // Use Rayon default (all CPUs)
             min_parallel_size: 1000, // Chunks need enough work to justify overhead
-            batch_size: 1000,        // Deprecated, kept for API compatibility
         }
     }
 }
@@ -146,7 +137,6 @@ impl ChunkResult {
 /// let config = BfsConfig {
 ///     max_threads: Some(4),
 ///     min_parallel_size: 500,
-///     batch_size: 50,
 /// };
 /// let result = parallel_bfs(&backend, 1, Some(config))?;
 /// # Ok(())
@@ -444,7 +434,6 @@ mod tests {
         let config = BfsConfig {
             max_threads: None,
             min_parallel_size: 1000,
-            batch_size: 100,
         };
 
         let result = parallel_bfs(&backend, node_ids[0], Some(config)).unwrap();
@@ -460,7 +449,6 @@ mod tests {
 
         assert_eq!(config.max_threads, None);
         assert_eq!(config.min_parallel_size, 1000);
-        assert_eq!(config.batch_size, 1000);
     }
 
     #[test]

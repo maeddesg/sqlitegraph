@@ -3,7 +3,6 @@
 //! Provides utilities for creating deterministic test graphs and running
 //! fair performance comparisons between SQLite and Native backends.
 
-use std::collections::HashMap;
 use std::time::Duration;
 use tempfile::TempDir;
 

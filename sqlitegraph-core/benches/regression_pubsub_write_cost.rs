@@ -3,7 +3,6 @@
 //! Measures write-path cost with pub/sub event emission to ensure ≤+10% increase vs baseline.
 //! This validates that publisher.emit() on the commit path doesn't degrade write performance.
 
-use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sqlitegraph::backend::SubscriptionFilter;
