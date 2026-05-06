@@ -95,3 +95,7 @@ test_*_api
 docs/internal/
 # Note: internal/ folder IS tracked in git for team sharing
 # It's excluded from crates.io publication via package manifest
+
+# Agent instructions — local only, not for repo
+**/CLAUDE.md
+**/AGENTS.md
