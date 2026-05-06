@@ -1,5 +1,10 @@
 # SQLiteGraph Changelog
 
+## [2.2.2] - 2026-05-06
+
+### Fixed
+- **`SqliteGraph` is now `Send + Sync`** — Added `Send` bound to `VectorStorage` trait and changed `hnsw_indexes` from `RwLock` to `Mutex`. Previously `SqliteGraph` was `!Send` because `HnswIndex` wraps `Box<dyn VectorStorage>` which was `!Send`, blocking use in `axum::AppState` and multi-threaded contexts. Compile-time proven: `Mutex<T>` only requires `T: Send` (unlike `RwLock<T>` which requires `T: Send + Sync`), and `rusqlite::Connection` is `Send + !Sync`.
+
 ## [2.2.1] - 2026-05-06
 
 ### Fixed

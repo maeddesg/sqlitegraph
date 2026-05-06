@@ -433,13 +433,13 @@ impl crate::SqliteGraph {
         &self,
         name: &str,
         config: crate::hnsw::config::HnswConfig,
-    ) -> Result<std::sync::RwLockWriteGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
+    ) -> Result<std::sync::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
         
         
 
         // Check if index already exists
         {
-            let indexes = self.hnsw_indexes.read().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
+            let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
             if indexes.contains_key(name) {
                 return Err(crate::SqliteGraphError::invalid_input(format!("HNSW index '{}' already exists. Use get_hnsw_index() to retrieve it.", name)));
             }
@@ -454,7 +454,7 @@ impl crate::SqliteGraph {
         hnsw.save_metadata(conn_ref).map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to save HNSW index metadata: {}", e)))?;
 
         // Store the index
-        let mut indexes = self.hnsw_indexes.write().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
+        let mut indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
         indexes.insert(name.to_string(), hnsw);
 
         Ok(indexes)
@@ -493,13 +493,13 @@ impl crate::SqliteGraph {
         &self,
         name: &str,
         config: crate::hnsw::config::HnswConfig,
-    ) -> Result<std::sync::RwLockWriteGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
+    ) -> Result<std::sync::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
         
         
 
         // Check if index already exists
         {
-            let indexes = self.hnsw_indexes.read().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
+            let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
             if indexes.contains_key(name) {
                 return Err(crate::SqliteGraphError::invalid_input(format!("HNSW index '{}' already exists. Use get_hnsw_index() to retrieve it.", name)));
             }
@@ -550,7 +550,7 @@ impl crate::SqliteGraph {
         };
 
         // Store the index (metadata already saved to database above)
-        let mut indexes = self.hnsw_indexes.write().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
+        let mut indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
         indexes.insert(name.to_string(), hnsw);
 
         Ok(indexes)
@@ -567,11 +567,11 @@ impl crate::SqliteGraph {
     pub fn get_hnsw_index(
         &self,
         name: &str,
-    ) -> Result<Option<std::sync::RwLockWriteGuard<'_, std::collections::HashMap<String, HnswIndex>>>, crate::SqliteGraphError> {
+    ) -> Result<Option<std::sync::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>>, crate::SqliteGraphError> {
         
         
 
-        let indexes = self.hnsw_indexes.write().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
+        let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
 
         if indexes.contains_key(name) {
             Ok(Some(indexes))
@@ -591,7 +591,7 @@ impl crate::SqliteGraph {
     {
         
 
-        let indexes = self.hnsw_indexes.read().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
+        let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
 
         if let Some(hnsw) = indexes.get(name) {
             Ok(f(hnsw))
@@ -611,7 +611,7 @@ impl crate::SqliteGraph {
     {
         
 
-        let mut indexes = self.hnsw_indexes.write().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
+        let mut indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
 
         if let Some(hnsw) = indexes.get_mut(name) {
             Ok(f(hnsw))
@@ -624,7 +624,7 @@ impl crate::SqliteGraph {
     pub fn list_hnsw_indexes(&self) -> Result<Vec<String>, crate::SqliteGraphError> {
         
 
-        let indexes = self.hnsw_indexes.read().map_err(|e| crate::SqliteGraphError::invalid_input(format!("RwLock poisoned: {}", e)))?;
+        let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
         Ok(indexes.keys().cloned().collect())
     }
 }

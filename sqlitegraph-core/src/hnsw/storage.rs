@@ -267,7 +267,11 @@ impl VectorBatch {
 ///
 /// Provides unified interface for storing and retrieving vectors across different
 /// storage backends. Automatically adapts to the active backend type.
-pub trait VectorStorage {
+/// All implementors must be `Send` so that `HnswIndex` (and its parent
+/// `SqliteGraph`) can be safely transferred across threads (e.g. stored in
+/// axum `AppState`). `Sync` is intentionally NOT required because
+/// `rusqlite::Connection` (used by `SQLiteVectorStorage`) is `!Sync`.
+pub trait VectorStorage: Send {
     /// Store a vector with optional metadata
     ///
     /// # Arguments

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
 
@@ -47,8 +47,11 @@ pub struct SqliteGraph {
     pub(crate) metrics: Arc<GraphMetrics>,
     pub(crate) statement_tracker: Arc<StatementTracker>,
     pub(crate) snapshot_manager: SnapshotManager,
-    /// HNSW vector indexes stored by name (public for CLI access)
-    pub hnsw_indexes: RwLock<HashMap<String, HnswIndex>>,
+    /// HNSW vector indexes stored by name (public for CLI access).
+    /// Uses `Mutex` rather than `RwLock` because `HnswIndex` contains
+    /// `Box<dyn VectorStorage>` which is `!Sync` (rusqlite::Connection is !Sync).
+    /// `Mutex<T: Send>` is itself `Send + Sync`, making `SqliteGraph` thread-safe.
+    pub hnsw_indexes: Mutex<HashMap<String, HnswIndex>>,
 }
 
 // Helper function to check if connection is in-memory
@@ -147,7 +150,7 @@ impl SqliteGraph {
             metrics: Arc::new(GraphMetrics::default()),
             statement_tracker: Arc::new(StatementTracker::default()),
             snapshot_manager: SnapshotManager::new(),
-            hnsw_indexes: RwLock::new(hnsw_indexes),
+            hnsw_indexes: Mutex::new(hnsw_indexes),
         })
     }
 
@@ -220,7 +223,7 @@ impl SqliteGraph {
             metrics: Arc::new(GraphMetrics::default()),
             statement_tracker: Arc::new(StatementTracker::default()),
             snapshot_manager: SnapshotManager::new(),
-            hnsw_indexes: RwLock::new(hnsw_indexes),
+            hnsw_indexes: Mutex::new(hnsw_indexes),
         })
     }
 
