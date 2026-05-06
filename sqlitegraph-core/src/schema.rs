@@ -66,6 +66,14 @@ const MIGRATION_STEPS: &[MigrationStep] = &[
             "INSERT INTO graph_meta_history(version) VALUES(3)",
         ],
     },
+    MigrationStep {
+        target_version: 4,
+        statements: &[
+            "CREATE INDEX IF NOT EXISTS idx_entities_kind ON graph_entities(kind)",
+            "CREATE INDEX IF NOT EXISTS idx_entities_kind_name ON graph_entities(kind, name)",
+            "INSERT INTO graph_meta_history(version) VALUES(4)",
+        ],
+    },
 ];
 
 pub const SCHEMA_VERSION: i64 = BASE_SCHEMA_VERSION + MIGRATION_STEPS.len() as i64;

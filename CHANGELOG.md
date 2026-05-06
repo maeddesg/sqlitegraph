@@ -1,5 +1,17 @@
 # SQLiteGraph Changelog
 
+## [2.2.0] - 2026-05-06
+
+### Added
+- **`find_entities_by_kind(kind)`** — Returns all entities matching a given kind, ordered by id. Uses `idx_entities_kind` index.
+- **`find_entity_by_kind_and_name(kind, name)`** — Returns a single entity matching both kind and exact name. Returns `Option<GraphEntity>`. Uses `idx_entities_kind_name` composite index.
+- **Schema migration v4** — Two new indexes on `graph_entities`: `idx_entities_kind` and `idx_entities_kind_name`.
+
+### Tested
+- 3 new unit tests covering: kind filtering, kind+name exact match (including cross-kind name collision), and insertion-order preservation.
+
+---
+
 ## [2.1.4] - 2026-05-05
 
 ### Fixed
