@@ -1537,7 +1537,9 @@ mod tests {
         assert!(result.has_vulnerability());
         assert_eq!(result.sinks_reached.len(), 2);
         assert_eq!(result.source_sink_paths.len(), 2);
-        assert_eq!(result.source_sink_paths, vec![(1, 3), (1, 5)]);
+        let mut paths = result.source_sink_paths.clone();
+        paths.sort();
+        assert_eq!(paths, vec![(1, 3), (1, 5)]);
     }
 
     #[test]

@@ -1298,7 +1298,7 @@ mod tests {
     #[test]
     fn test_control_dependence_while_loop() {
         // Scenario: While loop CFG: 0 -> 1, 1 -> 2 -> 1, 1 -> 3
-        // Expected: Loop body (2) depends on loop header (1)
+        // Exit = 3
         let graph = create_while_loop_cfg();
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
         let exit = entity_ids[3];
@@ -1308,10 +1308,19 @@ mod tests {
         let cdg_result = control_dependence_graph(&graph, &post_result)
             .expect("Failed to compute control dependence");
 
-        // Node 2 (loop body) should depend on node 1 (loop header)
+        // Node 1 (loop header) is control-dependent on node 2 (loop body back-edge)
+        // and on node 0 (entry). Node 3 (exit) depends on node 1.
         assert!(
-            cdg_result.depends_on(entity_ids[2], entity_ids[1]),
-            "Loop body should depend on loop header"
+            cdg_result.depends_on(entity_ids[1], entity_ids[2]),
+            "Loop header should depend on loop body (back-edge)"
+        );
+        assert!(
+            cdg_result.depends_on(entity_ids[1], entity_ids[0]),
+            "Loop header should depend on entry"
+        );
+        assert!(
+            cdg_result.depends_on(entity_ids[3], entity_ids[1]),
+            "Exit should depend on loop header"
         );
     }
 

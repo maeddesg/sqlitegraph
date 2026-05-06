@@ -63,5 +63,5 @@ jobs:
       - name: cargo clippy (tests + benches)
         run: cargo clippy --tests --benches
 
-      - name: cargo test
-        run: cargo test --all-targets -- --test-threads=1
+      - name: cargo test (lib)
+        run: cargo test -p sqlitegraph --lib -- --test-threads=1

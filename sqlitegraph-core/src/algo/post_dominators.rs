@@ -565,8 +565,10 @@ fn reverse_postorder_reversed(
     _all_nodes: &[i64],
 ) -> Result<Vec<i64>, SqliteGraphError> {
     let mut visited = AHashSet::new();
+    let mut seen = AHashSet::new();
     let mut postorder = Vec::new();
     let mut stack = vec![(exit, false)]; // (node, visited_predecessors)
+    seen.insert(exit);
 
     while let Some((node, visited_predecessors)) = stack.pop() {
         if visited_predecessors {
@@ -581,7 +583,7 @@ fn reverse_postorder_reversed(
             if let Some(predecessors) = preds.get(&node) {
                 for pred in predecessors.iter().rev() {
                     // Reverse to maintain order
-                    if !visited.contains(pred) {
+                    if !visited.contains(pred) && seen.insert(*pred) {
                         stack.push((*pred, false));
                     }
                 }
@@ -1173,7 +1175,7 @@ mod tests {
 
         let result = post_dominators(&graph, exit).expect("Failed to compute post-dominators");
 
-        // Exit post-dominates all
+        // Exit post-dominates all nodes (every path from any node reaches exit)
         for &node in &entity_ids {
             assert!(
                 result.post_dominates(exit, node),
@@ -1181,11 +1183,6 @@ mod tests {
                 node
             );
         }
-
-        // Node 2 is exit, post-dominates only itself
-        assert!(result.post_dominates(exit, exit));
-        assert!(!result.post_dominates(exit, entity_ids[0]));
-        assert!(!result.post_dominates(exit, entity_ids[1]));
     }
 
     #[test]

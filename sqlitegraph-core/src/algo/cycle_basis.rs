@@ -202,10 +202,23 @@ impl CycleBasisResult {
     /// // cyclic contains: {1, 2, 3, 4, 5}
     /// ```
     pub fn cyclic_nodes(&self) -> AHashSet<i64> {
-        self.cycles
+        let mut nodes: AHashSet<i64> = self
+            .cycles
             .iter()
             .flat_map(|cycle| cycle.iter().copied())
-            .collect()
+            .collect();
+
+        // Ensure all nodes in non-trivial SCCs are included,
+        // even if the cycle basis didn't cover every node.
+        for component in &self.scc_decomposition.components {
+            if component.len() > 1 {
+                for &node in component {
+                    nodes.insert(node);
+                }
+            }
+        }
+
+        nodes
     }
 
     /// Checks if a node is part of any cycle.
@@ -623,6 +636,7 @@ fn paton_cycles_in_scc(
     let mut visited: AHashSet<i64> = AHashSet::new();
     let mut parent: AHashMap<i64, i64> = AHashMap::new();
     let mut depth: AHashMap<i64, usize> = AHashMap::new();
+    let mut rec_stack: AHashSet<i64> = AHashSet::new();
 
     // Process each node in the SCC
     for &node in scc {
@@ -634,6 +648,7 @@ fn paton_cycles_in_scc(
                 &mut visited,
                 &mut parent,
                 &mut depth,
+                &mut rec_stack,
                 &mut cycles,
                 bounds,
                 cycles_skipped,
@@ -646,8 +661,8 @@ fn paton_cycles_in_scc(
 
 /// DFS helper for Paton's algorithm.
 ///
-/// Traverses the graph, detecting back edges and extracting cycles.
-/// Only explores edges within the SCC (to avoid leaving the cyclic region).
+/// Traverses the graph, detecting back edges and cross edges that form cycles,
+/// and extracting cycles. Only explores edges within the SCC.
 fn dfs_cycle_search(
     graph: &SqliteGraph,
     node: i64,
@@ -655,11 +670,13 @@ fn dfs_cycle_search(
     visited: &mut AHashSet<i64>,
     parent: &mut AHashMap<i64, i64>,
     depth: &mut AHashMap<i64, usize>,
+    rec_stack: &mut AHashSet<i64>,
     cycles: &mut Vec<Vec<i64>>,
     bounds: &CycleBasisBounds,
     cycles_skipped: &mut usize,
 ) -> Result<(), SqliteGraphError> {
     visited.insert(node);
+    rec_stack.insert(node);
 
     let current_depth = depth.get(&node).copied().unwrap_or(0);
 
@@ -681,32 +698,29 @@ fn dfs_cycle_search(
                 visited,
                 parent,
                 depth,
+                rec_stack,
                 cycles,
                 bounds,
                 cycles_skipped,
             )?;
-        } else {
-            // Neighbor already visited - check if it's an ancestor (back edge)
-            // A back edge goes from current node to an ancestor in the DFS tree
-            let neighbor_depth = depth.get(&neighbor).copied().unwrap_or(0);
-            if neighbor_depth < current_depth {
-                // Back edge detected - extract cycle
-                if let Some(cycle) = extract_cycle_from_back_edge(node, neighbor, parent, depth) {
-                    // Apply max_cycle_length bound
-                    if let Some(max_len) = bounds.max_cycle_length {
-                        if cycle.len() > max_len {
-                            *cycles_skipped += 1;
-                            continue;
-                        }
+        } else if rec_stack.contains(&neighbor) {
+            // Edge to a node on the current recursion stack -> cycle
+            if let Some(cycle) = extract_cycle_from_back_edge(node, neighbor, parent, depth) {
+                // Apply max_cycle_length bound
+                if let Some(max_len) = bounds.max_cycle_length {
+                    if cycle.len() > max_len {
+                        *cycles_skipped += 1;
+                        continue;
                     }
-
-                    let canonical = canonicalize_cycle(cycle);
-                    cycles.push(canonical);
                 }
+
+                let canonical = canonicalize_cycle(cycle);
+                cycles.push(canonical);
             }
         }
     }
 
+    rec_stack.remove(&node);
     Ok(())
 }
 
