@@ -10,6 +10,17 @@ atomic batch commits. Graph algorithms + HNSW vector search in one engine.
 SQLite: stable, mature, excellent for adjacency queries. V3: high-performance,
 designed for large-scale graphs, faster for bulk traversals. See benchmarks below.
 
+## Recent Changes
+
+**v2.2.0** — Entity queries by kind/name, schema indexes, algorithm determinism fixes, CI hardening:
+
+- `find_entities_by_kind()` and `find_entity_by_kind_and_name()` with composite indexes
+- Fixed post-dominators infinite loop on cyclic graphs
+- Fixed cycle basis cross-edge detection and deterministic `cyclic_nodes()`
+- Hardened CI against runner OOM and non-deterministic test failures
+
+See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) for full history.
+
 ## Backends
 
 | Feature | SQLite | Native V3 |
@@ -25,16 +36,18 @@ designed for large-scale graphs, faster for bulk traversals. See benchmarks belo
 
 ## Benchmarks
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture details.
+See [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) for system design details.
 
-**Quick Summary (v2.1.2 - VERIFIED):**
-- **Point lookup**: V3 114× faster with LRU cache (warm vs cold cache)
-- **Bulk traversal**: V3 10-20× faster (contiguous storage)
-- **Adaptive pages**: 15-25% faster (SSD/HWD auto-detection, verified)
-- **Delta encoding**: 75-87% space savings (exceeds 42% claim)
-- **Parallel BFS**: Thread-safe implementation, sequential fallback for <1K nodes, experimental for larger graphs
+**Quick Summary (v2.2.0 - VERIFIED):**
+
+- **Point lookup**: V3 114x faster with LRU cache (warm vs cold cache)
+- **Bulk traversal**: V3 10-20x faster (contiguous storage)
+- **Adaptive pages**: 15-25% faster (SSD/HDD auto-detection, verified)
+- **Delta encoding**: 75-87% space savings
+- **Parallel BFS**: Thread-safe chunked processing, sequential fallback for <1K nodes
 
 **Run benchmarks yourself:**
+
 ```bash
 git clone https://github.com/oldnordic/sqlitegraph.git
 cd sqlitegraph/sqlitegraph-core
@@ -42,17 +55,17 @@ cargo run --example test_performance_comparison --features native-v3
 cargo bench --features native-v3 -- backend_comparison
 ```
 
-See [examples/](sqlitegraph-core/examples/) for reproducible performance tests.
+See [examples/](https://github.com/oldnordic/sqlitegraph/tree/main/sqlitegraph-core/examples) for reproducible performance tests.
 
 ## Quick Start
 
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "2.1.3"
+sqlitegraph = "2.2"
 
 # OR Native V3 backend (faster traversals)
-sqlitegraph = { version = "2.1", features = ["native-v3"] }
+sqlitegraph = { version = "2.2", features = ["native-v3"] }
 ```
 
 ```rust
@@ -61,14 +74,14 @@ use sqlitegraph::backend::sqlite::SqliteGraphBackend;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = SqliteGraphBackend::in_memory()?;
-    
+
     let node_id = backend.insert_node(NodeSpec {
         kind: "User".to_string(),
         name: "Alice".to_string(),
         file_path: None,
         data: serde_json::json!({"age": 30}),
     })?;
-    
+
     println!("Created node: {}", node_id);
     Ok(())
 }
@@ -100,11 +113,11 @@ Tools built on SQLiteGraph:
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) - System design
-- [Manual](MANUAL.md) - API guide
-- [Changelog](CHANGELOG.md) - Version history
-- [SnapshotId Migration Guide](docs/SNAPSHOTID_MIGRATION.md) - v2.1.2 API changes
+- [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) - System design
+- [Manual](https://github.com/oldnordic/sqlitegraph/blob/main/MANUAL.md) - API guide
+- [Changelog](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) - Version history
+- [SnapshotId Migration Guide](https://github.com/oldnordic/sqlitegraph/blob/main/docs/SNAPSHOTID_MIGRATION.md) - v2.1.2 API changes
 
 ## License
 
-GPL-3.0-or-later
+GPL-3.0
