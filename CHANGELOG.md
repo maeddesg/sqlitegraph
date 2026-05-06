@@ -1,5 +1,12 @@
 # SQLiteGraph Changelog
 
+## [2.2.1] - 2026-05-06
+
+### Fixed
+- **Packaging: excluded CLAUDE.md and AGENTS.md from crate** — These agent-instruction files were accidentally included in 2.2.0 via `--allow-dirty`. Added `**/CLAUDE.md` and `**/AGENTS.md` to Cargo.toml exclude list.
+
+---
+
 ## [2.2.0] - 2026-05-06
 
 ### Added
