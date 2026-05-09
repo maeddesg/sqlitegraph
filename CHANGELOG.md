@@ -1,5 +1,15 @@
 # SQLiteGraph Changelog
 
+## [2.2.3] - 2026-05-09
+
+### Fixed
+- **`unwrap()` panics in centrality algorithms** — `pagerank()` and `betweenness_centrality()` now return `GraphCorruption` errors instead of panicking when encountering graph inconsistencies (edges pointing to non-existent entities). Previously, `get_mut().unwrap()` calls would crash on corrupted graphs.
+  - Added `SqliteGraphError::GraphCorruption` variant
+  - 3 unwrap() calls replaced with proper error handling
+  - Added regression test `test_pagerank_handles_inconsistent_graph`
+
+---
+
 ## [2.2.2] - 2026-05-06
 
 ### Fixed

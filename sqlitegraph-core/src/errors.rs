@@ -19,6 +19,8 @@ pub enum SqliteGraphError {
     TransactionError(String),
     #[error("validation error: {0}")]
     ValidationError(String),
+    #[error("graph corruption: {0}")]
+    GraphCorruption(String),
     #[error("unsupported operation: {0}")]
     Unsupported(String),
     #[error("native backend error: {0}")]
@@ -56,6 +58,10 @@ impl SqliteGraphError {
 
     pub fn validation<T: Into<String>>(msg: T) -> Self {
         SqliteGraphError::ValidationError(msg.into())
+    }
+
+    pub fn graph_corruption<T: Into<String>>(msg: T) -> Self {
+        SqliteGraphError::GraphCorruption(msg.into())
     }
 
     pub fn unsupported<T: Into<String>>(msg: T) -> Self {

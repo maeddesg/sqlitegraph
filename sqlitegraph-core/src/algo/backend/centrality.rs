@@ -72,7 +72,15 @@ pub fn pagerank(
                 // Distribute score evenly to all outgoing neighbors
                 let share = score / out_count as f64;
                 for &neighbor in &graph.fetch_outgoing(id)? {
-                    *new_scores.get_mut(&neighbor).unwrap() += damping * share;
+                    if let Some(score_entry) = new_scores.get_mut(&neighbor) {
+                        *score_entry += damping * share;
+                    } else {
+                        // Neighbor not in new_scores - graph inconsistency
+                        return Err(SqliteGraphError::graph_corruption(format!(
+                            "Edge from node {} to node {} points to non-existent entity",
+                            id, neighbor
+                        )));
+                    }
                 }
             }
         }
@@ -168,11 +176,25 @@ pub fn betweenness_centrality(
 
             for &v in predecessors.get(&w).unwrap_or(&vec![]) {
                 let contribution = (sigma[&v] / sigma[&w]) * (1.0 + delta[&w]);
-                *delta.get_mut(&v).unwrap() += contribution;
+                if let Some(delta_entry) = delta.get_mut(&v) {
+                    *delta_entry += contribution;
+                } else {
+                    return Err(SqliteGraphError::graph_corruption(format!(
+                        "Betweenness centrality: predecessor node {} not found in delta map",
+                        v
+                    )));
+                }
             }
 
             if w != s {
-                *centrality.get_mut(&w).unwrap() += delta[&w];
+                if let Some(centrality_entry) = centrality.get_mut(&w) {
+                    *centrality_entry += delta[&w];
+                } else {
+                    return Err(SqliteGraphError::graph_corruption(format!(
+                        "Betweenness centrality: node {} not found in centrality map",
+                        w
+                    )));
+                }
             }
         }
     }
@@ -273,5 +295,45 @@ mod tests {
 
         let centrality = betweenness_centrality(&backend).unwrap();
         assert!(centrality.is_empty());
+    }
+
+    // Test for unwrap panic bug: This test demonstrates that graph inconsistency
+    // causes panic instead of proper error. This test should FAIL before the fix
+    // and PASS after the fix (returning Result::Err instead of panicking).
+    #[test]
+    fn test_pagerank_handles_inconsistent_graph() {
+        let (backend, _temp) = create_test_backend();
+
+        // Create a valid node
+        let node1 = backend
+            .insert_node(NodeSpec {
+                kind: "Node".to_string(),
+                name: "node1".to_string(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+
+        // Create an edge to a non-existent node (simulating graph corruption)
+        // This will be caught by the fix and return an error instead of panicking
+        let fake_neighbor_id = 99999; // Non-existent node
+        backend
+            .insert_edge(EdgeSpec {
+                from: node1,
+                to: fake_neighbor_id,
+                edge_type: "links".to_string(),
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+
+        // Before fix: This panics with unwrap() error
+        // After fix: This returns Err(SqliteGraphError::GraphCorruption)
+        let result = pagerank(&backend, 0.85, 5);
+
+        // The fix should return an error, not panic
+        assert!(
+            result.is_err(),
+            "Should detect graph inconsistency and return error"
+        );
     }
 }
