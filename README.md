@@ -12,12 +12,11 @@ designed for large-scale graphs, faster for bulk traversals. See benchmarks belo
 
 ## Recent Changes
 
-**v2.2.0** — Entity queries by kind/name, schema indexes, algorithm determinism fixes, CI hardening:
+**v2.2.4** — V3 batch insert crash fix, regression test rewrite, fresh SQLite vs V3 benchmarks:
 
-- `find_entities_by_kind()` and `find_entity_by_kind_and_name()` with composite indexes
-- Fixed post-dominators infinite loop on cyclic graphs
-- Fixed cycle basis cross-edge detection and deterministic `cyclic_nodes()`
-- Hardened CI against runner OOM and non-deterministic test failures
+- Fixed V3 `NodeStore::insert_node` retry path missing file write when `file_coordinator=None`
+- Rewrote `cluster_offset_corruption_regression.rs` to use `GraphBackend` API (portable across backends)
+- Full SQLite vs V3 benchmark comparison: V3 5.5x faster for small BFS, SQLite faster at scale
 
 See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) for full history.
 
@@ -38,24 +37,27 @@ See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md)
 
 See [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) for system design details.
 
-**Quick Summary (v2.2.0 - VERIFIED):**
+**Backend Comparison (v2.2.4 — AMD Ryzen 7 7800X3D, tmpfs, Rust 1.95.0):**
 
-- **Point lookup**: V3 114x faster with LRU cache (warm vs cold cache)
-- **Bulk traversal**: V3 10-20x faster (contiguous storage)
-- **Adaptive pages**: 15-25% faster (SSD/HDD auto-detection, verified)
-- **Delta encoding**: 75-87% space savings
-- **Parallel BFS**: Thread-safe chunked processing, sequential fallback for <1K nodes
+| Benchmark | SQLite | V3 | Ratio |
+|-----------|--------|----|-------|
+| BFS 1K nodes / 5K edges | 2.5ms | 0.45ms | V3 **5.5x faster** |
+| BFS 10K / 50K | 26ms | 27ms | ~parity |
+| BFS 50K / 250K | 160ms | 586ms | SQLite 3.6x faster |
+| DFS 1K / 5K | 2.4ms | 0.46ms | V3 **5.2x faster** |
+| Point lookup 1K | 15µs | 82µs | SQLite 5.4x faster |
+| Point lookup 10K | 27µs | 503µs | SQLite 18x faster |
+| Shortest path 1K | 304µs | 393µs | SQLite 29% faster |
+
+V3 excels at small-scale traversals (contiguous page storage, LRU cache). SQLite dominates at scale (mmap, WAL, FTS5) and point lookups.
 
 **Run benchmarks yourself:**
 
 ```bash
 git clone https://github.com/oldnordic/sqlitegraph.git
 cd sqlitegraph/sqlitegraph-core
-cargo run --example test_performance_comparison --features native-v3
-cargo bench --features native-v3 -- backend_comparison
+cargo bench --features native-v3 --bench backend_comparison
 ```
-
-See [examples/](https://github.com/oldnordic/sqlitegraph/tree/main/sqlitegraph-core/examples) for reproducible performance tests.
 
 ## Quick Start
 

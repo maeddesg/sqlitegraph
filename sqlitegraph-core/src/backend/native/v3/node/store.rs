@@ -499,6 +499,53 @@ impl NodeStore {
                 let page_bytes = new_page.pack()?;
                 if let Some(coordinator) = &self.file_coordinator {
                     coordinator.write_page(new_page_id, &page_bytes)?;
+                } else {
+                    // Fallback: write directly to file when no coordinator
+                    let offset = Self::page_offset(new_page_id);
+                    let file_exists = self.db_path.exists();
+                    let mut file = OpenOptions::new()
+                        .write(true)
+                        .create(!file_exists)
+                        .open(&self.db_path)
+                        .map_err(|e| NativeBackendError::IoError {
+                            context: format!(
+                                "Failed to open db file for retry page write: {}",
+                                self.db_path.display()
+                            ),
+                            source: e,
+                        })?;
+
+                    let current_len = file.metadata().map(|m| m.len()).unwrap_or(0);
+                    let required_len = offset + page_bytes.len() as u64;
+                    if required_len > current_len {
+                        file.set_len(required_len)
+                            .map_err(|e| NativeBackendError::IoError {
+                                context: format!(
+                                    "Failed to extend file to {} bytes for retry page {}",
+                                    required_len, new_page_id
+                                ),
+                                source: e,
+                            })?;
+                    }
+
+                    file.seek(SeekFrom::Start(offset)).map_err(|e| {
+                        NativeBackendError::IoError {
+                            context: format!(
+                                "Failed to seek to offset {} for retry page {}",
+                                offset, new_page_id
+                            ),
+                            source: e,
+                        }
+                    })?;
+                    file.write_all(&page_bytes)
+                        .map_err(|e| NativeBackendError::IoError {
+                            context: format!("Failed to write retry page {} to disk", new_page_id),
+                            source: e,
+                        })?;
+                    file.sync_all().map_err(|e| NativeBackendError::IoError {
+                        context: format!("Failed to sync retry page {}", new_page_id),
+                        source: e,
+                    })?;
                 }
 
                 new_page_id

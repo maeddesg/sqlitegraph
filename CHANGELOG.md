@@ -1,5 +1,25 @@
 # SQLiteGraph Changelog
 
+## [2.2.4] - 2026-05-11
+
+### Fixed
+- **V3 batch insert crash ("Failed to read page 4")** — `NodeStore::insert_node` retry path (when a page is full) only wrote empty pages via `file_coordinator`, but `V3Backend::create()` initializes with `file_coordinator=None`. The retry path never wrote the new empty page to disk, causing `UnexpectedEof` on subsequent reads. Added direct file I/O fallback in the retry path, matching the pattern in `find_or_create_page_for_node`.
+- **V3 regression tests rewritten** — `cluster_offset_corruption_regression.rs` now tests via `GraphBackend` API instead of reading raw V2 byte offsets, making tests portable across backend versions. All 4 tests pass.
+
+### Benchmark Results (SQLite vs V3 — after fix)
+
+| Benchmark | SQLite | V3 | Ratio |
+|-----------|--------|----|-------|
+| BFS 1K/5K | 2.5ms | 0.45ms | V3 5.5x faster |
+| BFS 10K/50K | 26ms | 27ms | ~parity |
+| BFS 50K/250K | 160ms | 586ms | SQLite 3.6x faster |
+| DFS 1K/5K | 2.4ms | 0.46ms | V3 5.2x faster |
+| Point lookup 1K | 15µs | 82µs | SQLite 5.4x faster |
+
+V3 excels at small-scale traversals due to contiguous page storage and LRU cache. SQLite wins at scale (optimized B-tree, mmap, WAL) and point lookups (FTS5 index).
+
+---
+
 ## [2.2.3] - 2026-05-09
 
 ### Fixed

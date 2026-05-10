@@ -108,6 +108,11 @@ impl PageAllocator {
     ///
     /// Allocated page_id
     pub fn allocate(&mut self) -> NativeResult<u64> {
+        let result = self.allocate_inner()?;
+        Ok(result)
+    }
+
+    fn allocate_inner(&mut self) -> NativeResult<u64> {
         #[cfg(feature = "v3-forensics")]
         FORENSIC_COUNTERS
             .page_allocate_count

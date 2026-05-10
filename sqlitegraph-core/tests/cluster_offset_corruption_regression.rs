@@ -1,48 +1,24 @@
 //! Cluster Offset Corruption Regression Test
 //!
-//! Regression test to ensure cluster offset corruption (where cluster writes overwrite node slots)
-//! never happens again. This test validates that the fix in edge_store.rs correctly positions
-//! cluster writes after the node region to prevent node slot corruption.
+//! Regression test to ensure node data survives edge insertion operations.
+//! Tests verify through the GraphBackend API (portable across V2/V3 layouts)
+//! rather than reading raw disk bytes (which differ between backend versions).
 
-use rand::SeedableRng;
-use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, open_graph};
-use std::fs;
-use std::io::Read;
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 
-/// Helper to directly read node slot version from disk
-fn read_node_slot_version(
-    path: &std::path::Path,
-    node_id: i64,
-) -> Result<u8, Box<dyn std::error::Error>> {
-    let mut file = fs::File::open(path)?;
-
-    const NODE_SLOT_SIZE: u64 = 4096;
-    const DEFAULT_NODE_DATA_START: u64 = 1024;
-
-    let slot_offset = DEFAULT_NODE_DATA_START + ((node_id - 1) as u64 * NODE_SLOT_SIZE);
-
-    use std::io::Seek;
-    use std::io::SeekFrom;
-
-    file.seek(SeekFrom::Start(slot_offset))?;
-    let mut buffer = [0u8; 1];
-    file.read_exact(&mut buffer)?;
-
-    Ok(buffer[0])
-}
-
-/// Calculate where node slots end for a given node count
-fn calculate_node_region_end(node_count: u64) -> u64 {
-    const NODE_DATA_START: u64 = 1024;
-    const NODE_SLOT_SIZE: u64 = 4096;
-    NODE_DATA_START + (node_count * NODE_SLOT_SIZE)
+/// Verify a node exists and has the expected name through the GraphBackend API.
+fn verify_node(graph: &dyn sqlitegraph::GraphBackend, node_id: i64, expected_name: &str) -> bool {
+    let snapshot = SnapshotId::current();
+    match graph.get_node(snapshot, node_id) {
+        Ok(entity) => entity.name == expected_name,
+        Err(_) => false,
+    }
 }
 
 #[test]
-fn test_cluster_offset_never_overlaps_node_slots() {
-    println!("=== CLUSTER OFFSET CORRUPTION REGRESSION TEST ===");
+fn test_node_data_survives_edge_insertion() {
+    println!("=== NODE DATA SURVIVAL REGRESSION TEST ===");
 
-    // Test multiple graph sizes to ensure the fix works for all scenarios
     let test_sizes = [10, 50, 100, 256, 300, 500, 1000];
 
     for &size in &test_sizes {
@@ -51,9 +27,8 @@ fn test_cluster_offset_never_overlaps_node_slots() {
         let temp_dir = tempfile::tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
 
-        // Create graph
         let graph =
-            open_graph(&db_path, &GraphConfig::native()).expect("Failed to create V2 native graph");
+            open_graph(&db_path, &GraphConfig::native()).expect("Failed to create native graph");
 
         // Create nodes
         let mut node_ids = Vec::new();
@@ -65,65 +40,76 @@ fn test_cluster_offset_never_overlaps_node_slots() {
                     file_path: None,
                     data: serde_json::json!({"id": i}),
                 })
-                .expect(&format!("Failed to insert node {}", i));
+                .unwrap_or_else(|_| panic!("Failed to insert node {}", i));
             node_ids.push(node_id);
         }
 
-        // Verify all nodes have version=2 immediately after creation
-        for i in 1..=size {
-            let version = read_node_slot_version(&db_path, i).unwrap();
-            assert_eq!(
-                version, 2,
-                "Node {} should have version=2 after creation",
-                i
+        // Verify all nodes are readable immediately after creation
+        for (i, &node_id) in node_ids.iter().enumerate() {
+            assert!(
+                verify_node(graph.as_ref(), node_id, &format!("node_{}", i + 1)),
+                "Node {} (id={}) not readable after creation",
+                i + 1,
+                node_id
             );
         }
 
         // Create edges in chain pattern (1->2->3->...->size)
         for i in 0..(size as usize) - 1 {
-            let from_id = node_ids[i];
-            let to_id = node_ids[i + 1];
-
             graph
                 .insert_edge(EdgeSpec {
-                    from: from_id,
-                    to: to_id,
+                    from: node_ids[i],
+                    to: node_ids[i + 1],
                     edge_type: "chain".to_string(),
                     data: serde_json::json!({"edge_index": i}),
                 })
-                .expect(&format!("Failed to insert edge {} -> {}", from_id, to_id));
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to insert edge {} -> {}",
+                        node_ids[i],
+                        node_ids[i + 1]
+                    )
+                });
 
-            // Check critical nodes around every 100th edge insertion
+            // Spot-check critical nodes around every 100th edge insertion
             if i % 100 == 0 || i == (size as usize) - 2 {
-                // Sample a few critical nodes to ensure they haven't been corrupted
-                let sample_nodes = [
-                    1,
-                    if size >= 50 { size / 4 } else { 1 },
-                    if size >= 100 { size / 2 } else { 1 },
-                    if size >= 150 { (3 * size) / 4 } else { size },
-                    size,
+                let sample_indices: Vec<usize> = vec![
+                    0,
+                    if size >= 50 { size as usize / 4 } else { 0 },
+                    if size >= 100 { size as usize / 2 } else { 0 },
+                    if size >= 150 {
+                        (3 * size as usize) / 4
+                    } else {
+                        size as usize - 1
+                    },
+                    size as usize - 1,
                 ];
 
-                for &sample_node in &sample_nodes {
-                    if sample_node <= size {
-                        let version = read_node_slot_version(&db_path, sample_node as i64).unwrap();
-                        assert_eq!(
-                            version, 2,
-                            "Node {} has version={} after edge {} (corruption detected!)",
-                            sample_node, version, i
+                for &idx in &sample_indices {
+                    if idx < node_ids.len() {
+                        assert!(
+                            verify_node(
+                                graph.as_ref(),
+                                node_ids[idx],
+                                &format!("node_{}", idx + 1)
+                            ),
+                            "Node {} (id={}) corrupted after edge {} insertion",
+                            idx + 1,
+                            node_ids[idx],
+                            i
                         );
                     }
                 }
             }
         }
 
-        // Final verification: all nodes should still have version=2
-        for i in 1..=size {
-            let version = read_node_slot_version(&db_path, i).unwrap();
-            assert_eq!(
-                version, 2,
-                "Node {} should have version=2 after all edge insertions",
-                i
+        // Final verification: all nodes should still be readable
+        for (i, &node_id) in node_ids.iter().enumerate() {
+            assert!(
+                verify_node(graph.as_ref(), node_id, &format!("node_{}", i + 1)),
+                "Node {} (id={}) corrupted after all edge insertions",
+                i + 1,
+                node_id
             );
         }
 
@@ -135,21 +121,14 @@ fn test_cluster_offset_never_overlaps_node_slots() {
         );
     }
 
-    println!("\n🎉 ALL REGRESSION TESTS PASSED - Cluster offset corruption is FIXED!");
+    println!("\n🎉 ALL REGRESSION TESTS PASSED - Node data integrity verified!");
 }
 
 #[test]
 fn test_boundary_conditions_around_node_257() {
     println!("=== BOUNDARY CONDITION TEST AROUND NODE 257 ===");
 
-    // Test specifically around the corruption boundary (node 257)
-    let boundary_ranges = [
-        (250, 260), // Around the corruption point
-        (255, 260), // Closer to corruption point
-        (256, 258), // Immediate boundary
-        (257, 257), // Just the corrupted node
-        (300, 310), // Beyond corruption point
-    ];
+    let boundary_ranges = [(250, 260), (255, 260), (256, 258), (257, 257), (300, 310)];
 
     for &(start, end) in &boundary_ranges {
         println!("\n--- Testing nodes {} to {} ---", start, end);
@@ -158,7 +137,7 @@ fn test_boundary_conditions_around_node_257() {
         let db_path = temp_dir.path().join("test.db");
 
         let graph =
-            open_graph(&db_path, &GraphConfig::native()).expect("Failed to create V2 native graph");
+            open_graph(&db_path, &GraphConfig::native()).expect("Failed to create native graph");
 
         // Create nodes in this range
         let mut node_ids = Vec::new();
@@ -170,11 +149,7 @@ fn test_boundary_conditions_around_node_257() {
                     file_path: None,
                     data: serde_json::json!({"id": i}),
                 })
-                .expect(&format!("Failed to insert node {}", i));
-            println!(
-                "DEBUG: Created node with name='node_{}' -> node_id={}",
-                i, node_id
-            );
+                .unwrap_or_else(|_| panic!("Failed to insert node {}", i));
             node_ids.push(node_id);
         }
 
@@ -188,32 +163,21 @@ fn test_boundary_conditions_around_node_257() {
                         edge_type: "test".to_string(),
                         data: serde_json::json!({"from": i, "to": j}),
                     })
-                    .expect(&format!(
-                        "Failed to insert edge {} -> {}",
-                        node_ids[i], node_ids[j]
-                    ));
+                    .unwrap_or_else(|_| {
+                        panic!("Failed to insert edge {} -> {}", node_ids[i], node_ids[j])
+                    });
             }
         }
 
-        // Verify all nodes in range have correct version
-        for i in start..=end {
-            // Check if the file is large enough to contain this node slot
-            let slot_offset = 1024 + ((i - 1) as u64 * 4096);
-            let file_size = std::fs::metadata(&db_path).unwrap().len();
-
-            if slot_offset + 1 <= file_size {
-                let version = read_node_slot_version(&db_path, i).unwrap();
-                // Node slots should remain uninitialized (version=0) unless the node was actually created
-                // This test checks that cluster writes don't corrupt uninitialized node slots
-                assert_eq!(
-                    version, 0,
-                    "Node {} slot should remain version=0 (uninitialized) after cluster writes - corruption detected!",
-                    i
-                );
-            } else {
-                // Node slot doesn't exist in file - this is fine, means no corruption
-                println!("Node {} slot beyond file size - no corruption possible", i);
-            }
+        // Verify all nodes in range are still readable after edge insertion
+        for (idx, &node_id) in node_ids.iter().enumerate() {
+            let expected_name = format!("node_{}", start + idx);
+            assert!(
+                verify_node(graph.as_ref(), node_id, &expected_name),
+                "Node {} (id={}) corrupted after edge insertion",
+                start + idx,
+                node_id
+            );
         }
 
         println!(
@@ -224,41 +188,50 @@ fn test_boundary_conditions_around_node_257() {
         );
     }
 
-    println!("\n🎉 ALL BOUNDARY TESTS PASSED - Node 257 corruption is FIXED!");
+    println!("\n🎉 ALL BOUNDARY TESTS PASSED - Node 257 boundary is safe!");
 }
 
 #[test]
 fn test_node_region_calculation_invariants() {
     println!("=== NODE REGION CALCULATION INVARIANTS TEST ===");
 
-    // Test that cluster offsets are always positioned after node region
     let test_cases = [1, 10, 100, 257, 500, 1000, 10000];
 
     for &node_count in &test_cases {
-        let node_region_end = calculate_node_region_end(node_count as u64);
-        let node_257_slot_start = 1024 + ((257 - 1) as u64 * 4096);
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.db");
 
-        println!(
-            "Node count {}: node_region_end = 0x{:x} = {}",
-            node_count, node_region_end, node_region_end
-        );
+        let graph =
+            open_graph(&db_path, &GraphConfig::native()).expect("Failed to create native graph");
 
-        // For node counts >= 257, ensure node region end is after node 257
-        if node_count >= 257 {
+        let mut node_ids = Vec::new();
+        for i in 1..=node_count {
+            let id = graph
+                .insert_node(NodeSpec {
+                    kind: "Node".to_string(),
+                    name: format!("node_{}", i),
+                    file_path: None,
+                    data: serde_json::json!({"id": i}),
+                })
+                .expect("insert failed");
+            node_ids.push(id);
+        }
+
+        // All nodes must be retrievable
+        for (i, &id) in node_ids.iter().enumerate() {
             assert!(
-                node_region_end > node_257_slot_start,
-                "Node region end {} should be after node 257 slot start {}",
-                node_region_end,
-                node_257_slot_start
+                verify_node(graph.as_ref(), id, &format!("node_{}", i + 1)),
+                "Node {} (id={}) not retrievable in graph with {} nodes",
+                i + 1,
+                id,
+                node_count
             );
         }
 
-        // The fix should ensure cluster offsets are positioned at or after node_region_end
-        // This prevents cluster writes from corrupting node slots
-        println!("  ✅ Cluster offsets should be >= 0x{:x}", node_region_end);
+        println!("  ✅ {} nodes: all retrievable", node_count);
     }
 
-    println!("\n🎉 ALL INVARIANT TESTS PASSED - Node region calculations are correct!");
+    println!("\n🎉 ALL INVARIANT TESTS PASSED - Node storage scales correctly!");
 }
 
 #[test]
@@ -269,7 +242,7 @@ fn test_comprehensive_edge_patterns() {
     let db_path = temp_dir.path().join("test.db");
 
     let graph =
-        open_graph(&db_path, &GraphConfig::native()).expect("Failed to create V2 native graph");
+        open_graph(&db_path, &GraphConfig::native()).expect("Failed to create native graph");
 
     // Create 1000 nodes for comprehensive testing
     let mut node_ids = Vec::new();
@@ -281,7 +254,7 @@ fn test_comprehensive_edge_patterns() {
                 file_path: None,
                 data: serde_json::json!({"id": i}),
             })
-            .expect(&format!("Failed to insert node {}", i));
+            .unwrap_or_else(|_| panic!("Failed to insert node {}", i));
         node_ids.push(node_id);
     }
 
@@ -306,8 +279,8 @@ fn test_comprehensive_edge_patterns() {
     for i in 1..1000 {
         graph
             .insert_edge(EdgeSpec {
-                from: node_ids[0], // node 1
-                to: node_ids[i],   // node i+1
+                from: node_ids[0],
+                to: node_ids[i],
                 edge_type: "star".to_string(),
                 data: serde_json::json!({"star_index": i}),
             })
@@ -320,8 +293,8 @@ fn test_comprehensive_edge_patterns() {
     for i in (1..1000).rev() {
         graph
             .insert_edge(EdgeSpec {
-                from: node_ids[i],   // node i+1
-                to: node_ids[i - 1], // node i
+                from: node_ids[i],
+                to: node_ids[i - 1],
                 edge_type: "reverse".to_string(),
                 data: serde_json::json!({"reverse_index": i}),
             })
@@ -329,9 +302,9 @@ fn test_comprehensive_edge_patterns() {
     }
     println!("✅ Reverse chain pattern: 999 edges inserted");
 
-    // Test 4: Random edges around node 257 boundary
-    println!("Testing random pattern around node 257...");
-    use rand::RngCore;
+    // Test 4: Random edges
+    println!("Testing random pattern...");
+    use rand::{RngCore, SeedableRng};
     let mut rng = rand::rngs::StdRng::seed_from_u64(0x12345678);
 
     for _ in 0..1000 {
@@ -352,19 +325,16 @@ fn test_comprehensive_edge_patterns() {
     }
     println!("✅ Random pattern: 1000 edges inserted");
 
-    // Final verification: all nodes should have version=2
+    // Final verification: all nodes should still be readable through the API
     println!("Final verification of all nodes...");
-    for i in 1..=1000 {
-        let version = read_node_slot_version(&db_path, i).unwrap();
-        assert_eq!(
-            version, 2,
-            "Node {} corrupted to version {} after comprehensive testing",
-            i, version
+    for (i, &node_id) in node_ids.iter().enumerate() {
+        assert!(
+            verify_node(graph.as_ref(), node_id, &format!("node_{}", i + 1)),
+            "Node {} (id={}) corrupted after comprehensive edge testing",
+            i + 1,
+            node_id
         );
     }
 
     println!("🎉 COMPREHENSIVE TEST PASSED: 3997 edges with NO corruption!");
-    println!(
-        "Total edges inserted: 999 (chain) + 999 (star) + 999 (reverse) + 1000 (random) = 3997"
-    );
 }
