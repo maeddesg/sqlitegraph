@@ -45,10 +45,15 @@ jobs:
       - name: Setup Rust (for maturin develop)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dev dependencies
+      - name: Create venv + install dev dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" maturin
+          pip install maturin
+          pip install -e ".[dev]"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
 
       - name: Build extension
         run: maturin develop --release

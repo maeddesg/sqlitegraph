@@ -98,8 +98,7 @@ impl Graph {
     /// Open an in-memory graph database (fast, no persistence).
     #[staticmethod]
     fn open_in_memory() -> PyResult<Self> {
-        let backend =
-            SqliteGraphBackend::in_memory().map_err(into_pyerr)?;
+        let backend = SqliteGraphBackend::in_memory().map_err(into_pyerr)?;
         Ok(Graph { backend })
     }
 
@@ -131,9 +130,7 @@ impl Graph {
             file_path: None,
             data: json_data,
         };
-        self.backend
-            .insert_node(spec)
-            .map_err(into_pyerr)
+        self.backend.insert_node(spec).map_err(into_pyerr)
     }
 
     /// Get a node by ID. Returns a dict with keys: id, kind, name, data.
@@ -147,16 +144,12 @@ impl Graph {
 
     /// Delete a node and all its edges.
     fn delete_node(&self, id: i64) -> PyResult<()> {
-        self.backend
-            .delete_entity(id)
-            .map_err(into_pyerr)
+        self.backend.delete_entity(id).map_err(into_pyerr)
     }
 
     /// Get all node IDs.
     fn node_ids(&self) -> PyResult<Vec<i64>> {
-        self.backend
-            .entity_ids()
-            .map_err(into_pyerr)
+        self.backend.entity_ids().map_err(into_pyerr)
     }
 
     /// Get nodes of a specific kind.
@@ -201,9 +194,7 @@ impl Graph {
             file_path: None,
             data: json_data,
         };
-        self.backend
-            .update_node(id, spec)
-            .map_err(into_pyerr)
+        self.backend.update_node(id, spec).map_err(into_pyerr)
     }
 
     // ── Edge operations ──────────────────────────────────────────
@@ -236,9 +227,7 @@ impl Graph {
             edge_type,
             data: json_data,
         };
-        self.backend
-            .insert_edge(spec)
-            .map_err(into_pyerr)
+        self.backend.insert_edge(spec).map_err(into_pyerr)
     }
 
     /// Get neighbors of a node.
@@ -307,20 +296,13 @@ impl Graph {
 
     /// Fetch an edge by ID as a dict with keys: id, from_id, to_id, edge_type, data.
     fn get_edge<'py>(&self, py: Python<'py>, id: i64) -> PyResult<Bound<'py, PyDict>> {
-        let edge = self
-            .backend
-            .graph()
-            .get_edge(id)
-            .map_err(into_pyerr)?;
+        let edge = self.backend.graph().get_edge(id).map_err(into_pyerr)?;
         edge_to_dict(py, &edge)
     }
 
     /// Delete an edge by ID.
     fn delete_edge(&self, id: i64) -> PyResult<()> {
-        self.backend
-            .graph()
-            .delete_edge(id)
-            .map_err(into_pyerr)
+        self.backend.graph().delete_edge(id).map_err(into_pyerr)
     }
 
     // ── Graph algorithms ─────────────────────────────────────────
@@ -349,16 +331,14 @@ impl Graph {
     /// Returns a list of communities; each community is a list of node IDs.
     #[pyo3(signature = (max_iterations=None))]
     fn louvain_communities(&self, max_iterations: Option<usize>) -> PyResult<Vec<Vec<i64>>> {
-        louvain_communities(self.backend.graph(), max_iterations.unwrap_or(10))
-            .map_err(into_pyerr)
+        louvain_communities(self.backend.graph(), max_iterations.unwrap_or(10)).map_err(into_pyerr)
     }
 
     /// Connected components (forward reachability).
     ///
     /// Returns a list of components; each component is a list of node IDs.
     fn connected_components(&self) -> PyResult<Vec<Vec<i64>>> {
-        connected_components(self.backend.graph())
-            .map_err(into_pyerr)
+        connected_components(self.backend.graph()).map_err(into_pyerr)
     }
 
     // ── HNSW vector index ────────────────────────────────────────
@@ -394,9 +374,7 @@ impl Graph {
         let index_name = {
             let this = slf.borrow();
             let graph = this.backend.graph();
-            let mut indexes = graph
-                .hnsw_index(&name, config)
-                .map_err(into_pyerr)?;
+            let mut indexes = graph.hnsw_index(&name, config).map_err(into_pyerr)?;
             let index = indexes
                 .get_mut(&name)
                 .ok_or_else(|| BackendError::new_err("Index not found after creation"))?;
@@ -434,16 +412,12 @@ impl Graph {
     /// List all HNSW index names.
     fn list_hnsw_indexes(&self) -> PyResult<Vec<String>> {
         let graph = self.backend.graph();
-        graph
-            .list_hnsw_indexes()
-            .map_err(into_pyerr)
+        graph.list_hnsw_indexes().map_err(into_pyerr)
     }
 
     /// Force checkpoint (flush WAL to disk).
     fn checkpoint(&self) -> PyResult<()> {
-        self.backend
-            .checkpoint()
-            .map_err(into_pyerr)
+        self.backend.checkpoint().map_err(into_pyerr)
     }
 }
 
@@ -524,9 +498,9 @@ impl HnswIndexWrapper {
             let json_meta = if meta_obj.is_none() {
                 None
             } else {
-                let meta_dict = meta_obj
-                    .cast::<PyDict>()
-                    .map_err(|_| InvalidArgumentError::new_err("metadata must be a dict or None"))?;
+                let meta_dict = meta_obj.cast::<PyDict>().map_err(|_| {
+                    InvalidArgumentError::new_err("metadata must be a dict or None")
+                })?;
                 Some(dict_to_json(meta_dict)?)
             };
             let id = index
@@ -593,9 +567,7 @@ impl HnswIndexWrapper {
         for i in 0..n_vectors {
             let vec = &float_slice[i * dimension..(i + 1) * dimension];
             let json_meta = Some(serde_json::json!({"neuron_id": i}));
-            let id = index
-                .insert_vector(vec, json_meta)
-                .map_err(hnsw_to_pyerr)?;
+            let id = index.insert_vector(vec, json_meta).map_err(hnsw_to_pyerr)?;
             ids.push(id);
         }
         Ok(ids)
@@ -612,9 +584,7 @@ impl HnswIndexWrapper {
         let index = indexes
             .get(&self.name)
             .ok_or_else(|| NotFoundError::new_err("Index not found"))?;
-        index
-            .search(&query, k)
-            .map_err(hnsw_to_pyerr)
+        index.search(&query, k).map_err(hnsw_to_pyerr)
     }
 
     /// Get a stored vector by ID.
@@ -632,9 +602,7 @@ impl HnswIndexWrapper {
         let index = indexes
             .get(&self.name)
             .ok_or_else(|| NotFoundError::new_err("Index not found"))?;
-        let result = index
-            .get_vector(vector_id)
-            .map_err(hnsw_to_pyerr)?;
+        let result = index.get_vector(vector_id).map_err(hnsw_to_pyerr)?;
         match result {
             Some((vec, meta)) => {
                 let dict = json_to_dict(py, &meta)?;
@@ -786,7 +754,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<HnswIndexWrapper>()?;
     m.add("GraphError", py.get_type::<GraphError>())?;
     m.add("NotFoundError", py.get_type::<NotFoundError>())?;
-    m.add("InvalidArgumentError", py.get_type::<InvalidArgumentError>())?;
+    m.add(
+        "InvalidArgumentError",
+        py.get_type::<InvalidArgumentError>(),
+    )?;
     m.add("BackendError", py.get_type::<BackendError>())?;
     #[cfg(feature = "inference")]
     m.add_class::<InferenceEngine>()?;
