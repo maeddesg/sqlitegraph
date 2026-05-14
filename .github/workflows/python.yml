@@ -44,6 +44,11 @@ jobs:
 
       - name: Setup Rust (for maturin develop)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: cargo fmt --check (sqlitegraph-py)
+        run: cargo fmt --check
 
       - name: Create venv + install dev dependencies
         run: |
