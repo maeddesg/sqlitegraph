@@ -79,3 +79,22 @@ def test_bfs():
     reached = g.bfs(a, depth=2)
     assert b in reached
     assert c in reached
+
+
+def test_node_degree_returns_in_out_order():
+    g = sqlitegraph.Graph.open_in_memory()
+    a = g.add_node(kind="N", name="a")
+    b = g.add_node(kind="N", name="b")
+    c = g.add_node(kind="N", name="c")
+    # a -> b, a -> c, c -> a
+    g.add_edge(a, b, "next")
+    g.add_edge(a, c, "next")
+    g.add_edge(c, a, "back")
+
+    in_deg, out_deg = g.node_degree(a)
+    assert in_deg == 1
+    assert out_deg == 2
+
+    in_b, out_b = g.node_degree(b)
+    assert in_b == 1
+    assert out_b == 0

@@ -278,11 +278,16 @@ impl Graph {
             .map_err(into_pyerr)
     }
 
-    /// Get node degree (in_degree, out_degree).
+    /// Get node degree as ``(in_degree, out_degree)``.
+    ///
+    /// Note: the underlying Rust trait returns ``(out, in)`` — we swap here
+    /// so Python users get the conventional ``(in, out)`` order.
     fn node_degree(&self, node_id: i64) -> PyResult<(usize, usize)> {
-        self.backend
+        let (out, incoming) = self
+            .backend
             .node_degree(sqlitegraph::SnapshotId::current(), node_id)
-            .map_err(into_pyerr)
+            .map_err(into_pyerr)?;
+        Ok((incoming, out))
     }
 
     /// Shortest path between two nodes, as a list of node IDs.

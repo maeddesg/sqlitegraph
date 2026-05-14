@@ -91,6 +91,17 @@ jobs:
           fi
           echo "No bare except clauses"
 
+      - name: Rust stub scan (py crate src)
+        run: |
+          set -e
+          # These would ship inside the wheel — block them at the gate.
+          if grep -rnE 'todo!\(|unimplemented!\(|panic!\(|unreachable!\(|\.unwrap\(\)|\.expect\(' src 2>/dev/null; then
+            echo "FAIL: Rust stubs (todo!/unimplemented!/panic!/unreachable!/unwrap()/expect(...)) in sqlitegraph-py/src/"
+            echo "This code ships in the wheel users pip install."
+            exit 1
+          fi
+          echo "No Rust stubs in py crate"
+
       - name: ruff format --check
         run: ruff format --check .
 
