@@ -1,0 +1,23 @@
+[package]
+name = "sqlitegraph-py"
+version = "0.1.0"
+edition = "2021"
+description = "Python bindings for sqlitegraph via PyO3"
+license = "GPL-3.0-only"
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+# Sparse-inference research engine. Pulls in numpy + ndarray. Off by default
+# so end users only get the graph database surface.
+inference = ["dep:numpy", "dep:ndarray"]
+
+[dependencies]
+sqlitegraph = { path = "../sqlitegraph-core" }
+pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
+serde_json = "1"
+numpy = { version = "0.28", optional = true }
+ndarray = { version = "0.16", optional = true }

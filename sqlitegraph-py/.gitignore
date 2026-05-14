@@ -1,0 +1,23 @@
+# Python virtualenvs
+.venv/
+venv/
+
+# Python bytecode and caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Maturin / build artifacts
+target/
+dist/
+build/
+*.egg-info/
+*.whl
+
+# Compiled extensions
+python/sqlitegraph/_native*.so
+python/sqlitegraph/_native*.pyd
+python/sqlitegraph/_native*.dylib

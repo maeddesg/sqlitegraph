@@ -1,0 +1,94 @@
+name: Python
+
+# Scope: gates for the Python bindings (sqlitegraph-py/). This workflow is
+# entirely independent of the Rust crate's Validate workflow.
+#
+# Path filter: the job only runs when files that could affect the Python
+# bindings change. A Rust-only PR (touching sqlitegraph-core/src/ or the CLI)
+# does NOT trigger this workflow, so it cannot break Rust-only CI.
+#
+# Security review:
+#   Only trusted inputs (paths and branches from `on:` config) are referenced.
+#   No untrusted user-supplied fields are interpolated into run: blocks.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "sqlitegraph-py/**"
+      - ".github/workflows/python.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "sqlitegraph-py/**"
+      - ".github/workflows/python.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: python (ruff + mypy + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sqlitegraph-py
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Rust (for maturin develop)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" maturin
+
+      - name: Build extension
+        run: maturin develop --release
+
+      - name: Check Python terminology (LLM / AI assistant / production-ready)
+        run: |
+          set -e
+          if grep -riE "\bLLM\b|\bAI assistant\b|production-ready" \
+              python tests README.md 2>/dev/null; then
+            echo "FAIL: forbidden terminology in Python sources or README"
+            exit 1
+          fi
+          echo "Terminology clean"
+
+      - name: Check raise NotImplementedError outside tests
+        run: |
+          set -e
+          if grep -rn 'raise NotImplementedError' python 2>/dev/null | grep -v '\.pyi:'; then
+            echo "FAIL: raise NotImplementedError in library code"
+            exit 1
+          fi
+          echo "No NotImplementedError stubs"
+
+      - name: Check bare except outside tests
+        run: |
+          set -e
+          if grep -rEn '^\s*except\s*:' python 2>/dev/null; then
+            echo "FAIL: bare 'except:' in library code"
+            exit 1
+          fi
+          echo "No bare except clauses"
+
+      - name: ruff format --check
+        run: ruff format --check .
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: mypy
+        run: mypy
+
+      - name: pytest
+        run: pytest -q

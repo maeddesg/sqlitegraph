@@ -2,6 +2,9 @@
 
 Usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V2).
 
+> Looking for the Python wrapper? See
+> [`sqlitegraph-py/README.md`](./sqlitegraph-py/README.md) — `pip install sqlitegraph`.
+
 ---
 
 ## 1. Quick Start

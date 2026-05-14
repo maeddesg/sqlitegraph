@@ -1,5 +1,13 @@
 name: Validate
 
+# Security review:
+#   Only trusted inputs (branch names from `on:` config) are referenced.
+#   No untrusted user-supplied fields (issue titles, PR bodies, commit messages)
+#   are interpolated into run: blocks.
+#
+# Scope: this workflow gates the Rust crate. Python bindings have their own
+# workflow at .github/workflows/python.yml.
+
 on:
   push:
     branches: [main, master]

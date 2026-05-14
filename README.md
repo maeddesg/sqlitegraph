@@ -102,6 +102,34 @@ sqlitegraph --db graph.db bfs --start 1 --max-depth 3
 sqlitegraph --db graph.db pagerank --iterations 100
 ```
 
+## Python
+
+A Python wrapper around the same Rust engine is published to PyPI as
+[`sqlitegraph`](https://pypi.org/project/sqlitegraph/). The source lives in
+[`sqlitegraph-py/`](./sqlitegraph-py/) and ships as a single `abi3` wheel per
+platform (Python 3.10+).
+
+```bash
+pip install sqlitegraph
+```
+
+```python
+from sqlitegraph import Graph
+
+g = Graph.open_in_memory()
+alice = g.add_node(kind="User", name="Alice", data={"age": 30})
+order = g.add_node(kind="Order", name="Order-123")
+g.add_edge(alice, order, "placed")
+
+print(g.neighbors(alice))
+```
+
+The Python surface covers node/edge CRUD, BFS/k-hop/shortest path, PageRank +
+Louvain + connected components, HNSW vector indexes, typed exceptions
+(`GraphError`, `NotFoundError`, `InvalidArgumentError`, `BackendError`), and
+type stubs for editors. See [`sqlitegraph-py/README.md`](./sqlitegraph-py/README.md)
+for the full Python API and examples.
+
 ## Ecosystem
 
 Tools built on SQLiteGraph:
