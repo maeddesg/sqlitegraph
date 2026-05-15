@@ -3,6 +3,16 @@
 This file tracks releases of the `sqlitegraph` package on PyPI. The Rust
 crate of the same name has its own changelog at the repository root.
 
+## [0.1.1] - 2026-05-15
+
+### Fixed
+- **`create_hnsw_index` now calls `hnsw_index_persistent`** — Previously the
+  Python binding called the non-persistent `hnsw_index()`, so vector indexes
+  created from Python were lost when the `Graph` object was dropped. Now it
+  calls `hnsw_index_persistent()`, matching the expected durability contract.
+  Requires `sqlitegraph` (Rust) **>= 2.2.5** (the release that fixes the
+  underlying `database_list` column read).
+
 ## [0.1.0] — unreleased
 
 ### Added

@@ -1,5 +1,10 @@
 # SQLiteGraph Changelog
 
+## [2.2.5] - 2026-05-15
+
+### Fixed
+- **`hnsw_index_persistent` reads file path from `database_list`, not db alias** — `index_api.rs` was reading column 1 (`name`, always `"main"`) from `PRAGMA database_list` instead of column 2 (`file`, the actual filesystem path). This caused `hnsw_index_persistent` to try opening a database named `"main"` rather than the real `.graph` file, silently failing to persist vector indexes across connections.
+
 ## [2.2.4] - 2026-05-11
 
 ### Fixed

@@ -1,6 +1,6 @@
 [package]
 name = "sqlitegraph-cli"
-version = "2.1.4"
+version = "2.1.5"
 edition = "2021"
 description = "Command-line interface for SQLiteGraph graph database"
 license = "GPL-3.0"
