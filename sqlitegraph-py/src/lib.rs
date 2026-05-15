@@ -379,7 +379,9 @@ impl Graph {
         let index_name = {
             let this = slf.borrow();
             let graph = this.backend.graph();
-            let mut indexes = graph.hnsw_index(&name, config).map_err(into_pyerr)?;
+            let mut indexes = graph
+                .hnsw_index_persistent(&name, config)
+                .map_err(into_pyerr)?;
             let index = indexes
                 .get_mut(&name)
                 .ok_or_else(|| BackendError::new_err("Index not found after creation"))?;
