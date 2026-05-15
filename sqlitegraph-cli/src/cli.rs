@@ -39,7 +39,11 @@ pub enum Commands {
     },
 
     /// Show database status
-    Status,
+    Status {
+        /// Use compact output format (single line, no pretty-print)
+        #[arg(long)]
+        compact: bool,
+    },
 
     /// List all nodes
     List {

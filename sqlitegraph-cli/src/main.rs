@@ -28,7 +28,7 @@ fn main() -> Result<()> {
     // Execute command
     match cli.command {
         Commands::Query { query } => run_query(&client, &query),
-        Commands::Status => run_status(&client),
+        Commands::Status { compact } => run_status(&client, compact),
         Commands::List { kind } => run_list(&client, kind),
         Commands::Bfs { start, depth } => run_bfs(&client, start, depth),
         Commands::Path { from, to } => run_path(&client, from, to),
@@ -47,16 +47,57 @@ fn run_query(client: &sqlitegraph_cli::client::CliClient, query_str: &str) -> Re
     Ok(())
 }
 
-fn run_status(client: &sqlitegraph_cli::client::CliClient) -> Result<()> {
-    let nodes = client.node_count()?;
+fn run_status(client: &sqlitegraph_cli::client::CliClient, compact: bool) -> Result<()> {
+    use sqlitegraph::introspection::GraphIntrospection;
 
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json!({
-            "backend": client.backend_name(),
-            "nodes": nodes,
-        }))?
-    );
+    // Get comprehensive introspection data
+    let intro = if let Some(graph) = client.sqlite_graph() {
+        graph.introspect()?
+    } else {
+        // For non-SQLite backends, use basic info
+        GraphIntrospection {
+            backend_type: client.backend_name().to_string(),
+            node_count: client.node_count()?,
+            edge_count: sqlitegraph::introspection::EdgeCount::Unavailable,
+            cache_stats: sqlitegraph::cache::CacheStats {
+                hits: 0,
+                misses: 0,
+                entries: 0,
+            },
+            memory_usage: None,
+            file_size: None,
+            wal_size: None,
+            is_in_memory: false,
+        }
+    };
+
+    if compact {
+        // Compact format: single line, no pretty-print
+        println!(
+            "{}",
+            serde_json::to_string(&json!({
+                "backend": intro.backend_type,
+                "nodes": intro.node_count,
+                "edges": intro.edge_count.value(),
+                "file_size_mb": intro.file_size.map(|s| s / 1_048_576),
+                "is_in_memory": intro.is_in_memory,
+            }))?
+        );
+    } else {
+        // Pretty-print format
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "backend": intro.backend_type,
+                "nodes": intro.node_count,
+                "edges": intro.edge_count.value(),
+                "cache_hit_ratio": intro.cache_stats.hit_ratio(),
+                "file_size_mb": intro.file_size.map(|s| s / 1_048_576),
+                "wal_size_mb": intro.wal_size.map(|s| s / 1_048_576),
+                "is_in_memory": intro.is_in_memory,
+            }))?
+        );
+    }
     Ok(())
 }
 
