@@ -526,10 +526,11 @@ impl crate::SqliteGraph {
                 .map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to get index_id: {}", e)))?
                 .ok_or_else(|| crate::SqliteGraphError::invalid_input("Failed to get index_id after saving metadata".to_string()))?;
 
-            // Get database path to open a new connection for storage
+            // Get database path to open a new connection for storage.
+            // `database_list` columns: 0=seq, 1=name ("main"), 2=file (actual path).
             let db_path = conn_ref.pragma_query_value(None, "database_list", |row| {
-                let name: String = row.get(1)?;
-                Ok(name)
+                let file: String = row.get(2)?;
+                Ok(file)
             }).map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to get database path: {}", e)))?;
 
             let conn_for_storage = rusqlite::Connection::open(&db_path)
