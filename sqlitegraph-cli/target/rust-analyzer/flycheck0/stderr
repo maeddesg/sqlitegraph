@@ -1,4 +1,0 @@
-error: no such command: `cargo clippy`
-
-help: view all installed commands with `cargo --list`
-help: find a package to install `cargo clippy` with `cargo search cargo-cargo clippy`
