@@ -25,7 +25,7 @@ use crate::graph::GraphEntity;
 use crate::multi_hop::{ChainStep, chain_query};
 use crate::pattern::{NodeConstraint, PatternLeg, PatternQuery, execute_pattern};
 use crate::snapshot::SnapshotId;
-use crate::{PatternTriple, SqliteGraphBackend, TripleMatch, match_triples};
+use crate::{PatternTriple, SqliteGraphBackend, match_triples};
 
 // ── Public types ─────────────────────────────────────────────
 
@@ -856,7 +856,6 @@ fn parse_star_pattern(s: &str) -> Result<ParsedPattern, String> {
         return Err("star pattern needs at least two comma-separated legs".into());
     }
     let mut legs: Vec<EdgeLeg> = Vec::new();
-    let mut root_var: Option<String> = None;
 
     for part in parts {
         let trimmed = part.trim();
@@ -869,20 +868,8 @@ fn parse_star_pattern(s: &str) -> Result<ParsedPattern, String> {
             Pattern::Edge(from, rel, to) => (from, rel, to),
             _ => return Err(format!("star leg must be an edge pattern: {trimmed}")),
         };
-        // All legs must share the same root variable.
-        let leg_root_var = match direction {
-            EdgeDirection::Incoming => to_pat.var.clone(),
-            _ => from_pat.var.clone(),
-        };
-        match root_var {
-            None => root_var = Some(leg_root_var),
-            Some(ref existing) if *existing == leg_root_var => {}
-            Some(ref existing) => {
-                return Err(format!(
-                    "star legs must share the same root variable: leg starts with `{leg_root_var}`, expected `{existing}`"
-                ));
-            }
-        }
+        // Legs may share any variable (or none, producing a cross product).
+        // The executor performs a hash-join on every shared variable name.
         legs.push(EdgeLeg {
             rel_type,
             direction,
@@ -1423,16 +1410,23 @@ fn execute_star(
     legs: &[EdgeLeg],
     query: &CypherQuery,
 ) -> Result<Value, String> {
+    use std::collections::HashMap;
+
     if legs.is_empty() {
         return Err("star pattern must have at least one leg".into());
     }
     let graph = backend.graph();
     let snapshot = SnapshotId::current();
-    // All legs share the same root variable (parser enforces this).
-    let root_pat = legs[0].from.clone();
 
-    // For each leg, run match_triples and bucket by start_id.
-    let mut per_leg: Vec<std::collections::HashMap<i64, Vec<TripleMatch>>> = Vec::new();
+    /// A partial result row: variable name → bound node id, plus the per-var
+    /// pattern (so we can re-check node-pattern constraints after the join).
+    type Binding = HashMap<String, i64>;
+
+    // For each leg, build the list of bindings produced by match_triples.
+    // The binding maps the leg's `from` var to start_id and `to` var to end_id
+    // (regardless of direction — match_triples already orders by edge
+    // direction).
+    let mut leg_bindings_per_leg: Vec<Vec<Binding>> = Vec::with_capacity(legs.len());
     for leg in legs {
         let (start_pat, end_pat) = match leg.direction {
             EdgeDirection::Incoming => (&leg.to, &leg.from),
@@ -1452,127 +1446,117 @@ fn execute_star(
             pattern = pattern.end_property(key, value);
         }
         let triples = match_triples(graph, &pattern).map_err(|e| e.to_string())?;
-        // Key by the root binding regardless of direction: for incoming legs,
-        // end_id is the root in the cypher sense.
-        let mut bucket: std::collections::HashMap<i64, Vec<TripleMatch>> =
-            std::collections::HashMap::new();
+
+        let mut bindings: Vec<Binding> = Vec::with_capacity(triples.len());
         for triple in triples {
-            let root_id = match leg.direction {
-                EdgeDirection::Incoming => triple.end_id,
-                _ => triple.start_id,
+            let (from_id, to_id) = match leg.direction {
+                EdgeDirection::Incoming => (triple.end_id, triple.start_id),
+                _ => (triple.start_id, triple.end_id),
             };
-            bucket.entry(root_id).or_default().push(triple);
+            let mut b = Binding::new();
+            b.insert(leg.from.var.clone(), from_id);
+            b.insert(leg.to.var.clone(), to_id);
+            bindings.push(b);
         }
-        per_leg.push(bucket);
+        leg_bindings_per_leg.push(bindings);
     }
 
-    // Intersect root candidates across all legs.
-    let mut common_roots: Vec<i64> = per_leg[0].keys().copied().collect();
-    for bucket in &per_leg[1..] {
-        common_roots.retain(|id| bucket.contains_key(id));
+    // Hash-join legs sequentially. After processing leg `i`, `joined` holds
+    // all bindings that satisfy legs `0..=i`, with all bound variables merged.
+    let mut joined: Vec<Binding> = leg_bindings_per_leg.remove(0);
+    for next_bindings in leg_bindings_per_leg {
+        let mut merged: Vec<Binding> = Vec::new();
+        for left in &joined {
+            for right in &next_bindings {
+                // Compatible if shared keys agree.
+                let mut ok = true;
+                for (k, rv) in right {
+                    if let Some(lv) = left.get(k)
+                        && lv != rv
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+                if ok {
+                    let mut combo = left.clone();
+                    for (k, v) in right {
+                        combo.insert(k.clone(), *v);
+                    }
+                    merged.push(combo);
+                }
+            }
+        }
+        joined = merged;
+        if joined.is_empty() {
+            break;
+        }
     }
-    common_roots.sort_unstable();
 
-    let mut results: Vec<Value> = Vec::new();
+    // Build a var → NodePattern map so we can re-check pattern constraints
+    // (labels, props) once per binding. The same var should have the same
+    // pattern across legs, but if a label appears on one leg and not another
+    // we still want it enforced.
+    let mut var_pat: HashMap<String, NodePattern> = HashMap::new();
+    for leg in legs {
+        var_pat
+            .entry(leg.from.var.clone())
+            .or_insert_with(|| leg.from.clone());
+        var_pat
+            .entry(leg.to.var.clone())
+            .or_insert_with(|| leg.to.clone());
+    }
+
     let limit = query.limit.unwrap_or(usize::MAX);
-
-    for root_id in common_roots {
-        let root_node = match backend.get_node(snapshot, root_id) {
-            Ok(n) => n,
-            Err(_) => continue,
-        };
-        if !node_pattern_matches(&root_pat, &root_node) {
+    let mut results: Vec<Value> = Vec::new();
+    for binding in joined {
+        // Fetch nodes for every bound variable; bail on any missing.
+        let mut nodes: HashMap<String, GraphEntity> = HashMap::new();
+        let mut ok = true;
+        for (var, id) in &binding {
+            match backend.get_node(snapshot, *id) {
+                Ok(n) => {
+                    if let Some(pat) = var_pat.get(var)
+                        && !node_pattern_matches(pat, &n)
+                    {
+                        ok = false;
+                        break;
+                    }
+                    nodes.insert(var.clone(), n);
+                }
+                Err(_) => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if !ok {
             continue;
         }
 
-        // Cartesian product across legs: each combination is one row.
-        let leg_choices: Vec<&Vec<TripleMatch>> = per_leg
-            .iter()
-            .map(|bucket| bucket.get(&root_id).expect("root_id present in every bucket"))
-            .collect();
-        let mut indices = vec![0usize; leg_choices.len()];
-
-        loop {
-            // Build bindings: root + each leg's end.
-            let mut leg_ends: Vec<(NodePattern, GraphEntity, i64)> = Vec::new();
-            let mut row_valid = true;
-
-            for (leg_idx, leg) in legs.iter().enumerate() {
-                let triple = &leg_choices[leg_idx][indices[leg_idx]];
-                let end_id = match leg.direction {
-                    EdgeDirection::Incoming => triple.start_id,
-                    _ => triple.end_id,
-                };
-                let end_node = match backend.get_node(snapshot, end_id) {
-                    Ok(n) => n,
-                    Err(_) => {
-                        row_valid = false;
-                        break;
-                    }
-                };
-                let end_pat = match leg.direction {
-                    EdgeDirection::Incoming => leg.from.clone(),
-                    _ => leg.to.clone(),
-                };
-                if !node_pattern_matches(&end_pat, &end_node) {
-                    row_valid = false;
-                    break;
-                }
-                leg_ends.push((end_pat, end_node, triple.edge_id));
-            }
-
-            if row_valid {
-                // Apply WHERE. For now WHERE only sees root + each leg-end one
-                // at a time as the "secondary" binding. We iterate each leg
-                // binding and require it satisfies clauses referencing its var;
-                // clauses on unknown vars pass through (consistent with the
-                // single-edge executor).
-                let mut where_ok = true;
-                for (end_pat, end_node, _) in &leg_ends {
-                    if !where_clauses_match(query, &root_pat, &root_node, Some((end_pat, end_node))) {
-                        where_ok = false;
-                        break;
-                    }
-                }
-                if where_ok {
-                    let mut obj = serde_json::Map::new();
-                    extend_with_node(&mut obj, &root_pat, &root_node, &query.returns);
-                    for (end_pat, end_node, edge_id) in &leg_ends {
-                        extend_with_node(&mut obj, end_pat, end_node, &query.returns);
-                        // Stash the per-leg edge_id under the leg's var.
-                        // (When returns includes "*", project_edge handles
-                        // edge_id; for star we keep it simple and surface no
-                        // single edge_id when returns doesn't request one.)
-                        let _ = edge_id;
-                    }
-                    if !obj.is_empty() {
-                        results.push(Value::Object(obj));
-                        if results.len() >= limit {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Advance the cartesian iterator.
-            let mut carry = true;
-            for i in (0..indices.len()).rev() {
-                if carry {
-                    indices[i] += 1;
-                    if indices[i] < leg_choices[i].len() {
-                        carry = false;
-                    } else {
-                        indices[i] = 0;
-                    }
-                }
-            }
-            if carry {
-                break; // all combinations exhausted
-            }
+        let node_refs: HashMap<String, &GraphEntity> =
+            nodes.iter().map(|(k, v)| (k.clone(), v)).collect();
+        if !where_clauses_match_multi(query, &node_refs) {
+            continue;
         }
 
-        if results.len() >= limit {
-            break;
+        let mut obj = serde_json::Map::new();
+        for (var, node) in &nodes {
+            let pat = var_pat
+                .get(var)
+                .cloned()
+                .unwrap_or_else(|| NodePattern {
+                    var: var.clone(),
+                    label: None,
+                    props: Vec::new(),
+                });
+            extend_with_node(&mut obj, &pat, node, &query.returns);
+        }
+        if !obj.is_empty() {
+            results.push(Value::Object(obj));
+            if results.len() >= limit {
+                break;
+            }
         }
     }
 
@@ -1580,6 +1564,25 @@ fn execute_star(
         "results": results.clone(),
         "count": results.len(),
     }))
+}
+
+/// Multi-binding WHERE evaluator: same DNF semantics as
+/// [`where_clauses_match`] but uses an arbitrary `var → node` map rather
+/// than the primary/secondary special-case. Predicates referencing unknown
+/// vars pass through, matching the single-/edge-pattern behaviour.
+fn where_clauses_match_multi(
+    query: &CypherQuery,
+    bindings: &std::collections::HashMap<String, &GraphEntity>,
+) -> bool {
+    if query.where_groups.is_empty() {
+        return true;
+    }
+    query.where_groups.iter().any(|and_group| {
+        and_group.iter().all(|clause| match bindings.get(&clause.var) {
+            Some(n) => evaluate_predicate(clause, n),
+            None => true,
+        })
+    })
 }
 
 fn execute_variable_depth(

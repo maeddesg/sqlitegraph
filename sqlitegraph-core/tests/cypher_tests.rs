@@ -759,14 +759,123 @@ fn test_parse_star_three_legs() {
 }
 
 #[test]
-fn test_parse_star_root_var_mismatch_rejected() {
-    // Legs that don't share a root variable aren't true stars — for now we
-    // require all legs to start from the same var.
-    let result = cypher::parse("MATCH (a)-[:X]->(b), (c)-[:Y]->(d) RETURN a, b, c, d");
-    assert!(
-        result.is_err(),
-        "expected parse error for non-shared root, got {result:?}"
-    );
+fn test_parse_star_arbitrary_join_vars() {
+    // Legs no longer have to share the first variable — they can join on any
+    // shared binding. `(a)-[:X]->(b), (b)-[:Y]->(c)` is a chain expressed via
+    // commas (joined on `b`).
+    let q = cypher::parse("MATCH (a)-[:X]->(b), (b)-[:Y]->(c) RETURN a, b, c")
+        .expect("parse chain-via-comma");
+    match &q.pattern {
+        Pattern::Star { legs } => {
+            assert_eq!(legs.len(), 2);
+            assert_eq!(legs[0].to.var, "b");
+            assert_eq!(legs[1].from.var, "b");
+        }
+        other => panic!("expected Pattern::Star, got {other:?}"),
+    }
+
+    // Fully disjoint legs are also accepted (they produce a cross product).
+    let q2 = cypher::parse("MATCH (a)-[:X]->(b), (c)-[:Y]->(d) RETURN a, b, c, d")
+        .expect("parse disjoint legs");
+    assert!(matches!(q2.pattern, Pattern::Star { .. }));
+}
+
+#[test]
+fn test_execute_chain_via_comma() {
+    // Build a 3-node chain a -X-> b -Y-> c (ids 1, 2, 3) plus a 4th node 'd'
+    // that doesn't participate. The comma-chain query should equal the
+    // multi-hop chain `(a)-[:X]->(b)-[:Y]->(c)`.
+    let graph = SqliteGraph::open_in_memory().expect("open");
+    let backend = SqliteGraphBackend::from_graph(graph);
+    let mut ids = Vec::new();
+    for name in &["a", "b", "c", "d"] {
+        let id = backend
+            .insert_node(NodeSpec {
+                kind: "Node".into(),
+                name: (*name).into(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+        ids.push(id);
+    }
+    backend
+        .insert_edge(EdgeSpec {
+            from: ids[0],
+            to: ids[1],
+            edge_type: "X".into(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: ids[1],
+            to: ids[2],
+            edge_type: "Y".into(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+
+    let q = cypher::parse("MATCH (a)-[:X]->(b), (b)-[:Y]->(c) RETURN a.name, b.name, c.name")
+        .expect("parse");
+    let res = cypher::execute(&backend, &q).expect("execute");
+    let rows = res.get("results").unwrap().as_array().unwrap();
+    assert_eq!(rows.len(), 1, "comma chain should join on b");
+    let row = &rows[0];
+    assert_eq!(row.get("a.name").unwrap().as_str(), Some("a"));
+    assert_eq!(row.get("b.name").unwrap().as_str(), Some("b"));
+    assert_eq!(row.get("c.name").unwrap().as_str(), Some("c"));
+}
+
+#[test]
+fn test_execute_disjoint_legs_produce_cross_product() {
+    // Two independent edges with no shared variable: result is the cartesian
+    // product of leg-1 matches × leg-2 matches.
+    let graph = SqliteGraph::open_in_memory().expect("open");
+    let backend = SqliteGraphBackend::from_graph(graph);
+    let mut ids = Vec::new();
+    for name in &["p", "q", "r", "s"] {
+        let id = backend
+            .insert_node(NodeSpec {
+                kind: "Node".into(),
+                name: (*name).into(),
+                file_path: None,
+                data: serde_json::json!({}),
+            })
+            .unwrap();
+        ids.push(id);
+    }
+    // p -X-> q ; r -Y-> s : two disjoint edges.
+    backend
+        .insert_edge(EdgeSpec {
+            from: ids[0],
+            to: ids[1],
+            edge_type: "X".into(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: ids[2],
+            to: ids[3],
+            edge_type: "Y".into(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+
+    let q = cypher::parse(
+        "MATCH (a)-[:X]->(b), (c)-[:Y]->(d) RETURN a.name, b.name, c.name, d.name",
+    )
+    .expect("parse");
+    let res = cypher::execute(&backend, &q).expect("execute");
+    let rows = res.get("results").unwrap().as_array().unwrap();
+    // 1 leg-1 match × 1 leg-2 match = 1 cross-product row.
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert_eq!(row.get("a.name").unwrap().as_str(), Some("p"));
+    assert_eq!(row.get("b.name").unwrap().as_str(), Some("q"));
+    assert_eq!(row.get("c.name").unwrap().as_str(), Some("r"));
+    assert_eq!(row.get("d.name").unwrap().as_str(), Some("s"));
 }
 
 #[test]

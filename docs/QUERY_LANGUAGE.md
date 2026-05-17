@@ -46,20 +46,32 @@ With label filters on endpoints:
 MATCH (a:Function)-[:CALLS]->(b:Function) RETURN a.name, b.name
 ```
 
-### Star Patterns
+### Star and Multi-Pattern Queries
 
-Comma-separated edge patterns where every leg starts from the same root
-variable form a *star*. The result is the cartesian product of per-leg
-matches, joined on the shared root binding:
+Comma-separated patterns in a single `MATCH` are evaluated together and joined
+on any shared variables. The common case is a *star* where every leg starts
+from the same root:
 
 ```sql
 MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y) RETURN r.name, x.name, y.name
 ```
 
-All legs must share the *first* variable (`r` above). Multi-pattern joins
-on other variables (e.g. `(a)-[:X]->(b), (b)-[:Y]->(c)` as a 3-node
-chain) are not yet supported — express such patterns as a chain
-`(a)-[:X]->(b)-[:Y]->(c)`.
+Legs may also share *non-root* variables, which lets you express chains via
+commas:
+
+```sql
+MATCH (a)-[:X]->(b), (b)-[:Y]->(c) RETURN a.name, b.name, c.name
+```
+
+is equivalent to the multi-hop form `(a)-[:X]->(b)-[:Y]->(c)`. Disjoint
+legs with no shared variables produce a cartesian product:
+
+```sql
+MATCH (a)-[:X]->(b), (c)-[:Y]->(d) RETURN a, b, c, d
+```
+
+Internally the executor performs a hash-join across legs on every shared
+variable name.
 
 ### WHERE Clause
 

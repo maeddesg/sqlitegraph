@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Cypher star executor** — Generalized from "shared-root only" to a hash-join on any shared variable. The parser no longer rejects legs whose root variables differ; instead the executor builds per-leg `(var → node_id)` bindings, then sequentially joins legs on shared keys (intersecting where vars overlap, taking cartesian product where they don't). This shifts the executor from a special-case "root cartesian product" to a general relational join. The published `Pattern::Star { legs }` shape is unchanged.
 - **Cypher WHERE parser** — Replaced the split-on-OR-then-AND splitter with a proper recursive-descent expression parser. Parentheses now work (`(a OR b) AND c`, nested groups, unbalanced parens error). The parser builds an internal `WhereExpr` tree and flattens to DNF before storing in `where_groups`, so the public `Vec<Vec<WhereClause>>` shape is unchanged for downstream consumers. Single AND/OR clauses still parse identically.
 - **Cypher WHERE precedence** — Mixed `AND`/`OR` in a single `WHERE` clause now parses with standard precedence (`OR` binds looser than `AND`). `a AND b OR c` parses to `(a AND b) OR c`. The `CypherQuery` struct's WHERE storage moved from `where_clauses: Vec<WhereClause>` + `where_combinator: WhereCombinator` to `where_groups: Vec<Vec<WhereClause>>` (disjunctive normal form: outer OR, inner AND). The `WhereCombinator` enum was removed; the combinator is now encoded in the structure. Pure-AND and pure-OR queries still parse identically (just nested one level deeper).
 
@@ -11,7 +12,7 @@
   - `MATCH (n)`, `MATCH (n:Label)`, `MATCH (n:Label {key: "value"})`
   - Edge patterns `(a)-[:REL]->(b)`, backward `<-[:REL]-`, undirected `-[:REL]-`
   - Multi-hop chains `(a)-[:X]->(b)-[:Y]->(c)`
-  - Star patterns `(a)-[:X]->(b), (a)-[:Y]->(c)` — comma-separated legs sharing a root variable; result is the cartesian product of per-leg matches joined on the shared root
+  - Star and multi-pattern queries `(a)-[:X]->(b), (...)-[:Y]->(...)` — comma-separated legs hash-joined on any shared variable. Supports shared-root stars, chains expressed via comma (`(a)-[:X]->(b), (b)-[:Y]->(c)`), and disjoint legs (cartesian product).
   - Variable-depth `(a)-[:X*1..3]->(b)` via `k_hop_filtered`
   - `WHERE n.field = "value"` with operators `=`, `!=`, `<`, `<=`, `>`, `>=`, `=~` (regex)
   - `WHERE` clauses combined with `AND` and `OR` with full precedence and parentheses (e.g. `(a OR b) AND c`)
