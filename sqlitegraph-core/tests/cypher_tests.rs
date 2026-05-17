@@ -538,6 +538,196 @@ fn test_execute_where_and_or_precedence() {
     assert!(names.contains(&"util"));
 }
 
+// ── Star patterns: comma-separated legs sharing a root variable ──
+
+/// Build a star test graph.
+///
+/// Layout (ids assigned in insert order):
+/// - `root` (Hub, id 1) — central node
+/// - `a` (Thing, id 2), `b` (Thing, id 3) — both OWNed
+/// - `c` (Thing, id 4) — LIKED only
+///
+/// Edges:
+/// - root -OWNS-> a
+/// - root -OWNS-> b
+/// - root -LIKES-> c
+/// - root -TAGS-> a
+fn build_star_graph() -> SqliteGraphBackend {
+    let graph = SqliteGraph::open_in_memory().expect("open in-memory");
+    let backend = SqliteGraphBackend::from_graph(graph);
+
+    let root = backend
+        .insert_node(NodeSpec {
+            kind: "Hub".into(),
+            name: "root".into(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .expect("insert root");
+    let a = backend
+        .insert_node(NodeSpec {
+            kind: "Thing".into(),
+            name: "a".into(),
+            file_path: None,
+            data: serde_json::json!({"colour": "red"}),
+        })
+        .expect("insert a");
+    let b = backend
+        .insert_node(NodeSpec {
+            kind: "Thing".into(),
+            name: "b".into(),
+            file_path: None,
+            data: serde_json::json!({"colour": "blue"}),
+        })
+        .expect("insert b");
+    let c = backend
+        .insert_node(NodeSpec {
+            kind: "Thing".into(),
+            name: "c".into(),
+            file_path: None,
+            data: serde_json::json!({"colour": "green"}),
+        })
+        .expect("insert c");
+
+    add_label(backend.graph(), root, "Hub").expect("label root");
+    add_label(backend.graph(), a, "Thing").expect("label a");
+    add_label(backend.graph(), b, "Thing").expect("label b");
+    add_label(backend.graph(), c, "Thing").expect("label c");
+
+    for (from, to, kind) in &[
+        (root, a, "OWNS"),
+        (root, b, "OWNS"),
+        (root, c, "LIKES"),
+        (root, a, "TAGS"),
+    ] {
+        backend
+            .insert_edge(EdgeSpec {
+                from: *from,
+                to: *to,
+                edge_type: (*kind).into(),
+                data: serde_json::json!({}),
+            })
+            .expect("insert edge");
+    }
+
+    backend
+}
+
+#[test]
+fn test_parse_star_two_legs() {
+    let query = cypher::parse("MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y) RETURN r, x, y")
+        .expect("parse star");
+    match &query.pattern {
+        Pattern::Star { legs } => {
+            assert_eq!(legs.len(), 2);
+            assert_eq!(legs[0].rel_type, "OWNS");
+            assert_eq!(legs[0].from.var, "r");
+            assert_eq!(legs[0].to.var, "x");
+            assert_eq!(legs[1].rel_type, "LIKES");
+            assert_eq!(legs[1].from.var, "r");
+            assert_eq!(legs[1].to.var, "y");
+        }
+        other => panic!("expected Pattern::Star, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_star_three_legs() {
+    let query =
+        cypher::parse("MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y), (r)-[:TAGS]->(z) RETURN r")
+            .expect("parse three-leg star");
+    match &query.pattern {
+        Pattern::Star { legs } => {
+            assert_eq!(legs.len(), 3);
+        }
+        other => panic!("expected Pattern::Star, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_star_root_var_mismatch_rejected() {
+    // Legs that don't share a root variable aren't true stars — for now we
+    // require all legs to start from the same var.
+    let result = cypher::parse("MATCH (a)-[:X]->(b), (c)-[:Y]->(d) RETURN a, b, c, d");
+    assert!(
+        result.is_err(),
+        "expected parse error for non-shared root, got {result:?}"
+    );
+}
+
+#[test]
+fn test_execute_star_two_legs() {
+    let backend = build_star_graph();
+    // OWNS → {a, b}; LIKES → {c}. Cartesian product: (root, a, c), (root, b, c).
+    let query = cypher::parse("MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y) RETURN r.name, x.name, y.name")
+        .expect("parse");
+    let result = cypher::execute(&backend, &query).expect("execute");
+    let results = result
+        .get("results")
+        .expect("results")
+        .as_array()
+        .expect("array");
+    assert_eq!(results.len(), 2);
+
+    // Each result must have r=root, y=c, and x ∈ {a, b}.
+    let mut xs: Vec<&str> = results
+        .iter()
+        .filter_map(|r| r.get("x.name").and_then(|v| v.as_str()))
+        .collect();
+    xs.sort();
+    assert_eq!(xs, vec!["a", "b"]);
+    for row in results {
+        assert_eq!(row.get("r.name").and_then(|v| v.as_str()), Some("root"));
+        assert_eq!(row.get("y.name").and_then(|v| v.as_str()), Some("c"));
+    }
+}
+
+#[test]
+fn test_execute_star_with_where() {
+    let backend = build_star_graph();
+    // OWNS → {a, b}; restrict x.colour = "red" → only a survives. LIKES → c.
+    let query = cypher::parse(
+        r#"MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y) WHERE x.colour = "red" RETURN x.name, y.name"#,
+    )
+    .expect("parse");
+    let result = cypher::execute(&backend, &query).expect("execute");
+    let results = result
+        .get("results")
+        .expect("results")
+        .as_array()
+        .expect("array");
+    assert_eq!(results.len(), 1);
+    assert_eq!(
+        results[0].get("x.name").and_then(|v| v.as_str()),
+        Some("a")
+    );
+    assert_eq!(
+        results[0].get("y.name").and_then(|v| v.as_str()),
+        Some("c")
+    );
+}
+
+#[test]
+fn test_execute_star_three_legs_shared_root() {
+    let backend = build_star_graph();
+    // OWNS → {a, b}; LIKES → {c}; TAGS → {a}.
+    // Cartesian: 2 × 1 × 1 = 2 rows. Each has y=c, z=a, x ∈ {a, b}.
+    let query =
+        cypher::parse("MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y), (r)-[:TAGS]->(z) RETURN x.name, y.name, z.name")
+            .expect("parse");
+    let result = cypher::execute(&backend, &query).expect("execute");
+    let results = result
+        .get("results")
+        .expect("results")
+        .as_array()
+        .expect("array");
+    assert_eq!(results.len(), 2);
+    for row in results {
+        assert_eq!(row.get("y.name").and_then(|v| v.as_str()), Some("c"));
+        assert_eq!(row.get("z.name").and_then(|v| v.as_str()), Some("a"));
+    }
+}
+
 // ── Existing executor tests ─────────────────────────────────
 
 #[test]

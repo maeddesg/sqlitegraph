@@ -10,6 +10,7 @@
   - `MATCH (n)`, `MATCH (n:Label)`, `MATCH (n:Label {key: "value"})`
   - Edge patterns `(a)-[:REL]->(b)`, backward `<-[:REL]-`, undirected `-[:REL]-`
   - Multi-hop chains `(a)-[:X]->(b)-[:Y]->(c)`
+  - Star patterns `(a)-[:X]->(b), (a)-[:Y]->(c)` — comma-separated legs sharing a root variable; result is the cartesian product of per-leg matches joined on the shared root
   - Variable-depth `(a)-[:X*1..3]->(b)` via `k_hop_filtered`
   - `WHERE n.field = "value"` with operators `=`, `!=`, `<`, `<=`, `>`, `>=`, `=~` (regex)
   - `WHERE` clauses combined with `AND` and `OR` (OR binds looser than AND; parentheses unsupported)

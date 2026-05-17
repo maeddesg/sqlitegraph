@@ -42,6 +42,21 @@ With label filters on endpoints:
 MATCH (a:Function)-[:CALLS]->(b:Function) RETURN a.name, b.name
 ```
 
+### Star Patterns
+
+Comma-separated edge patterns where every leg starts from the same root
+variable form a *star*. The result is the cartesian product of per-leg
+matches, joined on the shared root binding:
+
+```sql
+MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y) RETURN r.name, x.name, y.name
+```
+
+All legs must share the *first* variable (`r` above). Multi-pattern joins
+on other variables (e.g. `(a)-[:X]->(b), (b)-[:Y]->(c)` as a 3-node
+chain) are not yet supported — express such patterns as a chain
+`(a)-[:X]->(b)-[:Y]->(c)`.
+
 ### WHERE Clause
 
 Filter results by property values:

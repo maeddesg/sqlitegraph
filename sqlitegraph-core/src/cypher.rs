@@ -25,7 +25,7 @@ use crate::graph::GraphEntity;
 use crate::multi_hop::{ChainStep, chain_query};
 use crate::pattern::{NodeConstraint, PatternLeg, PatternQuery, execute_pattern};
 use crate::snapshot::SnapshotId;
-use crate::{PatternTriple, SqliteGraphBackend, match_triples};
+use crate::{PatternTriple, SqliteGraphBackend, TripleMatch, match_triples};
 
 // ── Public types ─────────────────────────────────────────────
 
@@ -117,6 +117,11 @@ pub enum Pattern {
         min_hops: usize,
         max_hops: usize,
     },
+    /// `MATCH (a)-[:X]->(b), (a)-[:Y]->(c)` — star pattern where multiple
+    /// legs all start from the same root variable. Each leg is an
+    /// independent edge pattern; the result is the cartesian product of
+    /// per-leg matches, joined on the shared root binding.
+    Star { legs: Vec<EdgeLeg> },
 }
 
 /// A node pattern within a MATCH clause.
@@ -465,6 +470,13 @@ type ParsedPattern = (
 fn parse_pattern(s: &str) -> Result<ParsedPattern, String> {
     let s = s.trim();
 
+    // Star pattern: comma-separated edge patterns sharing a root var.
+    // `(a)-[:X]->(b), (a)-[:Y]->(c)`. Star must be tried before edge/multi-hop
+    // because a chain like `(a)-[:X]->(b)-[:Y]->(c)` has no top-level commas.
+    if has_top_level_comma(s) {
+        return parse_star_pattern(s);
+    }
+
     // Variable-depth: (a)-[:REL*min..max]->(b)
     if s.contains("-[:")
         && (s.contains("*") || s.contains("]*"))
@@ -494,6 +506,109 @@ fn parse_pattern(s: &str) -> Result<ParsedPattern, String> {
     }
 
     Err(format!("invalid pattern syntax: {s}"))
+}
+
+/// Returns `true` if `s` contains a comma at depth zero — outside any
+/// parenthesis or square bracket. Used to detect star patterns without
+/// misreading commas inside `{key: "val", ...}` property maps or rel-type
+/// lists.
+fn has_top_level_comma(s: &str) -> bool {
+    let mut depth_paren = 0i32;
+    let mut depth_bracket = 0i32;
+    let mut in_string = false;
+    for ch in s.chars() {
+        if in_string {
+            if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_string = true,
+            '(' => depth_paren += 1,
+            ')' => depth_paren -= 1,
+            '[' => depth_bracket += 1,
+            ']' => depth_bracket -= 1,
+            ',' if depth_paren == 0 && depth_bracket == 0 => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Split on top-level commas (same rules as `has_top_level_comma`).
+fn split_top_level_commas(s: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut depth_paren = 0i32;
+    let mut depth_bracket = 0i32;
+    let mut in_string = false;
+    let mut last = 0usize;
+    for (i, ch) in s.char_indices() {
+        if in_string {
+            if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_string = true,
+            '(' => depth_paren += 1,
+            ')' => depth_paren -= 1,
+            '[' => depth_bracket += 1,
+            ']' => depth_bracket -= 1,
+            ',' if depth_paren == 0 && depth_bracket == 0 => {
+                parts.push(s[last..i].to_string());
+                last = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(s[last..].to_string());
+    parts
+}
+
+fn parse_star_pattern(s: &str) -> Result<ParsedPattern, String> {
+    let parts = split_top_level_commas(s);
+    if parts.len() < 2 {
+        return Err("star pattern needs at least two comma-separated legs".into());
+    }
+    let mut legs: Vec<EdgeLeg> = Vec::new();
+    let mut root_var: Option<String> = None;
+
+    for part in parts {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            return Err("empty leg in star pattern".into());
+        }
+        let parsed = parse_edge_pattern(trimmed)?;
+        let (pattern, direction, _, _) = parsed;
+        let (from_pat, rel_type, to_pat) = match pattern {
+            Pattern::Edge(from, rel, to) => (from, rel, to),
+            _ => return Err(format!("star leg must be an edge pattern: {trimmed}")),
+        };
+        // All legs must share the same root variable.
+        let leg_root_var = match direction {
+            EdgeDirection::Incoming => to_pat.var.clone(),
+            _ => from_pat.var.clone(),
+        };
+        match root_var {
+            None => root_var = Some(leg_root_var),
+            Some(ref existing) if *existing == leg_root_var => {}
+            Some(ref existing) => {
+                return Err(format!(
+                    "star legs must share the same root variable: leg starts with `{leg_root_var}`, expected `{existing}`"
+                ));
+            }
+        }
+        legs.push(EdgeLeg {
+            rel_type,
+            direction,
+            from: from_pat,
+            to: to_pat,
+        });
+    }
+
+    Ok((Pattern::Star { legs }, EdgeDirection::Outgoing, None, None))
 }
 
 fn count_edge_segments(s: &str) -> usize {
@@ -829,6 +944,7 @@ fn execute_match(backend: &SqliteGraphBackend, query: &CypherQuery) -> Result<Va
             min_hops,
             max_hops,
         } => execute_variable_depth(backend, rel_type, *min_hops, *max_hops, query),
+        Pattern::Star { legs } => execute_star(backend, legs, query),
         Pattern::None => Err("MATCH requires a pattern".into()),
     }
 }
@@ -1011,6 +1127,170 @@ fn execute_multi_hop(
     Ok(serde_json::json!({
         "results": truncated.clone(),
         "count": truncated.len(),
+    }))
+}
+
+fn execute_star(
+    backend: &SqliteGraphBackend,
+    legs: &[EdgeLeg],
+    query: &CypherQuery,
+) -> Result<Value, String> {
+    if legs.is_empty() {
+        return Err("star pattern must have at least one leg".into());
+    }
+    let graph = backend.graph();
+    let snapshot = SnapshotId::current();
+    // All legs share the same root variable (parser enforces this).
+    let root_pat = legs[0].from.clone();
+
+    // For each leg, run match_triples and bucket by start_id.
+    let mut per_leg: Vec<std::collections::HashMap<i64, Vec<TripleMatch>>> = Vec::new();
+    for leg in legs {
+        let (start_pat, end_pat) = match leg.direction {
+            EdgeDirection::Incoming => (&leg.to, &leg.from),
+            _ => (&leg.from, &leg.to),
+        };
+        let mut pattern = PatternTriple::new(&leg.rel_type);
+        if let Some(ref label) = start_pat.label {
+            pattern = pattern.start_label(label);
+        }
+        if let Some(ref label) = end_pat.label {
+            pattern = pattern.end_label(label);
+        }
+        for (key, value) in &start_pat.props {
+            pattern = pattern.start_property(key, value);
+        }
+        for (key, value) in &end_pat.props {
+            pattern = pattern.end_property(key, value);
+        }
+        let triples = match_triples(graph, &pattern).map_err(|e| e.to_string())?;
+        // Key by the root binding regardless of direction: for incoming legs,
+        // end_id is the root in the cypher sense.
+        let mut bucket: std::collections::HashMap<i64, Vec<TripleMatch>> =
+            std::collections::HashMap::new();
+        for triple in triples {
+            let root_id = match leg.direction {
+                EdgeDirection::Incoming => triple.end_id,
+                _ => triple.start_id,
+            };
+            bucket.entry(root_id).or_default().push(triple);
+        }
+        per_leg.push(bucket);
+    }
+
+    // Intersect root candidates across all legs.
+    let mut common_roots: Vec<i64> = per_leg[0].keys().copied().collect();
+    for bucket in &per_leg[1..] {
+        common_roots.retain(|id| bucket.contains_key(id));
+    }
+    common_roots.sort_unstable();
+
+    let mut results: Vec<Value> = Vec::new();
+    let limit = query.limit.unwrap_or(usize::MAX);
+
+    for root_id in common_roots {
+        let root_node = match backend.get_node(snapshot, root_id) {
+            Ok(n) => n,
+            Err(_) => continue,
+        };
+        if !node_pattern_matches(&root_pat, &root_node) {
+            continue;
+        }
+
+        // Cartesian product across legs: each combination is one row.
+        let leg_choices: Vec<&Vec<TripleMatch>> = per_leg
+            .iter()
+            .map(|bucket| bucket.get(&root_id).expect("root_id present in every bucket"))
+            .collect();
+        let mut indices = vec![0usize; leg_choices.len()];
+
+        loop {
+            // Build bindings: root + each leg's end.
+            let mut leg_ends: Vec<(NodePattern, GraphEntity, i64)> = Vec::new();
+            let mut row_valid = true;
+
+            for (leg_idx, leg) in legs.iter().enumerate() {
+                let triple = &leg_choices[leg_idx][indices[leg_idx]];
+                let end_id = match leg.direction {
+                    EdgeDirection::Incoming => triple.start_id,
+                    _ => triple.end_id,
+                };
+                let end_node = match backend.get_node(snapshot, end_id) {
+                    Ok(n) => n,
+                    Err(_) => {
+                        row_valid = false;
+                        break;
+                    }
+                };
+                let end_pat = match leg.direction {
+                    EdgeDirection::Incoming => leg.from.clone(),
+                    _ => leg.to.clone(),
+                };
+                if !node_pattern_matches(&end_pat, &end_node) {
+                    row_valid = false;
+                    break;
+                }
+                leg_ends.push((end_pat, end_node, triple.edge_id));
+            }
+
+            if row_valid {
+                // Apply WHERE. For now WHERE only sees root + each leg-end one
+                // at a time as the "secondary" binding. We iterate each leg
+                // binding and require it satisfies clauses referencing its var;
+                // clauses on unknown vars pass through (consistent with the
+                // single-edge executor).
+                let mut where_ok = true;
+                for (end_pat, end_node, _) in &leg_ends {
+                    if !where_clauses_match(query, &root_pat, &root_node, Some((end_pat, end_node))) {
+                        where_ok = false;
+                        break;
+                    }
+                }
+                if where_ok {
+                    let mut obj = serde_json::Map::new();
+                    extend_with_node(&mut obj, &root_pat, &root_node, &query.returns);
+                    for (end_pat, end_node, edge_id) in &leg_ends {
+                        extend_with_node(&mut obj, end_pat, end_node, &query.returns);
+                        // Stash the per-leg edge_id under the leg's var.
+                        // (When returns includes "*", project_edge handles
+                        // edge_id; for star we keep it simple and surface no
+                        // single edge_id when returns doesn't request one.)
+                        let _ = edge_id;
+                    }
+                    if !obj.is_empty() {
+                        results.push(Value::Object(obj));
+                        if results.len() >= limit {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Advance the cartesian iterator.
+            let mut carry = true;
+            for i in (0..indices.len()).rev() {
+                if carry {
+                    indices[i] += 1;
+                    if indices[i] < leg_choices[i].len() {
+                        carry = false;
+                    } else {
+                        indices[i] = 0;
+                    }
+                }
+            }
+            if carry {
+                break; // all combinations exhausted
+            }
+        }
+
+        if results.len() >= limit {
+            break;
+        }
+    }
+
+    Ok(serde_json::json!({
+        "results": results.clone(),
+        "count": results.len(),
     }))
 }
 
