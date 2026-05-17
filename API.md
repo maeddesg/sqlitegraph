@@ -509,4 +509,4 @@ pub enum SqliteGraphError {
 
 ---
 
-**Note:** This API reference is accurate for v2.0.0. We document deprecations and limitations honestly - check backend-specific sections for feature availability.
+**Note:** This API reference is accurate for v3.0.0. We document deprecations and limitations honestly - check backend-specific sections for feature availability.

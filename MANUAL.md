@@ -17,10 +17,10 @@ Usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V3
 
 ```toml
 [dependencies]
-sqlitegraph = "2.4"
+sqlitegraph = "3.0"
 
 # For Native V3 backend
-sqlitegraph = { version = "2.4", features = ["native-v3"] }
+sqlitegraph = { version = "3.0", features = ["native-v3"] }
 ```
 
 ### Basic Usage

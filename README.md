@@ -72,10 +72,10 @@ cargo bench --features native-v3 --bench backend_comparison
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "2.4"
+sqlitegraph = "3.0"
 
 # OR Native V3 backend (faster traversals)
-sqlitegraph = { version = "2.4", features = ["native-v3"] }
+sqlitegraph = { version = "3.0", features = ["native-v3"] }
 ```
 
 ```rust
