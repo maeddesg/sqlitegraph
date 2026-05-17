@@ -884,14 +884,15 @@ mod tests {
         // For each node, verify bidirectional mapping consistency
         for &node in &entity_ids {
             if let Some(supernode) = collapsed.supernode_for(node)
-                && let Some(members) = collapsed.members_of(supernode) {
-                    assert!(
-                        members.contains(&node),
-                        "Supernode {} should contain node {}",
-                        supernode,
-                        node
-                    );
-                }
+                && let Some(members) = collapsed.members_of(supernode)
+            {
+                assert!(
+                    members.contains(&node),
+                    "Supernode {} should contain node {}",
+                    supernode,
+                    node
+                );
+            }
         }
 
         // Verify each supernode's members map back to it

@@ -4,19 +4,14 @@
 //! Uses the public GraphBackend API rather than raw file offsets so the test
 //! remains valid across storage-format changes (V2 fixed slots → V3 B+Tree pages).
 
-use sqlitegraph::{
-    EdgeSpec, GraphBackend, GraphConfig, NodeSpec, SnapshotId, open_graph,
-};
+use sqlitegraph::{EdgeSpec, GraphBackend, GraphConfig, NodeSpec, SnapshotId, open_graph};
 
 fn verify_nodes(graph: &dyn GraphBackend, node_ids: &[i64], label: &str) {
     println!("=== {} ===", label);
     for &node_id in node_ids {
         match graph.get_node(SnapshotId::current(), node_id) {
             Ok(node) => {
-                println!(
-                    "Node {}: kind={}, name={}",
-                    node_id, node.kind, node.name
-                );
+                println!("Node {}: kind={}, name={}", node_id, node.kind, node.name);
             }
             Err(e) => {
                 println!("Node {}: ERROR fetching - {}", node_id, e);
@@ -31,12 +26,15 @@ fn assert_nodes_intact(graph: &dyn GraphBackend, node_ids: &[i64], context: &str
             .get_node(SnapshotId::current(), node_id)
             .unwrap_or_else(|e| panic!("{}: failed to fetch node {}: {}", context, node_id, e));
 
-        assert_eq!(node.id, node_id, "{}: node {} ID mismatch", context, node_id);
+        assert_eq!(
+            node.id, node_id,
+            "{}: node {} ID mismatch",
+            context, node_id
+        );
         assert_eq!(
             node.kind, "Node",
             "{}: node {} kind mismatch",
-            context,
-            node_id
+            context, node_id
         );
         assert_eq!(
             node.name,
@@ -63,8 +61,8 @@ fn test_edge_insertion_corruption_isolation() {
     let db_path = temp_dir.path().join("test.graph");
 
     // Create native V3 graph
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create native V3 graph");
+    let graph =
+        open_graph(&db_path, &GraphConfig::native()).expect("Failed to create native V3 graph");
 
     // Create exactly 300 nodes to cross the 256 boundary
     let mut node_ids = Vec::new();
@@ -96,7 +94,11 @@ fn test_edge_insertion_corruption_isolation() {
         // Check critical nodes before inserting this edge
         if (250..=270).contains(&from_id) || (250..=270).contains(&to_id) {
             println!("\n--- EDGE {}: {} -> {} ---", i, from_id, to_id);
-            assert_nodes_intact(graph.as_ref(), &critical_nodes, &format!("Before edge {} ({} -> {})", i, from_id, to_id));
+            assert_nodes_intact(
+                graph.as_ref(),
+                &critical_nodes,
+                &format!("Before edge {} ({} -> {})", i, from_id, to_id),
+            );
         }
 
         // Insert the edge - this is where corruption might happen
@@ -158,8 +160,8 @@ fn test_direct_edge_to_node_257() {
     let db_path = temp_dir.path().join("test.graph");
 
     // Create native V3 graph
-    let graph = open_graph(&db_path, &GraphConfig::native())
-        .expect("Failed to create native V3 graph");
+    let graph =
+        open_graph(&db_path, &GraphConfig::native()).expect("Failed to create native V3 graph");
 
     // Create exactly 257 nodes to focus on boundary
     let mut node_ids = Vec::new();
@@ -193,8 +195,7 @@ fn test_direct_edge_to_node_257() {
         }
         Err(e) => {
             println!("Edge 256 -> 257 failed: {}", e);
-            if e.to_string().contains("uninitialized slot") || e.to_string().contains("version=0")
-            {
+            if e.to_string().contains("uninitialized slot") || e.to_string().contains("version=0") {
                 panic!("REPRODUCED: Node 257 corruption when inserting edge 256 -> 257");
             } else {
                 panic!("Different error occurred: {}", e);

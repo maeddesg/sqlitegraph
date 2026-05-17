@@ -536,9 +536,7 @@ fn run_hnsw(client: &sqlitegraph_cli::client::CliClient, command: HnswCommands) 
             );
         }
         HnswCommands::List => {
-            let names = graph
-                .list_hnsw_indexes()
-                .context("list HNSW indexes")?;
+            let names = graph.list_hnsw_indexes().context("list HNSW indexes")?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&json!({

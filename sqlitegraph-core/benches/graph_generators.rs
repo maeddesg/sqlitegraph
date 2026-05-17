@@ -6,7 +6,10 @@
 //! Each bench binary uses a subset of these helpers; clippy flags the rest
 //! as dead per-target. Allow it here so the shared utilities stay green.
 
-#![allow(dead_code, reason = "shared bench utilities used across multiple bench targets")]
+#![allow(
+    dead_code,
+    reason = "shared bench utilities used across multiple bench targets"
+)]
 
 use rand::Rng;
 use sqlitegraph::backend::{EdgeSpec, NodeSpec};
@@ -397,7 +400,10 @@ fn generate_complete(nodes: usize) -> GraphData {
 
 #[cfg(test)]
 mod tests {
-    #[allow(unused_imports, reason = "items resolved through allow(dead_code) attribute")]
+    #[allow(
+        unused_imports,
+        reason = "items resolved through allow(dead_code) attribute"
+    )]
     use super::*;
 
     #[test]

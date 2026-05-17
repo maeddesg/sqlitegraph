@@ -528,7 +528,11 @@ fn test_execute_where_and_or_precedence() {
     )
     .expect("parse");
     let result = cypher::execute(&backend, &query).expect("execute");
-    let results = result.get("results").expect("results").as_array().expect("array");
+    let results = result
+        .get("results")
+        .expect("results")
+        .as_array()
+        .expect("array");
     assert_eq!(results.len(), 2);
     let names: Vec<&str> = results
         .iter()
@@ -863,10 +867,9 @@ fn test_execute_disjoint_legs_produce_cross_product() {
         })
         .unwrap();
 
-    let q = cypher::parse(
-        "MATCH (a)-[:X]->(b), (c)-[:Y]->(d) RETURN a.name, b.name, c.name, d.name",
-    )
-    .expect("parse");
+    let q =
+        cypher::parse("MATCH (a)-[:X]->(b), (c)-[:Y]->(d) RETURN a.name, b.name, c.name, d.name")
+            .expect("parse");
     let res = cypher::execute(&backend, &q).expect("execute");
     let rows = res.get("results").unwrap().as_array().unwrap();
     // 1 leg-1 match × 1 leg-2 match = 1 cross-product row.
@@ -882,8 +885,9 @@ fn test_execute_disjoint_legs_produce_cross_product() {
 fn test_execute_star_two_legs() {
     let backend = build_star_graph();
     // OWNS → {a, b}; LIKES → {c}. Cartesian product: (root, a, c), (root, b, c).
-    let query = cypher::parse("MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y) RETURN r.name, x.name, y.name")
-        .expect("parse");
+    let query =
+        cypher::parse("MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y) RETURN r.name, x.name, y.name")
+            .expect("parse");
     let result = cypher::execute(&backend, &query).expect("execute");
     let results = result
         .get("results")
@@ -920,14 +924,8 @@ fn test_execute_star_with_where() {
         .as_array()
         .expect("array");
     assert_eq!(results.len(), 1);
-    assert_eq!(
-        results[0].get("x.name").and_then(|v| v.as_str()),
-        Some("a")
-    );
-    assert_eq!(
-        results[0].get("y.name").and_then(|v| v.as_str()),
-        Some("c")
-    );
+    assert_eq!(results[0].get("x.name").and_then(|v| v.as_str()), Some("a"));
+    assert_eq!(results[0].get("y.name").and_then(|v| v.as_str()), Some("c"));
 }
 
 #[test]
@@ -935,9 +933,10 @@ fn test_execute_star_three_legs_shared_root() {
     let backend = build_star_graph();
     // OWNS → {a, b}; LIKES → {c}; TAGS → {a}.
     // Cartesian: 2 × 1 × 1 = 2 rows. Each has y=c, z=a, x ∈ {a, b}.
-    let query =
-        cypher::parse("MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y), (r)-[:TAGS]->(z) RETURN x.name, y.name, z.name")
-            .expect("parse");
+    let query = cypher::parse(
+        "MATCH (r)-[:OWNS]->(x), (r)-[:LIKES]->(y), (r)-[:TAGS]->(z) RETURN x.name, y.name, z.name",
+    )
+    .expect("parse");
     let result = cypher::execute(&backend, &query).expect("execute");
     let results = result
         .get("results")
@@ -1194,8 +1193,8 @@ fn test_execute_call_vector_query() {
 #[test]
 fn test_execute_call_unknown_index_errors() {
     let backend = build_test_graph();
-    let q = cypher::parse("CALL db.index.vector.queryNodes('missing', 3, [1.0, 2.0])")
-        .expect("parse");
+    let q =
+        cypher::parse("CALL db.index.vector.queryNodes('missing', 3, [1.0, 2.0])").expect("parse");
     let r = cypher::execute(&backend, &q);
     assert!(r.is_err(), "expected error for missing index, got {r:?}");
 }

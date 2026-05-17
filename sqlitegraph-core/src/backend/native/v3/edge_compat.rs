@@ -1805,10 +1805,11 @@ mod tests {
             // Deserialize the record using bincode
             let record_bytes = &wal_content[pos..pos + size];
             if let Ok(record) = V3WALRecord::from_bytes(record_bytes)
-                && record.record_type() == V3WALRecordType::EdgeInsert {
-                    found_edge_insert = true;
-                    break;
-                }
+                && record.record_type() == V3WALRecordType::EdgeInsert
+            {
+                found_edge_insert = true;
+                break;
+            }
 
             // Skip to next record
             pos += size;

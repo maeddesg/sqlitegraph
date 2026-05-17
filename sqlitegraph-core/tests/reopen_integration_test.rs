@@ -66,8 +66,12 @@ fn test_reopen_maintains_graph_integrity() {
                         edge_type: "test_edge".to_string(),
                         data: serde_json::json!({"edge_id": edge_count, "seed": seed}),
                     })
-                    .unwrap_or_else(|_| panic!("Failed to insert edge {} from {} to {}",
-                        edge_count, from_id, to_id));
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Failed to insert edge {} from {} to {}",
+                            edge_count, from_id, to_id
+                        )
+                    });
 
                 edge_count += 1;
             }

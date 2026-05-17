@@ -266,25 +266,22 @@ impl SqliteGraph {
                 Ok(mut hnsw) => {
                     if !db_path.is_empty() && db_path != ":memory:" {
                         match HnswIndex::get_index_id(conn, &name) {
-                            Ok(Some(index_id)) => {
-                                match rusqlite::Connection::open(&db_path) {
-                                    Ok(storage_conn) => {
-                                        let _ = crate::schema::ensure_schema(&storage_conn);
-                                        hnsw.storage = Box::new(
-                                            crate::hnsw::storage::SQLiteVectorStorage::new(
-                                                index_id,
-                                                storage_conn,
-                                            ),
-                                        );
-                                    }
-                                    Err(e) => {
-                                        eprintln!(
-                                            "Warning: HNSW index '{}' loaded with in-memory storage; failed to open persistent storage: {}",
-                                            name, e
-                                        );
-                                    }
+                            Ok(Some(index_id)) => match rusqlite::Connection::open(&db_path) {
+                                Ok(storage_conn) => {
+                                    let _ = crate::schema::ensure_schema(&storage_conn);
+                                    hnsw.storage =
+                                        Box::new(crate::hnsw::storage::SQLiteVectorStorage::new(
+                                            index_id,
+                                            storage_conn,
+                                        ));
                                 }
-                            }
+                                Err(e) => {
+                                    eprintln!(
+                                        "Warning: HNSW index '{}' loaded with in-memory storage; failed to open persistent storage: {}",
+                                        name, e
+                                    );
+                                }
+                            },
                             Ok(None) => {
                                 eprintln!(
                                     "Warning: HNSW index '{}' has no id row in hnsw_indexes; staying with in-memory storage",

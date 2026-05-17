@@ -2509,10 +2509,7 @@ fn test_natural_loops_with_dominators_integration() {
         .loop_with_header(entity_ids[2])
         .expect("Should have inner loop");
 
-    assert!(
-        inner.is_nested_in(outer),
-        "Inner should be nested in outer"
-    );
+    assert!(inner.is_nested_in(outer), "Inner should be nested in outer");
 }
 
 #[test]

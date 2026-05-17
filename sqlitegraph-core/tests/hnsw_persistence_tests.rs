@@ -248,10 +248,12 @@ fn test_hnsw_distance_metric_preservation() {
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test.db");
 
-    let metrics = [DistanceMetric::Euclidean,
+    let metrics = [
+        DistanceMetric::Euclidean,
         DistanceMetric::Cosine,
         DistanceMetric::DotProduct,
-        DistanceMetric::Manhattan];
+        DistanceMetric::Manhattan,
+    ];
 
     for (i, metric) in metrics.iter().enumerate() {
         let index_name = format!("metric_test_{}", i);

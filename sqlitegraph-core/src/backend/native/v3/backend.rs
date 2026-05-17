@@ -519,8 +519,7 @@ impl V3Backend {
         let mut kv_store = KvStore::new();
         let mut recovered = false;
         if wal_path.exists() {
-            let mut recovery =
-                crate::backend::native::v3::wal::WALRecovery::new(wal_path);
+            let mut recovery = crate::backend::native::v3::wal::WALRecovery::new(wal_path);
             if let Ok(count) = recovery.recover_kv(&mut kv_store) {
                 recovered = count > 0;
             }
@@ -707,9 +706,9 @@ impl V3Backend {
             wal.write()
                 .flush()
                 .map_err(|e| SqliteGraphError::connection(format!("WAL flush failed: {:?}", e)))?;
-            wal.write()
-                .truncate()
-                .map_err(|e| SqliteGraphError::connection(format!("WAL truncate failed: {:?}", e)))?;
+            wal.write().truncate().map_err(|e| {
+                SqliteGraphError::connection(format!("WAL truncate failed: {:?}", e))
+            })?;
         }
         Ok(())
     }

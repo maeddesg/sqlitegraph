@@ -7,7 +7,10 @@
 //! The helper functions below are only reachable when the `v3-forensics` feature
 //! is enabled; clippy reports them as dead in the default build.
 
-#![allow(dead_code, reason = "forensic helpers used only when v3-forensics feature is enabled")]
+#![allow(
+    dead_code,
+    reason = "forensic helpers used only when v3-forensics feature is enabled"
+)]
 
 #[cfg(feature = "v3-forensics")]
 use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;

@@ -61,7 +61,6 @@ pub enum WhereOp {
     Regex,
 }
 
-
 /// Top-level statement kind. `Match` is the default for read queries.
 #[derive(Debug, Default)]
 pub enum Statement {
@@ -1542,14 +1541,11 @@ fn execute_star(
 
         let mut obj = serde_json::Map::new();
         for (var, node) in &nodes {
-            let pat = var_pat
-                .get(var)
-                .cloned()
-                .unwrap_or_else(|| NodePattern {
-                    var: var.clone(),
-                    label: None,
-                    props: Vec::new(),
-                });
+            let pat = var_pat.get(var).cloned().unwrap_or_else(|| NodePattern {
+                var: var.clone(),
+                label: None,
+                props: Vec::new(),
+            });
             extend_with_node(&mut obj, &pat, node, &query.returns);
         }
         if !obj.is_empty() {
@@ -1578,10 +1574,12 @@ fn where_clauses_match_multi(
         return true;
     }
     query.where_groups.iter().any(|and_group| {
-        and_group.iter().all(|clause| match bindings.get(&clause.var) {
-            Some(n) => evaluate_predicate(clause, n),
-            None => true,
-        })
+        and_group
+            .iter()
+            .all(|clause| match bindings.get(&clause.var) {
+                Some(n) => evaluate_predicate(clause, n),
+                None => true,
+            })
     })
 }
 

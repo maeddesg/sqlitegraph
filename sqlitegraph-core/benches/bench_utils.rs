@@ -6,7 +6,10 @@
 //! This module is consumed by many benchmark binaries; clippy reports dead
 //! code per-target, but every helper here is used by at least one bench.
 
-#![allow(dead_code, reason = "shared bench utilities used across multiple bench targets")]
+#![allow(
+    dead_code,
+    reason = "shared bench utilities used across multiple bench targets"
+)]
 
 use std::time::Duration;
 use tempfile::TempDir;

@@ -43,7 +43,10 @@ fn test_node_slots_persist_across_edge_transactions() {
                     "Node name mismatch for node {}",
                     node_id
                 );
-                println!("Node {} verified: kind={}, name={}", node_id, node.kind, node.name);
+                println!(
+                    "Node {} verified: kind={}, name={}",
+                    node_id, node.kind, node.name
+                );
             }
         }
 

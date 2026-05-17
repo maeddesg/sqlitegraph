@@ -760,7 +760,7 @@ fn test_snapshot_outlives_graph() -> Result<(), SqliteGraphError> {
         warm_cache(&graph)?;
 
         // Acquire snapshot and move it out
-        
+
         graph.acquire_snapshot()?
     };
 
