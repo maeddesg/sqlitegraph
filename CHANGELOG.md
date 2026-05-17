@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-05-18
+
+### Highlights
+
+A major release: a full Cypher-inspired query language, a doubled CLI command
+surface, broader Python FFI coverage, and a correctness fix that changes
+HNSW persistence behaviour across sessions. The CLI version is now aligned
+with the core library — both crates will bump together from here on.
+
 ### Changed
 - **Cypher star executor** — Generalized from "shared-root only" to a hash-join on any shared variable. The parser no longer rejects legs whose root variables differ; instead the executor builds per-leg `(var → node_id)` bindings, then sequentially joins legs on shared keys (intersecting where vars overlap, taking cartesian product where they don't). This shifts the executor from a special-case "root cartesian product" to a general relational join. The published `Pattern::Star { legs }` shape is unchanged.
 - **Cypher WHERE parser** — Replaced the split-on-OR-then-AND splitter with a proper recursive-descent expression parser. Parentheses now work (`(a OR b) AND c`, nested groups, unbalanced parens error). The parser builds an internal `WhereExpr` tree and flattens to DNF before storing in `where_groups`, so the public `Vec<Vec<WhereClause>>` shape is unchanged for downstream consumers. Single AND/OR clauses still parse identically.
