@@ -61,15 +61,6 @@ pub enum WhereOp {
     Regex,
 }
 
-/// Logical combinator joining `WHERE` predicates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum WhereCombinator {
-    /// `AND` (default)
-    #[default]
-    And,
-    /// `OR`
-    Or,
-}
 
 /// Top-level statement kind. `Match` is the default for read queries.
 #[derive(Debug, Default)]
@@ -152,8 +143,10 @@ pub struct CypherQuery {
     pub pattern: Pattern,
     pub direction: EdgeDirection,
     pub returns: Vec<String>,
-    pub where_clauses: Vec<WhereClause>,
-    pub where_combinator: WhereCombinator,
+    /// WHERE predicates in disjunctive normal form: outer `Vec` is OR-joined,
+    /// inner `Vec` is AND-joined. `WHERE a AND b OR c` parses to
+    /// `vec![vec![a, b], vec![c]]`. Empty groups mean "no filter".
+    pub where_groups: Vec<Vec<WhereClause>>,
     pub limit: Option<usize>,
     /// For variable-depth and multi-hop queries: the start-node constraint.
     pub start_node: Option<NodePattern>,
@@ -168,8 +161,7 @@ impl Default for CypherQuery {
             pattern: Pattern::None,
             direction: EdgeDirection::Outgoing,
             returns: vec!["*".to_string()],
-            where_clauses: Vec::new(),
-            where_combinator: WhereCombinator::And,
+            where_groups: Vec::new(),
             limit: None,
             start_node: None,
             end_node: None,
@@ -208,7 +200,7 @@ fn parse_match(query: &str) -> Result<CypherQuery, String> {
     // Then LIMIT (after RETURN), RETURN, WHERE.
     let (rest, limit) = extract_limit(rest);
     let (pattern_str, returns) = extract_return(rest);
-    let (pattern_str, where_clauses, where_combinator) = extract_where(pattern_str);
+    let (pattern_str, where_groups) = extract_where(pattern_str);
 
     let (pattern, direction, start_node, end_node) = parse_pattern(pattern_str.trim())?;
 
@@ -219,8 +211,7 @@ fn parse_match(query: &str) -> Result<CypherQuery, String> {
         pattern,
         direction,
         returns,
-        where_clauses,
-        where_combinator,
+        where_groups,
         limit,
         start_node,
         end_node,
@@ -355,37 +346,45 @@ fn extract_return(input: &str) -> (&str, Vec<String>) {
     }
 }
 
-fn extract_where(input: &str) -> (&str, Vec<WhereClause>, WhereCombinator) {
+fn extract_where(input: &str) -> (&str, Vec<Vec<WhereClause>>) {
     let upper = input.to_uppercase();
     if let Some(pos) = upper.find(" WHERE ") {
         let pattern_part = &input[..pos];
         let where_part = &input[pos + 7..];
-        let (clauses, combinator) = parse_where_clauses(where_part);
-        (pattern_part.trim(), clauses, combinator)
+        let groups = parse_where_clauses(where_part);
+        (pattern_part.trim(), groups)
     } else {
-        (input, Vec::new(), WhereCombinator::And)
+        (input, Vec::new())
     }
 }
 
-/// Split a WHERE body into clauses joined by `AND` or `OR` (case-insensitive).
-/// The first matching combinator wins; mixed AND/OR is not supported yet.
-fn parse_where_clauses(input: &str) -> (Vec<WhereClause>, WhereCombinator) {
-    let upper = input.to_uppercase();
-    let (parts, combinator) = if upper.contains(" OR ") {
-        (split_case_insensitive(input, " OR "), WhereCombinator::Or)
-    } else if upper.contains(" AND ") {
-        (split_case_insensitive(input, " AND "), WhereCombinator::And)
-    } else {
-        (vec![input.to_string()], WhereCombinator::And)
-    };
-
-    let mut clauses = Vec::new();
-    for part in parts {
-        if let Some(clause) = parse_single_predicate(part.trim()) {
-            clauses.push(clause);
+/// Parse a WHERE body into disjunctive normal form: outer `Vec` is OR-joined,
+/// inner `Vec` is AND-joined.
+///
+/// `OR` binds looser than `AND` (standard precedence). So:
+/// - `a` parses to `[[a]]`
+/// - `a AND b` parses to `[[a, b]]`
+/// - `a OR b` parses to `[[a], [b]]`
+/// - `a AND b OR c` parses to `[[a, b], [c]]`
+/// - `a OR b AND c` parses to `[[a], [b, c]]`
+///
+/// Parentheses are not supported.
+fn parse_where_clauses(input: &str) -> Vec<Vec<WhereClause>> {
+    let or_parts = split_case_insensitive(input, " OR ");
+    let mut groups = Vec::new();
+    for or_part in or_parts {
+        let and_parts = split_case_insensitive(or_part.trim(), " AND ");
+        let mut and_group = Vec::new();
+        for and_part in and_parts {
+            if let Some(clause) = parse_single_predicate(and_part.trim()) {
+                and_group.push(clause);
+            }
+        }
+        if !and_group.is_empty() {
+            groups.push(and_group);
         }
     }
-    (clauses, combinator)
+    groups
 }
 
 fn split_case_insensitive(input: &str, sep: &str) -> Vec<String> {
@@ -1283,13 +1282,12 @@ fn where_clauses_match(
     primary_node: &GraphEntity,
     secondary: Option<(&NodePattern, &GraphEntity)>,
 ) -> bool {
-    if query.where_clauses.is_empty() {
+    if query.where_groups.is_empty() {
         return true;
     }
-    let evaluated: Vec<bool> = query
-        .where_clauses
-        .iter()
-        .map(|clause| {
+    // DNF evaluation: any group whose every clause matches wins.
+    query.where_groups.iter().any(|and_group| {
+        and_group.iter().all(|clause| {
             let node = if clause.var == primary_pat.var {
                 Some(primary_node)
             } else if let Some((pat, n)) = secondary {
@@ -1302,11 +1300,7 @@ fn where_clauses_match(
                 None => true, // unknown var — don't filter on this clause
             }
         })
-        .collect();
-    match query.where_combinator {
-        WhereCombinator::And => evaluated.iter().all(|b| *b),
-        WhereCombinator::Or => evaluated.iter().any(|b| *b),
-    }
+    })
 }
 
 fn evaluate_predicate(clause: &WhereClause, node: &GraphEntity) -> bool {

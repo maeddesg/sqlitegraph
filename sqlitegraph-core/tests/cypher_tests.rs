@@ -159,10 +159,11 @@ fn test_parse_edge_pattern_with_labels() {
 fn test_parse_where_clause() {
     let query =
         cypher::parse(r#"MATCH (n:Function) WHERE n.lang = "rust" RETURN n.name"#).expect("parse");
-    assert_eq!(query.where_clauses.len(), 1);
-    assert_eq!(query.where_clauses[0].var, "n");
-    assert_eq!(query.where_clauses[0].field, "lang");
-    assert_eq!(query.where_clauses[0].value, "rust");
+    assert_eq!(query.where_groups.len(), 1);
+    assert_eq!(query.where_groups[0].len(), 1);
+    assert_eq!(query.where_groups[0][0].var, "n");
+    assert_eq!(query.where_groups[0][0].field, "lang");
+    assert_eq!(query.where_groups[0][0].value, "rust");
 }
 
 #[test]
@@ -177,7 +178,8 @@ fn test_parse_where_and_limit() {
         cypher::parse(r#"MATCH (a)-[:CALLS]->(b) WHERE b.lang = "rust" RETURN a.name LIMIT 5"#)
             .expect("parse");
     assert!(matches!(query.pattern, Pattern::Edge(_, _, _)));
-    assert_eq!(query.where_clauses.len(), 1);
+    assert_eq!(query.where_groups.len(), 1);
+    assert_eq!(query.where_groups[0].len(), 1);
     assert_eq!(query.limit, Some(5));
     assert_eq!(query.returns, &["a.name".to_string()]);
 }
@@ -204,13 +206,15 @@ fn test_parse_where_multiple_and() {
     let query =
         cypher::parse(r#"MATCH (n:Function) WHERE n.lang = "rust" AND n.name = "main" RETURN n"#)
             .expect("parse");
-    assert_eq!(query.where_clauses.len(), 2);
-    assert_eq!(query.where_clauses[0].var, "n");
-    assert_eq!(query.where_clauses[0].field, "lang");
-    assert_eq!(query.where_clauses[0].value, "rust");
-    assert_eq!(query.where_clauses[1].var, "n");
-    assert_eq!(query.where_clauses[1].field, "name");
-    assert_eq!(query.where_clauses[1].value, "main");
+    // Pure AND: a single OR-group containing two AND-joined predicates.
+    assert_eq!(query.where_groups.len(), 1);
+    assert_eq!(query.where_groups[0].len(), 2);
+    assert_eq!(query.where_groups[0][0].var, "n");
+    assert_eq!(query.where_groups[0][0].field, "lang");
+    assert_eq!(query.where_groups[0][0].value, "rust");
+    assert_eq!(query.where_groups[0][1].var, "n");
+    assert_eq!(query.where_groups[0][1].field, "name");
+    assert_eq!(query.where_groups[0][1].value, "main");
 }
 
 #[test]
@@ -437,10 +441,11 @@ fn test_execute_set() {
 #[test]
 fn test_parse_where_regex() {
     let query = cypher::parse(r#"MATCH (n) WHERE n.name =~ "ma.*" RETURN n"#).expect("parse");
-    assert_eq!(query.where_clauses.len(), 1);
-    assert_eq!(query.where_clauses[0].field, "name");
-    assert_eq!(query.where_clauses[0].operator, cypher::WhereOp::Regex);
-    assert_eq!(query.where_clauses[0].value, "ma.*");
+    assert_eq!(query.where_groups.len(), 1);
+    assert_eq!(query.where_groups[0].len(), 1);
+    assert_eq!(query.where_groups[0][0].field, "name");
+    assert_eq!(query.where_groups[0][0].operator, cypher::WhereOp::Regex);
+    assert_eq!(query.where_groups[0][0].value, "ma.*");
 }
 
 #[test]
@@ -462,18 +467,75 @@ fn test_execute_where_regex() {
 fn test_parse_where_numeric_comparison() {
     let query = cypher::parse(r#"MATCH (n) WHERE n.count > 5 RETURN n"#).expect("parse");
     assert_eq!(
-        query.where_clauses[0].operator,
+        query.where_groups[0][0].operator,
         cypher::WhereOp::GreaterThan
     );
-    assert_eq!(query.where_clauses[0].value, "5");
+    assert_eq!(query.where_groups[0][0].value, "5");
 }
 
 #[test]
 fn test_parse_where_or() {
     let query = cypher::parse(r#"MATCH (n) WHERE n.name = "main" OR n.name = "util" RETURN n"#)
         .expect("parse");
-    assert_eq!(query.where_clauses.len(), 2);
-    assert_eq!(query.where_combinator, cypher::WhereCombinator::Or);
+    // Pure OR: two OR-groups, each containing one predicate.
+    assert_eq!(query.where_groups.len(), 2);
+    assert_eq!(query.where_groups[0].len(), 1);
+    assert_eq!(query.where_groups[1].len(), 1);
+    assert_eq!(query.where_groups[0][0].value, "main");
+    assert_eq!(query.where_groups[1][0].value, "util");
+}
+
+// ── Mixed AND/OR precedence (OR binds looser than AND) ───────
+
+#[test]
+fn test_parse_where_and_or_precedence() {
+    // `a AND b OR c` → (a AND b) OR c  →  [[a, b], [c]]
+    let query = cypher::parse(
+        r#"MATCH (n) WHERE n.lang = "rust" AND n.name = "main" OR n.name = "util" RETURN n"#,
+    )
+    .expect("parse");
+    assert_eq!(query.where_groups.len(), 2);
+    assert_eq!(query.where_groups[0].len(), 2);
+    assert_eq!(query.where_groups[0][0].value, "rust");
+    assert_eq!(query.where_groups[0][1].value, "main");
+    assert_eq!(query.where_groups[1].len(), 1);
+    assert_eq!(query.where_groups[1][0].value, "util");
+}
+
+#[test]
+fn test_parse_where_or_and_precedence() {
+    // `a OR b AND c` → a OR (b AND c)  →  [[a], [b, c]]
+    let query = cypher::parse(
+        r#"MATCH (n) WHERE n.name = "util" OR n.lang = "rust" AND n.name = "main" RETURN n"#,
+    )
+    .expect("parse");
+    assert_eq!(query.where_groups.len(), 2);
+    assert_eq!(query.where_groups[0].len(), 1);
+    assert_eq!(query.where_groups[0][0].value, "util");
+    assert_eq!(query.where_groups[1].len(), 2);
+    assert_eq!(query.where_groups[1][0].value, "rust");
+    assert_eq!(query.where_groups[1][1].value, "main");
+}
+
+#[test]
+fn test_execute_where_and_or_precedence() {
+    let backend = build_test_graph();
+    // Graph: main(rust), helper(rust), util(python), main.rs(File).
+    // Predicate: (lang = "rust" AND name = "main") OR name = "util"
+    // Matches: main (first group), util (second group). Total 2.
+    let query = cypher::parse(
+        r#"MATCH (n:Function) WHERE n.lang = "rust" AND n.name = "main" OR n.name = "util" RETURN n.name"#,
+    )
+    .expect("parse");
+    let result = cypher::execute(&backend, &query).expect("execute");
+    let results = result.get("results").expect("results").as_array().expect("array");
+    assert_eq!(results.len(), 2);
+    let names: Vec<&str> = results
+        .iter()
+        .filter_map(|r| r.get("n.name").and_then(|v| v.as_str()))
+        .collect();
+    assert!(names.contains(&"main"));
+    assert!(names.contains(&"util"));
 }
 
 // ── Existing executor tests ─────────────────────────────────

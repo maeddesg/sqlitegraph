@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Cypher WHERE precedence** — Mixed `AND`/`OR` in a single `WHERE` clause now parses with standard precedence (`OR` binds looser than `AND`). `a AND b OR c` parses to `(a AND b) OR c`. The `CypherQuery` struct's WHERE storage moved from `where_clauses: Vec<WhereClause>` + `where_combinator: WhereCombinator` to `where_groups: Vec<Vec<WhereClause>>` (disjunctive normal form: outer OR, inner AND). The `WhereCombinator` enum was removed; the combinator is now encoded in the structure. Pure-AND and pure-OR queries still parse identically (just nested one level deeper). Parentheses inside `WHERE` are still unsupported.
+
 ### Added
 - **Cypher-inspired query language** in `sqlitegraph-core/src/cypher.rs`. The new public API is `sqlitegraph::cypher::parse(query)` returning a `CypherQuery` and `sqlitegraph::cypher::execute(backend, &query)` returning a JSON `serde_json::Value`. Supported grammar:
   - `MATCH (n)`, `MATCH (n:Label)`, `MATCH (n:Label {key: "value"})`
@@ -9,7 +12,7 @@
   - Multi-hop chains `(a)-[:X]->(b)-[:Y]->(c)`
   - Variable-depth `(a)-[:X*1..3]->(b)` via `k_hop_filtered`
   - `WHERE n.field = "value"` with operators `=`, `!=`, `<`, `<=`, `>`, `>=`, `=~` (regex)
-  - `WHERE` clauses combined with `AND` or `OR` (mixed combinators not yet supported)
+  - `WHERE` clauses combined with `AND` and `OR` (OR binds looser than AND; parentheses unsupported)
   - `LIMIT n` applied after filtering
   - `RETURN n`, `RETURN n.field`, `RETURN *`
   - `CREATE (n:Label {key: "value"})` and `CREATE (a)-[:REL]->(b)`

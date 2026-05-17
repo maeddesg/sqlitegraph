@@ -50,6 +50,23 @@ Filter results by property values:
 MATCH (n:Function) WHERE n.lang = "rust" RETURN n.name
 ```
 
+Supported operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, and `=~` (regex match).
+
+```sql
+MATCH (n) WHERE n.count > 5 RETURN n
+MATCH (n) WHERE n.name =~ "main.*" RETURN n.name
+```
+
+Combine predicates with `AND` and `OR`. `OR` binds looser than `AND` (standard
+precedence), so `a AND b OR c` is `(a AND b) OR c`:
+
+```sql
+MATCH (n) WHERE n.lang = "rust" AND n.name = "main" OR n.name = "util" RETURN n
+```
+
+Parentheses are not yet supported; rewrite expressions to fit the fixed
+precedence if needed.
+
 On edge patterns, filter by either endpoint:
 
 ```sql
@@ -118,9 +135,10 @@ Labels in node patterns (e.g., `:Function`) map to the `kind` field of nodes. Fo
 
 ## Limitations
 
-- Only `MATCH` queries are supported (no `CREATE`, `DELETE`, `SET`)
-- WHERE supports only equality (`=`) comparison
-- Single-hop edge patterns only (no multi-hop like `(a)-[:X]->(b)-[:Y]->(c)`)
-- No aggregation (COUNT, SUM, etc.)
+- No aggregation (COUNT, SUM, AVG, etc.)
 - No ORDER BY
-- Edge patterns require SQLite backend
+- No WITH or UNWIND
+- No variable bindings carried across patterns (each MATCH is independent)
+- No shortestPath() function
+- Parentheses inside WHERE are not supported (precedence is fixed: OR binds looser than AND)
+- Edge patterns require the SQLite backend; the V3 backend returns an error
