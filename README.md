@@ -11,10 +11,10 @@ atomic batch commits. Graph algorithms + HNSW vector search in one engine.
 SQLite: stable, mature, excellent for adjacency queries. V3: high-performance,
 designed for large-scale graphs, faster for bulk traversals. See benchmarks below.
 
-## Current Main
+## What's New in v3.0.0
 
-The current unreleased tree builds on `v2.4.0` with a larger query and
-tooling surface:
+`v3.0.0` is the first release that ships the full Cypher engine, the
+expanded CLI surface, and the cross-session HNSW persistence fix:
 
 - Cypher-inspired `MATCH`, `CREATE`, `SET`, `DELETE`, multi-hop, variable-depth,
   star/multi-pattern joins, `WHERE` with precedence/parentheses, and HNSW

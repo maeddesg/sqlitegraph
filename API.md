@@ -1,6 +1,6 @@
 # SQLiteGraph API Reference
 
-**Version:** v2.4.0 plus current unreleased changes
+**Version:** v3.0.0
 **Last Updated:** 2026-05-18
 
 The complete API documentation is available at **[docs.rs/sqlitegraph](https://docs.rs/sqlitegraph)**.
