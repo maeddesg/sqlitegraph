@@ -140,7 +140,7 @@ pub struct NodePattern {
 }
 
 /// A single WHERE clause predicate.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WhereClause {
     pub var: String,
     pub field: String,
@@ -214,7 +214,7 @@ fn parse_match(query: &str) -> Result<CypherQuery, String> {
     // Then LIMIT (after RETURN), RETURN, WHERE.
     let (rest, limit) = extract_limit(rest);
     let (pattern_str, returns) = extract_return(rest);
-    let (pattern_str, where_groups) = extract_where(pattern_str);
+    let (pattern_str, where_groups) = extract_where(pattern_str)?;
 
     let (pattern, direction, start_node, end_node) = parse_pattern(pattern_str.trim())?;
 
@@ -459,61 +459,236 @@ fn extract_return(input: &str) -> (&str, Vec<String>) {
     }
 }
 
-fn extract_where(input: &str) -> (&str, Vec<Vec<WhereClause>>) {
+fn extract_where(input: &str) -> Result<(&str, Vec<Vec<WhereClause>>), String> {
     let upper = input.to_uppercase();
     if let Some(pos) = upper.find(" WHERE ") {
         let pattern_part = &input[..pos];
         let where_part = &input[pos + 7..];
-        let groups = parse_where_clauses(where_part);
-        (pattern_part.trim(), groups)
+        let groups = parse_where_clauses(where_part)?;
+        Ok((pattern_part.trim(), groups))
     } else {
-        (input, Vec::new())
+        Ok((input, Vec::new()))
     }
+}
+
+/// Internal tree representation of a WHERE expression, used during parsing
+/// before flattening to the public `where_groups` DNF form.
+#[derive(Debug)]
+enum WhereExpr {
+    Atom(WhereClause),
+    And(Vec<WhereExpr>),
+    Or(Vec<WhereExpr>),
 }
 
 /// Parse a WHERE body into disjunctive normal form: outer `Vec` is OR-joined,
 /// inner `Vec` is AND-joined.
 ///
-/// `OR` binds looser than `AND` (standard precedence). So:
-/// - `a` parses to `[[a]]`
-/// - `a AND b` parses to `[[a, b]]`
-/// - `a OR b` parses to `[[a], [b]]`
-/// - `a AND b OR c` parses to `[[a, b], [c]]`
-/// - `a OR b AND c` parses to `[[a], [b, c]]`
+/// Supports parenthesised sub-expressions and the standard precedence (`OR`
+/// binds looser than `AND`). The recursive-descent parser builds a
+/// [`WhereExpr`] tree which is then flattened to DNF.
 ///
-/// Parentheses are not supported.
-fn parse_where_clauses(input: &str) -> Vec<Vec<WhereClause>> {
-    let or_parts = split_case_insensitive(input, " OR ");
-    let mut groups = Vec::new();
-    for or_part in or_parts {
-        let and_parts = split_case_insensitive(or_part.trim(), " AND ");
-        let mut and_group = Vec::new();
-        for and_part in and_parts {
-            if let Some(clause) = parse_single_predicate(and_part.trim()) {
-                and_group.push(clause);
-            }
-        }
-        if !and_group.is_empty() {
-            groups.push(and_group);
-        }
+/// Examples:
+/// - `a` parses to `[[a]]`
+/// - `a AND b` → `[[a, b]]`
+/// - `a OR b` → `[[a], [b]]`
+/// - `a AND b OR c` → `[[a, b], [c]]`
+/// - `(a OR b) AND c` → `[[a, c], [b, c]]`
+/// - `a OR (b AND c)` → `[[a], [b, c]]`
+fn parse_where_clauses(input: &str) -> Result<Vec<Vec<WhereClause>>, String> {
+    let mut parser = WhereParser::new(input);
+    let expr = parser.parse_or()?;
+    parser.skip_ws();
+    if parser.pos < parser.src.len() {
+        return Err(format!(
+            "trailing input in WHERE: `{}`",
+            &input[parser.pos..]
+        ));
     }
-    groups
+    Ok(where_expr_to_dnf(&expr))
 }
 
-fn split_case_insensitive(input: &str, sep: &str) -> Vec<String> {
-    let upper = input.to_uppercase();
-    let sep_upper = sep.to_uppercase();
-    let mut parts = Vec::new();
-    let mut last = 0;
-    let mut search_start = 0;
-    while let Some(rel) = upper[search_start..].find(&sep_upper) {
-        let pos = search_start + rel;
-        parts.push(input[last..pos].to_string());
-        last = pos + sep.len();
-        search_start = last;
+/// Recursive-descent parser for the WHERE expression grammar:
+/// ```text
+/// or_expr  := and_expr ('OR' and_expr)*
+/// and_expr := primary ('AND' primary)*
+/// primary  := '(' or_expr ')' | atom
+/// atom     := <predicate-text terminated by AND/OR/')'/EOF at depth 0>
+/// ```
+struct WhereParser<'a> {
+    src: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> WhereParser<'a> {
+    fn new(s: &'a str) -> Self {
+        Self {
+            src: s.as_bytes(),
+            pos: 0,
+        }
     }
-    parts.push(input[last..].to_string());
-    parts
+
+    fn skip_ws(&mut self) {
+        while self.pos < self.src.len() && self.src[self.pos].is_ascii_whitespace() {
+            self.pos += 1;
+        }
+    }
+
+    /// True if the upcoming bytes match `kw` (case-insensitive) and the
+    /// following byte is a word boundary (not alphanumeric or `_`).
+    fn peek_keyword(&self, kw: &str) -> bool {
+        let bytes = kw.as_bytes();
+        if self.pos + bytes.len() > self.src.len() {
+            return false;
+        }
+        for (i, &b) in bytes.iter().enumerate() {
+            if !self.src[self.pos + i].eq_ignore_ascii_case(&b) {
+                return false;
+            }
+        }
+        if self.pos + bytes.len() < self.src.len() {
+            let nxt = self.src[self.pos + bytes.len()];
+            if nxt.is_ascii_alphanumeric() || nxt == b'_' {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn consume_keyword(&mut self, kw: &str) -> bool {
+        self.skip_ws();
+        if self.peek_keyword(kw) {
+            self.pos += kw.len();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn parse_or(&mut self) -> Result<WhereExpr, String> {
+        let mut terms = vec![self.parse_and()?];
+        loop {
+            self.skip_ws();
+            if !self.consume_keyword("OR") {
+                break;
+            }
+            terms.push(self.parse_and()?);
+        }
+        Ok(if terms.len() == 1 {
+            terms.pop().expect("non-empty")
+        } else {
+            WhereExpr::Or(terms)
+        })
+    }
+
+    fn parse_and(&mut self) -> Result<WhereExpr, String> {
+        let mut terms = vec![self.parse_primary()?];
+        loop {
+            self.skip_ws();
+            if !self.consume_keyword("AND") {
+                break;
+            }
+            terms.push(self.parse_primary()?);
+        }
+        Ok(if terms.len() == 1 {
+            terms.pop().expect("non-empty")
+        } else {
+            WhereExpr::And(terms)
+        })
+    }
+
+    fn parse_primary(&mut self) -> Result<WhereExpr, String> {
+        self.skip_ws();
+        if self.pos < self.src.len() && self.src[self.pos] == b'(' {
+            self.pos += 1;
+            let inner = self.parse_or()?;
+            self.skip_ws();
+            if self.pos >= self.src.len() || self.src[self.pos] != b')' {
+                return Err("expected closing ')' in WHERE".into());
+            }
+            self.pos += 1;
+            return Ok(inner);
+        }
+
+        // Atom: scan until next AND/OR keyword at depth 0, a closing ')',
+        // or end-of-input. Skip over string literals so quoted AND/OR is
+        // treated as data, not a keyword.
+        let start = self.pos;
+        let mut in_str = false;
+        let mut str_quote: u8 = b'"';
+        while self.pos < self.src.len() {
+            let c = self.src[self.pos];
+            if in_str {
+                if c == str_quote {
+                    in_str = false;
+                }
+                self.pos += 1;
+                continue;
+            }
+            if c == b'"' || c == b'\'' {
+                in_str = true;
+                str_quote = c;
+                self.pos += 1;
+                continue;
+            }
+            if c == b')' {
+                break;
+            }
+            if c.is_ascii_whitespace() {
+                let save = self.pos;
+                self.skip_ws();
+                if self.peek_keyword("AND") || self.peek_keyword("OR") {
+                    self.pos = save;
+                    break;
+                }
+                continue;
+            }
+            self.pos += 1;
+        }
+        let atom_bytes = &self.src[start..self.pos];
+        let atom_str = std::str::from_utf8(atom_bytes)
+            .map_err(|e| format!("WHERE atom not utf8: {e}"))?
+            .trim();
+        if atom_str.is_empty() {
+            return Err("empty predicate in WHERE".into());
+        }
+        let clause = parse_single_predicate(atom_str)
+            .ok_or_else(|| format!("invalid predicate in WHERE: `{atom_str}`"))?;
+        Ok(WhereExpr::Atom(clause))
+    }
+}
+
+/// Flatten a [`WhereExpr`] tree to disjunctive normal form.
+///
+/// Note: for an AND of N OR-groups each of size K, the resulting DNF has
+/// K^N rows. For realistic Cypher WHERE clauses (≤ 5 predicates) this is
+/// fine; pathological inputs are bounded by query parser limits upstream.
+fn where_expr_to_dnf(expr: &WhereExpr) -> Vec<Vec<WhereClause>> {
+    match expr {
+        WhereExpr::Atom(c) => vec![vec![c.clone()]],
+        WhereExpr::Or(terms) => {
+            let mut groups = Vec::new();
+            for t in terms {
+                groups.extend(where_expr_to_dnf(t));
+            }
+            groups
+        }
+        WhereExpr::And(terms) => {
+            let mut acc: Vec<Vec<WhereClause>> = vec![vec![]];
+            for t in terms {
+                let dnf = where_expr_to_dnf(t);
+                let mut next: Vec<Vec<WhereClause>> = Vec::new();
+                for existing in &acc {
+                    for grp in &dnf {
+                        let mut combined = existing.clone();
+                        combined.extend(grp.clone());
+                        next.push(combined);
+                    }
+                }
+                acc = next;
+            }
+            acc
+        }
+    }
 }
 
 fn parse_single_predicate(part: &str) -> Option<WhereClause> {

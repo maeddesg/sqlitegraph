@@ -83,8 +83,11 @@ precedence), so `a AND b OR c` is `(a AND b) OR c`:
 MATCH (n) WHERE n.lang = "rust" AND n.name = "main" OR n.name = "util" RETURN n
 ```
 
-Parentheses are not yet supported; rewrite expressions to fit the fixed
-precedence if needed.
+Parentheses override the default precedence:
+
+```sql
+MATCH (n) WHERE (n.kind = "Function" OR n.kind = "Module") AND n.lang = "rust" RETURN n
+```
 
 On edge patterns, filter by either endpoint:
 
@@ -192,5 +195,4 @@ Labels in node patterns (e.g., `:Function`) map to the `kind` field of nodes. Fo
 - No WITH or UNWIND
 - No variable bindings carried across patterns (each MATCH is independent)
 - No shortestPath() function
-- Parentheses inside WHERE are not supported (precedence is fixed: OR binds looser than AND)
 - Edge patterns require the SQLite backend; the V3 backend returns an error

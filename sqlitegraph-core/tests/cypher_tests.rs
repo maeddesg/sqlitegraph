@@ -538,6 +538,120 @@ fn test_execute_where_and_or_precedence() {
     assert!(names.contains(&"util"));
 }
 
+// ── Parenthesised WHERE (overrides default OR-binds-looser) ──
+
+#[test]
+fn test_parse_where_parens_or_then_and() {
+    // `(a OR b) AND c` → DNF: [[a, c], [b, c]]
+    let query = cypher::parse(
+        r#"MATCH (n) WHERE (n.name = "main" OR n.name = "util") AND n.lang = "rust" RETURN n"#,
+    )
+    .expect("parse parens");
+    assert_eq!(query.where_groups.len(), 2);
+    for group in &query.where_groups {
+        assert_eq!(group.len(), 2);
+        // every group ends with the AND'd `n.lang = "rust"` predicate
+        assert!(group.iter().any(|c| c.field == "lang" && c.value == "rust"));
+    }
+    let names: Vec<&str> = query
+        .where_groups
+        .iter()
+        .map(|g| {
+            g.iter()
+                .find(|c| c.field == "name")
+                .map(|c| c.value.as_str())
+                .unwrap_or("")
+        })
+        .collect();
+    assert!(names.contains(&"main"));
+    assert!(names.contains(&"util"));
+}
+
+#[test]
+fn test_parse_where_parens_and_then_or() {
+    // `a OR (b AND c)` → DNF: [[a], [b, c]]
+    let query = cypher::parse(
+        r#"MATCH (n) WHERE n.name = "util" OR (n.lang = "rust" AND n.name = "main") RETURN n"#,
+    )
+    .expect("parse parens");
+    assert_eq!(query.where_groups.len(), 2);
+    // One group is a single predicate (name=util); the other is a pair.
+    let mut sizes: Vec<usize> = query.where_groups.iter().map(|g| g.len()).collect();
+    sizes.sort();
+    assert_eq!(sizes, vec![1, 2]);
+}
+
+#[test]
+fn test_parse_where_nested_parens() {
+    // `((a OR b) AND c) OR d` → DNF: [[a, c], [b, c], [d]]
+    let query = cypher::parse(
+        r#"MATCH (n) WHERE ((n.name = "main" OR n.name = "helper") AND n.lang = "rust") OR n.kind = "File" RETURN n"#,
+    )
+    .expect("parse nested parens");
+    assert_eq!(query.where_groups.len(), 3);
+    let mut sizes: Vec<usize> = query.where_groups.iter().map(|g| g.len()).collect();
+    sizes.sort();
+    assert_eq!(sizes, vec![1, 2, 2]);
+}
+
+#[test]
+fn test_execute_where_parens_changes_meaning() {
+    // Build a small custom graph where the difference matters:
+    // - alpha (Function, lang=rust)
+    // - beta  (Function, lang=python)
+    // - gamma (Other,    lang=rust)
+    let graph = SqliteGraph::open_in_memory().expect("open");
+    let backend = SqliteGraphBackend::from_graph(graph);
+    for (kind, name, lang) in &[
+        ("Function", "alpha", "rust"),
+        ("Function", "beta", "python"),
+        ("Other", "gamma", "rust"),
+    ] {
+        let id = backend
+            .insert_node(NodeSpec {
+                kind: (*kind).into(),
+                name: (*name).into(),
+                file_path: None,
+                data: serde_json::json!({ "lang": lang }),
+            })
+            .unwrap();
+        add_label(backend.graph(), id, kind).unwrap();
+    }
+
+    // `(kind = Function OR kind = Other) AND lang = rust` should match alpha + gamma.
+    let q = cypher::parse(
+        r#"MATCH (n) WHERE (n.kind = "Function" OR n.kind = "Other") AND n.lang = "rust" RETURN n.name"#,
+    )
+    .expect("parse");
+    let res = cypher::execute(&backend, &q).expect("execute");
+    let results = res.get("results").unwrap().as_array().unwrap();
+    let names: Vec<&str> = results
+        .iter()
+        .filter_map(|r| r.get("n.name").and_then(|v| v.as_str()))
+        .collect();
+    assert_eq!(results.len(), 2);
+    assert!(names.contains(&"alpha"));
+    assert!(names.contains(&"gamma"));
+
+    // Without parens (standard precedence, OR binds looser):
+    // `kind = Function OR kind = Other AND lang = rust`
+    // = kind=Function OR (kind=Other AND lang=rust)
+    // = alpha, beta (Function) + gamma (Other ∧ rust)  → 3 rows.
+    let q2 = cypher::parse(
+        r#"MATCH (n) WHERE n.kind = "Function" OR n.kind = "Other" AND n.lang = "rust" RETURN n.name"#,
+    )
+    .expect("parse");
+    let res2 = cypher::execute(&backend, &q2).expect("execute");
+    let count2 = res2.get("results").unwrap().as_array().unwrap().len();
+    assert_eq!(count2, 3);
+}
+
+#[test]
+fn test_parse_where_unbalanced_paren_rejected() {
+    let r = cypher::parse(r#"MATCH (n) WHERE (n.name = "a" OR n.name = "b" RETURN n"#);
+    assert!(r.is_err(), "expected error for unbalanced paren, got {r:?}");
+}
+
 // ── Star patterns: comma-separated legs sharing a root variable ──
 
 /// Build a star test graph.
