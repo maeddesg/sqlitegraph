@@ -56,3 +56,14 @@ def test_list_hnsw_indexes():
     g.create_hnsw_index("b", dimension=2)
     names = g.list_hnsw_indexes()
     assert set(names) >= {"a", "b"}
+
+
+def test_delete_hnsw_index_removes_it():
+    g = sqlitegraph.Graph.open_in_memory()
+    g.create_hnsw_index("doomed", dimension=2)
+    assert "doomed" in g.list_hnsw_indexes()
+    g.delete_hnsw_index("doomed")
+    assert "doomed" not in g.list_hnsw_indexes()
+    # Subsequent get must fail.
+    with pytest.raises(NotFoundError):
+        g.get_hnsw_index("doomed")

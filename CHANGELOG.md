@@ -8,6 +8,13 @@
 - **Cypher WHERE precedence** — Mixed `AND`/`OR` in a single `WHERE` clause now parses with standard precedence (`OR` binds looser than `AND`). `a AND b OR c` parses to `(a AND b) OR c`. The `CypherQuery` struct's WHERE storage moved from `where_clauses: Vec<WhereClause>` + `where_combinator: WhereCombinator` to `where_groups: Vec<Vec<WhereClause>>` (disjunctive normal form: outer OR, inner AND). The `WhereCombinator` enum was removed; the combinator is now encoded in the structure. Pure-AND and pure-OR queries still parse identically (just nested one level deeper).
 
 ### Added
+- **Python `Graph` algorithm bindings** — Expose the previously CLI-only algorithms in `sqlitegraph-py`:
+  - `Graph.strongly_connected_components() -> list[list[int]]`
+  - `Graph.label_propagation(max_iterations=50) -> list[list[int]]`
+  - `Graph.find_cycles(limit=100) -> list[list[int]]`
+  - `Graph.dominators(entry) -> {"dom": {int: list[int]}, "idom": {int: int | None}}`
+  - `Graph.critical_path() -> {"path": list[int], "distance": float, "path_length": int}` (uniform edge weights; raises on cyclic graphs)
+  - `Graph.delete_hnsw_index(name)` — removes both the in-memory entry and the SQLite-backed vector tables.
 - **CLI HNSW subcommands** — Full `sqlitegraph hnsw` command group: `create --name --dim --metric --m --ef-construction`, `insert --name --vector --metadata`, `search --name --k --vector`, `list`, `delete --name`. Vectors are comma-separated f32s (e.g. `"1.0,0.5,-0.25"`). Read-only commands (`search`, `list`) work without `--write`; everything else requires it. All output is pretty-printed JSON matching the existing CLI convention.
 - **`SqliteGraph::delete_hnsw_index`** — Public method to remove an index from both the in-memory cache and the persisted SQLite tables, paired symmetrically with `hnsw_index_persistent` for create.
 - **Cypher-inspired query language** in `sqlitegraph-core/src/cypher.rs`. The new public API is `sqlitegraph::cypher::parse(query)` returning a `CypherQuery` and `sqlitegraph::cypher::execute(backend, &query)` returning a JSON `serde_json::Value`. Supported grammar:

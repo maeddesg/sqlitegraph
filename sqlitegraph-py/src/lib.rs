@@ -8,7 +8,11 @@ use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use sqlitegraph::{
-    algo::{connected_components, louvain_communities, pagerank},
+    algo::{
+        connected_components, critical_path, default_weight_fn, dominators, find_cycles_limited,
+        label_propagation, louvain_communities, pagerank, strongly_connected_components,
+        WeightCallback,
+    },
     backend::{EdgeSpec, NeighborQuery, NodeSpec},
     hnsw::{
         config::HnswConfig,
@@ -515,6 +519,94 @@ impl Graph {
         connected_components(self.backend.graph()).map_err(into_pyerr)
     }
 
+    /// Strongly-connected components (Tarjan).
+    ///
+    /// Returns each SCC as a list of node IDs. Components are returned in
+    /// reverse-topological order (sinks first), matching the underlying core
+    /// implementation.
+    fn strongly_connected_components(&self) -> PyResult<Vec<Vec<i64>>> {
+        let result =
+            strongly_connected_components(self.backend.graph()).map_err(into_pyerr)?;
+        Ok(result
+            .components
+            .into_iter()
+            .map(|comp| {
+                let mut ids: Vec<i64> = comp.into_iter().collect();
+                ids.sort_unstable();
+                ids
+            })
+            .collect())
+    }
+
+    /// Label-propagation community detection.
+    ///
+    /// Returns a list of communities; each community is a list of node IDs.
+    #[pyo3(signature = (max_iterations=None))]
+    fn label_propagation(&self, max_iterations: Option<usize>) -> PyResult<Vec<Vec<i64>>> {
+        label_propagation(self.backend.graph(), max_iterations.unwrap_or(50))
+            .map_err(into_pyerr)
+    }
+
+    /// Find cycles (bounded).
+    ///
+    /// Returns up to `limit` cycles; each cycle is a list of node IDs.
+    #[pyo3(signature = (limit=None))]
+    fn find_cycles(&self, limit: Option<usize>) -> PyResult<Vec<Vec<i64>>> {
+        find_cycles_limited(self.backend.graph(), limit.unwrap_or(100)).map_err(into_pyerr)
+    }
+
+    /// Dominator tree from a given entry node.
+    ///
+    /// Returns a dict with two keys:
+    ///   - ``"dom"``: ``{node_id: [dominator_ids]}`` — full dominance sets
+    ///   - ``"idom"``: ``{node_id: immediate_dominator_or_None}`` — the
+    ///     dominator tree edges (entry's idom is ``None``).
+    fn dominators(&self, py: Python<'_>, entry: i64) -> PyResult<Py<PyAny>> {
+        let result = dominators(self.backend.graph(), entry).map_err(into_pyerr)?;
+
+        let out = PyDict::new(py);
+        let dom = PyDict::new(py);
+        for (node, dominators_of_node) in &result.dom {
+            let mut ids: Vec<i64> = dominators_of_node.iter().copied().collect();
+            ids.sort_unstable();
+            dom.set_item(*node, ids)?;
+        }
+        out.set_item("dom", dom)?;
+
+        let idom = PyDict::new(py);
+        for (node, parent) in &result.idom {
+            match parent {
+                Some(p) => idom.set_item(*node, *p)?,
+                None => idom.set_item(*node, py.None())?,
+            }
+        }
+        out.set_item("idom", idom)?;
+
+        Ok(out.into())
+    }
+
+    /// Critical path (longest weighted path) through the DAG.
+    ///
+    /// Uses uniform edge weights (`1.0` per edge), so the returned distance
+    /// equals the longest path length by edge count. Raises an exception if
+    /// the graph contains a cycle.
+    ///
+    /// Returns a dict with:
+    ///   - ``"path"``: list of node IDs in source-to-sink order
+    ///   - ``"distance"``: total weight along the path (float)
+    ///   - ``"path_length"``: number of nodes in the path
+    fn critical_path(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let weight_fn: &WeightCallback = &default_weight_fn;
+        let result = critical_path(self.backend.graph(), weight_fn)
+            .map_err(|e| PyException::new_err(format!("critical_path error: {e:?}")))?;
+
+        let out = PyDict::new(py);
+        out.set_item("path", result.path.clone())?;
+        out.set_item("distance", result.distance)?;
+        out.set_item("path_length", result.path.len())?;
+        Ok(out.into())
+    }
+
     // ── Cypher query language ──────────────────────────────────
 
     /// Execute a Cypher-inspired query.
@@ -615,6 +707,14 @@ impl Graph {
     fn list_hnsw_indexes(&self) -> PyResult<Vec<String>> {
         let graph = self.backend.graph();
         graph.list_hnsw_indexes().map_err(into_pyerr)
+    }
+
+    /// Delete an HNSW index by name. Removes both the in-memory entry and
+    /// the persisted SQLite tables. Raises an exception if the index name
+    /// is not registered.
+    fn delete_hnsw_index(&self, name: String) -> PyResult<()> {
+        let graph = self.backend.graph();
+        graph.delete_hnsw_index(&name).map_err(into_pyerr)
     }
 
     /// Force checkpoint (flush WAL to disk).
