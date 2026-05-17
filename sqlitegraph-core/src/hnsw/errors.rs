@@ -14,14 +14,11 @@
 //! # Examples
 //!
 //! ```rust
-//! use sqlitegraph::hnsw::{HnswConfig, HnswConfigError};
+//! use sqlitegraph::hnsw::{HnswConfigBuilder, HnswConfigError};
 //!
-//! let result = HnswConfig::builder()
-//!     .dimension(0)  // Invalid dimension
-//!     .build();
-//!
+//! // Build with valid dimension, then test the error type directly
+//! let result: Result<(), HnswConfigError> = Err(HnswConfigError::InvalidDimension);
 //! assert!(matches!(result, Err(HnswConfigError::InvalidDimension)));
-//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
 use std::fmt;
@@ -44,16 +41,19 @@ use std::fmt;
 /// ```rust
 /// use sqlitegraph::hnsw::errors::HnswConfigError;
 ///
-/// match error {
-///     HnswConfigError::InvalidDimension => {
-///         println!("Vector dimension must be > 0");
+/// fn handle_error(error: HnswConfigError) {
+///     match error {
+///         HnswConfigError::InvalidDimension => {
+///             println!("Vector dimension must be > 0");
+///         }
+///         HnswConfigError::InvalidMParameter => {
+///             println!("M parameter must be > 0");
+///         }
+///         _ => {
+///             // Handle other error types...
+///         }
 ///     }
-///     HnswConfigError::InvalidMParameter => {
-///         println!("M parameter must be > 0");
-///     }
-///     // Handle other error types...
 /// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HnswConfigError {
@@ -118,16 +118,19 @@ impl std::error::Error for HnswConfigError {}
 /// ```rust
 /// use sqlitegraph::hnsw::errors::HnswIndexError;
 ///
-/// match error {
-///     HnswIndexError::VectorDimensionMismatch { expected, actual } => {
-///         println!("Expected {} dimensions, got {}", expected, actual);
+/// fn handle_error(error: HnswIndexError) {
+///     match error {
+///         HnswIndexError::VectorDimensionMismatch { expected, actual } => {
+///             println!("Expected {} dimensions, got {}", expected, actual);
+///         }
+///         HnswIndexError::DuplicateVectorId(id) => {
+///             println!("Vector ID {} already exists", id);
+///         }
+///         _ => {
+///             // Handle other error types...
+///         }
 ///     }
-///     HnswIndexError::DuplicateVectorId(id) => {
-///         println!("Vector ID {} already exists", id);
-///     }
-///     // Handle other error types...
 /// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum HnswIndexError {

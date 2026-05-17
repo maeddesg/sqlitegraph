@@ -31,7 +31,7 @@ fn create_performance_test_graph() -> Result<SqliteGraphBackend, Box<dyn std::er
             if target != 0 && target != i + 1 {
                 backend.insert_edge(EdgeSpec {
                     from: node_ids[i],
-                    to: node_ids[target as usize - 1],
+                    to: node_ids[target - 1],
                     edge_type: "mesh".to_string(),
                     data: serde_json::json!({"weight": j}),
                 })?;

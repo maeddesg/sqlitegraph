@@ -390,8 +390,8 @@ fn test_v3_shortest_path_via_trait() {
         let current_dist = distances[&node];
 
         for neighbor in backend.fetch_outgoing(node).unwrap() {
-            if !distances.contains_key(&neighbor) {
-                distances.insert(neighbor, current_dist + 1);
+            if let std::collections::hash_map::Entry::Vacant(e) = distances.entry(neighbor) {
+                e.insert(current_dist + 1);
                 predecessors.insert(neighbor, node);
                 queue.push_back(neighbor);
             }
@@ -1694,9 +1694,9 @@ fn test_v3_query_nodes_by_name_pattern_accepts_any_snapshot() {
         })
         .unwrap();
 
-    // V3 accepts all snapshots — query_nodes_by_name_pattern not yet implemented, returns all nodes
+    // V3 accepts all snapshots — query_nodes_by_name_pattern does prefix/substring matching
     let arbitrary = SnapshotId::from_lsn(777);
-    let result = backend.query_nodes_by_name_pattern(arbitrary, "test");
+    let result = backend.query_nodes_by_name_pattern(arbitrary, "test*");
 
     assert!(
         result.is_ok(),
@@ -1739,7 +1739,7 @@ fn test_v3_fixed_methods_work_with_current_snapshot() {
     assert_eq!(kind_result.unwrap().len(), 1);
 
     // query_nodes_by_name_pattern should work with current snapshot
-    let pattern_result = backend.query_nodes_by_name_pattern(current, "test");
+    let pattern_result = backend.query_nodes_by_name_pattern(current, "test*");
     assert!(
         pattern_result.is_ok(),
         "query_nodes_by_name_pattern should work with current snapshot"

@@ -151,7 +151,7 @@ fn test_page_checksum_validation() {
     assert!(NodePage::unpack(&bytes).is_ok());
 
     // Corrupt checksum should fail
-    let mut corrupted = bytes.clone();
+    let mut corrupted = bytes;
     corrupted[28] ^= 0xFF; // Flip bits in checksum field
 
     let result = NodePage::unpack(&corrupted);
@@ -418,7 +418,7 @@ fn test_compression_error_handling() {
     let bytes = page.pack().unwrap();
 
     // Corrupt the node data region
-    let mut corrupted = bytes.clone();
+    let mut corrupted = bytes;
     // Corrupt some bytes in the data region (after header)
     let data_start = 32; // PAGE_HEADER_SIZE
     if data_start + 10 < corrupted.len() {
@@ -460,7 +460,7 @@ fn test_corruption_recovery() {
     ]);
 
     // Corrupt data
-    let mut corrupted = valid_bytes.clone();
+    let mut corrupted = valid_bytes;
     corrupted[100] ^= 0xFF;
 
     // Unpack should detect checksum mismatch

@@ -106,7 +106,7 @@ fn scenario_a_10k_nodes_only() {
     println!("{}", "=".repeat(80));
 
     let temp = TempDir::new().unwrap();
-    let db_path = temp.path().join(&format!("scenario_a_{}.db", timestamp()));
+    let db_path = temp.path().join(format!("scenario_a_{}.db", timestamp()));
 
     // Create phase
     let (inserted_ids, expected_kinds) = {
@@ -204,7 +204,7 @@ fn scenario_b_10k_nodes_50k_edges() {
     println!("{}", "=".repeat(80));
 
     let temp = TempDir::new().unwrap();
-    let db_path = temp.path().join(&format!("scenario_b_{}.db", timestamp()));
+    let db_path = temp.path().join(format!("scenario_b_{}.db", timestamp()));
 
     // Create phase
     let (node_ids, _edge_pairs) = {
@@ -352,7 +352,7 @@ fn scenario_c_10k_nodes_mixed_kinds_names() {
     println!("{}", "=".repeat(80));
 
     let temp = TempDir::new().unwrap();
-    let db_path = temp.path().join(&format!("scenario_c_{}.db", timestamp()));
+    let db_path = temp.path().join(format!("scenario_c_{}.db", timestamp()));
 
     // Create with 20 different kinds and varied name patterns
     let kind_list = vec![
@@ -525,7 +525,7 @@ fn scenario_d_10k_nodes_50k_edges_mixed() {
     println!("{}", "=".repeat(80));
 
     let temp = TempDir::new().unwrap();
-    let db_path = temp.path().join(&format!("scenario_d_{}.db", timestamp()));
+    let db_path = temp.path().join(format!("scenario_d_{}.db", timestamp()));
 
     let kind_list = vec![
         "Entity",
@@ -664,7 +664,7 @@ fn scenario_d_10k_nodes_50k_edges_mixed() {
             .expect("Kind query should work");
 
         let expected_count = (NODE_COUNT / kind_list.len()
-            + if NODE_COUNT % kind_list.len() > 0 {
+            + if !NODE_COUNT.is_multiple_of(kind_list.len()) {
                 1
             } else {
                 0
@@ -737,7 +737,7 @@ fn test_repeated_run_stability_10k() {
         let temp = TempDir::new().unwrap();
         let db_path = temp
             .path()
-            .join(&format!("repeat_test_{}_{}.db", timestamp(), run));
+            .join(format!("repeat_test_{}_{}.db", timestamp(), run));
 
         // Create and populate
         let inserted_ids = {
@@ -786,7 +786,7 @@ fn test_repeated_run_stability_10k() {
         for &idx in &check_indices {
             backend
                 .get_node(SnapshotId::current(), inserted_ids[idx])
-                .expect(&format!("Run {}: Node {} should exist", run, idx));
+                .unwrap_or_else(|_| panic!("Run {}: Node {} should exist", run, idx));
         }
 
         println!("    Run {} complete: {}", run + 1, stats);

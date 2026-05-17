@@ -346,7 +346,7 @@ fn test_louvain_barbell() {
 
     // Should detect communities with strong internal connections
     // Bridge edge may or may not merge them depending on modularity
-    assert!(communities.len() >= 1);
+    assert!(!communities.is_empty());
     assert!(communities.len() <= 6);
 
     // Total nodes should be 6

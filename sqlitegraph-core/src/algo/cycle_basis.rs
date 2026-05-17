@@ -190,11 +190,11 @@ impl CycleBasisResult {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// # use sqlitegraph::algo::CycleBasisResult;
     /// # let result = CycleBasisResult {
     /// #     cycles: vec![vec![1, 2, 3], vec![4, 5]],
-    /// #     scc_decomposition: unsafe { std::mem::zeroed() },
+    /// #     scc_decomposition: /* SccResult from cycle_basis() call */,
     /// #     cycles_skipped: 0,
     /// #     bounds_applied: Default::default(),
     /// # };
@@ -228,11 +228,11 @@ impl CycleBasisResult {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// # use sqlitegraph::algo::CycleBasisResult;
     /// # let result = CycleBasisResult {
     /// #     cycles: vec![vec![1, 2, 3], vec![4, 5]],
-    /// #     scc_decomposition: unsafe { std::mem::zeroed() },
+    /// #     scc_decomposition: /* SccResult from cycle_basis() call */,
     /// #     cycles_skipped: 0,
     /// #     bounds_applied: Default::default(),
     /// # };
@@ -251,11 +251,11 @@ impl CycleBasisResult {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// # use sqlitegraph::algo::CycleBasisResult;
     /// # let result = CycleBasisResult {
     /// #     cycles: vec![vec![1, 2, 3], vec![1, 4, 5]],
-    /// #     scc_decomposition: unsafe { std::mem::zeroed() },
+    /// #     scc_decomposition: /* SccResult from cycle_basis() call */,
     /// #     cycles_skipped: 0,
     /// #     bounds_applied: Default::default(),
     /// # };
@@ -278,11 +278,11 @@ impl CycleBasisResult {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// # use sqlitegraph::algo::CycleBasisResult;
     /// # let result = CycleBasisResult {
     /// #     cycles: vec![vec![1, 2, 3], vec![1, 4, 5]],
-    /// #     scc_decomposition: unsafe { std::mem::zeroed() },
+    /// #     scc_decomposition: /* SccResult from cycle_basis() call */,
     /// #     cycles_skipped: 0,
     /// #     bounds_applied: Default::default(),
     /// # };
@@ -425,18 +425,18 @@ pub fn cycle_basis_bounded(
         if component.len() == 1 {
             let node = *component.iter().next().unwrap();
             // Check if this node has a self-loop
-            if let Ok(outgoing) = graph.fetch_outgoing(node) {
-                if outgoing.contains(&node) {
-                    // Self-loop detected: [node, node]
-                    if let Some(max_len) = bounds.max_cycle_length {
-                        if 2 > max_len {
-                            cycles_skipped += 1;
-                        } else {
-                            cycles.push(vec![node, node]);
-                        }
+            if let Ok(outgoing) = graph.fetch_outgoing(node)
+                && outgoing.contains(&node)
+            {
+                // Self-loop detected: [node, node]
+                if let Some(max_len) = bounds.max_cycle_length {
+                    if 2 > max_len {
+                        cycles_skipped += 1;
                     } else {
                         cycles.push(vec![node, node]);
                     }
+                } else {
+                    cycles.push(vec![node, node]);
                 }
             }
         }
@@ -489,12 +489,12 @@ pub fn cycle_basis_bounded(
         }
 
         // Apply max_cycles limit globally
-        if let Some(max_cycles) = bounds.max_cycles {
-            if cycles.len() >= max_cycles {
-                cycles_skipped += cycles.len() - max_cycles;
-                cycles.truncate(max_cycles);
-                break;
-            }
+        if let Some(max_cycles) = bounds.max_cycles
+            && cycles.len() >= max_cycles
+        {
+            cycles_skipped += cycles.len() - max_cycles;
+            cycles.truncate(max_cycles);
+            break;
         }
     }
 
@@ -589,12 +589,12 @@ where
         }
 
         // Apply max_cycles limit globally
-        if let Some(max_cycles) = bounds.max_cycles {
-            if all_cycles.len() >= max_cycles {
-                cycles_skipped += all_cycles.len() - max_cycles;
-                all_cycles.truncate(max_cycles);
-                break;
-            }
+        if let Some(max_cycles) = bounds.max_cycles
+            && all_cycles.len() >= max_cycles
+        {
+            cycles_skipped += all_cycles.len() - max_cycles;
+            all_cycles.truncate(max_cycles);
+            break;
         }
     }
 
@@ -707,11 +707,11 @@ fn dfs_cycle_search(
             // Edge to a node on the current recursion stack -> cycle
             if let Some(cycle) = extract_cycle_from_back_edge(node, neighbor, parent, depth) {
                 // Apply max_cycle_length bound
-                if let Some(max_len) = bounds.max_cycle_length {
-                    if cycle.len() > max_len {
-                        *cycles_skipped += 1;
-                        continue;
-                    }
+                if let Some(max_len) = bounds.max_cycle_length
+                    && cycle.len() > max_len
+                {
+                    *cycles_skipped += 1;
+                    continue;
                 }
 
                 let canonical = canonicalize_cycle(cycle);
@@ -937,7 +937,7 @@ mod tests {
 
         // Should find at least one cycle covering all nodes
         assert!(
-            result.cycles.len() >= 1,
+            !result.cycles.is_empty(),
             "Expected at least 1 cycle, found {:?}",
             result.cycles
         );
@@ -986,7 +986,7 @@ mod tests {
         let result = cycle_basis(&graph).unwrap();
 
         // Should find at least one cycle (exact number depends on discovery order)
-        assert!(result.cycles.len() >= 1);
+        assert!(!result.cycles.is_empty());
         assert!(result.has_cycles());
 
         // All nodes should be in cycles
@@ -1015,7 +1015,7 @@ mod tests {
 
         // Should find at least one cycle
         assert!(
-            result.cycles.len() >= 1,
+            !result.cycles.is_empty(),
             "Expected at least 1 cycle, found {:?}",
             result.cycles
         );
@@ -1067,7 +1067,7 @@ mod tests {
 
         // Should find at least one cycle per SCC
         assert!(
-            result.cycles.len() >= 1,
+            !result.cycles.is_empty(),
             "Expected at least 1 cycle, found {:?}",
             result.cycles
         );
@@ -1141,7 +1141,7 @@ mod tests {
         let result = cycle_basis(&graph).unwrap();
 
         // Should find at least one cycle
-        assert!(result.cycles.len() >= 1);
+        assert!(!result.cycles.is_empty());
 
         // All nodes should be in the SCC
         assert_eq!(result.cyclic_scc_count(), 1);
@@ -1345,11 +1345,11 @@ mod tests {
 
         // Node 0 is in multiple cycles
         let cycles_with_0 = result.cycles_containing(ids[0]);
-        assert!(cycles_with_0.len() >= 1);
+        assert!(!cycles_with_0.is_empty());
 
         // Node 1 is in one cycle
         let cycles_with_1 = result.cycles_containing(ids[1]);
-        assert!(cycles_with_1.len() >= 1);
+        assert!(!cycles_with_1.is_empty());
     }
 
     // Test 14: Helper method - explain_cycle

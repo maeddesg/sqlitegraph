@@ -87,7 +87,7 @@ fn hnsw_vector_insertion(criterion: &mut Criterion) {
                     let vectors = generate_test_vectors(dataset_size, dimension);
 
                     for vector in &vectors {
-                        hnsw.insert_vector(&vector, None)
+                        hnsw.insert_vector(vector, None)
                             .expect("Failed to insert vector");
                     }
                 })
@@ -122,13 +122,13 @@ fn hnsw_search_performance(criterion: &mut Criterion) {
                     let mut hnsw = create_hnsw_index(dimension, 200, 50);
                     let vectors = generate_test_vectors(dataset_size, dimension);
                     for vector in &vectors {
-                        hnsw.insert_vector(&vector, None)
+                        hnsw.insert_vector(vector, None)
                             .expect("Failed to insert vector");
                     }
 
                     let query = &vectors[0];
 
-                    b.iter(|| hnsw.search(&query, k).expect("Failed to search"))
+                    b.iter(|| hnsw.search(query, k).expect("Failed to search"))
                 });
             }
         }
@@ -175,12 +175,12 @@ fn hnsw_distance_metrics(criterion: &mut Criterion) {
 
                     let vectors = generate_test_vectors(dataset_size, dimension);
                     for vector in &vectors {
-                        hnsw.insert_vector(&vector, None)
+                        hnsw.insert_vector(vector, None)
                             .expect("Failed to insert vector");
                     }
 
                     let query = &vectors[0];
-                    hnsw.search(&query, k).expect("Failed to search")
+                    hnsw.search(query, k).expect("Failed to search")
                 })
             });
         }
@@ -211,7 +211,7 @@ fn hnsw_end_to_end_performance(criterion: &mut Criterion) {
 
                     // Insert vectors
                     for vector in &vectors {
-                        hnsw.insert_vector(&vector, None)
+                        hnsw.insert_vector(vector, None)
                             .expect("Failed to insert vector");
                     }
 
@@ -255,13 +255,13 @@ fn hnsw_openai_embeddings(criterion: &mut Criterion) {
 
                 // Insert all vectors
                 for vector in &vectors {
-                    hnsw.insert_vector(&vector, None)
+                    hnsw.insert_vector(vector, None)
                         .expect("Failed to insert vector");
                 }
 
                 let query = &vectors[0];
 
-                b.iter(|| hnsw.search(&query, k).expect("Failed to search"))
+                b.iter(|| hnsw.search(query, k).expect("Failed to search"))
             });
         }
     }

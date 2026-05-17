@@ -97,7 +97,7 @@ fn bench_insert_throughput(criterion: &mut Criterion) {
             &batch_size,
             |b, &size| {
                 b.iter_batched(
-                    || create_benchmark_temp_dir(),
+                    create_benchmark_temp_dir,
                     |temp_dir| {
                         let db_path = temp_dir.path().join("insert.db");
                         let graph = open_graph(&db_path, &GraphConfig::native()).unwrap();
@@ -209,7 +209,7 @@ fn bench_memory_efficiency(criterion: &mut Criterion) {
             &node_count,
             |b, &count| {
                 b.iter_batched(
-                    || create_benchmark_temp_dir(),
+                    create_benchmark_temp_dir,
                     |temp_dir| {
                         let db_path = temp_dir.path().join("memory.db");
                         let graph = open_graph(&db_path, &GraphConfig::native()).unwrap();

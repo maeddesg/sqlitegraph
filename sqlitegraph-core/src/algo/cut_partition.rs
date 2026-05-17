@@ -1126,10 +1126,10 @@ where
     let mut separator = AHashSet::new();
     for node in current_network.nodes() {
         for edge in current_network.neighbors(node) {
-            if let Some(original) = transform.is_internal_edge(node, edge.to) {
-                if edge.residual() == 0 {
-                    separator.insert(original);
-                }
+            if let Some(original) = transform.is_internal_edge(node, edge.to)
+                && edge.residual() == 0
+            {
+                separator.insert(original);
             }
         }
     }
@@ -1192,10 +1192,9 @@ fn compute_cut_edges(
                 if let (Some(&from_partition), Some(&to_partition)) = (
                     node_to_partition.get(&from_node),
                     node_to_partition.get(&to_node),
-                ) {
-                    if from_partition != to_partition {
-                        cut_edges.push((from_node, to_node));
-                    }
+                ) && from_partition != to_partition
+                {
+                    cut_edges.push((from_node, to_node));
                 }
             }
         }
@@ -2649,7 +2648,7 @@ mod tests {
         assert_eq!(result.partitions.len(), 2, "Should have 2 partitions");
         // Nodes from different components should be in different partitions
         assert!(
-            result.partitions.iter().all(|p| p.len() > 0),
+            result.partitions.iter().all(|p| !p.is_empty()),
             "Each partition should have at least one node"
         );
     }

@@ -5,7 +5,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use sqlitegraph_core::backend::native::v3::string_table::StringTable;
+//! use sqlitegraph::backend::native::v3::string_table::StringTable;
 //!
 //! let mut table = StringTable::new();
 //!

@@ -393,7 +393,7 @@ fn test_transitive_closure_with_progress_callback() {
     assert!(result.is_ok(), "transitive_closure_with_progress failed");
 
     let closure = result.unwrap();
-    assert!(closure.len() > 0, "Should have reachable pairs");
+    assert!(!closure.is_empty(), "Should have reachable pairs");
 }
 
 #[test]
@@ -2510,7 +2510,7 @@ fn test_natural_loops_with_dominators_integration() {
         .expect("Should have inner loop");
 
     assert!(
-        inner.is_nested_in(&outer),
+        inner.is_nested_in(outer),
         "Inner should be nested in outer"
     );
 }
@@ -2927,7 +2927,7 @@ fn test_enumerate_paths_progress_integration() {
 
     assert!(result.is_ok(), "Enumeration with progress failed");
     let paths = result.unwrap();
-    assert!(paths.paths.len() > 0, "Should find at least one path");
+    assert!(!paths.paths.is_empty(), "Should find at least one path");
 }
 
 #[test]
@@ -3037,7 +3037,7 @@ fn test_enumerate_paths_with_natural_loops_integration() {
     let result = enumerate_paths(&graph, node0, &config).expect("Failed to enumerate paths");
 
     // Should find paths (direct exit + one loop iteration)
-    assert!(result.paths.len() >= 1, "Should find at least one path");
+    assert!(!result.paths.is_empty(), "Should find at least one path");
 }
 
 #[test]

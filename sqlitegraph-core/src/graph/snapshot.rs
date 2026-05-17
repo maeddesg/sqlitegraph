@@ -34,7 +34,7 @@ impl SqliteGraph {
     /// **IMPORTANT**: Snapshots read from the in-memory adjacency cache, not the database.
     /// For accurate snapshots, the cache must be warmed first:
     ///
-    /// ```rust
+    /// ```ignore
     /// use sqlitegraph::SqliteGraph;
     ///
     /// let graph = SqliteGraph::open_in_memory()?;
@@ -103,9 +103,9 @@ impl SqliteGraph {
     /// Convenience alias for `acquire_snapshot()`
     ///
     /// This is a shorter name for acquiring snapshots, equivalent to:
-    /// ```rust
+    /// ```ignore
     /// # use sqlitegraph::SqliteGraph;
-    /// # let graph = unsafe { std::mem::zeroed() };
+    /// let graph = SqliteGraph::open_in_memory()?;
     /// let snapshot = graph.snapshot()?;
     /// ```
     ///

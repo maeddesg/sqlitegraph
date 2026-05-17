@@ -623,7 +623,7 @@ mod tests {
         let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
 
         // Create weighted chain: 0 --5--> 1 --3--> 2 --2--> 3
-        let weights = vec![5.0, 3.0, 2.0];
+        let weights = [5.0, 3.0, 2.0];
         for (i, &weight) in weights.iter().enumerate() {
             let edge = GraphEdge {
                 id: 0,

@@ -731,19 +731,18 @@ impl NodeStore {
             // Check preferred pages in order (most recent first = reverse)
             for &page_id in preferred_pages.iter().rev() {
                 // Check dirty_pages first (in-memory modifications)
-                if let Some(page) = self.dirty_pages.get(&page_id) {
-                    if page.capacity() >= node_size {
-                        return Ok(page_id);
-                    }
+                if let Some(page) = self.dirty_pages.get(&page_id)
+                    && page.capacity() >= node_size
+                {
+                    return Ok(page_id);
                 }
 
                 // Then check page_cache
-                if let Some(page_bytes) = self.page_cache_get(page_id) {
-                    if let Ok(page) = NodePage::unpack(&page_bytes) {
-                        if page.capacity() >= node_size {
-                            return Ok(page_id);
-                        }
-                    }
+                if let Some(page_bytes) = self.page_cache_get(page_id)
+                    && let Ok(page) = NodePage::unpack(&page_bytes)
+                    && page.capacity() >= node_size
+                {
+                    return Ok(page_id);
                 }
             }
         }
@@ -1366,10 +1365,10 @@ impl NodeStore {
         cache.insert(page_id, page);
 
         // Enforce capacity limit (share same limit as raw page cache)
-        if cache.len() > self.cache_capacity {
-            if let Some(key) = cache.keys().next().copied() {
-                cache.remove(&key);
-            }
+        if cache.len() > self.cache_capacity
+            && let Some(key) = cache.keys().next().copied()
+        {
+            cache.remove(&key);
         }
     }
 
@@ -1643,7 +1642,7 @@ impl PageLoader {
             .try_clone()
             .map_err(|_| NativeBackendError::IoError {
                 context: "Failed to clone file handle for page read".to_string(),
-                source: std::io::Error::new(std::io::ErrorKind::Other, "Arc clone failed"),
+                source: std::io::Error::other("Arc clone failed"),
             })?;
 
         file.seek(SeekFrom::Start(offset))

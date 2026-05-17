@@ -192,7 +192,7 @@ fn test_c_recovery_without_flush() {
     // Document actual durability boundary
     if recovered_ids.len() == expected_count {
         println!("[TEST C] WAL replay preserved all data (good recovery)");
-    } else if recovered_ids.len() == 0 {
+    } else if recovered_ids.is_empty() {
         println!("[TEST C] No data recovered (no WAL flush = no durability)");
     } else {
         println!(
@@ -368,7 +368,7 @@ fn test_e_insert_throughput() {
     let counts = [100, 500, 1000];
 
     for count in counts {
-        let db_path = temp.path().join(&format!("perf_{}.graph", count));
+        let db_path = temp.path().join(format!("perf_{}.graph", count));
         let backend = V3Backend::create(&db_path).unwrap();
 
         let start = Instant::now();

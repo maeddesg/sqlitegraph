@@ -45,7 +45,7 @@ fn debug_page_writes() {
         // Check which pages exist by trying to read them
         let page_size: u64 = 4096;
         let header_size: u64 = 112;
-        let max_pages_to_check = (final_size / page_size as u64) + 2;
+        let max_pages_to_check = (final_size / page_size) + 2;
 
         println!("\nChecking which pages are readable...");
         for page_id in 1..max_pages_to_check {

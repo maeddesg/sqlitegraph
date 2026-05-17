@@ -14,7 +14,7 @@
 //!
 //! # Storage Features
 //!
-//! ```rust
+//! ```text
 //! // Store vector with metadata
 //! let vector_id = storage.store_vector(
 //!     &[1.0, 2.0, 3.0],
@@ -81,6 +81,7 @@ impl VectorRecord {
     /// # Examples
     ///
     /// ```rust
+    /// use sqlitegraph::hnsw::storage::VectorRecord;
     /// use serde_json::json;
     ///
     /// let vector = vec![1.0, 2.0, 3.0];
@@ -285,7 +286,7 @@ pub trait VectorStorage: Send {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use serde_json::json;
     ///
     /// let vector = vec![1.0, 2.0, 3.0];
@@ -441,7 +442,7 @@ fn serialize_vector(v: &[f32]) -> Vec<u8> {
 /// Converts bytes to f32 array using bytemuck for zero-copy operation.
 /// This is safe because f32 is POD (Plain Old Data) with no padding.
 fn deserialize_vector(bytes: &[u8]) -> Result<Vec<f32>, HnswError> {
-    if bytes.len() % std::mem::size_of::<f32>() != 0 {
+    if !bytes.len().is_multiple_of(std::mem::size_of::<f32>()) {
         return Err(HnswError::Storage(HnswStorageError::InvalidVectorData));
     }
     Ok(bytemuck::cast_slice::<u8, f32>(bytes).to_vec())
@@ -1002,8 +1003,8 @@ mod tests {
         let mut storage = InMemoryVectorStorage::new();
 
         // Store some vectors
-        storage.store_vector(&vec![1.0, 2.0], None).unwrap();
-        storage.store_vector(&vec![3.0, 4.0, 5.0], None).unwrap();
+        storage.store_vector(&[1.0, 2.0], None).unwrap();
+        storage.store_vector(&[3.0, 4.0, 5.0], None).unwrap();
 
         let stats = storage.get_statistics().unwrap();
         assert_eq!(stats.vector_count, 2);
@@ -1017,8 +1018,8 @@ mod tests {
         let mut storage = InMemoryVectorStorage::new();
 
         // Add some data
-        storage.store_vector(&vec![1.0, 2.0], None).unwrap();
-        storage.store_vector(&vec![3.0, 4.0], None).unwrap();
+        storage.store_vector(&[1.0, 2.0], None).unwrap();
+        storage.store_vector(&[3.0, 4.0], None).unwrap();
 
         assert_eq!(storage.vector_count().unwrap(), 2);
 

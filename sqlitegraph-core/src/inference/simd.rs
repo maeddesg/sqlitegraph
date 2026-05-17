@@ -159,7 +159,7 @@ unsafe fn matmul_avx512(
     in_dim: usize,
 ) {
     unsafe {
-        for j in 0..out_dim {
+        for (j, out_slot) in output.iter_mut().enumerate().take(out_dim) {
             let row = weight.as_ptr().add(j * in_dim);
 
             let mut sum0 = _mm512_setzero_ps();
@@ -188,7 +188,7 @@ unsafe fn matmul_avx512(
                 scalar_sum += *row.add(k) * *input.as_ptr().add(k);
             }
 
-            output[j] = scalar_sum;
+            *out_slot = scalar_sum;
         }
     }
 }
@@ -204,7 +204,7 @@ unsafe fn ffn_gate_up_avx512(
     hidden_dim: usize,
 ) {
     unsafe {
-        for j in 0..n {
+        for (j, inter_slot) in intermediate.iter_mut().enumerate().take(n) {
             let gate_row = ffn_gate.as_ptr().add(j * hidden_dim);
             let up_row = ffn_up.as_ptr().add(j * hidden_dim);
 
@@ -243,7 +243,7 @@ unsafe fn ffn_gate_up_avx512(
 
             // SiLU(g) * u = g * sigmoid(g) * u
             let silu_g = g_scalar * (1.0 / (1.0 + (-g_scalar).exp()));
-            intermediate[j] = silu_g * u_scalar;
+            *inter_slot = silu_g * u_scalar;
         }
     }
 }
@@ -262,7 +262,7 @@ unsafe fn matmul_avx2(
     in_dim: usize,
 ) {
     unsafe {
-        for j in 0..out_dim {
+        for (j, out_slot) in output.iter_mut().enumerate().take(out_dim) {
             let row = weight.as_ptr().add(j * in_dim);
 
             let mut sum0 = _mm256_setzero_ps();
@@ -296,7 +296,7 @@ unsafe fn matmul_avx2(
             for k in i..in_dim {
                 s += *row.add(k) * *input.as_ptr().add(k);
             }
-            output[j] = s;
+            *out_slot = s;
         }
     }
 }
@@ -312,7 +312,7 @@ unsafe fn ffn_gate_up_avx2(
     hidden_dim: usize,
 ) {
     unsafe {
-        for j in 0..n {
+        for (j, inter_slot) in intermediate.iter_mut().enumerate().take(n) {
             let gate_row = ffn_gate.as_ptr().add(j * hidden_dim);
             let up_row = ffn_up.as_ptr().add(j * hidden_dim);
 
@@ -360,7 +360,7 @@ unsafe fn ffn_gate_up_avx2(
             }
 
             let silu_g = g_scalar * (1.0 / (1.0 + (-g_scalar).exp()));
-            intermediate[j] = silu_g * u_scalar;
+            *inter_slot = silu_g * u_scalar;
         }
     }
 }
@@ -407,24 +407,24 @@ unsafe fn transpose_matvec_avx512(
             let b = _mm512_set1_ps(*input.get_unchecked(row));
             let row_start = row * n_cols;
 
-            for c in 0..n_simd {
+            for (c, acc) in col_accs.iter_mut().enumerate().take(n_simd) {
                 let w = _mm512_loadu_ps(matrix.as_ptr().add(row_start + c * 16));
-                col_accs[c] = _mm512_fmadd_ps(w, b, col_accs[c]);
+                *acc = _mm512_fmadd_ps(w, b, *acc);
             }
         }
 
         // Store column accumulators — each element is a separate column sum
-        for c in 0..n_simd {
-            _mm512_storeu_ps(output.as_mut_ptr().add(c * 16), col_accs[c]);
+        for (c, acc) in col_accs.iter().enumerate().take(n_simd) {
+            _mm512_storeu_ps(output.as_mut_ptr().add(c * 16), *acc);
         }
 
         // Scalar tail for remaining columns
-        for ci in n_simd * 16..n_cols {
+        for (ci, out_slot) in output.iter_mut().enumerate().take(n_cols).skip(n_simd * 16) {
             let mut s = 0.0f32;
             for ri in 0..n_rows {
                 s += *matrix.get_unchecked(ri * n_cols + ci) * *input.get_unchecked(ri);
             }
-            output[ci] = s;
+            *out_slot = s;
         }
     }
 }
@@ -449,22 +449,22 @@ unsafe fn transpose_matvec_avx2(
             let b = _mm256_set1_ps(*input.get_unchecked(row));
             let row_start = row * n_cols;
 
-            for c in 0..n_simd {
+            for (c, acc) in col_accs.iter_mut().enumerate().take(n_simd) {
                 let w = _mm256_loadu_ps(matrix.as_ptr().add(row_start + c * 8));
-                col_accs[c] = _mm256_fmadd_ps(w, b, col_accs[c]);
+                *acc = _mm256_fmadd_ps(w, b, *acc);
             }
         }
 
-        for c in 0..n_simd {
-            _mm256_storeu_ps(output.as_mut_ptr().add(c * 8), col_accs[c]);
+        for (c, acc) in col_accs.iter().enumerate().take(n_simd) {
+            _mm256_storeu_ps(output.as_mut_ptr().add(c * 8), *acc);
         }
 
-        for ci in n_simd * 8..n_cols {
+        for (ci, out_slot) in output.iter_mut().enumerate().take(n_cols).skip(n_simd * 8) {
             let mut s = 0.0f32;
             for ri in 0..n_rows {
                 s += *matrix.get_unchecked(ri * n_cols + ci) * *input.get_unchecked(ri);
             }
-            output[ci] = s;
+            *out_slot = s;
         }
     }
 }
@@ -490,7 +490,7 @@ fn transpose_matvec_scalar(
 // ---------------------------------------------------------------------------
 
 fn matmul_scalar(weight: &[f32], input: &[f32], output: &mut [f32], out_dim: usize, in_dim: usize) {
-    for j in 0..out_dim {
+    for (j, out_slot) in output.iter_mut().enumerate().take(out_dim) {
         let mut sum = 0.0f32;
         let row_start = j * in_dim;
         for i in 0..in_dim {
@@ -498,7 +498,7 @@ fn matmul_scalar(weight: &[f32], input: &[f32], output: &mut [f32], out_dim: usi
                 sum += *weight.get_unchecked(row_start + i) * *input.get_unchecked(i);
             }
         }
-        output[j] = sum;
+        *out_slot = sum;
     }
 }
 
@@ -510,7 +510,7 @@ fn ffn_gate_up_scalar(
     n: usize,
     hidden_dim: usize,
 ) {
-    for j in 0..n {
+    for (j, inter_slot) in intermediate.iter_mut().enumerate().take(n) {
         let mut g = 0.0f32;
         let mut u = 0.0f32;
         let base = j * hidden_dim;
@@ -522,6 +522,6 @@ fn ffn_gate_up_scalar(
             }
         }
         let silu_g = g * (1.0 / (1.0 + (-g).exp()));
-        intermediate[j] = silu_g * u;
+        *inter_slot = silu_g * u;
     }
 }

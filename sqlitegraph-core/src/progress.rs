@@ -279,7 +279,7 @@ pub trait ProgressCallback: Send + Sync {
 /// # Example
 ///
 /// ```rust
-/// use sqlitegraph::progress::NoProgress;
+/// use sqlitegraph::progress::{NoProgress, ProgressCallback};
 ///
 /// let progress = NoProgress;
 /// progress.on_progress(5, Some(10), "Processing..."); // Does nothing
@@ -313,7 +313,7 @@ impl ProgressCallback for NoProgress {
 /// # Example
 ///
 /// ```rust
-/// use sqlitegraph::progress::ConsoleProgress;
+/// use sqlitegraph::progress::{ConsoleProgress, ProgressCallback};
 ///
 /// let console = ConsoleProgress::new();
 /// console.on_progress(5, Some(10), "Processing");
@@ -382,9 +382,8 @@ impl ProgressCallback for ConsoleProgress {
 /// let mut progress = ProgressState::new(&inner, Duration::from_millis(100));
 ///
 /// // Only reports if at least 100ms has passed since last report
-/// progress.update(5, Some(10), "Processing")?;
-/// progress.update(6, Some(10), "Processing")?; // May be skipped
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// progress.update(5, Some(10), "Processing");
+/// progress.update(6, Some(10), "Processing"); // May be skipped
 /// ```
 #[derive(Debug)]
 pub struct ProgressState<'a, F>
@@ -550,7 +549,7 @@ mod tests {
         // Should not panic or do anything
         progress.on_progress(5, Some(10), "Test");
         progress.on_complete();
-        progress.on_error(&std::io::Error::new(std::io::ErrorKind::Other, "test"));
+        progress.on_error(&std::io::Error::other("test"));
     }
 
     #[test]
@@ -574,7 +573,7 @@ mod tests {
     fn test_error_invocation() {
         let callback = TestCallback::new();
 
-        let error = std::io::Error::new(std::io::ErrorKind::Other, "test error");
+        let error = std::io::Error::other("test error");
         callback.on_error(&error);
 
         assert_eq!(callback.progress_count(), 0);

@@ -494,10 +494,10 @@ where
             for &to_node in &graph.fetch_outgoing(from_node)? {
                 edges_processed += 1;
 
-                if let Some(&to_supernode) = node_to_supernode.get(&to_node) {
-                    if from_supernode != to_supernode {
-                        edge_set.insert((from_supernode, to_supernode));
-                    }
+                if let Some(&to_supernode) = node_to_supernode.get(&to_node)
+                    && from_supernode != to_supernode
+                {
+                    edge_set.insert((from_supernode, to_supernode));
                 }
             }
         }
@@ -883,8 +883,8 @@ mod tests {
 
         // For each node, verify bidirectional mapping consistency
         for &node in &entity_ids {
-            if let Some(supernode) = collapsed.supernode_for(node) {
-                if let Some(members) = collapsed.members_of(supernode) {
+            if let Some(supernode) = collapsed.supernode_for(node)
+                && let Some(members) = collapsed.members_of(supernode) {
                     assert!(
                         members.contains(&node),
                         "Supernode {} should contain node {}",
@@ -892,7 +892,6 @@ mod tests {
                         node
                     );
                 }
-            }
         }
 
         // Verify each supernode's members map back to it
@@ -1129,7 +1128,7 @@ mod tests {
         // Build adjacency map for cycle detection
         let mut adj: AHashMap<i64, Vec<i64>> = AHashMap::new();
         for &(from, to) in &collapsed.supernode_edges {
-            adj.entry(from).or_insert_with(Vec::new).push(to);
+            adj.entry(from).or_default().push(to);
         }
 
         // Simple DFS cycle detection

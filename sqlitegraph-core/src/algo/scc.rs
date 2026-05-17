@@ -110,6 +110,7 @@ impl SccResult {
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::strongly_connected_components};
 ///
 /// let graph = SqliteGraph::open_in_memory()?;
@@ -118,6 +119,8 @@ impl SccResult {
 ///
 /// println!("Found {} SCCs", scc.components.len());
 /// println!("Non-trivial SCCs (cycles): {}", scc.non_trivial_count());
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Complexity
@@ -261,10 +264,10 @@ fn build_condensed_dag(
     for &from_node in &graph.all_entity_ids()? {
         if let Some(&from_comp) = node_to_component.get(&from_node) {
             for &to_node in &graph.fetch_outgoing(from_node)? {
-                if let Some(&to_comp) = node_to_component.get(&to_node) {
-                    if from_comp != to_comp {
-                        edge_set.insert((from_comp, to_comp));
-                    }
+                if let Some(&to_comp) = node_to_component.get(&to_node)
+                    && from_comp != to_comp
+                {
+                    edge_set.insert((from_comp, to_comp));
                 }
             }
         }

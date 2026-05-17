@@ -353,8 +353,8 @@ fn create_topology(graph: &mut Box<dyn sqlitegraph::GraphBackend>, topology: &st
 
             for (from, to) in edges {
                 let edge_spec = EdgeSpec {
-                    from: from as i64,
-                    to: to as i64,
+                    from,
+                    to,
                     edge_type: "random".to_string(),
                     data: serde_json::json!({"random_edge": true}),
                 };

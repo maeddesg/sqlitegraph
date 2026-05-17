@@ -23,9 +23,9 @@ impl HnswIndex {
     /// # Examples
     ///
     /// ```rust
-    /// use sqlitegraph::hnsw::{HnswIndex, HnswConfig, DistanceMetric};
+    /// use sqlitegraph::hnsw::{HnswIndex, HnswConfigBuilder, DistanceMetric};
     ///
-    /// let config = HnswConfig::builder()
+    /// let config = HnswConfigBuilder::new()
     ///     .dimension(128)
     ///     .distance_metric(DistanceMetric::Euclidean)
     ///     .build()?;
@@ -151,8 +151,8 @@ impl HnswIndex {
     /// # Examples
     ///
     /// ```rust
-    /// # use sqlitegraph::hnsw::{HnswIndex, HnswConfig, DistanceMetric};
-    /// # let hnsw = HnswIndex::new(HnswConfig::default()).unwrap();
+    /// # use sqlitegraph::hnsw::{HnswIndex, HnswConfigBuilder, DistanceMetric};
+    /// # let mut hnsw = HnswIndex::new("test", HnswConfigBuilder::new().dimension(3).distance_metric(DistanceMetric::Euclidean).build().unwrap()).unwrap();
     /// let vector = vec![1.0, 0.0, 0.0];
     /// let metadata = serde_json::json!({"label": "test"});
     ///
@@ -222,8 +222,8 @@ impl HnswIndex {
     /// # Examples
     ///
     /// ```rust
-    /// # use sqlitegraph::hnsw::{HnswIndex, HnswConfig};
-    /// # let mut hnsw = HnswIndex::new(HnswConfig::default()).unwrap();
+    /// # use sqlitegraph::hnsw::{HnswIndex, HnswConfigBuilder, DistanceMetric};
+    /// # let mut hnsw = HnswIndex::new("test", HnswConfigBuilder::new().dimension(3).distance_metric(DistanceMetric::Euclidean).build().unwrap()).unwrap();
     /// # // Insert some vectors first
     /// let query = vec![1.0, 0.0, 0.0];
     ///
@@ -309,8 +309,8 @@ impl HnswIndex {
     /// # Examples
     ///
     /// ```rust
-    /// # use sqlitegraph::hnsw::{HnswIndex, HnswConfig};
-    /// # let mut hnsw = HnswIndex::new(HnswConfig::default()).unwrap();
+    /// # use sqlitegraph::hnsw::{HnswIndex, HnswConfigBuilder, DistanceMetric};
+    /// # let mut hnsw = HnswIndex::new("test", HnswConfigBuilder::new().dimension(2).distance_metric(DistanceMetric::Euclidean).build().unwrap()).unwrap();
     /// # let vector_id = hnsw.insert_vector(&vec![1.0, 0.0], None).unwrap();
     /// let result = hnsw.get_vector(vector_id)?;
     /// if let Some((vector, metadata)) = result {
@@ -331,8 +331,8 @@ impl HnswIndex {
     /// # Examples
     ///
     /// ```rust
-    /// # use sqlitegraph::hnsw::{HnswIndex, HnswConfig};
-    /// # let hnsw = HnswIndex::new(HnswConfig::default()).unwrap();
+    /// # use sqlitegraph::hnsw::{HnswIndex, HnswConfigBuilder, DistanceMetric};
+    /// # let hnsw = HnswIndex::new("test", HnswConfigBuilder::new().dimension(3).distance_metric(DistanceMetric::Euclidean).build().unwrap()).unwrap();
     /// let stats = hnsw.statistics()?;
     /// println!("Vectors indexed: {}", stats.vector_count);
     /// println!("Layers: {}", stats.layer_count);
@@ -418,10 +418,10 @@ impl crate::SqliteGraph {
     /// # Examples
     ///
     /// ```rust
-    /// use sqlitegraph::{SqliteGraph, hnsw::{HnswConfig, DistanceMetric}};
+    /// use sqlitegraph::{SqliteGraph, hnsw::{HnswConfigBuilder, DistanceMetric}};
     ///
     /// let graph = SqliteGraph::open_in_memory()?;
-    /// let config = HnswConfig::builder()
+    /// let config = HnswConfigBuilder::new()
     ///     .dimension(256)
     ///     .distance_metric(DistanceMetric::Cosine)
     ///     .build()?;
@@ -476,11 +476,11 @@ impl crate::SqliteGraph {
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// use sqlitegraph::{SqliteGraph, hnsw::{HnswConfig, DistanceMetric}};
+    /// ```rust,ignore
+    /// use sqlitegraph::{SqliteGraph, hnsw::{HnswConfigBuilder, DistanceMetric}};
     ///
     /// let graph = SqliteGraph::open("mydb.db")?;
-    /// let config = HnswConfig::builder()
+    /// let config = HnswConfigBuilder::new()
     ///     .dimension(256)
     ///     .distance_metric(DistanceMetric::Cosine)
     ///     .build()?;

@@ -893,7 +893,7 @@ mod tests {
         assert!(IndexPage::unpack(&bytes).is_ok());
 
         // Corrupt the checksum
-        let mut corrupted = bytes.clone();
+        let mut corrupted = bytes;
         corrupted[constants::CHECKSUM_OFFSET] ^= 0xFF;
 
         // Should fail checksum validation
@@ -916,7 +916,7 @@ mod tests {
         assert!(IndexPage::unpack(&bytes).is_ok());
 
         // Corrupt the checksum
-        let mut corrupted = bytes.clone();
+        let mut corrupted = bytes;
         corrupted[constants::CHECKSUM_OFFSET] ^= 0xFF;
 
         // Should fail checksum validation

@@ -255,10 +255,10 @@ pub fn transitive_closure(
 
         while let Some((node, depth)) = queue.pop_front() {
             // Check depth limit
-            if let Some(max_d) = max_depth {
-                if depth >= max_d {
-                    continue;
-                }
+            if let Some(max_d) = max_depth
+                && depth >= max_d
+            {
+                continue;
             }
 
             // Traverse outgoing edges
@@ -268,10 +268,10 @@ pub fn transitive_closure(
                     closure.insert((source, neighbor), true);
 
                     // Check pair limit
-                    if let Some(max_p) = max_pairs {
-                        if closure.len() >= max_p {
-                            return Ok(closure);
-                        }
+                    if let Some(max_p) = max_pairs
+                        && closure.len() >= max_p
+                    {
+                        return Ok(closure);
                     }
 
                     // Continue BFS if depth allows
@@ -368,10 +368,10 @@ where
 
         while let Some((node, depth)) = queue.pop_front() {
             // Check depth limit
-            if let Some(max_d) = max_depth {
-                if depth >= max_d {
-                    continue;
-                }
+            if let Some(max_d) = max_depth
+                && depth >= max_d
+            {
+                continue;
             }
 
             // Traverse outgoing edges
@@ -381,11 +381,11 @@ where
                     closure.insert((source, neighbor), true);
 
                     // Check pair limit
-                    if let Some(max_p) = max_pairs {
-                        if closure.len() >= max_p {
-                            progress.on_complete();
-                            return Ok(closure);
-                        }
+                    if let Some(max_p) = max_pairs
+                        && closure.len() >= max_p
+                    {
+                        progress.on_complete();
+                        return Ok(closure);
                     }
 
                     // Continue BFS if depth allows
@@ -782,7 +782,7 @@ mod tests {
 
         assert!(result.is_ok(), "transitive_closure_with_progress failed");
         let closure = result.unwrap();
-        assert!(closure.len() > 0, "Should have reachable pairs");
+        assert!(!closure.is_empty(), "Should have reachable pairs");
     }
 
     #[test]

@@ -47,7 +47,7 @@
 //!
 //! # Architecture
 //!
-//! ```
+//! ```text
 //! EdgeCluster { src: NodeId, dsts: Vec<NodeId>, dir: Out|In, metadata }
 //!
 //! B+Tree index: key = (src, dir) → value = edge_page_id
@@ -659,20 +659,20 @@ impl V3EdgeStore {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         // Cache miss - try to load from disk if we have a db_path
-        if let Some(ref db_path) = self.db_path {
-            if let Ok(neighbors) = self.load_neighbors_from_disk(src, dir, db_path) {
-                #[cfg(feature = "v3-forensics")]
-                if !neighbors.is_empty() {
-                    FORENSIC_COUNTERS
-                        .edge_page_read_count
-                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                }
-                if !neighbors.is_empty() {
-                    // Cache the loaded neighbors
-                    let mut cache = self.cache.write();
-                    cache.insert(key, neighbors.clone());
-                    return Ok(neighbors);
-                }
+        if let Some(ref db_path) = self.db_path
+            && let Ok(neighbors) = self.load_neighbors_from_disk(src, dir, db_path)
+        {
+            #[cfg(feature = "v3-forensics")]
+            if !neighbors.is_empty() {
+                FORENSIC_COUNTERS
+                    .edge_page_read_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            if !neighbors.is_empty() {
+                // Cache the loaded neighbors
+                let mut cache = self.cache.write();
+                cache.insert(key, neighbors.clone());
+                return Ok(neighbors);
             }
         }
 
@@ -833,15 +833,15 @@ impl V3EdgeStore {
 
             // DETECT POTENTIAL ALIASING: Check if we're overwriting a different type
             let key = (src, dst, dir);
-            if let Some(existing_type) = edge_types.get(&key) {
-                if existing_type != edge_type_str {
-                    // SEMANTIC WARNING: Overwriting different edge type for same tuple
-                    // This is logged but not an error - the caller's responsibility
-                    eprintln!(
-                        "WARNING: V3EdgeStore inserting edge_type '{}' for ({}, {}, {:?}), overwriting existing type '{}'. This is a known limitation of tuple-key model.",
-                        edge_type_str, src, dst, dir, existing_type
-                    );
-                }
+            if let Some(existing_type) = edge_types.get(&key)
+                && existing_type != edge_type_str
+            {
+                // SEMANTIC WARNING: Overwriting different edge type for same tuple
+                // This is logged but not an error - the caller's responsibility
+                eprintln!(
+                    "WARNING: V3EdgeStore inserting edge_type '{}' for ({}, {}, {:?}), overwriting existing type '{}'. This is a known limitation of tuple-key model.",
+                    edge_type_str, src, dst, dir, existing_type
+                );
             }
 
             edge_types.insert(key, edge_type_str.clone());
@@ -997,7 +997,7 @@ impl V3EdgeStore {
                                 "Failed to allocate edge page for ({}, {:?})",
                                 src, dir
                             ),
-                            source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                            source: std::io::Error::other(e.to_string()),
                         });
                     }
                 }
@@ -1560,7 +1560,7 @@ mod tests {
         for i in 0..5 {
             edge_store
                 .insert_edge(1, i as i64 + 10, Direction::Outgoing, None)
-                .expect(&format!("Insert iteration {} failed", i));
+                .unwrap_or_else(|_| panic!("Insert iteration {} failed", i));
             edge_store.flush(None).expect("Flush failed");
         }
 
@@ -1804,12 +1804,11 @@ mod tests {
 
             // Deserialize the record using bincode
             let record_bytes = &wal_content[pos..pos + size];
-            if let Ok(record) = V3WALRecord::from_bytes(record_bytes) {
-                if record.record_type() == V3WALRecordType::EdgeInsert {
+            if let Ok(record) = V3WALRecord::from_bytes(record_bytes)
+                && record.record_type() == V3WALRecordType::EdgeInsert {
                     found_edge_insert = true;
                     break;
                 }
-            }
 
             // Skip to next record
             pos += size;

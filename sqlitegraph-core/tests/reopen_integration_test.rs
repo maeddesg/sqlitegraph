@@ -29,7 +29,7 @@ fn test_reopen_maintains_graph_integrity() {
                 file_path: None,
                 data: serde_json::json!({"id": i, "phase": 1}),
             })
-            .expect(&format!("Failed to insert node {}", i));
+            .unwrap_or_else(|_| panic!("Failed to insert node {}", i));
         node_ids.push(node_id);
     }
 
@@ -66,10 +66,8 @@ fn test_reopen_maintains_graph_integrity() {
                         edge_type: "test_edge".to_string(),
                         data: serde_json::json!({"edge_id": edge_count, "seed": seed}),
                     })
-                    .expect(&format!(
-                        "Failed to insert edge {} from {} to {}",
-                        edge_count, from_id, to_id
-                    ));
+                    .unwrap_or_else(|_| panic!("Failed to insert edge {} from {} to {}",
+                        edge_count, from_id, to_id));
 
                 edge_count += 1;
             }
@@ -109,7 +107,7 @@ fn test_reopen_maintains_graph_integrity() {
     for &node_id in &node_ids {
         let node = graph
             .get_node(SnapshotId::current(), node_id)
-            .expect(&format!("Failed to get node {}", node_id));
+            .unwrap_or_else(|_| panic!("Failed to get node {}", node_id));
         assert_eq!(
             node.id, node_id,
             "Node {} should still exist after reopen",
@@ -122,7 +120,7 @@ fn test_reopen_maintains_graph_integrity() {
     for (i, &node_id) in sample_nodes.iter().enumerate() {
         let neighbors = graph
             .neighbors(SnapshotId::current(), node_id, NeighborQuery::default())
-            .expect(&format!("Failed to get neighbors for node {}", node_id));
+            .unwrap_or_else(|_| panic!("Failed to get neighbors for node {}", node_id));
         let original_count = original_neighbor_counts[i];
 
         assert_eq!(

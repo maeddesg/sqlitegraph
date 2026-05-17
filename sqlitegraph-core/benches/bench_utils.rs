@@ -2,6 +2,11 @@
 //!
 //! Provides utilities for creating deterministic test graphs and running
 //! fair performance comparisons between SQLite and Native backends.
+//!
+//! This module is consumed by many benchmark binaries; clippy reports dead
+//! code per-target, but every helper here is used by at least one bench.
+
+#![allow(dead_code, reason = "shared bench utilities used across multiple bench targets")]
 
 use std::time::Duration;
 use tempfile::TempDir;
@@ -84,14 +89,14 @@ pub fn create_benchmark_graph(backend: BackendKind, spec: &BenchmarkGraph) -> Be
     }
 
     // Generate edges based on topology using individual insertions
-    let edge_count = generate_edges(&graph, &node_ids, spec);
+    let edge_count = generate_edges(&*graph, &node_ids, spec);
 
     let creation_time = start_time.elapsed();
 
     BenchmarkResult {
         backend,
         node_count: node_ids.len(),
-        edge_count: edge_count,
+        edge_count,
         creation_time,
         temp_dir,
         db_path,
@@ -110,7 +115,7 @@ pub struct BenchmarkResult {
 
 /// Generate edges based on the specified topology
 fn generate_edges(
-    graph: &Box<dyn sqlitegraph::GraphBackend>,
+    graph: &dyn sqlitegraph::GraphBackend,
     node_ids: &[i64],
     spec: &BenchmarkGraph,
 ) -> usize {
@@ -138,11 +143,12 @@ fn generate_edges(
                 return 0;
             }
             let center = node_ids[0];
-            for i in 1..node_ids.len().min(spec.edge_count + 1) {
+            let take = (spec.edge_count + 1).min(node_ids.len()).saturating_sub(1);
+            for (i, &to) in node_ids.iter().enumerate().skip(1).take(take) {
                 graph
                     .insert_edge(EdgeSpec {
                         from: center,
-                        to: node_ids[i],
+                        to,
                         edge_type: "star".to_string(),
                         data: serde_json::json!({"spoke": i}),
                     })
@@ -237,9 +243,10 @@ impl BenchInMemoryGraph {
 
         match spec.topology {
             GraphTopology::Chain => {
-                for i in 0..spec.node_count.min(spec.edge_count) {
+                let limit = spec.node_count.min(spec.edge_count);
+                for (i, adj) in adjacency.iter_mut().enumerate().take(limit) {
                     if i + 1 < spec.node_count {
-                        adjacency[i].push(i as u32 + 1);
+                        adj.push(i as u32 + 1);
                     }
                 }
             }
@@ -263,18 +270,19 @@ impl BenchInMemoryGraph {
             }
             GraphTopology::Grid => {
                 let grid_size = (spec.node_count as f64).sqrt() as usize;
-                for i in 0..spec.node_count.min(spec.edge_count) {
+                let limit = spec.node_count.min(spec.edge_count);
+                for (i, adj) in adjacency.iter_mut().enumerate().take(limit) {
                     let row = i / grid_size;
                     let col = i % grid_size;
 
                     // Right neighbor
                     if col + 1 < grid_size && i + 1 < spec.node_count {
-                        adjacency[i].push((i + 1) as u32);
+                        adj.push((i + 1) as u32);
                     }
 
                     // Bottom neighbor
                     if row + 1 < grid_size && i + grid_size < spec.node_count {
-                        adjacency[i].push((i + grid_size) as u32);
+                        adj.push((i + grid_size) as u32);
                     }
                 }
             }

@@ -559,7 +559,8 @@ fn bench_kv_set(c: &mut Criterion) {
                 |(backend, _temp_dir)| {
                     for i in 0..count {
                         let key = format!("key_{}", i).into_bytes();
-                        black_box(backend.kv_set_v3(key, KvValue::Integer(i as i64), None));
+                        let _: () = backend.kv_set_v3(key, KvValue::Integer(i as i64), None);
+                        black_box(());
                     }
                 },
                 criterion::BatchSize::LargeInput,

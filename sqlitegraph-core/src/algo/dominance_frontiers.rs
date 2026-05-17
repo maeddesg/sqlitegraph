@@ -1130,14 +1130,13 @@ mod tests {
             for &other in &entity_ids {
                 let in_frontier = df_result.in_frontier(node, other);
                 // Should be symmetric with frontier() result
-                if in_frontier {
-                    if let Some(frontier) = df_result.frontier(node) {
+                if in_frontier
+                    && let Some(frontier) = df_result.frontier(node) {
                         assert!(
                             frontier.contains(&other),
                             "in_frontier true but not in frontier set"
                         );
                     }
-                }
             }
         }
     }

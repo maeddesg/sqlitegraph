@@ -41,7 +41,7 @@
 //! - **Control dependence**: "What conditions must execute?" (via CDG)
 //! - **Data dependence**: "Where does data flow from/to?" (via reachability)
 //!
-//! ```
+//! ```text
 //! Backward slice(target) = control_predecessors(target) + data_predecessors(target)
 //! Forward slice(source) = control_successors(source) + data_successors(source)
 //! ```

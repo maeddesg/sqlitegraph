@@ -749,7 +749,7 @@ fn test_algorithm_snapshot_consistency() {
 
     // Algorithm should see same number of nodes as snapshot
     assert_eq!(
-        graph_ids.len() as usize,
+        graph_ids.len(),
         snapshot_count,
         "Algorithm and snapshot disagree on node count"
     );

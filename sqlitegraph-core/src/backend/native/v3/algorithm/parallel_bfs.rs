@@ -128,11 +128,11 @@ impl ChunkResult {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use sqlitegraph::backend::native::v3::algorithm::parallel_bfs;
 /// use sqlitegraph::backend::native::v3::algorithm::BfsConfig;
 ///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let backend = /* ... */;
 /// let config = BfsConfig {
 ///     max_threads: Some(4),
@@ -205,7 +205,7 @@ fn partition_nodes(nodes: &[i64], num_chunks: usize) -> Vec<&[i64]> {
         return vec![nodes];
     }
 
-    let chunk_size = (nodes.len() + num_chunks - 1) / num_chunks; // Ceiling division
+    let chunk_size = nodes.len().div_ceil(num_chunks); // Ceiling division
     let mut chunks = Vec::with_capacity(num_chunks);
 
     let mut start = 0;

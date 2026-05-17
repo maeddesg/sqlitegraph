@@ -113,10 +113,10 @@ impl MediaDetector {
 
             // Check if this device matches our file's device
             let dev_path = format!("/dev/{}", device_str);
-            if let Ok(dev_metadata) = std::fs::metadata(&dev_path) {
-                if dev_metadata.rdev() == dev {
-                    return Some(device_str.to_string());
-                }
+            if let Ok(dev_metadata) = std::fs::metadata(&dev_path)
+                && dev_metadata.rdev() == dev
+            {
+                return Some(device_str.to_string());
             }
         }
 
@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn test_media_detector_default() {
-        let detector = MediaDetector::default();
+        let detector = MediaDetector;
         let media_type = detector.detect("/tmp");
         // Will return Unknown or detected type depending on platform
         assert!(matches!(

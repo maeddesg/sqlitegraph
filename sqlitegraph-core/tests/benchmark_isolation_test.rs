@@ -34,12 +34,12 @@ fn test_benchmark_iteration_isolation() {
                     file_path: None,
                     data: serde_json::json!({"id": i}),
                 })
-                .expect(&format!("Failed to insert node {}", i));
+                .unwrap_or_else(|_| panic!("Failed to insert node {}", i));
 
             node_ids.push(node_id);
 
             // Log boundary nodes
-            if i >= 250 && i <= 260 {
+            if (250..=260).contains(&i) {
                 println!("Created node {} -> node_id {}", i, node_id);
             }
         }
@@ -87,7 +87,7 @@ fn test_direct_corruption_reproduction() {
                 file_path: None,
                 data: serde_json::json!({"id": i}),
             })
-            .expect(&format!("Failed to insert node {}", i));
+            .unwrap_or_else(|_| panic!("Failed to insert node {}", i));
         node_ids.push(node_id);
     }
 

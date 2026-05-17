@@ -76,7 +76,7 @@ impl PageConfig {
 /// ```no_run
 /// use sqlitegraph::backend::native::v3::storage::AdaptivePageManager;
 ///
-/// let manager = AdaptivePageManager::new("/var/lib/data.db");
+/// let mut manager = AdaptivePageManager::new("/var/lib/data.db");
 /// let config = manager.get_config();
 /// println!("Using {} byte pages for {:?}", config.page_size, config.media_type);
 /// ```
@@ -118,8 +118,8 @@ impl AdaptivePageManager {
     ///
     /// # Example
     ///
-    /// ```no_run
-    /// # let manager = unimplemented!();
+    /// ```ignore
+    /// # let mut manager = unimplemented!();
     /// let config = manager.get_config();
     /// assert!(config.is_valid());
     /// ```

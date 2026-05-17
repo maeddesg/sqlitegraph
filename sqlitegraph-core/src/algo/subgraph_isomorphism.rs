@@ -144,13 +144,13 @@ impl SubgraphPatternBounds {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// # use sqlitegraph::{algo::find_subgraph_patterns, SqliteGraph};
 /// # use sqlitegraph::algo::SubgraphMatchResult;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # let graph = SqliteGraph::open_in_memory()?;
 /// # let pattern = SqliteGraph::open_in_memory()?;
-/// # let result: SubgraphMatchResult = unsafe { std::mem::zeroed() };
+/// # let result = find_subgraph_patterns(&graph, &pattern, Default::default())?;
 /// println!("Found {} matches", result.patterns_found);
 /// println!("Computation took {} ms", result.computation_time_ms);
 ///
@@ -348,13 +348,13 @@ pub fn find_subgraph_patterns(
     let pattern_count = pattern_ids.len();
 
     // Check max_pattern_nodes bound
-    if let Some(max_nodes) = bounds.max_pattern_nodes {
-        if pattern_count > max_nodes {
-            return Err(SqliteGraphError::invalid_input(format!(
-                "Pattern too large: {} nodes exceeds max_pattern_nodes bound of {}",
-                pattern_count, max_nodes
-            )));
-        }
+    if let Some(max_nodes) = bounds.max_pattern_nodes
+        && pattern_count > max_nodes
+    {
+        return Err(SqliteGraphError::invalid_input(format!(
+            "Pattern too large: {} nodes exceeds max_pattern_nodes bound of {}",
+            pattern_count, max_nodes
+        )));
     }
 
     // Convert both graphs to petgraph
@@ -390,19 +390,19 @@ pub fn find_subgraph_patterns(
     if let Some(iso_iter) = iso_iter {
         for mapping in iso_iter {
             // Check timeout
-            if let Some(to) = timeout {
-                if start_time.elapsed() >= to {
-                    bounded_hit = true;
-                    break;
-                }
+            if let Some(to) = timeout
+                && start_time.elapsed() >= to
+            {
+                bounded_hit = true;
+                break;
             }
 
             // Check max_matches
-            if let Some(max) = bounds.max_matches {
-                if matches.len() >= max {
-                    bounded_hit = true;
-                    break;
-                }
+            if let Some(max) = bounds.max_matches
+                && matches.len() >= max
+            {
+                bounded_hit = true;
+                break;
             }
 
             // mapping is Vec<usize> where pattern_idx -> target_idx
@@ -481,13 +481,13 @@ where
     let pattern_count = pattern_ids.len();
 
     // Check max_pattern_nodes bound
-    if let Some(max_nodes) = bounds.max_pattern_nodes {
-        if pattern_count > max_nodes {
-            return Err(SqliteGraphError::invalid_input(format!(
-                "Pattern too large: {} nodes exceeds max_pattern_nodes bound of {}",
-                pattern_count, max_nodes
-            )));
-        }
+    if let Some(max_nodes) = bounds.max_pattern_nodes
+        && pattern_count > max_nodes
+    {
+        return Err(SqliteGraphError::invalid_input(format!(
+            "Pattern too large: {} nodes exceeds max_pattern_nodes bound of {}",
+            pattern_count, max_nodes
+        )));
     }
 
     // Convert both graphs to petgraph
@@ -528,19 +528,19 @@ where
     if let Some(iso_iter) = iso_iter {
         for mapping in iso_iter {
             // Check timeout
-            if let Some(to) = timeout {
-                if start_time.elapsed() >= to {
-                    bounded_hit = true;
-                    break;
-                }
+            if let Some(to) = timeout
+                && start_time.elapsed() >= to
+            {
+                bounded_hit = true;
+                break;
             }
 
             // Check max_matches
-            if let Some(max) = bounds.max_matches {
-                if matches.len() >= max {
-                    bounded_hit = true;
-                    break;
-                }
+            if let Some(max) = bounds.max_matches
+                && matches.len() >= max
+            {
+                bounded_hit = true;
+                break;
             }
 
             // Convert Vec<usize> mapping to entity IDs

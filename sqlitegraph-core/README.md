@@ -100,6 +100,37 @@ sqlitegraph --db graph.db bfs --start 1 --max-depth 3
 sqlitegraph --db graph.db pagerank --iterations 100
 ```
 
+## Safety Invariants
+
+- Orphan edges are detected by verifying every edge endpoint references a stored entity before any reasoning or subgraph extraction runs.
+- Duplicate edges (identical `(from,to,type)` tuples) are tallied so traversal/pipeline counts stay deterministic and regressions surface quickly.
+- Invalid label/property references (metadata rows pointing at missing entities) are reported, and `safety-check --strict` fails builds whenever any of the above appear.
+- Integrity sweeps (`safety-check --sweep`) perform a deep table walk (entities/edges/labels/properties), verifying sorted IDs, valid JSON payloads, and metadata references before committing to pipelines or migrations.
+
+## DSL Constraints
+
+- Supported clauses are limited to deterministic `pattern`, `k-hop`, `filter type=…`, and `score` steps; ordering matters and only one filter clause is allowed.
+- Combination syntax (`CALLS*2`, `CALLS->USES`) must not introduce conflicting filters or unknown tokens—ambiguous or unsupported input causes parser errors surfaced to the CLI/tests.
+
+## Performance & Instrumentation
+
+Performance thresholds in sqlitegraph_bench.json gate releases. Benchmarks produce HTML reports under `target/criterion`. Use `cargo bench --bench bench_insert` (etc.) to isolate suites. The `bench_driver` binary runs all benches sequentially and surfaces pass/fail summaries.
+
+The CLI metrics command (`sqlitegraph --db <path> --command metrics [--reset-metrics]`) reports the live instrumentation snapshot—prepare/execute counts, transaction begins/commits/rollbacks, plus cache hits/misses—and optionally clears the counters so operators can capture deltas while reproducing workloads.
+
+## Schema Compatibility Matrix
+
+| Version | Description |
+|---------|-------------|
+| 1 | Base tables (`graph_entities`, `graph_edges`, `graph_labels`, `graph_properties`) plus indexes and `graph_meta`. |
+| 2 | Adds `graph_meta_history` rows so each migration application is recorded; exposed via `run_pending_migrations` / CLI `migrate`. |
+| Future | The CLI refuses to open DBs whose version exceeds the compiled `SCHEMA_VERSION`. |
+
+Upgrade workflow:
+1. Inspect version with `sqlitegraph --command status` (shows `schema_version=N`).
+2. Run `sqlitegraph --command migrate --dry-run` to view pending steps.
+3. Execute `sqlitegraph --command migrate` (or call the library helper) to apply migrations atomically; history entries are appended automatically.
+
 ## Ecosystem
 
 Tools built on SQLiteGraph:

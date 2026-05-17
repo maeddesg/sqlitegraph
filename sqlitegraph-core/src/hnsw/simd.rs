@@ -1033,7 +1033,7 @@ mod tests {
 
         let similarity = cosine_similarity(&a, &b);
         // Verify it's within valid range [-1, 1]
-        assert!(similarity >= -1.0 && similarity <= 1.0);
+        assert!((-1.0..=1.0).contains(&similarity));
     }
 
     #[test]
@@ -1070,7 +1070,7 @@ mod tests {
 
         // Should not panic and should return valid value
         let similarity = cosine_similarity(&a, &b);
-        assert!(similarity >= -1.0 && similarity <= 1.0);
+        assert!((-1.0..=1.0).contains(&similarity));
     }
 
     #[test]

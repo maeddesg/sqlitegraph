@@ -514,6 +514,30 @@ impl V3Backend {
             backend.rebuild_indexes();
         }
 
+        // Recover KV store from WAL or checkpoint
+        let wal_path = V3WALPaths::wal_file(&db_path);
+        let mut kv_store = KvStore::new();
+        let mut recovered = false;
+        if wal_path.exists() {
+            let mut recovery =
+                crate::backend::native::v3::wal::WALRecovery::new(wal_path);
+            if let Ok(count) = recovery.recover_kv(&mut kv_store) {
+                recovered = count > 0;
+            }
+        }
+        if !recovered {
+            // No WAL or empty WAL - try reading from checkpoint file
+            if let Ok(found) =
+                crate::backend::native::v3::wal::read_kv_checkpoint(&db_path, &mut kv_store)
+            {
+                recovered = found;
+            }
+        }
+        if recovered {
+            let mut kv_guard = backend.kv_store.write();
+            *kv_guard = Some(kv_store);
+        }
+
         Ok(backend)
     }
 
@@ -648,11 +672,14 @@ impl V3Backend {
         edge_store.flush(None).map_err(map_v3_error)?;
         drop(edge_store);
 
-        // Update header with edge store B+Tree root
+        // Update header with edge store B+Tree root and allocator state
         let mut header = self.header.write();
         if let Some(root_page) = self.edge_store.read().btree_root_page_id() {
             header.edge_data_offset = root_page;
         }
+        let allocator = self.allocator.read();
+        header.total_pages = allocator.total_pages();
+        drop(allocator);
         let node_count = header.node_count;
         drop(header);
 
@@ -666,10 +693,23 @@ impl V3Backend {
 
         // Sync header so edge B+Tree root is durable
         self.sync_header()?;
+
+        // Write KV checkpoint before WAL flush so it survives truncation
+        let kv_guard = self.kv_store.read();
+        if let Some(ref kv) = *kv_guard {
+            let _ = crate::backend::native::v3::wal::write_kv_checkpoint(&self.db_path, kv);
+        }
+        drop(kv_guard);
+
+        // Write WAL checkpoint record, flush, then truncate
+        self.checkpoint()?;
         if let Some(ref wal) = self.wal {
             wal.write()
                 .flush()
                 .map_err(|e| SqliteGraphError::connection(format!("WAL flush failed: {:?}", e)))?;
+            wal.write()
+                .truncate()
+                .map_err(|e| SqliteGraphError::connection(format!("WAL truncate failed: {:?}", e)))?;
         }
         Ok(())
     }
@@ -762,7 +802,7 @@ impl V3Backend {
             // Allocate page(s) for external data
             let data_len = external_data.len();
             let page_size = crate::backend::native::v3::constants::DEFAULT_PAGE_SIZE as usize;
-            let pages_needed = (data_len + page_size - 1) / page_size; // Ceiling division
+            let pages_needed = data_len.div_ceil(page_size); // Ceiling division
 
             let mut allocator = self.allocator.write();
             let start_page_id = allocator
@@ -868,10 +908,10 @@ impl V3Backend {
                     let actual_data_len = record.data_len
                         & crate::backend::native::v3::node::record::constants::MAX_DATA_LEN;
                     let mut buffer = vec![0u8; actual_data_len as usize];
-                    if let Ok(mut file) = OpenOptions::new().read(true).open(&self.db_path) {
-                        if file.seek(SeekFrom::Start(offset)).is_ok() {
-                            let _ = file.read_exact(&mut buffer);
-                        }
+                    if let Ok(mut file) = OpenOptions::new().read(true).open(&self.db_path)
+                        && file.seek(SeekFrom::Start(offset)).is_ok()
+                    {
+                        let _ = file.read_exact(&mut buffer);
                     }
                     buffer
                 } else {
@@ -889,6 +929,15 @@ impl V3Backend {
     ///
     /// Used by WriteBatchGuard to accumulate changes.
     fn insert_edge_inner(&self, edge: EdgeSpec) -> Result<i64, SqliteGraphError> {
+        // Validate that both endpoints exist before inserting the edge
+        let from_exists = self.get_node_internal(edge.from)?.is_some();
+        let to_exists = self.get_node_internal(edge.to)?.is_some();
+        if !from_exists || !to_exists {
+            return Err(SqliteGraphError::invalid_input(
+                "edge endpoints must reference existing entities",
+            ));
+        }
+
         let edge_store = self.edge_store.write();
 
         let edge_type = if edge.edge_type.is_empty() {

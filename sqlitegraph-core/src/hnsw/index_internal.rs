@@ -152,8 +152,8 @@ impl HnswIndex {
                 layer.add_one_way_connection(neighbor_id, node_id)?;
 
                 // Only prune if significantly over limit
-                if let Ok(existing_conns) = layer.get_connections(neighbor_id) {
-                    if existing_conns.len() > max_reverse_conns {
+                if let Ok(existing_conns) = layer.get_connections(neighbor_id)
+                    && existing_conns.len() > max_reverse_conns {
                         // Build distance map with small distance for new node to keep it
                         let mut reverse_distances = std::collections::HashMap::new();
                         reverse_distances.insert(node_id, 0.0); // Keep new connection
@@ -164,7 +164,6 @@ impl HnswIndex {
                         }
                         layer.prune_connections_by_distance(neighbor_id, &reverse_distances);
                     }
-                }
             }
         }
 

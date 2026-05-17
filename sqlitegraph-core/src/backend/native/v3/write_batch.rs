@@ -18,12 +18,15 @@ use crate::backend::native::v3::index::IndexPage;
 /// A write batch that buffers page mutations in memory
 ///
 /// Use this to amortize fsync costs across multiple operations:
-/// ```
+/// ```ignore
+/// use sqlitegraph::backend::native::v3::write_batch::WriteBatch;
+/// use sqlitegraph::backend::native::v3::index::IndexPage;
+///
 /// let mut batch = WriteBatch::new();
-/// batch.stage_page(page1)?;
-/// batch.stage_page(page2)?;
-/// batch.stage_page(page3)?;
-/// batch.commit(&db_path)?; // Single fsync for all pages
+/// batch.stage_page(IndexPage::new_leaf(1))?;
+/// batch.stage_page(IndexPage::new_leaf(2))?;
+/// batch.stage_page(IndexPage::new_leaf(3))?;
+/// batch.commit(std::path::Path::new("/tmp/db.graph"))?; // Single fsync for all pages
 /// ```
 #[derive(Debug)]
 pub struct WriteBatch {

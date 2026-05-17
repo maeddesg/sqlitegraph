@@ -549,7 +549,7 @@ mod tests {
         assert!((dot - 11.0).abs() < f32::EPSILON);
 
         let dist = euclidean_distance(&a, &b);
-        assert!((dist - 2.8284271).abs() < 0.0001);
+        assert!((dist - 2.828_427).abs() < 0.0001);
 
         // Test with non-aligned sizes
         let c: Vec<f32> = (1..=17).map(|i| i as f32).collect();

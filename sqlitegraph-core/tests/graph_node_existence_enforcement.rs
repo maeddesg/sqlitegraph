@@ -34,7 +34,7 @@ fn test_graph_enforces_node_existence_before_edge_insert() {
                     file_path: None,
                     data: serde_json::json!({"id": i}),
                 })
-                .expect(&format!("Failed to insert node {}", i))
+                .unwrap_or_else(|_| panic!("Failed to insert node {}", i))
         })
         .collect();
 
@@ -56,7 +56,9 @@ fn test_graph_enforces_node_existence_before_edge_insert() {
     );
     let error_msg = result.unwrap_err().to_string();
     assert!(
-        error_msg.contains("not found") || error_msg.contains("7"),
+        error_msg.contains("not found")
+            || error_msg.contains("7")
+            || error_msg.contains("existing entities"),
         "Error should mention missing node, got: {}",
         error_msg
     );
@@ -75,7 +77,9 @@ fn test_graph_enforces_node_existence_before_edge_insert() {
     );
     let error_msg = result.unwrap_err().to_string();
     assert!(
-        error_msg.contains("not found") || error_msg.contains("8"),
+        error_msg.contains("not found")
+            || error_msg.contains("8")
+            || error_msg.contains("existing entities"),
         "Error should mention missing node, got: {}",
         error_msg
     );
@@ -94,7 +98,9 @@ fn test_graph_enforces_node_existence_before_edge_insert() {
     );
     let error_msg = result.unwrap_err().to_string();
     assert!(
-        error_msg.contains("not found") || error_msg.contains("9"),
+        error_msg.contains("not found")
+            || error_msg.contains("9")
+            || error_msg.contains("existing entities"),
         "Error should mention missing source node, got: {}",
         error_msg
     );

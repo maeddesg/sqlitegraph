@@ -125,7 +125,7 @@ mod tests {
         }
 
         // Should be ordered by edge IDs we created
-        let expected_order = vec![edge1, edge2, edge3];
+        let expected_order = [edge1, edge2, edge3];
         for (i, &expected_edge_id) in expected_order.iter().enumerate() {
             assert_eq!(matches[i].edge_id, expected_edge_id);
         }

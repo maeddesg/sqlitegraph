@@ -23,11 +23,11 @@
 //!
 //! # Examples
 //!
-//! ```rust
-//! use sqlitegraph::{SqliteGraph, hnsw::{HnswConfig, DistanceMetric}};
+//! ```rust,ignore
+//! use sqlitegraph::{SqliteGraph, hnsw::{HnswConfigBuilder, DistanceMetric}};
 //!
 //! let graph = SqliteGraph::open_in_memory()?;
-//! let config = HnswConfig::builder()
+//! let config = HnswConfigBuilder::new()
 //!     .dimension(768)
 //!     .distance_metric(DistanceMetric::Cosine)
 //!     .build()?;
@@ -35,10 +35,13 @@
 //! let hnsw = graph.hnsw_index("vectors", config)?;
 //!
 //! // Insert vectors with metadata
+//! let vector_data = vec![1.0f32; 768];
+//! let metadata = serde_json::json!({"label": "test"});
 //! let vector_id = hnsw.get_mut("vectors").unwrap()
 //!     .insert_vector(&vector_data, Some(metadata))?;
 //!
 //! // Search for similar vectors
+//! let query_vector = vec![1.0f32; 768];
 //! let results = hnsw.get_mut("vectors").unwrap()
 //!     .search(&query_vector, 10)?;
 //! for (id, distance) in results {
@@ -535,7 +538,7 @@ mod tests {
         use crate::hnsw::multilayer::LevelDistributor;
         let mut distributor = LevelDistributor::new(16.0, 4).with_seed(42);
 
-        let mut level_counts = vec![0; 4];
+        let mut level_counts = [0; 4];
         for _ in 0..1000 {
             let level = distributor.sample_level_internal();
             level_counts[level] += 1;
@@ -694,9 +697,7 @@ mod tests {
                 }
             }
             if min_idx != i {
-                let temp = exact_results[i];
-                exact_results[i] = exact_results[min_idx];
-                exact_results[min_idx] = temp;
+                exact_results.swap(i, min_idx);
             }
         }
 

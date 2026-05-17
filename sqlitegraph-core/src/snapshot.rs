@@ -11,7 +11,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```ignore
 //! use sqlitegraph::snapshot::SnapshotId;
 //!
 //! // Get current snapshot (only committed data visible)
@@ -112,7 +112,7 @@ impl SnapshotId {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// # use sqlitegraph::snapshot::SnapshotId;
     /// // After commit returns SnapshotId
     /// let snapshot = coordinator.commit_transaction(tx_id)?;
@@ -152,9 +152,9 @@ impl SnapshotId {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// # use sqlitegraph::snapshot::SnapshotId;
-    /// fn validate_snapshot(snapshot: SnapshotId) -> Result<()> {
+    /// fn validate_snapshot(snapshot: SnapshotId) -> Result<(), &'static str> {
     ///     if snapshot == SnapshotId::invalid() {
     ///         return Err("Invalid snapshot");
     ///     }

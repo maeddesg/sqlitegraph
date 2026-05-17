@@ -10,7 +10,9 @@
 # documented false positives from cross-target usage patterns.
 
 # MSRV (Minimum Supported Rust Version)
-msrv = "1.70.0"
+# Tracks Cargo.toml `rust-version`. AVX-512 intrinsics in inference/simd.rs
+# were stabilised in Rust 1.89.
+msrv = "1.89.0"
 
 # Cognitive complexity - allow for complex graph algorithms and SQL statements
 cognitive-complexity-threshold = 30

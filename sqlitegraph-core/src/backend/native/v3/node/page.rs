@@ -1395,7 +1395,7 @@ mod tests {
         assert!(NodePage::unpack(&bytes).is_ok());
 
         // Corrupt the checksum
-        let mut corrupted = bytes.clone();
+        let mut corrupted = bytes;
         corrupted[constants::CHECKSUM_OFFSET] ^= 0xFF;
 
         // Should fail checksum validation
@@ -1629,7 +1629,7 @@ mod tests {
 
     #[test]
     fn test_multiple_page_ids() {
-        for page_id in vec![0, 1, 100, u64::MAX] {
+        for page_id in [0, 1, 100, u64::MAX] {
             let page = NodePage::new(page_id);
             assert_eq!(page.page_id, page_id);
 

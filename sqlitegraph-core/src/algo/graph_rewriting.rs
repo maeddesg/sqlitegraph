@@ -831,13 +831,13 @@ fn apply_single_rewrite(
         }
         // Incoming edges to deleted node
         for &from_id in &all_old_ids {
-            if let Ok(outgoing) = graph.fetch_outgoing(from_id) {
-                if outgoing.contains(&deleted_id) {
-                    operations.push(RewriteOperation::EdgeDeleted {
-                        from: from_id,
-                        to: deleted_id,
-                    });
-                }
+            if let Ok(outgoing) = graph.fetch_outgoing(from_id)
+                && outgoing.contains(&deleted_id)
+            {
+                operations.push(RewriteOperation::EdgeDeleted {
+                    from: from_id,
+                    to: deleted_id,
+                });
             }
         }
     }
@@ -848,40 +848,38 @@ fn apply_single_rewrite(
     for (idx, &replacement_id) in replacement_ids.iter().enumerate() {
         let is_interface = rule.interface.iter().any(|(_, rep_idx)| *rep_idx == idx);
 
-        if !is_interface {
-            if let Ok(entity) = rule.replacement.get_entity(replacement_id) {
-                let fresh_id = new_graph.insert_entity(&crate::GraphEntity {
-                    id: 0,
-                    kind: entity.kind.clone(),
-                    name: format!("{}_rewrite_{}", entity.name, rewrite_index),
-                    file_path: entity.file_path.clone(),
-                    data: entity.data.clone(),
-                })?;
-                replacement_node_map.insert(idx, fresh_id);
-                operations.push(RewriteOperation::NodeAdded(fresh_id));
-            }
+        if !is_interface && let Ok(entity) = rule.replacement.get_entity(replacement_id) {
+            let fresh_id = new_graph.insert_entity(&crate::GraphEntity {
+                id: 0,
+                kind: entity.kind.clone(),
+                name: format!("{}_rewrite_{}", entity.name, rewrite_index),
+                file_path: entity.file_path.clone(),
+                data: entity.data.clone(),
+            })?;
+            replacement_node_map.insert(idx, fresh_id);
+            operations.push(RewriteOperation::NodeAdded(fresh_id));
         }
     }
 
     // Step 4: Copy existing edges (excluding those incident to deleted nodes)
     for &from_old in &all_old_ids {
-        if let Some(&from_new) = old_to_new_id.get(&from_old) {
-            if let Ok(outgoing) = graph.fetch_outgoing(from_old) {
-                for to_old in outgoing {
-                    if let Some(&to_new) = old_to_new_id.get(&to_old) {
-                        let edge = crate::GraphEdge {
-                            id: 0,
-                            from_id: from_new,
-                            to_id: to_new,
-                            edge_type: "edge".to_string(),
-                            data: serde_json::json!({}),
-                        };
-                        if new_graph.insert_edge(&edge).is_ok() {
-                            operations.push(RewriteOperation::EdgeAdded {
-                                from: from_new,
-                                to: to_new,
-                            });
-                        }
+        if let Some(&from_new) = old_to_new_id.get(&from_old)
+            && let Ok(outgoing) = graph.fetch_outgoing(from_old)
+        {
+            for to_old in outgoing {
+                if let Some(&to_new) = old_to_new_id.get(&to_old) {
+                    let edge = crate::GraphEdge {
+                        id: 0,
+                        from_id: from_new,
+                        to_id: to_new,
+                        edge_type: "edge".to_string(),
+                        data: serde_json::json!({}),
+                    };
+                    if new_graph.insert_edge(&edge).is_ok() {
+                        operations.push(RewriteOperation::EdgeAdded {
+                            from: from_new,
+                            to: to_new,
+                        });
                     }
                 }
             }

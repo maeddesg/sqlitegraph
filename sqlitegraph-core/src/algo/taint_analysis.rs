@@ -339,17 +339,17 @@ pub struct MetadataSourceDetector;
 impl SourceCallback for MetadataSourceDetector {
     fn is_source(&self, _node: i64, entity: &GraphEntity) -> bool {
         // Check data.kind field
-        if let Some(kind) = entity.data.get("kind").and_then(|k| k.as_str()) {
-            if matches!(kind, "source" | "untrusted" | "user_input") {
-                return true;
-            }
+        if let Some(kind) = entity.data.get("kind").and_then(|k| k.as_str())
+            && matches!(kind, "source" | "untrusted" | "user_input")
+        {
+            return true;
         }
 
         // Check data.taint field
-        if let Some(taint) = entity.data.get("taint").and_then(|t| t.as_str()) {
-            if taint == "source" {
-                return true;
-            }
+        if let Some(taint) = entity.data.get("taint").and_then(|t| t.as_str())
+            && taint == "source"
+        {
+            return true;
         }
 
         false
@@ -382,20 +382,20 @@ pub struct MetadataSinkDetector;
 impl SinkCallback for MetadataSinkDetector {
     fn is_sink(&self, _node: i64, entity: &GraphEntity) -> bool {
         // Check data.kind field
-        if let Some(kind) = entity.data.get("kind").and_then(|k| k.as_str()) {
-            if matches!(
+        if let Some(kind) = entity.data.get("kind").and_then(|k| k.as_str())
+            && matches!(
                 kind,
                 "sink" | "sql_query" | "html_output" | "command" | "file_operation"
-            ) {
-                return true;
-            }
+            )
+        {
+            return true;
         }
 
         // Check data.operation field
-        if let Some(operation) = entity.data.get("operation").and_then(|o| o.as_str()) {
-            if matches!(operation, "execute" | "query" | "render" | "write") {
-                return true;
-            }
+        if let Some(operation) = entity.data.get("operation").and_then(|o| o.as_str())
+            && matches!(operation, "execute" | "query" | "render" | "write")
+        {
+            return true;
         }
 
         false

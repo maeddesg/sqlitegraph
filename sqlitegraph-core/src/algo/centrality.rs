@@ -56,10 +56,13 @@ use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 ///
 /// # Example
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::pagerank};
 /// let graph = SqliteGraph::open_in_memory()?;
 /// // ... add nodes and edges ...
 /// let scores = pagerank(&graph, 0.85, 20)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn pagerank(
     graph: &SqliteGraph,
@@ -152,6 +155,7 @@ pub fn pagerank(
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::pagerank_with_progress};
 /// use sqlitegraph::progress::NoProgress;
 ///
@@ -159,6 +163,8 @@ pub fn pagerank(
 /// // ... add nodes and edges ...
 /// let progress = NoProgress;
 /// let scores = pagerank_with_progress(&graph, 0.85, 20, &progress)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn pagerank_with_progress<F>(
     graph: &SqliteGraph,
@@ -281,10 +287,13 @@ where
 ///
 /// # Example
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::betweenness_centrality};
 /// let graph = SqliteGraph::open_in_memory()?;
 /// // ... add nodes and edges ...
 /// let centrality = betweenness_centrality(&graph)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn betweenness_centrality(graph: &SqliteGraph) -> Result<Vec<(i64, f64)>, SqliteGraphError> {
     let all_ids = graph.all_entity_ids()?;
@@ -379,6 +388,7 @@ pub fn betweenness_centrality(graph: &SqliteGraph) -> Result<Vec<(i64, f64)>, Sq
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::betweenness_centrality_with_progress};
 /// use sqlitegraph::progress::NoProgress;
 ///
@@ -386,6 +396,8 @@ pub fn betweenness_centrality(graph: &SqliteGraph) -> Result<Vec<(i64, f64)>, Sq
 /// // ... add nodes and edges ...
 /// let progress = NoProgress;
 /// let centrality = betweenness_centrality_with_progress(&graph, &progress)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn betweenness_centrality_with_progress<F>(
     graph: &SqliteGraph,

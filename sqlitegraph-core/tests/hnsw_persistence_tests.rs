@@ -198,9 +198,9 @@ fn test_hnsw_delete_index() {
         let mut hnsw = HnswIndex::new("delete_test", config).unwrap();
         hnsw.save_metadata(&conn).unwrap();
 
-        hnsw.insert_vector(&vec![1.0, 0.0, 0.0], None).unwrap();
-        hnsw.insert_vector(&vec![0.0, 1.0, 0.0], None).unwrap();
-        hnsw.insert_vector(&vec![0.0, 0.0, 1.0], None).unwrap();
+        hnsw.insert_vector(&[1.0, 0.0, 0.0], None).unwrap();
+        hnsw.insert_vector(&[0.0, 1.0, 0.0], None).unwrap();
+        hnsw.insert_vector(&[0.0, 0.0, 1.0], None).unwrap();
     }
 
     // Delete index
@@ -248,12 +248,10 @@ fn test_hnsw_distance_metric_preservation() {
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test.db");
 
-    let metrics = vec![
-        DistanceMetric::Euclidean,
+    let metrics = [DistanceMetric::Euclidean,
         DistanceMetric::Cosine,
         DistanceMetric::DotProduct,
-        DistanceMetric::Manhattan,
-    ];
+        DistanceMetric::Manhattan];
 
     for (i, metric) in metrics.iter().enumerate() {
         let index_name = format!("metric_test_{}", i);

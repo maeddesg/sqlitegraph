@@ -13,7 +13,7 @@
 //!
 //! # Layer Properties
 //!
-//! ```rust
+//! ```text
 //! Layer 0 (Base):    M connections per node, all nodes
 //! Layer 1:           M/2 connections, subset of nodes
 //! Layer 2:           M/4 connections, smaller subset

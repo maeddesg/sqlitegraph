@@ -307,12 +307,10 @@ fn test_hnsw_persistence_across_reopen() {
             .expect("Create HNSW with persistent storage should succeed");
 
         // Insert test vectors
-        let vectors = vec![
-            vec![1.0, 0.0, 0.0],
+        let vectors = [vec![1.0, 0.0, 0.0],
             vec![0.0, 1.0, 0.0],
             vec![0.0, 0.0, 1.0],
-            vec![1.0, 1.0, 0.0],
-        ];
+            vec![1.0, 1.0, 0.0]];
 
         for (i, vec_data) in vectors.iter().enumerate() {
             hnsw.insert_vector(vec_data, Some(serde_json::json!(format!("vec_{}", i))))

@@ -760,8 +760,8 @@ fn test_snapshot_outlives_graph() -> Result<(), SqliteGraphError> {
         warm_cache(&graph)?;
 
         // Acquire snapshot and move it out
-        let snap = graph.acquire_snapshot()?;
-        snap
+        
+        graph.acquire_snapshot()?
     };
 
     // Graph is dropped here, but snapshot should still work

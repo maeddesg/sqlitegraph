@@ -269,12 +269,12 @@ mod tests {
         // Write page 1
         let data1 = vec![1u8; 4096];
         coordinator.write_page(1, &data1).unwrap();
-        assert_eq!(coordinator.file_size(), V3_HEADER_SIZE as u64 + 4096);
+        assert_eq!(coordinator.file_size(), V3_HEADER_SIZE + 4096);
 
         // Write page 2
         let data2 = vec![2u8; 4096];
         coordinator.write_page(2, &data2).unwrap();
-        assert_eq!(coordinator.file_size(), V3_HEADER_SIZE as u64 + 8192);
+        assert_eq!(coordinator.file_size(), V3_HEADER_SIZE + 8192);
 
         // Read back
         let mut buffer = vec![0u8; 4096];
@@ -296,7 +296,7 @@ mod tests {
         let data = vec![42u8; 4096];
         coordinator.write_page(100, &data).unwrap();
 
-        let expected_size = V3_HEADER_SIZE as u64 + (99 * DEFAULT_PAGE_SIZE) + 4096;
+        let expected_size = V3_HEADER_SIZE + (99 * DEFAULT_PAGE_SIZE) + 4096;
         assert_eq!(coordinator.file_size(), expected_size);
 
         // Read it back

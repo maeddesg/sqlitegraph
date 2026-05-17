@@ -2,6 +2,11 @@
 //!
 //! Provides various graph structures to test algorithm performance
 //! under different topological conditions.
+//!
+//! Each bench binary uses a subset of these helpers; clippy flags the rest
+//! as dead per-target. Allow it here so the shared utilities stay green.
+
+#![allow(dead_code, reason = "shared bench utilities used across multiple bench targets")]
 
 use rand::Rng;
 use sqlitegraph::backend::{EdgeSpec, NodeSpec};
@@ -307,7 +312,7 @@ fn generate_power_law(nodes: usize, target_edges: usize, alpha: f64) -> GraphDat
 
 /// Generate grid/lattice structure
 fn generate_grid(nodes: usize, width: usize) -> GraphData {
-    let height = (nodes + width - 1) / width;
+    let height = nodes.div_ceil(width);
 
     let node_specs = (0..nodes)
         .map(|i| NodeSpec {
@@ -392,6 +397,7 @@ fn generate_complete(nodes: usize) -> GraphData {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports, reason = "items resolved through allow(dead_code) attribute")]
     use super::*;
 
     #[test]

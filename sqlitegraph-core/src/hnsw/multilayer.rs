@@ -50,7 +50,7 @@ use crate::hnsw::{
 ///
 /// # Data Structure
 ///
-/// ```
+/// ```text
 /// Global ID (1-based) → Local IDs per layer (0-based)
 ///     1 → [Some(0), None, Some(0)]  // Vector 1 in layers 0 and 2
 ///     2 → [Some(1), Some(0), None]  // Vector 2 in layers 0 and 1
@@ -223,19 +223,18 @@ impl LayerMappings {
         // Validate bidirectional consistency
         for (&global_id, mappings) in &self.global_to_local {
             for (layer_id, &local_id) in mappings.iter().enumerate() {
-                if let Some(id) = local_id {
-                    if let Some(mapped_global) = self.get_global_id(layer_id, id) {
-                        if mapped_global != global_id {
-                            return Err(HnswError::MultiLayer(
-                                HnswMultiLayerError::InconsistentMapping {
-                                    global_id,
-                                    layer_id,
-                                    local_id: id,
-                                    mapped_global,
-                                },
-                            ));
-                        }
-                    }
+                if let Some(id) = local_id
+                    && let Some(mapped_global) = self.get_global_id(layer_id, id)
+                    && mapped_global != global_id
+                {
+                    return Err(HnswError::MultiLayer(
+                        HnswMultiLayerError::InconsistentMapping {
+                            global_id,
+                            layer_id,
+                            local_id: id,
+                            mapped_global,
+                        },
+                    ));
                 }
             }
         }

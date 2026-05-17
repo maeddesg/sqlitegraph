@@ -28,9 +28,9 @@
 //! # Examples
 //!
 //! ```rust
-//! use sqlitegraph::hnsw::{HnswConfig, DistanceMetric};
+//! use sqlitegraph::hnsw::{HnswConfigBuilder, DistanceMetric};
 //!
-//! let config = HnswConfig::builder()
+//! let config = HnswConfigBuilder::new()
 //!     .dimension(768)
 //!     .m_connections(16)
 //!     .ef_construction(200)

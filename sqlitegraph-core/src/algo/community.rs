@@ -55,10 +55,13 @@ use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 ///
 /// # Example
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::label_propagation};
 /// let graph = SqliteGraph::open_in_memory()?;
 /// // ... add nodes and edges ...
 /// let communities = label_propagation(&graph, 10)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn label_propagation(
     graph: &SqliteGraph,
@@ -113,11 +116,11 @@ pub fn label_propagation(
                     .min()
                     .unwrap_or(node);
 
-                if let Some(current_label) = labels.get(&node) {
-                    if *current_label != best_label {
-                        labels.insert(node, best_label);
-                        any_changed = true;
-                    }
+                if let Some(current_label) = labels.get(&node)
+                    && *current_label != best_label
+                {
+                    labels.insert(node, best_label);
+                    any_changed = true;
                 }
             }
         }
@@ -180,10 +183,13 @@ pub fn label_propagation(
 ///
 /// # Example
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::louvain_communities};
 /// let graph = SqliteGraph::open_in_memory()?;
 /// // ... add nodes and edges ...
 /// let communities = louvain_communities(&graph, 10)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn louvain_communities(
     graph: &SqliteGraph,
@@ -328,6 +334,7 @@ pub fn louvain_communities(
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::louvain_communities_with_progress};
 /// use sqlitegraph::progress::NoProgress;
 ///
@@ -335,6 +342,8 @@ pub fn louvain_communities(
 /// // ... add nodes and edges ...
 /// let progress = NoProgress;
 /// let communities = louvain_communities_with_progress(&graph, 10, &progress)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn louvain_communities_with_progress<F>(
     graph: &SqliteGraph,

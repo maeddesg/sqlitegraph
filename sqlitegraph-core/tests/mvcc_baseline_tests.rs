@@ -145,8 +145,8 @@ fn add_more_data(graph: &SqliteGraph) -> Result<(i64, i64), SqliteGraphError> {
         data: serde_json::json!({"methods": 3}),
     };
 
-    let id4 = insert_entity(&graph, entity4)?;
-    let id5 = insert_entity(&graph, entity5)?;
+    let id4 = insert_entity(graph, entity4)?;
+    let id5 = insert_entity(graph, entity5)?;
 
     let edge3 = GraphEdgeCreate {
         from_id: id4,
@@ -155,7 +155,7 @@ fn add_more_data(graph: &SqliteGraph) -> Result<(i64, i64), SqliteGraphError> {
         data: serde_json::json!({"line": 25}),
     };
 
-    insert_edge(&graph, edge3)?;
+    insert_edge(graph, edge3)?;
 
     Ok((id4, id5))
 }

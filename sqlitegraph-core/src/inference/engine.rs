@@ -232,6 +232,11 @@ impl SparseInferenceEngine {
     /// * `bq` - Query bias [hidden_dim] or empty slice
     /// * `bk` - Key bias [n_kv_dim] or empty slice
     /// * `bv` - Value bias [n_kv_dim] or empty slice
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "transformer layer weights are an inherently wide signature; \
+                  a config struct would shuffle the same data without payoff"
+    )]
     pub fn load_layer(
         &mut self,
         layer_idx: usize,
@@ -410,19 +415,14 @@ impl SparseInferenceEngine {
     }
 
     /// Forward a single token through one layer (attention + FFN).
-    fn forward_layer(&mut self, x: &mut Vec<f32>, layer_idx: usize, pos: usize) {
+    fn forward_layer(&mut self, x: &mut [f32], layer_idx: usize, pos: usize) {
         let (attn_us, ffn_us) = self.forward_layer_timed(x, layer_idx, pos);
         // Discard timing in non-timed path
         let _ = (attn_us, ffn_us);
     }
 
     /// Forward a single token through one layer, returning timing.
-    fn forward_layer_timed(
-        &mut self,
-        x: &mut Vec<f32>,
-        layer_idx: usize,
-        pos: usize,
-    ) -> (u64, u64) {
+    fn forward_layer_timed(&mut self, x: &mut [f32], layer_idx: usize, pos: usize) -> (u64, u64) {
         let hidden_dim = self.hidden_dim;
         let n_heads = self.n_heads;
         let n_kv_heads = self.n_kv_heads;
@@ -446,14 +446,26 @@ impl SparseInferenceEngine {
 
         // Add attention biases if present
         let layer = &self.layers[layer_idx];
-        for i in 0..layer.bq.len().min(hidden_dim) {
-            q[i] += layer.bq[i];
+        for (i, slot) in q
+            .iter_mut()
+            .enumerate()
+            .take(layer.bq.len().min(hidden_dim))
+        {
+            *slot += layer.bq[i];
         }
-        for i in 0..layer.bk.len().min(n_kv_dim) {
-            k_proj[i] += layer.bk[i];
+        for (i, slot) in k_proj
+            .iter_mut()
+            .enumerate()
+            .take(layer.bk.len().min(n_kv_dim))
+        {
+            *slot += layer.bk[i];
         }
-        for i in 0..layer.bv.len().min(n_kv_dim) {
-            v_proj[i] += layer.bv[i];
+        for (i, slot) in v_proj
+            .iter_mut()
+            .enumerate()
+            .take(layer.bv.len().min(n_kv_dim))
+        {
+            *slot += layer.bv[i];
         }
 
         // 3. Apply RoPE to Q (per head) and K (per KV head)
@@ -542,10 +554,8 @@ impl SparseInferenceEngine {
             hidden_dim,
             hidden_dim,
         );
-        for i in 0..hidden_dim {
-            unsafe {
-                *x.get_unchecked_mut(i) += attn_out[i];
-            }
+        for (x_slot, &a_val) in x.iter_mut().zip(attn_out.iter()).take(hidden_dim) {
+            *x_slot += a_val;
         }
 
         let attn_us = attn_start.elapsed().as_micros() as u64;
@@ -569,10 +579,8 @@ impl SparseInferenceEngine {
         );
 
         // 3. Residual
-        for i in 0..hidden_dim {
-            unsafe {
-                *x.get_unchecked_mut(i) += ffn_out[i];
-            }
+        for (x_slot, &f_val) in x.iter_mut().zip(ffn_out.iter()).take(hidden_dim) {
+            *x_slot += f_val;
         }
 
         let ffn_us = ffn_start.elapsed().as_micros() as u64;

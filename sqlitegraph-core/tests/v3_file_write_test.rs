@@ -52,7 +52,7 @@ fn test_file_coordinator_write() {
     use std::io::{Read, Seek};
 
     // Skip header (112 bytes) and go to page 2
-    let page_offset = 112 + (2 - 1) * 4096;
+    let page_offset = 112 + 4096;
     file.seek(std::io::SeekFrom::Start(page_offset as u64))
         .unwrap();
 

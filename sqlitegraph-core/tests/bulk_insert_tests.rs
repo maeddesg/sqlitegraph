@@ -37,8 +37,8 @@ fn node_spec(kind: &str, name: &str) -> NodeSpec {
 
 fn edge_spec(from: i64, to: i64, kind: &str) -> EdgeSpec {
     EdgeSpec {
-        from: from,
-        to: to,
+        from,
+        to,
         edge_type: kind.to_string(),
         data: json!({}),
     }

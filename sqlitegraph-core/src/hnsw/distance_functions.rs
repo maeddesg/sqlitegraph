@@ -198,7 +198,7 @@ pub use crate::hnsw::simd::dot_product;
 /// let a = [1.0, 2.0, 3.0];
 /// let b = [4.0, 0.0, 6.0];
 /// let distance = manhattan_distance(&a, &b);
-/// assert_eq!(distance, 5.0); // |1-4| + |2-0| + |3-6|
+/// assert_eq!(distance, 8.0); // |1-4| + |2-0| + |3-6| = 3 + 2 + 3 = 8
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn manhattan_distance(a: &[f32], b: &[f32]) -> f32 {

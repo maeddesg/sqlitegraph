@@ -98,7 +98,7 @@ fn test_offset_u16_limit() {
     // Add many strings to approach u16 limit
     for i in 0..1000 {
         let s = format!("string_{}", i);
-        let offset = table.get_or_add_offset(&s).unwrap();
+        let _offset = table.get_or_add_offset(&s).unwrap();
         // offset is u16, so it is always <= u16::MAX by definition
     }
 }

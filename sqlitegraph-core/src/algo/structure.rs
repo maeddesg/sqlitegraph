@@ -41,10 +41,13 @@ use crate::{errors::SqliteGraphError, graph::SqliteGraph};
 ///
 /// # Example
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::connected_components};
 /// let graph = SqliteGraph::open_in_memory()?;
 /// // ... add nodes and edges ...
 /// let components = connected_components(&graph)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn connected_components(graph: &SqliteGraph) -> Result<Vec<Vec<i64>>, SqliteGraphError> {
     let mut components = Vec::new();
@@ -100,10 +103,13 @@ pub fn connected_components(graph: &SqliteGraph) -> Result<Vec<Vec<i64>>, Sqlite
 ///
 /// # Example
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::find_cycles_limited};
 /// let graph = SqliteGraph::open_in_memory()?;
 /// // ... add nodes and edges ...
 /// let cycles = find_cycles_limited(&graph, 10)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn find_cycles_limited(
     graph: &SqliteGraph,
@@ -163,10 +169,13 @@ pub fn find_cycles_limited(
 ///
 /// # Example
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use sqlitegraph::{SqliteGraph, algo::nodes_by_degree};
 /// let graph = SqliteGraph::open_in_memory()?;
 /// // ... add nodes and edges ...
 /// let degrees = nodes_by_degree(&graph, true)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn nodes_by_degree(
     graph: &SqliteGraph,

@@ -217,12 +217,11 @@ impl NeighborhoodSearch {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use sqlitegraph::hnsw::{NeighborhoodSearch, DistanceMetric};
     ///
     /// let search = NeighborhoodSearch::new(DistanceMetric::Cosine);
     /// // Ready for k-NN search operations
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn new(distance_metric: DistanceMetric) -> Self {
         Self { distance_metric }
@@ -247,7 +246,7 @@ impl NeighborhoodSearch {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use sqlitegraph::hnsw::{NeighborhoodSearch, DistanceMetric};
     ///
     /// let search = NeighborhoodSearch::new(DistanceMetric::Cosine);

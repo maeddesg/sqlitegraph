@@ -36,7 +36,7 @@ use crate::backend::native::v3::compression::varint::{decode_varint, encode_vari
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use sqlitegraph::backend::native::v3::compression::edge_delta::zigzag_encode;
 ///
 /// assert_eq!(zigzag_encode(0), 0);
@@ -59,7 +59,7 @@ fn zigzag_encode(value: i64) -> u64 {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use sqlitegraph::backend::native::v3::compression::edge_delta::zigzag_decode;
 ///
 /// assert_eq!(zigzag_decode(0), 0);

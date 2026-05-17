@@ -170,9 +170,9 @@ fn test_name_index_survives_reopen() {
 }
 
 #[test]
-fn test_name_index_unsupported_patterns() {
+fn test_name_index_special_patterns() {
     let temp = TempDir::new().unwrap();
-    let db_path = temp.path().join("unsupported_test.graph");
+    let db_path = temp.path().join("special_pattern_test.graph");
 
     let backend = V3Backend::create(&db_path).unwrap();
     backend
@@ -186,24 +186,31 @@ fn test_name_index_unsupported_patterns() {
 
     use sqlitegraph::SnapshotId;
 
-    // Suffix wildcard - should error
-    let result = backend.query_nodes_by_name_pattern(SnapshotId::current(), "*func");
-    assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("not support"));
+    // Suffix wildcard → substring search, finds some_func
+    let result = backend
+        .query_nodes_by_name_pattern(SnapshotId::current(), "*func")
+        .unwrap();
+    assert_eq!(result.len(), 1, "suffix *func should match some_func");
 
-    // Middle wildcard - should error
-    let result = backend.query_nodes_by_name_pattern(SnapshotId::current(), "some*func");
-    assert!(result.is_err());
+    // Middle wildcard → substring search, finds some_func
+    let result = backend
+        .query_nodes_by_name_pattern(SnapshotId::current(), "some_*func")
+        .unwrap();
+    assert_eq!(result.len(), 1, "middle some_*func should match some_func");
 
-    // Single char wildcard - should error
-    let result = backend.query_nodes_by_name_pattern(SnapshotId::current(), "some_func?");
-    assert!(result.is_err());
+    // Single char wildcard → exact match (no literal some_func? exists)
+    let result = backend
+        .query_nodes_by_name_pattern(SnapshotId::current(), "some_func?")
+        .unwrap();
+    assert_eq!(result.len(), 0, "? is treated as literal, no match");
 
-    // Character class - should error
-    let result = backend.query_nodes_by_name_pattern(SnapshotId::current(), "some_func[abc]");
-    assert!(result.is_err());
+    // Character class → exact match (no literal some_func[abc] exists)
+    let result = backend
+        .query_nodes_by_name_pattern(SnapshotId::current(), "some_func[abc]")
+        .unwrap();
+    assert_eq!(result.len(), 0, "[abc] is treated as literal, no match");
 
-    println!("✓ Unsupported patterns correctly rejected");
+    println!("✓ Special patterns handled correctly");
 }
 
 #[test]

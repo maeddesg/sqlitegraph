@@ -171,12 +171,12 @@ impl SimilarityBounds {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// # use sqlitegraph::{algo::structural_similarity, SqliteGraph, algo::SimilarityBounds};
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # let graph1 = SqliteGraph::open_in_memory()?;
 /// # let graph2 = SqliteGraph::open_in_memory()?;
-/// # let result = unsafe { std::mem::zeroed() };
+/// # let result = structural_similarity(&graph1, &graph2, SimilarityBounds::default())?;
 /// println!("Isomorphic: {}", result.isomorphic);
 /// println!("Similarity: {:.2}", result.mcs_similarity);
 /// println!("GED: {:.2}", result.ged_distance);

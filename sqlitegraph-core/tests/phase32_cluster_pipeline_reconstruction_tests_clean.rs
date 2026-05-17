@@ -146,10 +146,11 @@ fn create_star_v2_graph(
 
 /// Flush and reopen graph
 fn flush_and_reopen(
-    _graph: Box<dyn sqlitegraph::GraphBackend>,
+    graph: Box<dyn sqlitegraph::GraphBackend>,
     temp_dir: &TempDir,
 ) -> Box<dyn sqlitegraph::GraphBackend> {
-    // Note: GraphBackend doesn't have explicit flush, but we can reopen
+    // Explicit flush to ensure all pending writes are persisted before reopen
+    graph.flush().expect("Flush before reopen should succeed");
     let db_path = temp_dir.path().join("test.db");
     let cfg = GraphConfig::new(sqlitegraph::BackendKind::Native);
     open_graph(&db_path, &cfg).expect("Failed to reopen graph")
@@ -543,8 +544,8 @@ fn test_cluster_persistence() {
         let node_id = add_node_v2(
             &mut graph,
             i,
-            "TestNode",
             &format!("test_node_{}", i),
+            "TestNode",
             serde_json::json!({"index": i}),
         );
         node_ids.push(node_id);

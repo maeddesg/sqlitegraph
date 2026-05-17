@@ -8,10 +8,10 @@
 //! # Examples
 //!
 //! ```rust
-//! use sqlitegraph::hnsw::{HnswConfig, DistanceMetric};
+//! use sqlitegraph::hnsw::{HnswConfigBuilder, DistanceMetric};
 //!
 //! // Single-layer configuration (default, backward compatible)
-//! let config = HnswConfig::builder()
+//! let config = HnswConfigBuilder::new()
 //!     .dimension(512)
 //!     .m_connections(24)
 //!     .ef_construction(300)
@@ -20,10 +20,9 @@
 //!     .distance_metric(DistanceMetric::Euclidean)
 //!     .build()
 //!     .unwrap();
-//! # Ok::<(), Box<dyn std::error::Error>>(())
 //!
 //! // Multi-layer configuration for large datasets
-//! let multilayer_config = HnswConfig::builder()
+//! let multilayer_config = HnswConfigBuilder::new()
 //!     .dimension(768)
 //!     .m_connections(16)
 //!     .ef_construction(200)
@@ -31,7 +30,7 @@
 //!     .max_layers(16)
 //!     .distance_metric(DistanceMetric::Cosine)
 //!     .enable_multilayer(true)
-//!     .multilayer_deterministic_seed(42)
+//!     .multilayer_deterministic_seed(Some(42))
 //!     .build()
 //!     .unwrap();
 //! # Ok::<(), Box<dyn std::error::Error>>(())
@@ -49,7 +48,7 @@ use crate::hnsw::errors::HnswConfigError;
 /// # Examples
 ///
 /// ```rust
-/// use sqlitegraph::hnsw::{HnswConfig, DistanceMetric};
+/// use sqlitegraph::hnsw::{HnswConfigBuilder, DistanceMetric};
 ///
 /// // Single-layer configuration (default, backward compatible)
 /// let config = HnswConfigBuilder::new()

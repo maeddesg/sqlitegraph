@@ -57,8 +57,8 @@ use super::graph_similarity::{SimilarityBounds, structural_similarity};
 ///
 /// # Example
 ///
-/// ```rust
-/// # use sqlitegraph::algo::graph_diff::NodeDelta;
+/// ```rust,ignore
+/// # use sqlitegraph::algo::NodeDelta;
 /// # fn main() {
 /// let delta = NodeDelta {
 ///     nodes_added: vec![10, 11, 12].into_iter().collect(),
@@ -85,8 +85,8 @@ pub struct NodeDelta {
 ///
 /// # Example
 ///
-/// ```rust
-/// # use sqlitegraph::algo::graph_diff::EdgeDelta;
+/// ```rust,ignore
+/// # use sqlitegraph::algo::EdgeDelta;
 /// # fn main() {
 /// let delta = EdgeDelta {
 ///     edges_added: vec![(1, 2), (2, 3)],
@@ -920,7 +920,7 @@ mod tests {
         let diff = graph_diff(&graph1, &graph2).unwrap();
 
         // Edges should differ
-        assert!(diff.total_changes() > 0 || diff.edges_added.len() > 0);
+        assert!(diff.total_changes() > 0 || !diff.edges_added.is_empty());
     }
 
     // Test 9: Edges removed

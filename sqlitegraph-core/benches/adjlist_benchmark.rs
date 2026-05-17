@@ -36,16 +36,14 @@ impl SimpleAdjList {
     }
 
     fn add_edge(&mut self, src: u64, dst: u64) {
-        if let Some(outgoing) = self.outgoing.get_mut(&src) {
-            if !outgoing.contains(&dst) {
+        if let Some(outgoing) = self.outgoing.get_mut(&src)
+            && !outgoing.contains(&dst) {
                 outgoing.push(dst);
             }
-        }
-        if let Some(incoming) = self.incoming.get_mut(&dst) {
-            if !incoming.contains(&src) {
+        if let Some(incoming) = self.incoming.get_mut(&dst)
+            && !incoming.contains(&src) {
                 incoming.push(src);
             }
-        }
     }
 
     fn neighbors(&self, node: u64, direction: Direction) -> Option<&Vec<u64>> {
@@ -68,11 +66,10 @@ impl SimpleAdjList {
         visited.insert(start);
 
         while let Some((node, depth)) = queue.pop_front() {
-            if let Some(max_depth) = max_depth {
-                if depth > max_depth {
+            if let Some(max_depth) = max_depth
+                && depth > max_depth {
                     continue;
                 }
-            }
 
             result.push(node);
 

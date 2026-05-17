@@ -39,7 +39,7 @@
 //!
 //! Depth-first search with backtracking and revisit counting:
 //!
-//! ```
+//! ```text
 //! dfs(node, depth):
 //!     current_path.push(node)
 //!     visited[node] += 1
@@ -623,7 +623,7 @@ fn dfs_enumerate_with_progress<P: ProgressCallback>(
             *total_found += 1;
 
             // Report progress every 100 paths
-            if *total_found % 100 == 0 {
+            if (*total_found).is_multiple_of(100) {
                 progress.on_progress(*total_found, Some(config.max_paths), "Enumerating paths");
             }
         } else {
@@ -779,20 +779,20 @@ fn check_loop_constraints(
 ) -> bool {
     // Cannot exit loop without proper exit
     // If we have active loops (loop_stack not empty), verify we're at valid exit
-    if let Some(&active_loop_header) = loop_stack.last() {
-        if let Some(active_loop) = loops_result.loop_with_header(active_loop_header) {
-            // Current node should be in loop or be valid exit
-            // Use if-let to safely handle empty path (shouldn't happen in practice,
-            // but defensive programming prevents panic)
-            if let Some(&last_node) = path.last() {
-                if !active_loop.contains(last_node) {
-                    // Exited loop without proper exit - invalid path
-                    return false;
-                }
-            } else {
-                // Empty path cannot satisfy loop constraints
+    if let Some(&active_loop_header) = loop_stack.last()
+        && let Some(active_loop) = loops_result.loop_with_header(active_loop_header)
+    {
+        // Current node should be in loop or be valid exit
+        // Use if-let to safely handle empty path (shouldn't happen in practice,
+        // but defensive programming prevents panic)
+        if let Some(&last_node) = path.last() {
+            if !active_loop.contains(last_node) {
+                // Exited loop without proper exit - invalid path
                 return false;
             }
+        } else {
+            // Empty path cannot satisfy loop constraints
+            return false;
         }
     }
     true
@@ -1276,7 +1276,7 @@ fn dfs_with_constraints_progress<P: ProgressCallback>(
             *total_found += 1;
 
             // Report progress every 100 paths
-            if *total_found % 100 == 0 {
+            if (*total_found).is_multiple_of(100) {
                 progress.on_progress(
                     *total_found,
                     Some(config.base.max_paths),
