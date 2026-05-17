@@ -1,9 +1,13 @@
 # SQLiteGraph Manual
 
-Usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V2).
+Usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V3).
 
 > Looking for the Python wrapper? See
 > [`sqlitegraph-py/README.md`](./sqlitegraph-py/README.md) — `pip install sqlitegraph`.
+>
+> Looking for the query language? See
+> [`docs/QUERY_LANGUAGE.md`](./docs/QUERY_LANGUAGE.md) for the CLI and
+> Python `Graph.query()` grammar.
 
 ---
 
@@ -13,29 +17,27 @@ Usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V2
 
 ```toml
 [dependencies]
-sqlitegraph = "1.4"
+sqlitegraph = "2.4"
 
-# For Native V2 backend (with pub/sub support)
-sqlitegraph = { version = "1.4", features = ["native-v2"] }
+# For Native V3 backend
+sqlitegraph = { version = "2.4", features = ["native-v3"] }
 ```
 
 ### Basic Usage
 
 ```rust
-use sqlitegraph::{SqliteGraph, GraphEntity};
+use sqlitegraph::backend::{GraphBackend, NodeSpec};
+use sqlitegraph::backend::sqlite::SqliteGraphBackend;
 
-let graph = SqliteGraph::open_in_memory()?;
+let graph = SqliteGraphBackend::in_memory()?;
 
-let entity = GraphEntity {
-    id: 0,
+let id = graph.insert_node(NodeSpec {
     kind: "User".to_string(),
     name: "Alice".to_string(),
     file_path: None,
     data: serde_json::json!({"age": 30}),
-};
-
-let id = graph.insert_entity(&entity)?;
-println!("Created entity: {}", id);
+})?;
+println!("Created node: {}", id);
 ```
 
 ---
@@ -53,21 +55,19 @@ let graph = SqliteGraph::open_in_memory()?;
 // SQLite operations with full ACID compliance
 ```
 
-### Native V2 Backend
+### Native V3 Backend
 
 **Use**: Large graphs, traversal-heavy workloads
 
 ```rust
-use sqlitegraph::{GraphConfig, open_graph, NodeSpec, EdgeSpec};
+use sqlitegraph::backend::native::v3::V3Backend;
 
-let config = GraphConfig::native();
-let graph = open_graph("graph.db", &config)?;
-// Clustered adjacency for locality
+let graph = V3Backend::create("graph.graph")?;
 ```
 
 ### Backend Comparison
 
-| Characteristic | SQLite Backend | Native V2 Backend |
+| Characteristic | SQLite Backend | Native V3 Backend |
 |----------------|----------------|-------------------|
 | **Performance** | Standard SQLite | 10x faster for traversals |
 | **Transactions** | Full ACID | Atomic commits, WAL |
@@ -103,13 +103,13 @@ updated_entity.name = "Alice Smith".to_string();
 graph.update_entity(&updated_entity)?;
 ```
 
-### Node Management (Native V2 Backend)
+### Node Management (Native V3 Backend)
 
 ```rust
-use sqlitegraph::{GraphConfig, open_graph, NodeSpec, EdgeSpec};
+use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec};
+use sqlitegraph::backend::native::v3::V3Backend;
 
-let config = GraphConfig::native();
-let graph = open_graph("graph.db", &config)?;
+let graph = V3Backend::create("graph.graph")?;
 
 // Create node
 let node_spec = NodeSpec {
@@ -138,7 +138,7 @@ let edge_id = graph.insert_edge(edge_spec)?;
 
 ### Overview
 
-SQLiteGraph v1.4.1 includes a graph algorithms library with **35 algorithms** across 13 categories:
+SQLiteGraph includes a graph algorithms library with **35+ algorithms** across 13 categories:
 
 | Category | Algorithms |
 |----------|------------|
@@ -185,7 +185,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 ### Full Documentation
 
 **User Guides:**
-- **[MIGRATION.md](docs/MIGRATION.md)** - SQLite to Native V2 migration guide
+- **[MIGRATION.md](docs/MIGRATION.md)** - SQLite to Native V3 migration guide
 - **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 - **[PHILOSOPHY.md](docs/PHILOSOPHY.md)** - Design principles and trade-offs
 
@@ -217,8 +217,8 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 # All tests
 cargo test --workspace
 
-# With Native V2 backend
-cargo test --workspace --features native-v2
+# With Native V3 backend
+cargo test --workspace --features native-v3
 
 # Specific test patterns
 cargo test '*pagerank*'
@@ -227,7 +227,7 @@ cargo test '*wal*'
 
 ### Test Coverage
 
-**v1.4.1 Test Results:**
+**Known test coverage:**
 - 180+ graph algorithm tests passing (35 algorithms across 13 categories)
 - 59 pubsub tests passing (event emission, filtering, multiple subscribers)
 - 42 WAL tests passing (recovery, corruption, checkpoints)
@@ -241,9 +241,9 @@ cargo test '*wal*'
 
 ## 6. Performance
 
-### Native V2 Performance
+### Native V3 Performance
 
-Based on actual benchmarks (Phase 3, 7):
+Based on project benchmark runs:
 
 | Operation | Performance |
 |-----------|-------------|
@@ -406,19 +406,19 @@ let results = hnsw.search(&query, k)?;
 
 ```bash
 # Create index
-sqlitegraph --backend sqlite --db mygraph.db hnsw-create \
-    --dimension 768 --distance-metric cosine
+sqlitegraph --backend sqlite --db mygraph.db --write hnsw create \
+    --name vectors --dim 3 --metric cosine
 
 # Insert vectors
-sqlitegraph --backend sqlite --db mygraph.db hnsw-insert \
-    --index-name vectors --input vectors.json
+sqlitegraph --backend sqlite --db mygraph.db --write hnsw insert \
+    --name vectors --vector "0.1,0.2,0.3"
 
 # Search
-sqlitegraph --backend sqlite --db mygraph.db hnsw-search \
-    --index-name vectors --input query.json --k 10
+sqlitegraph --backend sqlite --db mygraph.db hnsw search \
+    --name vectors --vector "0.1,0.2,0.3" --k 10
 
 # List indexes
-sqlitegraph --backend sqlite --db mygraph.db hnsw-list
+sqlitegraph --backend sqlite --db mygraph.db hnsw list
 ```
 
 ---
@@ -427,14 +427,14 @@ sqlitegraph --backend sqlite --db mygraph.db hnsw-list
 
 ### Overview
 
-The Native V2 backend includes a transactional key-value store for storing arbitrary data alongside your graph. The KV store participates in transactions and emits events through the pub/sub system.
+The Native V3 backend includes a transactional key-value store for storing arbitrary data alongside your graph. The KV store participates in transactions and emits events through the pub/sub system.
 
 ### Availability
 
 | Backend | KV Store Support |
 |---------|------------------|
-| **Native V2** | Full support |
-| **SQLite** | Not supported |
+| **Native V3** | Full support |
+| **SQLite** | Full support |
 
 ### Basic Usage
 
@@ -621,7 +621,7 @@ Each KV entry has internal metadata (not directly exposed):
 
 ### Limitations
 
-- **Native V2 only**: SQLite backend does not support KV operations
+- **Current snapshot only**: Historical KV reads are not exposed through the public API.
 - **Byte keys**: Keys are `Vec<u8>` - use string encoding for text keys
 - **No snapshots**: Can't query historical KV values, only current snapshot
 - **Full enumeration**: No API to enumerate all keys without prefix (use `kv_prefix_scan(b"")` for all keys)
@@ -659,22 +659,18 @@ let all_entries = graph.kv_prefix_scan(snapshot.id, b"")?;
 - Hierarchical data retrieval (e.g., `cache:region:*` → all regional caches)
 - Namespace-based key management
 
-**CLI:**
-```bash
-# Scan all keys with prefix "user:"
-sqlitegraph --backend native-v2 --db mygraph.db kv-scan --prefix "user:"
-
-# Scan all KV entries
-sqlitegraph --backend native-v2 --db mygraph.db kv-scan --prefix ""
-```
+`kv_prefix_scan()` is currently documented as a library API. The public CLI does
+not expose KV scan commands.
 
 ---
 
-## 10. Query API Enhancements (Phase 58)
+## 10. Query API Enhancements
 
 ### Overview
 
-Phase 58 introduces query API enhancements for working with graph data without maintaining external ID tracking. These features are particularly useful for pub/sub use cases like agent messaging and topic-based subscriptions.
+The query helper APIs support working with graph data without maintaining
+external ID tracking for every lookup. These features are useful for pub/sub
+use cases like agent messaging and topic-based subscriptions.
 
 ### Query Nodes by Kind
 
@@ -699,17 +695,17 @@ for node_id in agent_ids {
 
 **Features:**
 - Direct kind filtering without full graph scan
-- Works on both SQLite and Native V2 backends
+- Works on both SQLite and Native V3 backends
 - Returns sorted node IDs for consistent output
 - MVCC snapshot isolation respected
 
 **CLI:**
 ```bash
 # Find all nodes with kind "agent"
-sqlitegraph mygraph.db nodes-by-kind --kind "agent"
+sqlitegraph --db mygraph.db list --kind agent
 
 # Find all message nodes
-sqlitegraph mygraph.db nodes-by-kind --kind "message"
+sqlitegraph --db mygraph.db list --kind message
 ```
 
 ### Query Nodes by Name Pattern
@@ -846,7 +842,7 @@ let (sub_id, rx) = graph.subscribe(region_filter)?;
 
 ### Backend Support
 
-| Feature | Native V2 | SQLite |
+| Feature | Native V3 | SQLite |
 |---------|-----------|--------|
 | `kv_prefix_scan()` | Full support | Full support |
 | `query_nodes_by_kind()` | Full support | Full support |
@@ -869,7 +865,7 @@ let (sub_id, rx) = graph.subscribe(region_filter)?;
 
 ---
 
-## 11. Developer Tools (Phase 9)
+## 11. Developer Tools
 
 ### Introspection API
 
@@ -894,17 +890,12 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, NoProgress)?;
 let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new())?;
 ```
 
-### CLI Debug Commands
+### CLI Inspection Commands
 
 ```bash
-# Statistics
-sqlitegraph --backend sqlite --db mygraph.db debug-stats
-
-# Dump graph
-sqlitegraph --backend sqlite --db mygraph.db debug-dump --output graph.json
-
-# Trace operations
-sqlitegraph --backend sqlite --db mygraph.db debug-trace
+sqlitegraph --backend sqlite --db mygraph.db status
+sqlitegraph --backend sqlite --db mygraph.db list
+sqlitegraph --backend sqlite --db mygraph.db list --kind User
 ```
 
 ---
@@ -922,9 +913,9 @@ if report.has_orphans() {
 }
 ```
 
-### V2 WAL Recovery
+### V3 WAL Recovery
 
-The Native V2 backend includes WAL recovery with:
+The Native V3 backend includes WAL recovery with:
 - Transaction rollback for all operations
 - Edge cascade cleanup on node deletion
 - Cluster reference cleanup
@@ -939,43 +930,47 @@ The Native V2 backend includes WAL recovery with:
 
 ```bash
 # Status
-sqlitegraph --command status --database mygraph.db
+sqlitegraph --db mygraph.db status
 
 # List entities
-sqlitegraph --command list --database mygraph.db
+sqlitegraph --db mygraph.db list
 
 # Export/Import
-sqlitegraph --command dump-graph --output backup.json --database mygraph.db
-sqlitegraph --command load-graph --input backup.json --database mygraph.db
+sqlitegraph --db mygraph.db --write export --output backup.json
+sqlitegraph --db mygraph.db --write import --input backup.json
 
-# Safety check
-sqlitegraph --command safety-check --database mygraph.db
+# Query language
+sqlitegraph --db mygraph.db query 'MATCH (n:User) RETURN n.name'
+sqlitegraph --db mygraph.db --write query 'CREATE (1)-[:KNOWS]->(2)'
 
 # Graph algorithms (35+ algorithms available)
-sqlitegraph --backend sqlite --db mygraph.db pagerank --progress
-sqlitegraph --backend sqlite --db mygraph.db betweenness --progress
-sqlitegraph --backend sqlite --db mygraph.db louvain --progress
+sqlitegraph --backend sqlite --db mygraph.db algo pagerank --iterations 100
+sqlitegraph --backend sqlite --db mygraph.db algo betweenness
+sqlitegraph --backend sqlite --db mygraph.db algo components
+sqlitegraph --backend sqlite --db mygraph.db algo scc
+sqlitegraph --backend sqlite --db mygraph.db algo louvain --max-iterations 100
+sqlitegraph --backend sqlite --db mygraph.db algo label-prop --max-iterations 50
+sqlitegraph --backend sqlite --db mygraph.db algo cycles --limit 100
 
 # CFG analysis
-sqlitegraph --backend sqlite --db mygraph.db dominators --entry 1
-sqlitegraph --backend sqlite --db mygraph.db natural-loops --entry 1
+sqlitegraph --backend sqlite --db mygraph.db algo dominators --entry 1
+sqlitegraph --backend sqlite --db mygraph.db algo critical-path
 
-# Program slicing
-sqlitegraph --backend sqlite --db mygraph.db backward-slice --target 42
-sqlitegraph --backend sqlite --db mygraph.db forward-slice --source 1
+# HNSW vector indexes
+sqlitegraph --db mygraph.db --write hnsw create --name embeddings --dim 3 --metric cosine
+sqlitegraph --db mygraph.db --write hnsw insert --name embeddings --vector "1.0,0.8,0.1"
+sqlitegraph --db mygraph.db hnsw search --name embeddings --k 5 --vector "1.0,0.9,0.0"
+sqlitegraph --db mygraph.db hnsw list
+sqlitegraph --db mygraph.db --write hnsw delete --name embeddings
 
-# Reachability
-sqlitegraph --backend sqlite --db mygraph.db forward-reach --start 1
-sqlitegraph --backend sqlite --db mygraph.db can-reach --from 1 --to 100
-
-# For complete CLI reference, see docs/GRAPH_ALGORITHMS_GUIDE.md
+# For complete query details, see docs/QUERY_LANGUAGE.md
 ```
 
 ---
 
 ## 14. Migration
 
-### SQLite to Native V2
+### SQLite to Native V3
 
 ```rust
 // Before (SQLite)
@@ -983,7 +978,7 @@ let graph = SqliteGraph::open("data.db")?;
 let entity = GraphEntity { /* fields */ };
 let id = graph.insert_entity(&entity)?;
 
-// After (Native V2)
+// After (Native V3)
 let config = GraphConfig::native();
 let graph = open_graph("data.db", &config)?;
 let node_spec = NodeSpec { /* similar fields */ };
@@ -992,7 +987,7 @@ let id = graph.insert_node(node_spec)?;
 
 ### Key Differences
 
-| Aspect | SQLite Backend | Native V2 Backend |
+| Aspect | SQLite Backend | Native V3 Backend |
 |--------|----------------|-------------------|
 | **Data Types** | `GraphEntity`/`GraphEdge` | `NodeSpec`/`EdgeSpec` |
 | **Edge Fields** | `from_id`/`to_id` | `from`/`to` |
@@ -1005,15 +1000,15 @@ let id = graph.insert_node(node_spec)?;
 ### Common Issues
 
 **Compilation Errors:**
-- Add feature flags: `--features native-v2`
+- Add feature flags: `--features native-v3`
 - Check backend-specific data types
 
 **Runtime Issues:**
-- Run integrity checks: `safety-check` command
+- Run integrity checks through the library safety-check helpers.
 - Check buffer configuration for large graphs
 
 **Performance:**
-- Use Native V2 for traversals
+- Use Native V3 for traversals
 - Enable parallel WAL recovery for large databases
 
 ### Getting Help
@@ -1026,23 +1021,23 @@ cargo test --lib 2>&1 | tail -5
 cargo test test_name -- --nocapture
 
 # Check compilation
-cargo check --features native-v2
+cargo check --features native-v3
 ```
 
 ---
 
-## 16. Pub/Sub Events (Phase 44)
+## 16. Pub/Sub Events
 
 ### Overview
 
-The Native V2 backend includes an in-process publish/subscribe system for receiving notifications when graph data changes. Events are emitted when transactions commit and carry only identifiers (not full data payloads).
+The Native V3 backend includes an in-process publish/subscribe system for receiving notifications when graph data changes. Events are emitted when transactions commit and carry only identifiers (not full data payloads).
 
 ### Availability
 
 | Backend | Pub/Sub Support |
 |---------|-----------------|
-| **Native V2** | Full support |
-| **SQLite** | Not supported (returns `Unsupported` error) |
+| **Native V3** | Full support |
+| **SQLite** | Full support |
 
 ### Event Types
 
@@ -1149,11 +1144,11 @@ if let PubSubEvent::NodeChanged { node_id, snapshot_id } = event {
 
 The pub/sub system is **minimal and best-effort**:
 
-- **In-Process Only**: No networking or IPC support
+- **In-process only**: No networking or IPC support
 - **No Persistence**: Events are lost if the process crashes
 - **No Delivery Guarantees**: Events dropped if channel is full or receiver is gone
 - **No Ordering**: Subscribers may receive events in different orders
-- **Native V2 Only**: SQLite backend does not support pub/sub
+- **Backend support**: SQLite and Native V3 publish events inside the current process.
 
 ### Thread Safety
 
@@ -1161,23 +1156,12 @@ The pub/sub system is **minimal and best-effort**:
 - Each subscriber gets their own channel
 - `Publisher` uses `Arc<Mutex<>>` for internal synchronization
 
-### Query API Limitations
+### Query API Notes
 
-**Important**: The GraphBackend API does not provide methods to query nodes by name and kind directly.
-
-```rust
-// What you CAN do:
-fn insert_node(NodeSpec) -> Result<i64>  // Creates node, returns ID
-fn get_node(snapshot_id, node_id) -> Result<GraphEntity>  // Requires ID
-
-// What you CANNOT do (no such API):
-// fn get_nodes_by_name_kind(name, kind) -> Result<Vec<Node>>
-// fn find_node(name, kind) -> Result<Option<Node>>
-```
-
-**Workarounds**:
-
-1. **Track node IDs yourself**: When creating a node, store its ID in your own tracking structure or in the KV store:
+The current `GraphBackend` API includes direct ID lookups plus helper methods
+such as `query_nodes_by_kind()` and `query_nodes_by_name_pattern()`. For dynamic
+application entities, it can still be useful to keep explicit secondary indexes
+in KV:
 
 ```rust
 // Create node and track the ID
@@ -1196,7 +1180,8 @@ graph.kv_set(
 )?;
 ```
 
-2. **Use KV as an index**: For message queues, user sessions, or other dynamic entities, maintain an index in KV:
+For message queues, user sessions, or other dynamic entities, maintain an index
+in KV:
 
 ```rust
 // Index pattern: store entity IDs in KV
@@ -1210,18 +1195,19 @@ graph.kv_set(
 )?;
 ```
 
-3. **Use SubscriptionFilter.nodes()**: When subscribing to events for specific nodes, you need their IDs. Plan your node creation to return IDs to interested parties.
+When subscribing to events for specific nodes, use `SubscriptionFilter.nodes()`
+with the IDs returned during node creation.
 
 **Why this design?**
 
-- **Simplicity**: Avoids complex query engine implementation
+- **Simplicity**: Keeps direct ID lookups explicit
 - **Performance**: Direct ID lookup is O(1)
 - **Explicit tracking**: Users control their own index strategies
 - **Extensibility**: KV store provides indexing options
 
 ### Test Coverage
 
-**v1.4.1 Test Results:**
+**Known test coverage:**
 - 59 pubsub tests passing (integration + module tests)
 - Tests cover: event emission, filtering, multiple subscribers, unsubscribe
 
@@ -1229,7 +1215,7 @@ graph.kv_set(
 
 ## Architecture Status
 
-**v1.4.1 Features:**
+**Current feature areas:**
 - Graph Algorithms Library: 35 production algorithms across 13 categories
   - Core Graph Theory: WCC, SCC, Transitive Closure, Transitive Reduction, Topological Sort
   - Reachability: Forward, Backward, Can-Reach, Unreachable Nodes
@@ -1242,31 +1228,13 @@ graph.kv_set(
   - ML/Inference: Subgraph Isomorphism, Graph Rewriting, Structural Similarity
   - Graph Diff: Structural Delta, Refactor Validation
   - Security: Taint Propagation (Forward/Backward), Sink Analysis, Source/Sink Discovery
-  - CLI commands for all 35 algorithms with progress tracking
+  - CLI commands for the most commonly used algorithms, with additional algorithms available through the Rust API
 
-**v1.2 Features:**
-- Pub/Sub Events: In-process event notification for graph changes
-  - Four event types (NodeChanged, EdgeChanged, KVChanged, SnapshotCommitted)
-  - Channel-based delivery with filtering
-  - Best-effort delivery (no blocking on commit path)
-  - Native V2 backend only
+**Storage and runtime:**
+- SQLite backend: ACID storage, SQL tooling compatibility, query-language execution.
+- Native V3 backend: graph-oriented file format, WAL/checkpoint durability, KV support.
+- Pub/Sub events: in-process notifications for node, edge, KV, and snapshot changes.
+- HNSW vector search: persistent vector indexes with create/insert/search/list/delete surfaces.
+- CLI and Python bindings: query-language access, algorithms, and vector-index operations.
 
-**v1.1 Features:**
-- Native V2 Backend: Full ACID transaction correctness
-  - Atomicity: Complete rollback for all operations
-  - Consistency: Runtime validation (cluster overlap, checkpoint state)
-  - Isolation: Transaction coordinator with deadlock detection
-  - Durability: All checkpoint strategies functional
-- Memory Safety: All unsafe transmute sites eliminated (Arc<RwLock<GraphFile>>)
-- Connection Pooling: r2d2 pool for SQLite backend (4-5x throughput)
-- Data Management: Migration API, Backup/Restore APIs, v3 file format
-
-**v1.0 Features:**
-- Native V2 Backend: Clustered adjacency with WAL
-- Dual Backend Support: Unified API
-- Graph Algorithms: 4 production algorithms
-- HNSW Vector Search: Full persistence support
-- MVCC Snapshots: Read isolation
-- Developer Tools: Introspection, progress tracking, CLI
-
-**Test Coverage:** 530+ tests passing (v1.4.1, including 180+ algorithm tests and 59 pubsub tests)
+**Test Coverage:** 530+ tests passing in the documented baseline, including 180+ algorithm tests and 59 pubsub tests.

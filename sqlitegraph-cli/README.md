@@ -22,14 +22,19 @@ cargo install --path .
 ## Quick Start
 
 ```bash
+# Build a small database from scratch
+rm -f /tmp/sqlitegraph-demo.db
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write insert --kind User --name Alice --data '{"age":30}'
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write insert --kind User --name Bob --data '{"age":31}'
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write query 'CREATE (1)-[:KNOWS]->(2)'
+
 # Cypher-inspired queries with edge traversal, WHERE, LIMIT
-sqlitegraph --db code.db query "MATCH (n:Function) RETURN n.name"
-sqlitegraph --db code.db query "MATCH (a)-[:CALLS]->(b) WHERE b.lang = 'rust' RETURN a.name LIMIT 10"
-sqlitegraph --db code.db query "MATCH (f:File)-[:CONTAINS]->(n) RETURN f, n"
+sqlitegraph --db /tmp/sqlitegraph-demo.db query 'MATCH (n:User) RETURN n.name'
+sqlitegraph --db /tmp/sqlitegraph-demo.db query 'MATCH (a:User)-[:KNOWS]->(b:User) RETURN a.name, b.name'
 
 # Graph algorithms
-sqlitegraph --db code.db bfs --start 1 --max-depth 3
-sqlitegraph --db code.db algo pagerank --iterations 100
+sqlitegraph --db /tmp/sqlitegraph-demo.db bfs --start 1 --depth 3
+sqlitegraph --db /tmp/sqlitegraph-demo.db algo pagerank --iterations 100
 
 # Insert data (requires --write flag)
 sqlitegraph --db code.db --write insert --kind Function --name main
@@ -85,7 +90,7 @@ sqlitegraph query "MATCH (a)-[:CALLS]->(b) RETURN a, b"
 sqlitegraph query "MATCH (n {role: 'admin'}) RETURN n"
 
 # Graph traversal
-sqlitegraph bfs --start 1 --max-depth 3
+sqlitegraph bfs --start 1 --depth 3
 sqlitegraph path --from 1 --to 10
 sqlitegraph neighbors --id 5 --direction outgoing
 
@@ -128,7 +133,8 @@ sqlitegraph list --kind User
 
 ## Read-Only by Default
 
-The CLI is **read-only by default** for safety. Use `--write` flag to enable modifications:
+Direct mutation commands are guarded by default. Use `--write` to enable
+modifications:
 
 ```bash
 # This will fail (tries to modify without --write)
@@ -137,6 +143,9 @@ sqlitegraph --db graph.db insert --kind User --name Alice
 # This works
 sqlitegraph --db graph.db --write insert --kind User --name Alice
 ```
+
+When running write-intended query statements such as `CREATE`, `SET`, or
+`DELETE`, include `--write` in your command line.
 
 ## Ecosystem
 

@@ -3,21 +3,28 @@
 [![crates.io](https://img.shields.io/crates/v/sqlitegraph.svg)](https://crates.io/crates/sqlitegraph)
 [![Documentation](https://docs.rs/sqlitegraph/badge.svg)](https://docs.rs/sqlitegraph)
 
-Embedded graph database with dual backend architecture.
+Embedded graph database with dual backend architecture, graph algorithms,
+Cypher-inspired queries, and HNSW vector search.
 
 **Positioning:** Single-binary embedded database (no server). Persistent storage with
 atomic batch commits. Graph algorithms + HNSW vector search in one engine.
 SQLite: stable, mature, excellent for adjacency queries. V3: high-performance,
 designed for large-scale graphs, faster for bulk traversals. See benchmarks below.
 
-## Recent Changes
+## Current Main
 
-**v2.2.0** — Entity queries by kind/name, schema indexes, algorithm determinism fixes, CI hardening:
+The current unreleased tree builds on `v2.4.0` with a larger query and tooling
+surface:
 
-- `find_entities_by_kind()` and `find_entity_by_kind_and_name()` with composite indexes
-- Fixed post-dominators infinite loop on cyclic graphs
-- Fixed cycle basis cross-edge detection and deterministic `cyclic_nodes()`
-- Hardened CI against runner OOM and non-deterministic test failures
+- Cypher-inspired `MATCH`, `CREATE`, `SET`, `DELETE`, multi-hop, variable-depth,
+  star/multi-pattern joins, `WHERE` with precedence/parentheses, and HNSW
+  vector search via `CALL db.index.vector.queryNodes(...)`.
+- CLI coverage for PageRank, betweenness, WCC/SCC, Louvain, label propagation,
+  cycle search, dominators, topological sort, critical path, and HNSW
+  create/insert/search/list/delete.
+- Python `Graph.query()` plus algorithm bindings for SCC, label propagation,
+  cycle search, dominators, critical path, and HNSW index deletion.
+- V3 durability fixes and HNSW autoload persistence fixes.
 
 See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) for full history.
 
@@ -38,13 +45,20 @@ See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md)
 
 See [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) for system design details.
 
-**Quick Summary (v2.2.0 - VERIFIED):**
+**Backend Comparison (v2.2.4 - AMD Ryzen 7 7800X3D, tmpfs, Rust 1.95.0):**
 
-- **Point lookup**: V3 114x faster with LRU cache (warm vs cold cache)
-- **Bulk traversal**: V3 10-20x faster (contiguous storage)
-- **Adaptive pages**: 15-25% faster (SSD/HDD auto-detection, verified)
-- **Delta encoding**: 75-87% space savings
-- **Parallel BFS**: Thread-safe chunked processing, sequential fallback for <1K nodes
+| Benchmark | SQLite | V3 | Ratio |
+|-----------|--------|----|-------|
+| BFS 1K nodes / 5K edges | 2.5ms | 0.45ms | V3 **5.5x faster** |
+| BFS 10K / 50K | 26ms | 27ms | ~parity |
+| BFS 50K / 250K | 160ms | 586ms | SQLite 3.6x faster |
+| DFS 1K / 5K | 2.4ms | 0.46ms | V3 **5.2x faster** |
+| Point lookup 1K | 15us | 82us | SQLite 5.4x faster |
+| Point lookup 10K | 27us | 503us | SQLite 18x faster |
+| Shortest path 1K | 304us | 393us | SQLite 29% faster |
+
+V3 excels at small-scale traversals. SQLite dominates at larger graph sizes and
+point lookups.
 
 **Run benchmarks yourself:**
 
@@ -62,10 +76,10 @@ See [examples/](https://github.com/oldnordic/sqlitegraph/tree/main/sqlitegraph-c
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "2.2"
+sqlitegraph = "2.4"
 
 # OR Native V3 backend (faster traversals)
-sqlitegraph = { version = "2.2", features = ["native-v3"] }
+sqlitegraph = { version = "2.4", features = ["native-v3"] }
 ```
 
 ```rust
@@ -92,20 +106,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```bash
 cargo install sqlitegraph-cli
 
-# Query (read-only by default)
+# Query
 sqlitegraph --db graph.db query "MATCH (n:User) RETURN n.name"
 
 # Algorithms
-sqlitegraph --db graph.db bfs --start 1 --max-depth 3
-sqlitegraph --db graph.db pagerank --iterations 100
+sqlitegraph --db graph.db bfs --start 1 --depth 3
+sqlitegraph --db graph.db algo pagerank --iterations 100
+```
+
+## Copy-Paste CLI Demo
+
+```bash
+rm -f /tmp/sqlitegraph-demo.db
+
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write insert --kind User --name Alice --data '{"age":30}'
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write insert --kind User --name Bob --data '{"age":31}'
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write query 'CREATE (1)-[:KNOWS]->(2)'
+
+sqlitegraph --db /tmp/sqlitegraph-demo.db query 'MATCH (a:User)-[:KNOWS]->(b:User) RETURN a.name, b.name'
+sqlitegraph --db /tmp/sqlitegraph-demo.db algo scc
+```
+
+## Hybrid Runtime Demo
+
+This crate includes a runnable demo that combines ordinary SQLite rows, Native
+V3 graph metadata, SQLite-backed HNSW vectors, and V3 pub/sub:
+
+```bash
+cargo run -p sqlitegraph --example hybrid_sqlite_v3_hnsw_pubsub --features native-v3
 ```
 
 ## Safety Invariants
 
 - Orphan edges are detected by verifying every edge endpoint references a stored entity before any reasoning or subgraph extraction runs.
 - Duplicate edges (identical `(from,to,type)` tuples) are tallied so traversal/pipeline counts stay deterministic and regressions surface quickly.
-- Invalid label/property references (metadata rows pointing at missing entities) are reported, and `safety-check --strict` fails builds whenever any of the above appear.
-- Integrity sweeps (`safety-check --sweep`) perform a deep table walk (entities/edges/labels/properties), verifying sorted IDs, valid JSON payloads, and metadata references before committing to pipelines or migrations.
+- Invalid label/property references (metadata rows pointing at missing entities) are reported by the safety-check helpers.
+- Integrity sweeps perform a deep table walk (entities/edges/labels/properties), verifying sorted IDs, valid JSON payloads, and metadata references before committing to pipelines or migrations.
 
 ## DSL Constraints
 
@@ -116,7 +152,9 @@ sqlitegraph --db graph.db pagerank --iterations 100
 
 Performance thresholds in sqlitegraph_bench.json gate releases. Benchmarks produce HTML reports under `target/criterion`. Use `cargo bench --bench bench_insert` (etc.) to isolate suites. The `bench_driver` binary runs all benches sequentially and surfaces pass/fail summaries.
 
-The CLI metrics command (`sqlitegraph --db <path> --command metrics [--reset-metrics]`) reports the live instrumentation snapshot—prepare/execute counts, transaction begins/commits/rollbacks, plus cache hits/misses—and optionally clears the counters so operators can capture deltas while reproducing workloads.
+Runtime instrumentation is exposed through the core APIs used by benchmarks and
+integration tests: prepare/execute counts, transaction begins/commits/rollbacks,
+and cache hits/misses can be captured while reproducing workloads.
 
 ## Schema Compatibility Matrix
 
@@ -127,9 +165,9 @@ The CLI metrics command (`sqlitegraph --db <path> --command metrics [--reset-met
 | Future | The CLI refuses to open DBs whose version exceeds the compiled `SCHEMA_VERSION`. |
 
 Upgrade workflow:
-1. Inspect version with `sqlitegraph --command status` (shows `schema_version=N`).
-2. Run `sqlitegraph --command migrate --dry-run` to view pending steps.
-3. Execute `sqlitegraph --command migrate` (or call the library helper) to apply migrations atomically; history entries are appended automatically.
+1. Inspect the database with `sqlitegraph --db <path> status`.
+2. Review pending migrations through the library migration helpers.
+3. Apply migrations atomically through the library helper; history entries are appended automatically.
 
 ## Ecosystem
 
@@ -146,6 +184,7 @@ Tools built on SQLiteGraph:
 
 - [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) - System design
 - [Manual](https://github.com/oldnordic/sqlitegraph/blob/main/MANUAL.md) - API guide
+- [Query Language](https://github.com/oldnordic/sqlitegraph/blob/main/docs/QUERY_LANGUAGE.md) - Cypher-inspired query reference
 - [Changelog](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) - Version history
 - [SnapshotId Migration Guide](https://github.com/oldnordic/sqlitegraph/blob/main/docs/SNAPSHOTID_MIGRATION.md) - v2.1.2 API changes
 

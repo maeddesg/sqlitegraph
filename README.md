@@ -3,20 +3,28 @@
 [![crates.io](https://img.shields.io/crates/v/sqlitegraph.svg)](https://crates.io/crates/sqlitegraph)
 [![Documentation](https://docs.rs/sqlitegraph/badge.svg)](https://docs.rs/sqlitegraph)
 
-Embedded graph database with dual backend architecture.
+Embedded graph database with dual backend architecture, graph algorithms,
+Cypher-inspired queries, and HNSW vector search.
 
 **Positioning:** Single-binary embedded database (no server). Persistent storage with
 atomic batch commits. Graph algorithms + HNSW vector search in one engine.
 SQLite: stable, mature, excellent for adjacency queries. V3: high-performance,
 designed for large-scale graphs, faster for bulk traversals. See benchmarks below.
 
-## Recent Changes
+## Current Main
 
-**v2.2.4** — V3 batch insert crash fix, regression test rewrite, fresh SQLite vs V3 benchmarks:
+The current unreleased tree builds on `v2.4.0` with a larger query and
+tooling surface:
 
-- Fixed V3 `NodeStore::insert_node` retry path missing file write when `file_coordinator=None`
-- Rewrote `cluster_offset_corruption_regression.rs` to use `GraphBackend` API (portable across backends)
-- Full SQLite vs V3 benchmark comparison: V3 5.5x faster for small BFS, SQLite faster at scale
+- Cypher-inspired `MATCH`, `CREATE`, `SET`, `DELETE`, multi-hop, variable-depth,
+  star/multi-pattern joins, `WHERE` with precedence/parentheses, and HNSW
+  vector search via `CALL db.index.vector.queryNodes(...)`.
+- CLI coverage for PageRank, betweenness, WCC/SCC, Louvain, label propagation,
+  cycle search, dominators, topological sort, critical path, and HNSW
+  create/insert/search/list/delete.
+- Python `Graph.query()` plus algorithm bindings for SCC, label propagation,
+  cycle search, dominators, critical path, and HNSW index deletion.
+- V3 durability fixes and HNSW autoload persistence fixes.
 
 See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) for full history.
 
@@ -64,10 +72,10 @@ cargo bench --features native-v3 --bench backend_comparison
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "2.2"
+sqlitegraph = "2.4"
 
 # OR Native V3 backend (faster traversals)
-sqlitegraph = { version = "2.2", features = ["native-v3"] }
+sqlitegraph = { version = "2.4", features = ["native-v3"] }
 ```
 
 ```rust
@@ -94,12 +102,57 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```bash
 cargo install sqlitegraph-cli
 
-# Query (read-only by default)
+# Query
 sqlitegraph --db graph.db query "MATCH (n:User) RETURN n.name"
 
 # Algorithms
-sqlitegraph --db graph.db bfs --start 1 --max-depth 3
-sqlitegraph --db graph.db pagerank --iterations 100
+sqlitegraph --db graph.db bfs --start 1 --depth 3
+sqlitegraph --db graph.db algo pagerank --iterations 100
+```
+
+## Copy-Paste Demos
+
+### Python: CRUD, Query, Algorithms, HNSW
+
+```python
+from sqlitegraph import Graph
+
+g = Graph.open_in_memory()
+
+alice = g.add_node(kind="User", name="Alice", data={"age": 30})
+bob = g.add_node(kind="User", name="Bob", data={"age": 31})
+g.add_edge(alice, bob, "KNOWS")
+
+print(g.query("MATCH (a:User)-[:KNOWS]->(b:User) RETURN a.name, b.name"))
+print(g.strongly_connected_components())
+
+idx = g.create_hnsw_index("embeddings", dimension=3, metric="cosine")
+idx.insert_vector([1.0, 0.8, 0.1], {"label": "graph databases"})
+idx.insert_vector([0.1, 0.2, 1.0], {"label": "baking"})
+print(idx.search([1.0, 0.9, 0.0], 1))
+g.delete_hnsw_index("embeddings")
+```
+
+### CLI: From Empty Database to Query Result
+
+```bash
+rm -f /tmp/sqlitegraph-demo.db
+
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write insert --kind User --name Alice --data '{"age":30}'
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write insert --kind User --name Bob --data '{"age":31}'
+sqlitegraph --db /tmp/sqlitegraph-demo.db --write query 'CREATE (1)-[:KNOWS]->(2)'
+
+sqlitegraph --db /tmp/sqlitegraph-demo.db query 'MATCH (a:User)-[:KNOWS]->(b:User) RETURN a.name, b.name'
+sqlitegraph --db /tmp/sqlitegraph-demo.db algo scc
+```
+
+### Rust: Hybrid Runtime
+
+The Rust example below shows the full mixed-runtime story: ordinary SQLite rows,
+Native V3 graph metadata, SQLite-backed HNSW vectors, and V3 pub/sub:
+
+```bash
+cargo run -p sqlitegraph --example hybrid_sqlite_v3_hnsw_pubsub --features native-v3
 ```
 
 ## Python
@@ -124,11 +177,13 @@ g.add_edge(alice, order, "placed")
 print(g.neighbors(alice))
 ```
 
-The Python surface covers node/edge CRUD, BFS/k-hop/shortest path, PageRank +
-Louvain + connected components, HNSW vector indexes, typed exceptions
-(`GraphError`, `NotFoundError`, `InvalidArgumentError`, `BackendError`), and
-type stubs for editors. See [`sqlitegraph-py/README.md`](./sqlitegraph-py/README.md)
-for the full Python API and examples.
+The Python surface covers node/edge CRUD, BFS/k-hop/shortest path, PageRank,
+Louvain, connected components, SCC, label propagation, cycle search,
+dominators, critical path, `Graph.query()`, HNSW vector indexes, typed
+exceptions (`GraphError`, `NotFoundError`, `InvalidArgumentError`,
+`BackendError`), and type stubs for editors. See
+[`sqlitegraph-py/README.md`](./sqlitegraph-py/README.md) for the full Python API
+and examples.
 
 ## Ecosystem
 
@@ -145,6 +200,7 @@ Tools built on SQLiteGraph:
 
 - [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) - System design
 - [Manual](https://github.com/oldnordic/sqlitegraph/blob/main/MANUAL.md) - API guide
+- [Query Language](https://github.com/oldnordic/sqlitegraph/blob/main/docs/QUERY_LANGUAGE.md) - Cypher-inspired query reference
 - [Changelog](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) - Version history
 - [SnapshotId Migration Guide](https://github.com/oldnordic/sqlitegraph/blob/main/docs/SNAPSHOTID_MIGRATION.md) - v2.1.2 API changes
 

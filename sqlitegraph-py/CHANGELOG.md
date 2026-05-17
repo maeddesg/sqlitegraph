@@ -3,6 +3,20 @@
 This file tracks releases of the `sqlitegraph` package on PyPI. The Rust
 crate of the same name has its own changelog at the repository root.
 
+## [Unreleased]
+
+### Added
+- **`Graph.query(query_str)`** — Exposes the Cypher-inspired query runtime from
+  Python. Returns a dict with `results` and `count`.
+- **Additional algorithm bindings**:
+  - `Graph.strongly_connected_components()`
+  - `Graph.label_propagation(max_iterations=50)`
+  - `Graph.find_cycles(limit=100)`
+  - `Graph.dominators(entry)`
+  - `Graph.critical_path()`
+- **`Graph.delete_hnsw_index(name)`** — Deletes an HNSW index from both the
+  in-memory registry and the SQLite-backed vector tables.
+
 ## [0.3.0] - 2026-05-16
 
 ### Added

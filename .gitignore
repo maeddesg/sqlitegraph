@@ -99,3 +99,8 @@ docs/internal/
 # Agent instructions — local only, not for repo
 **/CLAUDE.md
 **/AGENTS.md
+
+# Local agent/runtime artifacts
+.hermes/
+.magellan/
+PR/

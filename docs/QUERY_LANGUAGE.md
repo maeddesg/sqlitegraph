@@ -182,7 +182,10 @@ When accessing node fields in RETURN or WHERE:
 ## CLI Usage
 
 ```bash
-sqlitegraph query "MATCH (n:Function) RETURN n.name" --db graph.db
+sqlitegraph --db graph.db query "MATCH (n:Function) RETURN n.name"
+
+# Write-intended statements should be run with --write.
+sqlitegraph --db graph.db --write query 'CREATE (1)-[:CALLS]->(2)'
 ```
 
 ## Python Usage
@@ -198,7 +201,11 @@ for row in result["results"]:
 
 ## Supported Labels
 
-Labels in node patterns (e.g., `:Function`) map to the `kind` field of nodes. For edge patterns to use label filtering efficiently, labels must be registered via the index API (`add_label` in Rust). The `insert_node` method stores the `kind` but does not auto-register labels.
+Labels in node scan patterns (e.g., `MATCH (n:Function)`) map to the node
+`kind` field. For edge traversal patterns, endpoint label filters are routed
+through the triple-pattern label index; for nodes inserted through normal
+node APIs, use an unlabeled edge pattern plus `WHERE a.kind = "Function"` until
+that label metadata has been registered.
 
 ## Limitations
 

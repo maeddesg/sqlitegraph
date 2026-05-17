@@ -1,7 +1,7 @@
 # SQLiteGraph API Reference
 
-**Version:** v2.1.2  
-**Last Updated:** 2026-04-24
+**Version:** v2.4.0 plus current unreleased changes
+**Last Updated:** 2026-05-18
 
 The complete API documentation is available at **[docs.rs/sqlitegraph](https://docs.rs/sqlitegraph)**.
 
@@ -24,6 +24,7 @@ This document provides a quick overview of the main API surface.
 - [SQLite Backend API](#sqlite-backend-api)
 - [Native V3 Backend API](#native-v3-backend-api)
 - [Graph Algorithms API](#graph-algorithms-api)
+- [Cypher-Inspired Query API](#cypher-inspired-query-api)
 - [HNSW Vector Search API](#hnsw-vector-search-api)
 - [KV Store API](#kv-store-api)
 - [Pub/Sub API](#pubsub-api)
@@ -59,8 +60,12 @@ create_user(&v3, "Bob")?;
 | Method | Description |
 |--------|-------------|
 | `insert_node(spec)` | Insert node, returns ID |
+| `insert_nodes_bulk(items)` | Insert many nodes atomically |
 | `insert_edge(spec)` | Insert edge, returns ID |
+| `insert_edges_bulk(items)` | Insert many edges atomically |
 | `neighbors(snapshot, node, query)` | Get neighbors with direction filter |
+| `bfs_filtered(snapshot, start, depth, edge_types, direction)` | BFS restricted to edge types |
+| `shortest_path_filtered(snapshot, start, end, edge_types)` | Shortest path restricted to edge types |
 | `entity_ids()` | Get all node IDs |
 | `subscribe(filter)` | Subscribe to events (Pub/Sub) |
 | `kv_get(snapshot, key)` | Get KV value |
@@ -299,6 +304,32 @@ let scores = algo::pagerank(&sqlite, 0.85, 50)?;
 **Total: 35+ algorithms**
 
 See [GRAPH_ALGORITHMS_GUIDE.md](docs/GRAPH_ALGORITHMS_GUIDE.md) for complete list.
+
+---
+
+## Cypher-Inspired Query API
+
+The query parser and executor live in `sqlitegraph::cypher` and currently
+require the SQLite backend for execution:
+
+```rust
+use sqlitegraph::backend::sqlite::SqliteGraphBackend;
+
+let backend = SqliteGraphBackend::in_memory()?;
+let query = sqlitegraph::cypher::parse(
+    "MATCH (a:User)-[:KNOWS]->(b:User) RETURN a.name, b.name",
+)?;
+let result = sqlitegraph::cypher::execute(&backend, &query)?;
+println!("{}", result);
+```
+
+Supported statements include `MATCH`, `CREATE`, `SET`, `DELETE`, and
+`CALL db.index.vector.queryNodes(...)`. See
+[docs/QUERY_LANGUAGE.md](docs/QUERY_LANGUAGE.md) for the full grammar and the
+CLI/Python examples.
+
+Python exposes the same executor through `Graph.query(query_str)` and returns a
+dict with `results` and `count`.
 
 ---
 
