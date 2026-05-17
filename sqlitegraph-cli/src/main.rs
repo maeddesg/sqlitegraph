@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use serde_json::json;
-use sqlitegraph_cli::cli::{AlgoCommands, Cli, Commands, Direction};
+use sqlitegraph_cli::cli::{AlgoCommands, Cli, Commands, Direction, HnswCommands};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -14,6 +14,16 @@ fn main() -> Result<()> {
                     "This command modifies the database. Use --write flag to enable write mode"
                 );
             }
+            Commands::Hnsw { command } => match command {
+                HnswCommands::Create { .. }
+                | HnswCommands::Insert { .. }
+                | HnswCommands::Delete { .. } => {
+                    anyhow::bail!(
+                        "This command modifies the database. Use --write flag to enable write mode"
+                    );
+                }
+                HnswCommands::Search { .. } | HnswCommands::List => {}
+            },
             _ => {}
         }
     }
@@ -37,6 +47,7 @@ fn main() -> Result<()> {
         Commands::Export { output } => run_export(&client, &output),
         Commands::Import { input } => run_import(&client, &input),
         Commands::Insert { kind, name, data } => run_insert(&client, &kind, &name, data),
+        Commands::Hnsw { command } => run_hnsw(&client, command),
     }
 }
 
@@ -434,4 +445,142 @@ fn run_insert(
         }))?
     );
     Ok(())
+}
+
+fn run_hnsw(client: &sqlitegraph_cli::client::CliClient, command: HnswCommands) -> Result<()> {
+    use sqlitegraph::hnsw::config::HnswConfig;
+    use sqlitegraph::hnsw::distance_metric::DistanceMetric;
+
+    let graph = client
+        .sqlite_graph()
+        .context("HNSW operations require SQLite backend")?;
+
+    match command {
+        HnswCommands::Create {
+            name,
+            dim,
+            metric,
+            m,
+            ef_construction,
+        } => {
+            let dist = match metric.as_str() {
+                "cosine" => DistanceMetric::Cosine,
+                "euclidean" => DistanceMetric::Euclidean,
+                "dot" => DistanceMetric::DotProduct,
+                other => anyhow::bail!(
+                    "unknown distance metric `{other}` (expected: cosine, euclidean, dot)"
+                ),
+            };
+            let config = HnswConfig::new(dim, m, ef_construction, dist);
+            let _guard = graph
+                .hnsw_index_persistent(&name, config)
+                .context("create HNSW index")?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "operation": "create",
+                    "name": name,
+                    "dim": dim,
+                    "metric": metric,
+                    "m": m,
+                    "ef_construction": ef_construction,
+                    "status": "created",
+                }))?
+            );
+        }
+        HnswCommands::Insert {
+            name,
+            vector,
+            metadata,
+        } => {
+            let vec = parse_vector_string(&vector)?;
+            let meta: Option<serde_json::Value> = match metadata {
+                Some(m) => Some(
+                    serde_json::from_str(&m)
+                        .with_context(|| format!("parse metadata JSON `{m}`"))?,
+                ),
+                None => None,
+            };
+            let id = graph
+                .get_hnsw_index_mut(&name, |idx| idx.insert_vector(&vec, meta))
+                .context("look up HNSW index")?
+                .context("insert vector")?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "operation": "insert",
+                    "name": name,
+                    "id": id,
+                }))?
+            );
+        }
+        HnswCommands::Search { name, k, vector } => {
+            let vec = parse_vector_string(&vector)?;
+            let results = graph
+                .get_hnsw_index_ref(&name, |idx| idx.search(&vec, k))
+                .context("look up HNSW index")?
+                .context("HNSW search")?;
+            let rows: Vec<serde_json::Value> = results
+                .iter()
+                .map(|(id, score)| json!({"id": id, "score": score}))
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "operation": "search",
+                    "name": name,
+                    "k": k,
+                    "count": rows.len(),
+                    "results": rows,
+                }))?
+            );
+        }
+        HnswCommands::List => {
+            let names = graph
+                .list_hnsw_indexes()
+                .context("list HNSW indexes")?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "operation": "list",
+                    "count": names.len(),
+                    "indexes": names,
+                }))?
+            );
+        }
+        HnswCommands::Delete { name } => {
+            graph
+                .delete_hnsw_index(&name)
+                .context("delete HNSW index")?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "operation": "delete",
+                    "name": name,
+                    "status": "deleted",
+                }))?
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Parse a comma-separated string of floats into a `Vec<f32>`.
+fn parse_vector_string(s: &str) -> Result<Vec<f32>> {
+    let mut out = Vec::new();
+    for part in s.split(',') {
+        let p = part.trim();
+        if p.is_empty() {
+            continue;
+        }
+        let v: f32 = p
+            .parse()
+            .with_context(|| format!("invalid float `{p}` in vector"))?;
+        out.push(v);
+    }
+    if out.is_empty() {
+        anyhow::bail!("vector is empty");
+    }
+    Ok(out)
 }

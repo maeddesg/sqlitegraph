@@ -100,6 +100,13 @@ sqlitegraph algo cycles -l 100          # find up to N cycles
 sqlitegraph algo dominators -e 1        # dominator tree from entry node 1
 sqlitegraph algo critical-path          # longest path through the DAG
 sqlitegraph algo topo                   # topological sort
+
+# HNSW vector index (read-only ops; --write needed for create/insert/delete)
+sqlitegraph --write hnsw create --name embeddings --dim 384 --metric cosine
+sqlitegraph --write hnsw insert --name embeddings --vector "0.1,0.2,0.3,..."
+sqlitegraph hnsw search --name embeddings --k 5 --vector "0.1,0.2,0.3,..."
+sqlitegraph hnsw list
+sqlitegraph --write hnsw delete --name embeddings
 ```
 
 ### Data Modification (Requires --write)

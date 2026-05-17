@@ -103,6 +103,61 @@ pub enum Commands {
         #[arg(short, long)]
         data: Option<String>,
     },
+
+    /// HNSW vector index operations
+    Hnsw {
+        #[command(subcommand)]
+        command: HnswCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum HnswCommands {
+    /// Create a new HNSW index (requires --write)
+    Create {
+        #[arg(short, long)]
+        name: String,
+        /// Vector dimension
+        #[arg(short, long)]
+        dim: usize,
+        /// Distance metric: cosine, euclidean, or dot
+        #[arg(short, long, default_value = "cosine")]
+        metric: String,
+        /// Max edges per node per layer
+        #[arg(long, default_value = "16")]
+        m: usize,
+        /// Beam width during construction
+        #[arg(long, default_value = "200")]
+        ef_construction: usize,
+    },
+    /// Insert a vector into an existing HNSW index (requires --write)
+    Insert {
+        #[arg(short, long)]
+        name: String,
+        /// Comma-separated f32 values, e.g. `1.0,0.5,-0.25`
+        #[arg(short, long)]
+        vector: String,
+        /// Optional JSON metadata to attach to the vector
+        #[arg(long)]
+        metadata: Option<String>,
+    },
+    /// Search for the k nearest neighbours of a query vector
+    Search {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long, default_value = "10")]
+        k: usize,
+        /// Comma-separated f32 values, e.g. `1.0,0.5,-0.25`
+        #[arg(short, long)]
+        vector: String,
+    },
+    /// List all HNSW indices loaded on the graph
+    List,
+    /// Delete an HNSW index (requires --write)
+    Delete {
+        #[arg(short, long)]
+        name: String,
+    },
 }
 
 #[derive(Subcommand)]

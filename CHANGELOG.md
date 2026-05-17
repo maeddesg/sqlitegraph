@@ -8,6 +8,8 @@
 - **Cypher WHERE precedence** — Mixed `AND`/`OR` in a single `WHERE` clause now parses with standard precedence (`OR` binds looser than `AND`). `a AND b OR c` parses to `(a AND b) OR c`. The `CypherQuery` struct's WHERE storage moved from `where_clauses: Vec<WhereClause>` + `where_combinator: WhereCombinator` to `where_groups: Vec<Vec<WhereClause>>` (disjunctive normal form: outer OR, inner AND). The `WhereCombinator` enum was removed; the combinator is now encoded in the structure. Pure-AND and pure-OR queries still parse identically (just nested one level deeper).
 
 ### Added
+- **CLI HNSW subcommands** — Full `sqlitegraph hnsw` command group: `create --name --dim --metric --m --ef-construction`, `insert --name --vector --metadata`, `search --name --k --vector`, `list`, `delete --name`. Vectors are comma-separated f32s (e.g. `"1.0,0.5,-0.25"`). Read-only commands (`search`, `list`) work without `--write`; everything else requires it. All output is pretty-printed JSON matching the existing CLI convention.
+- **`SqliteGraph::delete_hnsw_index`** — Public method to remove an index from both the in-memory cache and the persisted SQLite tables, paired symmetrically with `hnsw_index_persistent` for create.
 - **Cypher-inspired query language** in `sqlitegraph-core/src/cypher.rs`. The new public API is `sqlitegraph::cypher::parse(query)` returning a `CypherQuery` and `sqlitegraph::cypher::execute(backend, &query)` returning a JSON `serde_json::Value`. Supported grammar:
   - `MATCH (n)`, `MATCH (n:Label)`, `MATCH (n:Label {key: "value"})`
   - Edge patterns `(a)-[:REL]->(b)`, backward `<-[:REL]-`, undirected `-[:REL]-`
@@ -35,6 +37,7 @@
   All subcommands emit pretty-printed JSON matching the existing algo output convention (`{"algorithm": ..., ...}`).
 
 ### Fixed
+- **HNSW index autoload now persists subsequent inserts** — `SqliteGraph::load_hnsw_indexes` (called at graph open time) previously left every loaded index with an `InMemoryVectorStorage`, so vectors inserted in any session after the one that created the index were silently dropped on close. For file-based databases the loader now opens a fresh connection to the same file and swaps in `SQLiteVectorStorage`, so insert/search across CLI invocations works end-to-end. In-memory databases keep the in-memory storage as before.
 - **V3 `header.total_pages` never persisted** — `flush_to_disk()` wrote the header to disk but never updated `header.total_pages` from the allocator. On reopen, `PageAllocator::new()` received `total_pages = 0` and started allocating from page 2, overwriting existing node/edge pages. Fixed by syncing `header.total_pages = allocator.total_pages()` before every header sync.
 - **V3 `flush_to_disk()` now writes KV checkpoint + WAL checkpoint + WAL truncate** — Previously `flush()` only synced the header and flushed WAL, leaving the KV store in-memory only. Now writes `.v3checkpoint`, writes a WAL checkpoint record, flushes WAL, and truncates WAL so KV data survives reopen.
 - **V3 `open()` now recovers KV store** — `V3Backend::open()` now calls `WALRecovery::recover_kv()` to restore KV data from WAL or checkpoint file. Previously the KV store was initialized as `None` and never recovered.

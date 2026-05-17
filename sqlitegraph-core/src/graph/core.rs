@@ -239,7 +239,10 @@ impl SqliteGraph {
     /// Load HNSW indexes from database
     ///
     /// This is called during SqliteGraph construction to restore any
-    /// previously created HNSW indexes with full vector data.
+    /// previously created HNSW indexes with full vector data. When the
+    /// underlying database is file-based, each loaded index gets a
+    /// `SQLiteVectorStorage` attached so subsequent inserts persist to
+    /// disk instead of being dropped at process exit.
     fn load_hnsw_indexes(
         conn: &Connection,
     ) -> Result<HashMap<String, HnswIndex>, SqliteGraphError> {
@@ -250,10 +253,52 @@ impl SqliteGraph {
             SqliteGraphError::invalid_input(format!("Failed to load HNSW indexes: {}", e))
         })?;
 
+        // Determine the underlying file path so we can attach a persistent
+        // storage backend. Empty path == in-memory database; leave the
+        // default in-memory storage in place in that case.
+        let db_path: String = conn
+            .pragma_query_value(None, "database_list", |row| row.get::<_, String>(2))
+            .unwrap_or_default();
+
         // Load each index with vectors
         for name in index_names {
             match HnswIndex::load_with_vectors(conn, &name) {
-                Ok(hnsw) => {
+                Ok(mut hnsw) => {
+                    if !db_path.is_empty() && db_path != ":memory:" {
+                        match HnswIndex::get_index_id(conn, &name) {
+                            Ok(Some(index_id)) => {
+                                match rusqlite::Connection::open(&db_path) {
+                                    Ok(storage_conn) => {
+                                        let _ = crate::schema::ensure_schema(&storage_conn);
+                                        hnsw.storage = Box::new(
+                                            crate::hnsw::storage::SQLiteVectorStorage::new(
+                                                index_id,
+                                                storage_conn,
+                                            ),
+                                        );
+                                    }
+                                    Err(e) => {
+                                        eprintln!(
+                                            "Warning: HNSW index '{}' loaded with in-memory storage; failed to open persistent storage: {}",
+                                            name, e
+                                        );
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                eprintln!(
+                                    "Warning: HNSW index '{}' has no id row in hnsw_indexes; staying with in-memory storage",
+                                    name
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "Warning: failed to look up id for HNSW index '{}': {}",
+                                    name, e
+                                );
+                            }
+                        }
+                    }
                     indexes.insert(name, hnsw);
                 }
                 Err(e) => {

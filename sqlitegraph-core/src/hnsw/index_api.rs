@@ -623,9 +623,26 @@ impl crate::SqliteGraph {
 
     /// List all HNSW index names
     pub fn list_hnsw_indexes(&self) -> Result<Vec<String>, crate::SqliteGraphError> {
-        
+
 
         let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
         Ok(indexes.keys().cloned().collect())
+    }
+
+    /// Delete an HNSW index by name, removing both the in-memory entry and
+    /// any persisted vectors / metadata in the SQLite tables.
+    pub fn delete_hnsw_index(&self, name: &str) -> Result<(), crate::SqliteGraphError> {
+        // Remove from in-memory map first so other operations can't race
+        // with the DB-side delete.
+        {
+            let mut indexes = self.hnsw_indexes.lock().map_err(|e| {
+                crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e))
+            })?;
+            indexes.remove(name);
+        }
+        let conn = self.connection();
+        HnswIndex::delete_index(conn.underlying(), name)
+            .map_err(|e| crate::SqliteGraphError::invalid_input(format!("delete HNSW index: {}", e)))?;
+        Ok(())
     }
 }
