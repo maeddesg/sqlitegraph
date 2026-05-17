@@ -843,3 +843,136 @@ fn test_execute_contains_edge() {
         .expect("array");
     assert_eq!(results.len(), 1);
 }
+
+// ── Vector queries: `CALL db.index.vector.queryNodes(idx, k, vec)` ──
+
+#[test]
+fn test_parse_call_vector_query_basic() {
+    let q = cypher::parse("CALL db.index.vector.queryNodes('idx', 5, [1.0, 2.0, 3.0])")
+        .expect("parse call");
+    match q.statement {
+        cypher::Statement::CallVectorQuery {
+            index_name,
+            k,
+            vector,
+        } => {
+            assert_eq!(index_name, "idx");
+            assert_eq!(k, 5);
+            assert_eq!(vector, vec![1.0, 2.0, 3.0]);
+        }
+        other => panic!("expected CallVectorQuery, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_call_double_quoted_index_name() {
+    let q = cypher::parse(r#"CALL db.index.vector.queryNodes("embeddings", 3, [0.1, 0.2])"#)
+        .expect("parse call");
+    match q.statement {
+        cypher::Statement::CallVectorQuery { index_name, .. } => {
+            assert_eq!(index_name, "embeddings");
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn test_parse_call_negative_and_scientific_floats() {
+    let q = cypher::parse("CALL db.index.vector.queryNodes('e', 3, [-0.5, 0.25, -1e-3, 2.5e2])")
+        .expect("parse call");
+    match q.statement {
+        cypher::Statement::CallVectorQuery { vector, .. } => {
+            assert_eq!(vector.len(), 4);
+            assert!((vector[0] - -0.5_f32).abs() < f32::EPSILON);
+            assert!((vector[1] - 0.25_f32).abs() < f32::EPSILON);
+            assert!((vector[2] - -0.001_f32).abs() < 1e-6);
+            assert!((vector[3] - 250.0_f32).abs() < f32::EPSILON);
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn test_parse_call_rejects_unknown_function() {
+    let r = cypher::parse("CALL db.index.vector.somethingElse('idx', 5, [1.0])");
+    assert!(r.is_err(), "expected error, got {r:?}");
+}
+
+#[test]
+fn test_parse_call_rejects_wrong_arg_count() {
+    // Missing the vector argument.
+    let r = cypher::parse("CALL db.index.vector.queryNodes('idx', 5)");
+    assert!(r.is_err(), "expected error, got {r:?}");
+}
+
+#[test]
+fn test_parse_call_rejects_non_integer_k() {
+    let r = cypher::parse("CALL db.index.vector.queryNodes('idx', 5.5, [1.0])");
+    assert!(r.is_err(), "expected error, got {r:?}");
+}
+
+#[test]
+fn test_execute_call_vector_query() {
+    use sqlitegraph::hnsw::config::HnswConfig;
+    use sqlitegraph::hnsw::distance_metric::DistanceMetric;
+
+    let graph = SqliteGraph::open_in_memory().expect("open in-memory");
+    let backend = SqliteGraphBackend::from_graph(graph);
+
+    // Build an HNSW index with 3 vectors. We're searching with a query vector
+    // close to vec1; expect vec1 to be the nearest neighbor.
+    let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+    {
+        let mut indexes = backend
+            .graph()
+            .hnsw_index_persistent("vectors", config)
+            .expect("create index");
+        let index = indexes.get_mut("vectors").expect("get_mut");
+        index
+            .insert_vector(&[1.0, 0.0, 0.0], None)
+            .expect("insert 1");
+        index
+            .insert_vector(&[0.0, 1.0, 0.0], None)
+            .expect("insert 2");
+        index
+            .insert_vector(&[0.0, 0.0, 1.0], None)
+            .expect("insert 3");
+    }
+
+    let q = cypher::parse("CALL db.index.vector.queryNodes('vectors', 2, [0.9, 0.1, 0.0])")
+        .expect("parse");
+    let result = cypher::execute(&backend, &q).expect("execute");
+
+    let results = result
+        .get("results")
+        .expect("results")
+        .as_array()
+        .expect("array");
+    assert_eq!(results.len(), 2, "should return k=2 hits");
+
+    // The first hit (smallest Euclidean distance) must be the vec closest to
+    // the query — vec1 (1, 0, 0).
+    let first_score = results[0]
+        .get("score")
+        .expect("score")
+        .as_f64()
+        .expect("f64");
+    let second_score = results[1]
+        .get("score")
+        .expect("score")
+        .as_f64()
+        .expect("f64");
+    assert!(
+        first_score <= second_score,
+        "results must be sorted by ascending distance"
+    );
+}
+
+#[test]
+fn test_execute_call_unknown_index_errors() {
+    let backend = build_test_graph();
+    let q = cypher::parse("CALL db.index.vector.queryNodes('missing', 3, [1.0, 2.0])")
+        .expect("parse");
+    let r = cypher::execute(&backend, &q);
+    assert!(r.is_err(), "expected error for missing index, got {r:?}");
+}

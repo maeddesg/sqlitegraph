@@ -88,6 +88,13 @@ pub enum Statement {
     },
     /// `MATCH (n) ... DELETE n`
     Delete { var: String },
+    /// `CALL db.index.vector.queryNodes('idx', k, [v1, v2, ...])` — HNSW
+    /// k-nearest-neighbour search over an already-loaded vector index.
+    CallVectorQuery {
+        index_name: String,
+        k: usize,
+        vector: Vec<f32>,
+    },
 }
 
 /// One step in a multi-hop pattern: `(from)-[:rel]->(to)`.
@@ -191,8 +198,10 @@ pub fn parse(query: &str) -> Result<CypherQuery, String> {
         parse_match(trimmed)
     } else if upper.starts_with("CREATE ") {
         parse_create(trimmed)
+    } else if upper.starts_with("CALL ") {
+        parse_call(trimmed)
     } else {
-        Err("only MATCH and CREATE queries are supported".into())
+        Err("only MATCH, CREATE, and CALL queries are supported".into())
     }
 }
 
@@ -281,6 +290,105 @@ fn parse_create_edge(s: &str) -> Result<CypherQuery, String> {
         pattern: Pattern::None,
         ..Default::default()
     })
+}
+
+/// Parse `CALL db.index.vector.queryNodes('name', k, [v1, v2, ...])`.
+///
+/// Only one procedure is currently supported. Argument types are positional:
+/// 1. string literal (single or double quotes) — index name
+/// 2. integer — `k` (number of neighbours to return)
+/// 3. bracketed list of f32 literals — query vector
+fn parse_call(query: &str) -> Result<CypherQuery, String> {
+    const PROC: &str = "db.index.vector.queryNodes";
+    let rest = query[5..].trim(); // strip "CALL "
+
+    let open = rest
+        .find('(')
+        .ok_or_else(|| "CALL: missing '(' after procedure name".to_string())?;
+    let proc_name = rest[..open].trim();
+    if proc_name != PROC {
+        return Err(format!(
+            "CALL: unknown procedure `{proc_name}` (only `{PROC}` is supported)"
+        ));
+    }
+    if !rest.ends_with(')') {
+        return Err("CALL: missing closing ')'".into());
+    }
+    let args_str = &rest[open + 1..rest.len() - 1];
+
+    let args = split_call_args(args_str);
+    if args.len() != 3 {
+        return Err(format!(
+            "CALL {PROC}: expected 3 arguments (index_name, k, vector), got {}",
+            args.len()
+        ));
+    }
+
+    let index_name = parse_string_literal(args[0].trim())
+        .ok_or_else(|| format!("CALL: invalid index name `{}`", args[0].trim()))?;
+
+    let k = args[1]
+        .trim()
+        .parse::<usize>()
+        .map_err(|e| format!("CALL: `k` must be a non-negative integer ({e})"))?;
+
+    let vector = parse_vector_literal(args[2].trim())?;
+
+    Ok(CypherQuery {
+        statement: Statement::CallVectorQuery {
+            index_name,
+            k,
+            vector,
+        },
+        pattern: Pattern::None,
+        ..Default::default()
+    })
+}
+
+/// Split a call-argument list on top-level commas, the same way as
+/// [`split_top_level_commas`]. Defined separately so future divergence (e.g.
+/// commas inside `{...}` maps that aren't yet legal here) doesn't churn the
+/// other splitter.
+fn split_call_args(s: &str) -> Vec<String> {
+    split_top_level_commas(s)
+}
+
+/// Parse a single-quoted or double-quoted string literal. Returns `None`
+/// when the input is malformed.
+fn parse_string_literal(s: &str) -> Option<String> {
+    let s = s.trim();
+    if s.len() < 2 {
+        return None;
+    }
+    let first = s.chars().next()?;
+    let last = s.chars().last()?;
+    if (first == '"' || first == '\'') && first == last {
+        Some(s[1..s.len() - 1].to_string())
+    } else {
+        None
+    }
+}
+
+/// Parse `[v1, v2, ...]` into a `Vec<f32>`. Supports negative, decimal, and
+/// scientific notation.
+fn parse_vector_literal(s: &str) -> Result<Vec<f32>, String> {
+    let s = s.trim();
+    let inner = s
+        .strip_prefix('[')
+        .and_then(|x| x.strip_suffix(']'))
+        .ok_or_else(|| format!("CALL: vector must be `[...]`, got `{s}`"))?;
+    let mut out = Vec::new();
+    for part in inner.split(',') {
+        let p = part.trim();
+        if p.is_empty() {
+            continue;
+        }
+        let v: f32 = p
+            .parse()
+            .map_err(|e| format!("CALL: invalid float in vector `{p}` ({e})"))?;
+        out.push(v);
+    }
+    Ok(out)
 }
 
 fn parse_node_id(s: &str) -> Result<i64, String> {
@@ -929,6 +1037,11 @@ pub fn execute(backend: &SqliteGraphBackend, query: &CypherQuery) -> Result<Valu
         } => execute_create_edge(backend, *from_id, *to_id, rel_type),
         Statement::Set { var, field, value } => execute_set(backend, query, var, field, value),
         Statement::Delete { var } => execute_delete(backend, query, var),
+        Statement::CallVectorQuery {
+            index_name,
+            k,
+            vector,
+        } => execute_call_vector_query(backend, index_name, *k, vector),
     }
 }
 
@@ -1490,6 +1603,29 @@ fn execute_delete(
         deleted += 1;
     }
     Ok(serde_json::json!({"deleted": deleted}))
+}
+
+fn execute_call_vector_query(
+    backend: &SqliteGraphBackend,
+    index_name: &str,
+    k: usize,
+    vector: &[f32],
+) -> Result<Value, String> {
+    let graph = backend.graph();
+    let raw_results = graph
+        .get_hnsw_index_ref(index_name, |idx| idx.search(vector, k))
+        .map_err(|e| format!("CALL: graph error: {e}"))?
+        .map_err(|e| format!("CALL: hnsw search failed: {e}"))?;
+
+    let rows: Vec<Value> = raw_results
+        .into_iter()
+        .map(|(id, score)| serde_json::json!({"id": id, "score": score}))
+        .collect();
+
+    Ok(serde_json::json!({
+        "results": rows.clone(),
+        "count": rows.len(),
+    }))
 }
 
 /// For SET/DELETE: collect node IDs that match the MATCH clause.

@@ -6,6 +6,10 @@ SQLiteGraph supports a Cypher-inspired query language for pattern matching and t
 
 ```
 MATCH <pattern> [WHERE <conditions>] [RETURN <fields>] [LIMIT <n>]
+                [SET <var>.<field> = <value> | DELETE <var>]
+CREATE (n:Label {prop: "value"})
+CREATE (<from-id>)-[:REL]->(<to-id>)
+CALL db.index.vector.queryNodes('idx', k, [v1, v2, ...])
 ```
 
 ### Node Patterns
@@ -115,6 +119,39 @@ Cap the number of results:
 ```sql
 MATCH (n:Function) RETURN n.name LIMIT 10
 ```
+
+### Vector Search via CALL
+
+Query an HNSW vector index for the `k` nearest neighbours of a vector:
+
+```sql
+CALL db.index.vector.queryNodes('embeddings', 5, [0.1, 0.2, 0.3, ...])
+```
+
+Arguments are positional:
+1. **Index name** — a single- or double-quoted string. The index must already
+   be loaded (e.g. via `Graph.create_hnsw_index(...)` in Python or
+   `hnsw_index_persistent(...)` in Rust); CALL does not create indices.
+2. **k** — non-negative integer, how many neighbours to return.
+3. **Query vector** — a bracketed list of floats. Negative, decimal, and
+   scientific notation (`1e-3`) are all accepted. Length must match the
+   index's configured dimension.
+
+Result shape:
+
+```json
+{
+  "results": [
+    {"id": 0, "score": 0.10},
+    {"id": 2, "score": 0.42}
+  ],
+  "count": 2
+}
+```
+
+`id` is the HNSW-assigned identifier from `insert_vector` (currently a `u64`,
+independent of graph node ids). `score` is the configured distance metric
+(Euclidean, Cosine, or DotProduct).
 
 ## Field Reference
 

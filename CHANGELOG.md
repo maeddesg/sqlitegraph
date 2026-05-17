@@ -19,6 +19,7 @@
   - `CREATE (n:Label {key: "value"})` and `CREATE (a)-[:REL]->(b)`
   - `MATCH (n) WHERE ... SET n.field = "value"`
   - `MATCH (n) WHERE ... DELETE n`
+  - `CALL db.index.vector.queryNodes('idx', k, [v1, v2, ...])` — k-nearest-neighbour search over an already-loaded HNSW vector index. Returns `{"results": [{"id": ..., "score": ...}], "count": N}`. Reachable from both the CLI (`sqlitegraph query "CALL ..."`) and the Python FFI (`Graph.query("CALL ...")`).
 - **CLI Cypher driver** — `sqlitegraph query "MATCH ..."` now delegates to `sqlitegraph::cypher::parse` + `execute`. `CliClient::sqlite_backend()` exposes the underlying `SqliteGraphBackend` for the cypher runtime; requires the SQLite backend (V3 backend reports an explanatory error).
 - **Python `Graph.query(query_str)`** — Exposes Cypher MATCH/CREATE/SET/DELETE from Python; returns a dict with `results` (list) and `count` (int).
 - **`docs/QUERY_LANGUAGE.md`** — User-facing reference documenting the supported grammar.
