@@ -5,6 +5,15 @@ crate of the same name has its own changelog at the repository root.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-18
+
+### Highlights
+
+Lines up with the Rust `sqlitegraph` 3.0.0 release: the full Cypher
+engine (parens, mixed AND/OR, star/multi-pattern joins, `CALL` vector
+queries) plus broader algorithm coverage and the HNSW autoload-
+persistence fix are all reachable from Python now.
+
 ### Added
 - **`Graph.query(query_str)`** — Exposes the Cypher-inspired query runtime from
   Python. Returns a dict with `results` and `count`.
