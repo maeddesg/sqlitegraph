@@ -114,10 +114,35 @@ pub enum AlgoCommands {
     },
     /// Betweenness centrality
     Betweenness,
-    /// Connected components
+    /// Weakly-connected components
     Components,
+    /// Strongly-connected components (Tarjan)
+    Scc,
     /// Topological sort
     Topo,
+    /// Louvain community detection
+    Louvain {
+        #[arg(short = 'i', long, default_value = "100")]
+        max_iterations: usize,
+    },
+    /// Label-propagation community detection
+    LabelProp {
+        #[arg(short = 'i', long, default_value = "50")]
+        max_iterations: usize,
+    },
+    /// Find cycles in the graph (bounded)
+    Cycles {
+        #[arg(short, long, default_value = "100")]
+        limit: usize,
+    },
+    /// Dominator tree from a given entry node
+    Dominators {
+        /// Entry node id (root of the dominator tree)
+        #[arg(short, long)]
+        entry: i64,
+    },
+    /// Critical path through the DAG (uniform edge weights = longest path)
+    CriticalPath,
 }
 
 #[derive(Clone, Debug, ValueEnum)]

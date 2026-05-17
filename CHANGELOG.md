@@ -18,6 +18,14 @@
 - **CLI Cypher driver** — `sqlitegraph query "MATCH ..."` now delegates to `sqlitegraph::cypher::parse` + `execute`. `CliClient::sqlite_backend()` exposes the underlying `SqliteGraphBackend` for the cypher runtime; requires the SQLite backend (V3 backend reports an explanatory error).
 - **Python `Graph.query(query_str)`** — Exposes Cypher MATCH/CREATE/SET/DELETE from Python; returns a dict with `results` (list) and `count` (int).
 - **`docs/QUERY_LANGUAGE.md`** — User-facing reference documenting the supported grammar.
+- **CLI algorithm subcommands** — `sqlitegraph algo` now exposes six previously-hidden algorithms from `sqlitegraph::algo`:
+  - `algo scc` — strongly-connected components (Tarjan), reports component count + first 10 components.
+  - `algo louvain --max-iterations N` — Louvain community detection (default 100 iterations).
+  - `algo label-prop --max-iterations N` — label-propagation communities (default 50 iterations).
+  - `algo cycles --limit N` — bounded cycle search (default limit 100).
+  - `algo dominators --entry ID` — dominator tree from a given entry node; emits the `idom` map.
+  - `algo critical-path` — longest path through the DAG using uniform edge weights (`default_weight_fn`); errors with `NotADag` if the graph contains a cycle.
+  All subcommands emit pretty-printed JSON matching the existing algo output convention (`{"algorithm": ..., ...}`).
 
 ### Fixed
 - **V3 `header.total_pages` never persisted** — `flush_to_disk()` wrote the header to disk but never updated `header.total_pages` from the allocator. On reopen, `PageAllocator::new()` received `total_pages = 0` and started allocating from page 2, overwriting existing node/edge pages. Fixed by syncing `header.total_pages = allocator.total_pages()` before every header sync.

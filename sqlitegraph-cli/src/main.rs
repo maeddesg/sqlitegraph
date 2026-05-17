@@ -267,6 +267,101 @@ fn run_algo(client: &sqlitegraph_cli::client::CliClient, command: AlgoCommands) 
                 }))?
             );
         }
+        AlgoCommands::Scc => {
+            let result = strongly_connected_components(graph)?;
+            let components_out: Vec<Vec<i64>> = result
+                .components
+                .iter()
+                .map(|c| {
+                    let mut ids: Vec<i64> = c.iter().copied().collect();
+                    ids.sort_unstable();
+                    ids
+                })
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "scc",
+                    "component_count": components_out.len(),
+                    "components": components_out.iter().take(10).collect::<Vec<_>>(),
+                }))?
+            );
+        }
+        AlgoCommands::Louvain { max_iterations } => {
+            let communities = louvain_communities(graph, max_iterations)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "louvain",
+                    "max_iterations": max_iterations,
+                    "community_count": communities.len(),
+                    "communities": communities.iter().take(10).collect::<Vec<_>>(),
+                }))?
+            );
+        }
+        AlgoCommands::LabelProp { max_iterations } => {
+            let communities = label_propagation(graph, max_iterations)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "label_propagation",
+                    "max_iterations": max_iterations,
+                    "community_count": communities.len(),
+                    "communities": communities.iter().take(10).collect::<Vec<_>>(),
+                }))?
+            );
+        }
+        AlgoCommands::Cycles { limit } => {
+            let cycles = find_cycles_limited(graph, limit)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "cycles",
+                    "limit": limit,
+                    "cycle_count": cycles.len(),
+                    "cycles": cycles.iter().take(10).collect::<Vec<_>>(),
+                }))?
+            );
+        }
+        AlgoCommands::Dominators { entry } => {
+            let result = dominators(graph, entry)?;
+            let idom_out: serde_json::Map<String, serde_json::Value> = result
+                .idom
+                .iter()
+                .map(|(node, parent)| {
+                    (
+                        node.to_string(),
+                        match parent {
+                            Some(p) => json!(p),
+                            None => json!(null),
+                        },
+                    )
+                })
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "dominators",
+                    "entry": entry,
+                    "node_count": result.idom.len(),
+                    "idom": idom_out,
+                }))?
+            );
+        }
+        AlgoCommands::CriticalPath => {
+            // Uniform edge weights: critical path == longest path by edge count.
+            let weight_fn: &WeightCallback = &default_weight_fn;
+            let result = critical_path(graph, weight_fn)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "algorithm": "critical_path",
+                    "path_length": result.path.len(),
+                    "distance": result.distance,
+                    "path": result.path,
+                }))?
+            );
+        }
     }
 
     Ok(())

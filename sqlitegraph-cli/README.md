@@ -92,7 +92,14 @@ sqlitegraph neighbors --id 5 --direction outgoing
 # Algorithms
 sqlitegraph algo pagerank --iterations 100
 sqlitegraph algo betweenness
-sqlitegraph algo components
+sqlitegraph algo components             # weakly-connected components
+sqlitegraph algo scc                    # strongly-connected components (Tarjan)
+sqlitegraph algo louvain -i 100         # Louvain community detection
+sqlitegraph algo label-prop -i 50       # label-propagation communities
+sqlitegraph algo cycles -l 100          # find up to N cycles
+sqlitegraph algo dominators -e 1        # dominator tree from entry node 1
+sqlitegraph algo critical-path          # longest path through the DAG
+sqlitegraph algo topo                   # topological sort
 ```
 
 ### Data Modification (Requires --write)
