@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/sqlitegraph-cli.svg)](https://crates.io/crates/sqlitegraph-cli)
 [![Documentation](https://docs.rs/sqlitegraph-cli/badge.svg)](https://docs.rs/sqlitegraph-cli)
 
-Command-line interface for SQLiteGraph graph database.
+Command-line interface for SQLiteGraph — an embedded graph and vector runtime.
 
 ## Installation
 
@@ -22,15 +22,37 @@ cargo install --path .
 ## Quick Start
 
 ```bash
-# Query using Cypher-like syntax (read-only by default)
-sqlitegraph --db mygraph.db query "MATCH (n:User) RETURN n.name"
+# Cypher-inspired queries with edge traversal, WHERE, LIMIT
+sqlitegraph --db code.db query "MATCH (n:Function) RETURN n.name"
+sqlitegraph --db code.db query "MATCH (a)-[:CALLS]->(b) WHERE b.lang = 'rust' RETURN a.name LIMIT 10"
+sqlitegraph --db code.db query "MATCH (f:File)-[:CONTAINS]->(n) RETURN f, n"
 
-# Run graph algorithms
-sqlitegraph --db mygraph.db bfs --start 1 --max-depth 3
-sqlitegraph --db mygraph.db pagerank --iterations 100
+# Graph algorithms
+sqlitegraph --db code.db bfs --start 1 --max-depth 3
+sqlitegraph --db code.db algo pagerank --iterations 100
 
 # Insert data (requires --write flag)
-sqlitegraph --db mygraph.db --write insert --kind User --name Alice
+sqlitegraph --db code.db --write insert --kind Function --name main
+```
+
+## Query Language
+
+SQLiteGraph supports a Cypher-inspired query language. See [docs/QUERY_LANGUAGE.md](../docs/QUERY_LANGUAGE.md) for the full reference.
+
+### Supported Patterns
+
+```sql
+-- Node scan
+MATCH (n:Function) RETURN n.name
+
+-- Node with property filter
+MATCH (n:Function {lang: "rust"}) RETURN n
+
+-- Edge traversal
+MATCH (a)-[:CALLS]->(b) RETURN a.name, b.name
+
+-- With WHERE and LIMIT
+MATCH (a)-[:CALLS]->(b) WHERE b.lang = "python" RETURN a.name LIMIT 5
 ```
 
 ## Backend Selection
@@ -38,14 +60,14 @@ sqlitegraph --db mygraph.db --write insert --kind User --name Alice
 ### SQLite Backend (Default)
 - Mature, ACID-compliant storage
 - Debuggable with standard SQL tools
-- Best for point lookups
+- Required for Cypher queries
 
 ```bash
 sqlitegraph --backend sqlite --db mygraph.db [command]
 ```
 
 ### Native V3 Backend
-- 10-20× faster traversals
+- 10-20x faster traversals
 - Unlimited node capacity
 - Binary format for graph workloads
 
@@ -57,8 +79,9 @@ sqlitegraph --backend v3 --db mygraph.db [command]
 
 ### Query Commands (Read-Only)
 ```bash
-# Cypher-like queries
+# Cypher-inspired queries
 sqlitegraph query "MATCH (n:User) RETURN n.name"
+sqlitegraph query "MATCH (a)-[:CALLS]->(b) RETURN a, b"
 sqlitegraph query "MATCH (n {role: 'admin'}) RETURN n"
 
 # Graph traversal

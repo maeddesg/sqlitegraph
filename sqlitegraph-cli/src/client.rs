@@ -61,6 +61,15 @@ impl CliClient {
         }
     }
 
+    /// Get SQLite backend reference (for Cypher queries)
+    pub fn sqlite_backend(&self) -> Option<&SqliteGraphBackend> {
+        match self {
+            Self::Sqlite(b) => Some(b),
+            #[cfg(feature = "native-v3")]
+            Self::V3(_) => None,
+        }
+    }
+
     /// Get backend name
     pub fn backend_name(&self) -> &'static str {
         match self {

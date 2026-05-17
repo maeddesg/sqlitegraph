@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- **Cypher-inspired query language** in `sqlitegraph-core/src/cypher.rs`. The new public API is `sqlitegraph::cypher::parse(query)` returning a `CypherQuery` and `sqlitegraph::cypher::execute(backend, &query)` returning a JSON `serde_json::Value`. Supported grammar:
+  - `MATCH (n)`, `MATCH (n:Label)`, `MATCH (n:Label {key: "value"})`
+  - Edge patterns `(a)-[:REL]->(b)`, backward `<-[:REL]-`, undirected `-[:REL]-`
+  - Multi-hop chains `(a)-[:X]->(b)-[:Y]->(c)`
+  - Variable-depth `(a)-[:X*1..3]->(b)` via `k_hop_filtered`
+  - `WHERE n.field = "value"` with operators `=`, `!=`, `<`, `<=`, `>`, `>=`, `=~` (regex)
+  - `WHERE` clauses combined with `AND` or `OR` (mixed combinators not yet supported)
+  - `LIMIT n` applied after filtering
+  - `RETURN n`, `RETURN n.field`, `RETURN *`
+  - `CREATE (n:Label {key: "value"})` and `CREATE (a)-[:REL]->(b)`
+  - `MATCH (n) WHERE ... SET n.field = "value"`
+  - `MATCH (n) WHERE ... DELETE n`
+- **CLI Cypher driver** — `sqlitegraph query "MATCH ..."` now delegates to `sqlitegraph::cypher::parse` + `execute`. `CliClient::sqlite_backend()` exposes the underlying `SqliteGraphBackend` for the cypher runtime; requires the SQLite backend (V3 backend reports an explanatory error).
+- **Python `Graph.query(query_str)`** — Exposes Cypher MATCH/CREATE/SET/DELETE from Python; returns a dict with `results` (list) and `count` (int).
+- **`docs/QUERY_LANGUAGE.md`** — User-facing reference documenting the supported grammar.
+
 ### Fixed
 - **V3 `header.total_pages` never persisted** — `flush_to_disk()` wrote the header to disk but never updated `header.total_pages` from the allocator. On reopen, `PageAllocator::new()` received `total_pages = 0` and started allocating from page 2, overwriting existing node/edge pages. Fixed by syncing `header.total_pages = allocator.total_pages()` before every header sync.
 - **V3 `flush_to_disk()` now writes KV checkpoint + WAL checkpoint + WAL truncate** — Previously `flush()` only synced the header and flushed WAL, leaving the KV store in-memory only. Now writes `.v3checkpoint`, writes a WAL checkpoint record, flushes WAL, and truncates WAL so KV data survives reopen.

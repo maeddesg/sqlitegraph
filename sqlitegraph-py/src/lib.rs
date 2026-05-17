@@ -515,6 +515,32 @@ impl Graph {
         connected_components(self.backend.graph()).map_err(into_pyerr)
     }
 
+    // ── Cypher query language ──────────────────────────────────
+
+    /// Execute a Cypher-inspired query.
+    ///
+    /// Args:
+    ///     query: Cypher query string. Supports:
+    ///         - MATCH (n:Label) RETURN n
+    ///         - MATCH (n:Label {prop: "val"}) RETURN n.name
+    ///         - MATCH (a)-[:REL]->(b) RETURN a, b
+    ///         - WHERE n.field = "value"
+    ///         - LIMIT N
+    ///
+    /// Returns:
+    ///     Dict with "results" (list of dicts) and "count" (int).
+    fn query(&self, py: Python<'_>, query: &str) -> PyResult<Py<PyAny>> {
+        let parsed = sqlitegraph::cypher::parse(query)
+            .map_err(|e| InvalidArgumentError::new_err(format!("parse error: {e}")))?;
+        let result = sqlitegraph::cypher::execute(&self.backend, &parsed)
+            .map_err(|e| GraphError::new_err(format!("execution error: {e}")))?;
+        let json_str = serde_json::to_string(&result)
+            .map_err(|e| GraphError::new_err(format!("serialization error: {e}")))?;
+        py.import("json")?
+            .call_method1("loads", (json_str,))
+            .map(|obj| obj.unbind())
+    }
+
     // ── HNSW vector index ────────────────────────────────────────
 
     /// Create an HNSW vector index.

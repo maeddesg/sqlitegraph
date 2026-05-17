@@ -41,8 +41,10 @@ fn main() -> Result<()> {
 }
 
 fn run_query(client: &sqlitegraph_cli::client::CliClient, query_str: &str) -> Result<()> {
-    let query = sqlitegraph_cli::query::parse(query_str)?;
-    let result = sqlitegraph_cli::query::execute(client.backend(), &query)?;
+    let sqlite_backend = client
+        .sqlite_backend()
+        .context("Cypher queries require SQLite backend")?;
+    let result = sqlitegraph_cli::query::run(sqlite_backend, query_str)?;
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
 }

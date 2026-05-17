@@ -2,7 +2,7 @@
 name = "sqlitegraph-cli"
 version = "2.1.5"
 edition = "2021"
-description = "Command-line interface for SQLiteGraph graph database"
+description = "Command-line interface for SQLiteGraph — embedded graph and vector runtime with Cypher-inspired queries"
 license = "GPL-3.0"
 repository = "https://github.com/oldnordic/sqlitegraph"
 readme = "README.md"
