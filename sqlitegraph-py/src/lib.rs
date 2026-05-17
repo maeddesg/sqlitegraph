@@ -525,8 +525,7 @@ impl Graph {
     /// reverse-topological order (sinks first), matching the underlying core
     /// implementation.
     fn strongly_connected_components(&self) -> PyResult<Vec<Vec<i64>>> {
-        let result =
-            strongly_connected_components(self.backend.graph()).map_err(into_pyerr)?;
+        let result = strongly_connected_components(self.backend.graph()).map_err(into_pyerr)?;
         Ok(result
             .components
             .into_iter()
@@ -543,8 +542,7 @@ impl Graph {
     /// Returns a list of communities; each community is a list of node IDs.
     #[pyo3(signature = (max_iterations=None))]
     fn label_propagation(&self, max_iterations: Option<usize>) -> PyResult<Vec<Vec<i64>>> {
-        label_propagation(self.backend.graph(), max_iterations.unwrap_or(50))
-            .map_err(into_pyerr)
+        label_propagation(self.backend.graph(), max_iterations.unwrap_or(50)).map_err(into_pyerr)
     }
 
     /// Find cycles (bounded).
