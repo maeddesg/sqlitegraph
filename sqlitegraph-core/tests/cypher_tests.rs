@@ -1198,3 +1198,96 @@ fn test_execute_call_unknown_index_errors() {
     let r = cypher::execute(&backend, &q);
     assert!(r.is_err(), "expected error for missing index, got {r:?}");
 }
+
+// ── Regression: label-filtered edge patterns must work after plain
+// `insert_node` without an explicit `add_label` call. Reported against
+// 3.0.0 / py 0.4.0 where the user found that
+//   `MATCH (a:User)-[:KNOWS]->(b:User) RETURN a, b`
+// returned zero rows even though the data was present, because
+// `insert_node` populated `graph_entities.kind` but never registered
+// the kind in `graph_labels` (which `match_triples` joins on).
+
+#[test]
+fn test_label_filtered_edge_match_after_plain_insert_node() {
+    let graph = SqliteGraph::open_in_memory().expect("open");
+    let backend = SqliteGraphBackend::from_graph(graph);
+    let a = backend
+        .insert_node(NodeSpec {
+            kind: "User".into(),
+            name: "Alice".into(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    let b = backend
+        .insert_node(NodeSpec {
+            kind: "User".into(),
+            name: "Bob".into(),
+            file_path: None,
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: a,
+            to: b,
+            edge_type: "KNOWS".into(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+
+    // No explicit `add_label` calls — `kind` alone must be enough.
+    let q =
+        cypher::parse("MATCH (a:User)-[:KNOWS]->(b:User) RETURN a.name, b.name").expect("parse");
+    let result = cypher::execute(&backend, &q).expect("execute");
+    let rows = result.get("results").unwrap().as_array().unwrap();
+    assert_eq!(
+        rows.len(),
+        1,
+        "label-filtered edge MATCH must find the one edge"
+    );
+    assert_eq!(rows[0].get("a.name").unwrap().as_str(), Some("Alice"));
+    assert_eq!(rows[0].get("b.name").unwrap().as_str(), Some("Bob"));
+}
+
+#[test]
+fn test_label_filtered_edge_match_after_bulk_insert() {
+    use sqlitegraph::GraphBackend;
+
+    let graph = SqliteGraph::open_in_memory().expect("open");
+    let backend = SqliteGraphBackend::from_graph(graph);
+    let ids = backend
+        .insert_nodes_bulk(&[
+            NodeSpec {
+                kind: "User".into(),
+                name: "Alice".into(),
+                file_path: None,
+                data: serde_json::json!({}),
+            },
+            NodeSpec {
+                kind: "User".into(),
+                name: "Bob".into(),
+                file_path: None,
+                data: serde_json::json!({}),
+            },
+        ])
+        .unwrap();
+    backend
+        .insert_edge(EdgeSpec {
+            from: ids[0],
+            to: ids[1],
+            edge_type: "KNOWS".into(),
+            data: serde_json::json!({}),
+        })
+        .unwrap();
+
+    let q =
+        cypher::parse("MATCH (a:User)-[:KNOWS]->(b:User) RETURN a.name, b.name").expect("parse");
+    let result = cypher::execute(&backend, &q).expect("execute");
+    let rows = result.get("results").unwrap().as_array().unwrap();
+    assert_eq!(
+        rows.len(),
+        1,
+        "bulk-inserted nodes must register kind as label too"
+    );
+}

@@ -14,18 +14,31 @@ impl SqliteGraph {
         validate_entity(entity)?;
         let data = serde_json::to_string(&entity.data)
             .map_err(|e| SqliteGraphError::invalid_input(e.to_string()))?;
-        self.connection()
-            .execute(
-                "INSERT INTO graph_entities(kind, name, file_path, data) VALUES(?1, ?2, ?3, ?4)",
-                params![
-                    entity.kind.as_str(),
-                    entity.name.as_str(),
-                    entity.file_path.as_deref(),
-                    data,
-                ],
+        let conn = self.connection();
+        conn.execute(
+            "INSERT INTO graph_entities(kind, name, file_path, data) VALUES(?1, ?2, ?3, ?4)",
+            params![
+                entity.kind.as_str(),
+                entity.name.as_str(),
+                entity.file_path.as_deref(),
+                data,
+            ],
+        )
+        .map_err(|e| SqliteGraphError::query(e.to_string()))?;
+        let id = conn.last_insert_rowid();
+        // Auto-register `kind` as a label so `match_triples` can answer
+        // label-filtered edge queries (e.g. `(a:User)-[:KNOWS]->(b:User)`)
+        // without callers having to call `index::add_label` separately.
+        // `INSERT OR IGNORE` is safe against duplicates if the row already
+        // exists (e.g. re-running migrations or future kind/label sync).
+        if !entity.kind.is_empty() {
+            conn.execute(
+                "INSERT OR IGNORE INTO graph_labels(entity_id, label) VALUES(?1, ?2)",
+                params![id, entity.kind.as_str()],
             )
             .map_err(|e| SqliteGraphError::query(e.to_string()))?;
-        Ok(self.connection().last_insert_rowid())
+        }
+        Ok(id)
     }
 
     /// Insert many entities atomically inside a single transaction.
@@ -51,22 +64,34 @@ impl SqliteGraph {
 
         let mut ids = Vec::with_capacity(entities.len());
         let insert_result: Result<(), SqliteGraphError> = (|| {
-            let mut stmt = conn
+            let mut entity_stmt = conn
                 .prepare_cached(
                     "INSERT INTO graph_entities(kind, name, file_path, data) VALUES(?1, ?2, ?3, ?4)",
+                )
+                .map_err(|e| SqliteGraphError::query(e.to_string()))?;
+            let mut label_stmt = conn
+                .prepare_cached(
+                    "INSERT OR IGNORE INTO graph_labels(entity_id, label) VALUES(?1, ?2)",
                 )
                 .map_err(|e| SqliteGraphError::query(e.to_string()))?;
             for entity in entities {
                 let data = serde_json::to_string(&entity.data)
                     .map_err(|e| SqliteGraphError::invalid_input(e.to_string()))?;
-                stmt.execute(params![
-                    entity.kind.as_str(),
-                    entity.name.as_str(),
-                    entity.file_path.as_deref(),
-                    data,
-                ])
-                .map_err(|e| SqliteGraphError::query(e.to_string()))?;
-                ids.push(conn.last_insert_rowid());
+                entity_stmt
+                    .execute(params![
+                        entity.kind.as_str(),
+                        entity.name.as_str(),
+                        entity.file_path.as_deref(),
+                        data,
+                    ])
+                    .map_err(|e| SqliteGraphError::query(e.to_string()))?;
+                let id = conn.last_insert_rowid();
+                if !entity.kind.is_empty() {
+                    label_stmt
+                        .execute(params![id, entity.kind.as_str()])
+                        .map_err(|e| SqliteGraphError::query(e.to_string()))?;
+                }
+                ids.push(id);
             }
             Ok(())
         })();

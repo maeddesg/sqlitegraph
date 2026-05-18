@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-05-18
+
+### Fixed
+
+- **Label-filtered edge MATCH returned zero rows after plain `insert_node`** —
+  `match_triples` joins on `graph_labels` to apply label filters
+  (e.g. `MATCH (a:User)-[:KNOWS]->(b:User)`), but `insert_entity`
+  populated only `graph_entities.kind`, leaving `graph_labels` empty
+  unless callers explicitly invoked `index::add_label`. Both
+  `insert_entity` and `insert_entities_bulk` now auto-register `kind`
+  as a label in the same transaction, so label-filtered edge patterns
+  work out of the box. Reported against the 3.0.0 Cypher executor by a
+  downstream consumer; reproduced from both the Rust API and the
+  Python FFI.
+- **`graph_labels` had no UNIQUE constraint, so `INSERT OR IGNORE` was
+  silently inserting duplicates** — pre-existing latent bug exposed by
+  the auto-label change above. Schema migration `v5` deduplicates any
+  existing rows (`MIN(rowid) GROUP BY entity_id, label`) and adds
+  `UNIQUE INDEX uq_graph_labels_entity_label` so future inserts behave
+  as the `OR IGNORE` semantics imply.
+
+### Tests
+
+- New regression tests in `cypher_tests.rs`:
+  - `test_label_filtered_edge_match_after_plain_insert_node` — asserts
+    `MATCH (a:User)-[:KNOWS]->(b:User)` returns the inserted edge with
+    no explicit `add_label` call.
+  - `test_label_filtered_edge_match_after_bulk_insert` — same
+    invariant via `insert_nodes_bulk`.
+- `instrumentation_tests::test_execute_counter_increments` expectation
+  bumped from `+1` to `+2` to match the new entity+label execute pair
+  with a comment explaining the contract.
+
 ## [3.0.0] - 2026-05-18
 
 ### Highlights

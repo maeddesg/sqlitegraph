@@ -5,6 +5,20 @@ crate of the same name has its own changelog at the repository root.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-18
+
+### Fixed
+
+- **`Graph.query("MATCH (a:User)-[:KNOWS]->(b:User) ...")` returned
+  zero rows** after plain `Graph.add_node(kind="User", ...)` calls.
+  Root cause was in the core `sqlitegraph` crate (fixed in 3.0.1):
+  `insert_entity` only populated `graph_entities.kind` and left
+  `graph_labels` empty, so `match_triples` label joins missed
+  everything. The Python wheel picks up the fix automatically by
+  bumping the bundled core to 3.0.1 — no Python-side code changes
+  beyond the version bump. Workarounds that called the underlying
+  Rust `add_label` helper are no longer necessary.
+
 ## [0.4.0] - 2026-05-18
 
 ### Highlights

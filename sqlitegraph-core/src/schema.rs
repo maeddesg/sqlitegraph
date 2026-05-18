@@ -74,6 +74,19 @@ const MIGRATION_STEPS: &[MigrationStep] = &[
             "INSERT INTO graph_meta_history(version) VALUES(4)",
         ],
     },
+    MigrationStep {
+        target_version: 5,
+        // Enforce label uniqueness so `INSERT OR IGNORE INTO graph_labels`
+        // actually dedupes (the original base schema had no UNIQUE
+        // constraint, so duplicates silently accumulated). The DELETE step
+        // collapses any existing duplicates by keeping the lowest rowid
+        // per (entity_id, label).
+        statements: &[
+            "DELETE FROM graph_labels WHERE rowid NOT IN (SELECT MIN(rowid) FROM graph_labels GROUP BY entity_id, label)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_graph_labels_entity_label ON graph_labels(entity_id, label)",
+            "INSERT INTO graph_meta_history(version) VALUES(5)",
+        ],
+    },
 ];
 
 pub const SCHEMA_VERSION: i64 = BASE_SCHEMA_VERSION + MIGRATION_STEPS.len() as i64;

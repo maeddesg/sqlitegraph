@@ -48,7 +48,12 @@ fn test_execute_counter_increments() -> Result<(), SqliteGraphError> {
     graph.insert_entity(&entity)?;
 
     let after = graph.metrics_snapshot();
-    assert_eq!(before.execute_count + 1, after.execute_count);
+    // insert_entity issues two `execute()` calls: one to insert the row
+    // into `graph_entities`, one to auto-register the kind as a label in
+    // `graph_labels` so subsequent `match_triples` label-filtered edge
+    // patterns find the node. The label INSERT is `OR IGNORE` and is
+    // skipped only when `kind` is empty (which is not the case here).
+    assert_eq!(before.execute_count + 2, after.execute_count);
     assert_eq!(before.prepare_count, after.prepare_count);
     Ok(())
 }
