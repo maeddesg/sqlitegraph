@@ -73,3 +73,19 @@ jobs:
 
       - name: cargo test (lib)
         run: cargo test -p sqlitegraph --lib -- --test-threads=1
+
+      - name: cargo audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
+
+  semgrep:
+    name: Semgrep Security Scan
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Semgrep OSS scan
+        run: semgrep ci --oss-only --config .semgrep/rules/
