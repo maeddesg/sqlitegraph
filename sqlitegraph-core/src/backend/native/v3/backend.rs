@@ -177,11 +177,22 @@ impl<'a> Drop for WriteBatchGuard<'a> {
 impl Drop for V3Backend {
     fn drop(&mut self) {
         // Flush any pending data to disk
-        // This ensures data is persisted when the backend is dropped
-        let _ = self.flush_to_disk();
+        // This ensures data is persisted when the backend is dropped.
+        // Errors here are silent because we cannot panic in Drop, but we
+        // surface them so callers don't silently lose the last transaction
+        // (e.g. on disk-full / read-only-FS).
+        if let Err(e) = self.flush_to_disk() {
+            eprintln!(
+                "[sqlitegraph] V3Backend::drop: flush_to_disk failed: {e}"
+            );
+        }
 
         // Sync header to ensure all metadata is written
-        let _ = self.sync_header();
+        if let Err(e) = self.sync_header() {
+            eprintln!(
+                "[sqlitegraph] V3Backend::drop: sync_header failed: {e}"
+            );
+        }
     }
 }
 
