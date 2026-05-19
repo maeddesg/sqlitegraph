@@ -339,91 +339,69 @@ impl PersistentHeaderV3 {
         let mut magic = [0u8; 8];
         magic.copy_from_slice(&bytes[offset::MAGIC..offset::MAGIC + size::MAGIC]);
 
-        let version = u32::from_be_bytes(
-            bytes[offset::VERSION..offset::VERSION + size::VERSION]
-                .try_into()
-                .unwrap(),
-        );
-        let flags = u32::from_be_bytes(
-            bytes[offset::FLAGS..offset::FLAGS + size::FLAGS]
-                .try_into()
-                .unwrap(),
-        );
-        let node_count = u64::from_be_bytes(
-            bytes[offset::NODE_COUNT..offset::NODE_COUNT + size::NODE_COUNT]
-                .try_into()
-                .unwrap(),
-        );
-        let edge_count = u64::from_be_bytes(
-            bytes[offset::EDGE_COUNT..offset::EDGE_COUNT + size::EDGE_COUNT]
-                .try_into()
-                .unwrap(),
-        );
-        let schema_version = u32::from_be_bytes(
-            bytes[offset::SCHEMA_VERSION..offset::SCHEMA_VERSION + size::SCHEMA_VERSION]
-                .try_into()
-                .unwrap(),
-        );
-        let reserved = u32::from_be_bytes(
-            bytes[offset::RESERVED..offset::RESERVED + size::RESERVED]
-                .try_into()
-                .unwrap(),
-        );
-        let node_data_offset = u64::from_be_bytes(
-            bytes[offset::NODE_DATA_OFFSET..offset::NODE_DATA_OFFSET + size::NODE_DATA_OFFSET]
-                .try_into()
-                .unwrap(),
-        );
-        let edge_data_offset = u64::from_be_bytes(
-            bytes[offset::EDGE_DATA_OFFSET..offset::EDGE_DATA_OFFSET + size::EDGE_DATA_OFFSET]
-                .try_into()
-                .unwrap(),
-        );
-        let outgoing_cluster_offset = u64::from_be_bytes(
-            bytes[offset::OUTGOING_CLUSTER_OFFSET
-                ..offset::OUTGOING_CLUSTER_OFFSET + size::OUTGOING_CLUSTER_OFFSET]
-                .try_into()
-                .unwrap(),
-        );
-        let incoming_cluster_offset = u64::from_be_bytes(
-            bytes[offset::INCOMING_CLUSTER_OFFSET
-                ..offset::INCOMING_CLUSTER_OFFSET + size::INCOMING_CLUSTER_OFFSET]
-                .try_into()
-                .unwrap(),
-        );
-        let free_space_offset = u64::from_be_bytes(
-            bytes[offset::FREE_SPACE_OFFSET..offset::FREE_SPACE_OFFSET + size::FREE_SPACE_OFFSET]
-                .try_into()
-                .unwrap(),
-        );
+        let version = read_u32_be(bytes, offset::VERSION, size::VERSION, "version")?;
+        let flags = read_u32_be(bytes, offset::FLAGS, size::FLAGS, "flags")?;
+        let node_count = read_u64_be(bytes, offset::NODE_COUNT, size::NODE_COUNT, "node_count")?;
+        let edge_count = read_u64_be(bytes, offset::EDGE_COUNT, size::EDGE_COUNT, "edge_count")?;
+        let schema_version = read_u32_be(
+            bytes,
+            offset::SCHEMA_VERSION,
+            size::SCHEMA_VERSION,
+            "schema_version",
+        )?;
+        let reserved = read_u32_be(bytes, offset::RESERVED, size::RESERVED, "reserved")?;
+        let node_data_offset = read_u64_be(
+            bytes,
+            offset::NODE_DATA_OFFSET,
+            size::NODE_DATA_OFFSET,
+            "node_data_offset",
+        )?;
+        let edge_data_offset = read_u64_be(
+            bytes,
+            offset::EDGE_DATA_OFFSET,
+            size::EDGE_DATA_OFFSET,
+            "edge_data_offset",
+        )?;
+        let outgoing_cluster_offset = read_u64_be(
+            bytes,
+            offset::OUTGOING_CLUSTER_OFFSET,
+            size::OUTGOING_CLUSTER_OFFSET,
+            "outgoing_cluster_offset",
+        )?;
+        let incoming_cluster_offset = read_u64_be(
+            bytes,
+            offset::INCOMING_CLUSTER_OFFSET,
+            size::INCOMING_CLUSTER_OFFSET,
+            "incoming_cluster_offset",
+        )?;
+        let free_space_offset = read_u64_be(
+            bytes,
+            offset::FREE_SPACE_OFFSET,
+            size::FREE_SPACE_OFFSET,
+            "free_space_offset",
+        )?;
 
         // V3 fields
-        let root_index_page = u64::from_be_bytes(
-            bytes[offset::ROOT_INDEX_PAGE..offset::ROOT_INDEX_PAGE + size::ROOT_INDEX_PAGE]
-                .try_into()
-                .unwrap(),
-        );
-        let free_page_list_head = u64::from_be_bytes(
-            bytes[offset::FREE_PAGE_LIST_HEAD
-                ..offset::FREE_PAGE_LIST_HEAD + size::FREE_PAGE_LIST_HEAD]
-                .try_into()
-                .unwrap(),
-        );
-        let total_pages = u64::from_be_bytes(
-            bytes[offset::TOTAL_PAGES..offset::TOTAL_PAGES + size::TOTAL_PAGES]
-                .try_into()
-                .unwrap(),
-        );
-        let page_size = u32::from_be_bytes(
-            bytes[offset::PAGE_SIZE..offset::PAGE_SIZE + size::PAGE_SIZE]
-                .try_into()
-                .unwrap(),
-        );
-        let btree_height = u32::from_be_bytes(
-            bytes[offset::BTREE_HEIGHT..offset::BTREE_HEIGHT + size::BTREE_HEIGHT]
-                .try_into()
-                .unwrap(),
-        );
+        let root_index_page = read_u64_be(
+            bytes,
+            offset::ROOT_INDEX_PAGE,
+            size::ROOT_INDEX_PAGE,
+            "root_index_page",
+        )?;
+        let free_page_list_head = read_u64_be(
+            bytes,
+            offset::FREE_PAGE_LIST_HEAD,
+            size::FREE_PAGE_LIST_HEAD,
+            "free_page_list_head",
+        )?;
+        let total_pages = read_u64_be(bytes, offset::TOTAL_PAGES, size::TOTAL_PAGES, "total_pages")?;
+        let page_size = read_u32_be(bytes, offset::PAGE_SIZE, size::PAGE_SIZE, "page_size")?;
+        let btree_height = read_u32_be(
+            bytes,
+            offset::BTREE_HEIGHT,
+            size::BTREE_HEIGHT,
+            "btree_height",
+        )?;
 
         Ok(Self {
             magic,
@@ -469,6 +447,46 @@ impl PersistentHeaderV3 {
             })
         }
     }
+}
+
+/// Read a big-endian u32 from `bytes` at `start` covering `len` bytes,
+/// returning an `InvalidHeader` error (instead of panicking via `unwrap()`)
+/// if the slice is not the expected width.
+fn read_u32_be(bytes: &[u8], start: usize, len: usize, field: &str) -> NativeResult<u32> {
+    let slice =
+        bytes
+            .get(start..start + len)
+            .ok_or_else(|| NativeBackendError::InvalidHeader {
+                field: field.to_string(),
+                reason: format!("slice out of bounds at offset {start} (len {len})"),
+            })?;
+    let arr: [u8; 4] = slice
+        .try_into()
+        .map_err(|_| NativeBackendError::InvalidHeader {
+            field: field.to_string(),
+            reason: format!("expected 4 bytes at offset {start}, got {}", slice.len()),
+        })?;
+    Ok(u32::from_be_bytes(arr))
+}
+
+/// Read a big-endian u64 from `bytes` at `start` covering `len` bytes,
+/// returning an `InvalidHeader` error (instead of panicking via `unwrap()`)
+/// if the slice is not the expected width.
+fn read_u64_be(bytes: &[u8], start: usize, len: usize, field: &str) -> NativeResult<u64> {
+    let slice =
+        bytes
+            .get(start..start + len)
+            .ok_or_else(|| NativeBackendError::InvalidHeader {
+                field: field.to_string(),
+                reason: format!("slice out of bounds at offset {start} (len {len})"),
+            })?;
+    let arr: [u8; 8] = slice
+        .try_into()
+        .map_err(|_| NativeBackendError::InvalidHeader {
+            field: field.to_string(),
+            reason: format!("expected 8 bytes at offset {start}, got {}", slice.len()),
+        })?;
+    Ok(u64::from_be_bytes(arr))
 }
 
 /// Size of PersistentHeaderV3 - calculated from field sizes
