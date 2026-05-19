@@ -143,29 +143,35 @@ impl SqliteGraphBackend {
         &self.graph
     }
 
-    /// Create a new HNSW vector storage using this SQLite backend
+    /// Create a new HNSW vector storage using this SQLite backend.
+    ///
+    /// **Always returns `None`.** `SQLiteVectorStorage` requires an owned
+    /// `rusqlite::Connection`, but `SqliteGraphBackend` only holds a
+    /// pooled reference. There is no safe way to mint a fresh owned
+    /// connection from `&self` without exposing the underlying DB path.
+    ///
+    /// Use [`crate::hnsw::storage::SQLiteVectorStorage::new`] directly
+    /// with a separately-opened `Connection` instead.
+    ///
+    /// This method is preserved for trait-object call sites and may
+    /// gain a working implementation if `SqliteGraph` ever exposes its
+    /// path (see issue tracker).
     ///
     /// # Arguments
     ///
-    /// * `index_name` - Name for the HNSW index (used for table naming)
-    ///
-    /// # Returns
-    ///
-    /// `Some(Box<dyn VectorStorage>)` containing a storage backed by SQLite
+    /// * `_index_name` - Currently ignored.
     ///
     /// # Example
     ///
     /// ```ignore
-    /// let backend = SqliteGraphBackend::in_memory().unwrap();
-    /// let storage = backend.create_hnsw_storage("my_index").unwrap();
+    /// use sqlitegraph::hnsw::storage::SQLiteVectorStorage;
+    /// let conn = rusqlite::Connection::open("vectors.db")?;
+    /// let storage = SQLiteVectorStorage::new(conn, "my_index")?;
     /// ```
     pub fn create_hnsw_storage(
         &self,
         _index_name: impl Into<String>,
     ) -> Option<Box<dyn crate::hnsw::storage::VectorStorage>> {
-        // SQLiteVectorStorage requires an owned Connection, but we only have a reference
-        // This is a limitation - we can't easily create a storage from &self
-        // The caller should use SQLiteVectorStorage::new() directly with a connection
         None
     }
 
