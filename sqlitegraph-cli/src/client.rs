@@ -2,10 +2,16 @@ use sqlitegraph::backend::GraphBackend;
 use sqlitegraph::backend::SqliteGraphBackend;
 
 /// CLI backend client supporting SQLite and V3 backends
+///
+/// Both variants box their payload so the enum stays pointer-sized
+/// (8 bytes) instead of being bloated to ~1.2 KB by the V3 variant,
+/// avoiding `clippy::large_enum_variant`. The CLI only ever holds
+/// one `CliClient` at a time, so the extra heap indirection has no
+/// measurable cost vs. paying for the largest variant on every value.
 pub enum CliClient {
-    Sqlite(SqliteGraphBackend),
+    Sqlite(Box<SqliteGraphBackend>),
     #[cfg(feature = "native-v3")]
-    V3(sqlitegraph::backend::native::v3::V3Backend),
+    V3(Box<sqlitegraph::backend::native::v3::V3Backend>),
 }
 
 impl CliClient {
@@ -14,7 +20,9 @@ impl CliClient {
         match backend {
             super::cli::BackendType::Sqlite => {
                 let graph = sqlitegraph::SqliteGraph::open(path)?;
-                Ok(Self::Sqlite(SqliteGraphBackend::from_graph(graph)))
+                Ok(Self::Sqlite(Box::new(SqliteGraphBackend::from_graph(
+                    graph,
+                ))))
             }
             #[cfg(feature = "native-v3")]
             super::cli::BackendType::V3 => {
@@ -24,7 +32,7 @@ impl CliClient {
                 } else {
                     V3Backend::create(path)?
                 };
-                Ok(Self::V3(backend))
+                Ok(Self::V3(Box::new(backend)))
             }
         }
     }
@@ -34,7 +42,9 @@ impl CliClient {
         match backend {
             super::cli::BackendType::Sqlite => {
                 let graph = sqlitegraph::SqliteGraph::open_in_memory()?;
-                Ok(Self::Sqlite(SqliteGraphBackend::from_graph(graph)))
+                Ok(Self::Sqlite(Box::new(SqliteGraphBackend::from_graph(
+                    graph,
+                ))))
             }
             #[cfg(feature = "native-v3")]
             super::cli::BackendType::V3 => {
@@ -46,9 +56,9 @@ impl CliClient {
     /// Get backend trait object
     pub fn backend(&self) -> &dyn GraphBackend {
         match self {
-            Self::Sqlite(b) => b,
+            Self::Sqlite(b) => b.as_ref(),
             #[cfg(feature = "native-v3")]
-            Self::V3(b) => b,
+            Self::V3(b) => b.as_ref(),
         }
     }
 
@@ -64,7 +74,7 @@ impl CliClient {
     /// Get SQLite backend reference (for Cypher queries)
     pub fn sqlite_backend(&self) -> Option<&SqliteGraphBackend> {
         match self {
-            Self::Sqlite(b) => Some(b),
+            Self::Sqlite(b) => Some(b.as_ref()),
             #[cfg(feature = "native-v3")]
             Self::V3(_) => None,
         }
