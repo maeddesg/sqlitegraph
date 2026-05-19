@@ -2,6 +2,46 @@
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-05-19
+
+### Fixed
+
+- **V3Backend::drop silently discarded flush/sync errors** — `let _ =` pattern
+  masked disk-full and read-only-FS failures. Now logs to stderr via `eprintln`.
+  ([#7](https://github.com/oldnordic/sqlitegraph/pull/7))
+
+- **PersistentHeaderV3::from_bytes had 16 `try_into().unwrap()` sites** — corrupted
+  or short header files caused panics at open time instead of returning an error.
+  Replaced with `read_u32_be`/`read_u64_be` helpers that return
+  `NativeBackendError::InvalidHeader` with field-name tagging.
+  ([#8](https://github.com/oldnordic/sqlitegraph/pull/8))
+
+- **Performance comparison example printed misleading "0.1× faster"** — point-lookup
+  ratio was computed as `v3_time/sqlite_time` and always printed "SQLite is N× faster"
+  even when V3 won. Traversal timing used `as_millis()` rounding sub-ms averages to 0.
+  Both fixed with correct winner-branching and nanosecond precision.
+  ([#9](https://github.com/oldnordic/sqlitegraph/pull/9))
+
+- **`create_hnsw_storage` docstring promised `Some()` but implementation returns `None`**
+  — the doc showed `.unwrap()` in the example, which would panic. Rewritten to document
+  the limitation and point at `SQLiteVectorStorage::new()` as the working alternative.
+  ([#10](https://github.com/oldnordic/sqlitegraph/pull/10))
+
+- **CliClient enum wasted stack — V3 variant 1216 bytes vs Sqlite 432 bytes** —
+  `clippy::large_enum_variant` fired. Both variants boxed; enum is now pointer-sized.
+  ([#11](https://github.com/oldnordic/sqlitegraph/pull/11))
+
+- **test_pagerank_handles_inconsistent_graph was stale** — `insert_edge_inner` added
+  referential integrity checks, so the test's edge to non-existent node 99999 panicked
+  at insert time instead of testing pagerank's error handling. Split into two assertions:
+  one for the insert guard, one for pagerank on valid graphs. Restores 1186/1186 green.
+  ([#6](https://github.com/oldnordic/sqlitegraph/pull/6))
+
+### Thanks
+
+- All six fixes contributed by [@maeddesg](https://github.com/maeddesg) — clean
+  bug reports with precise root-cause analysis and minimal patches.
+
 ## [3.0.1] - 2026-05-18
 
 ### Fixed
