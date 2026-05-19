@@ -394,7 +394,8 @@ impl PersistentHeaderV3 {
             size::FREE_PAGE_LIST_HEAD,
             "free_page_list_head",
         )?;
-        let total_pages = read_u64_be(bytes, offset::TOTAL_PAGES, size::TOTAL_PAGES, "total_pages")?;
+        let total_pages =
+            read_u64_be(bytes, offset::TOTAL_PAGES, size::TOTAL_PAGES, "total_pages")?;
         let page_size = read_u32_be(bytes, offset::PAGE_SIZE, size::PAGE_SIZE, "page_size")?;
         let btree_height = read_u32_be(
             bytes,
@@ -453,13 +454,12 @@ impl PersistentHeaderV3 {
 /// returning an `InvalidHeader` error (instead of panicking via `unwrap()`)
 /// if the slice is not the expected width.
 fn read_u32_be(bytes: &[u8], start: usize, len: usize, field: &str) -> NativeResult<u32> {
-    let slice =
-        bytes
-            .get(start..start + len)
-            .ok_or_else(|| NativeBackendError::InvalidHeader {
-                field: field.to_string(),
-                reason: format!("slice out of bounds at offset {start} (len {len})"),
-            })?;
+    let slice = bytes
+        .get(start..start + len)
+        .ok_or_else(|| NativeBackendError::InvalidHeader {
+            field: field.to_string(),
+            reason: format!("slice out of bounds at offset {start} (len {len})"),
+        })?;
     let arr: [u8; 4] = slice
         .try_into()
         .map_err(|_| NativeBackendError::InvalidHeader {
@@ -473,13 +473,12 @@ fn read_u32_be(bytes: &[u8], start: usize, len: usize, field: &str) -> NativeRes
 /// returning an `InvalidHeader` error (instead of panicking via `unwrap()`)
 /// if the slice is not the expected width.
 fn read_u64_be(bytes: &[u8], start: usize, len: usize, field: &str) -> NativeResult<u64> {
-    let slice =
-        bytes
-            .get(start..start + len)
-            .ok_or_else(|| NativeBackendError::InvalidHeader {
-                field: field.to_string(),
-                reason: format!("slice out of bounds at offset {start} (len {len})"),
-            })?;
+    let slice = bytes
+        .get(start..start + len)
+        .ok_or_else(|| NativeBackendError::InvalidHeader {
+            field: field.to_string(),
+            reason: format!("slice out of bounds at offset {start} (len {len})"),
+        })?;
     let arr: [u8; 8] = slice
         .try_into()
         .map_err(|_| NativeBackendError::InvalidHeader {

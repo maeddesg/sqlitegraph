@@ -129,10 +129,7 @@ fn test_point_lookup() -> Result<(), Box<dyn std::error::Error>> {
         println!("  Why: SQLite's B-tree has decades of optimization\n");
     } else {
         let speedup = sqlite_time as f64 / v3_time as f64;
-        println!(
-            "\n  Result: V3 is {:.1}× faster for point lookups",
-            speedup
-        );
+        println!("\n  Result: V3 is {:.1}× faster for point lookups", speedup);
         println!("  Why: V3's B+tree + page decode keeps lookups cache-warm\n");
     }
 
@@ -293,10 +290,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
         // Use nanos to avoid rounding to 0 when the average per-BFS
         // is under 1 ms (TEST 3 is intentionally a fast micro-op).
         sqlite_time = start.elapsed().as_nanos() as f64 / 1000.0 / 1_000_000.0;
-        println!(
-            "  SQLite:  {:.6} ms/BFS  (3 hops, 100 nodes)",
-            sqlite_time
-        );
+        println!("  SQLite:  {:.6} ms/BFS  (3 hops, 100 nodes)", sqlite_time);
     }
 
     // V3
@@ -340,10 +334,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
         println!("  Why: Contiguous adjacency storage reduces I/O\n");
     } else {
         let speedup = v3_time / sqlite_time;
-        println!(
-            "\n  Result: SQLite is {:.1}× faster for traversal",
-            speedup
-        );
+        println!("\n  Result: SQLite is {:.1}× faster for traversal", speedup);
         println!("  Why: SQLite outperformed V3 on this dataset/hardware\n");
     }
 

@@ -182,16 +182,12 @@ impl Drop for V3Backend {
         // surface them so callers don't silently lose the last transaction
         // (e.g. on disk-full / read-only-FS).
         if let Err(e) = self.flush_to_disk() {
-            eprintln!(
-                "[sqlitegraph] V3Backend::drop: flush_to_disk failed: {e}"
-            );
+            eprintln!("[sqlitegraph] V3Backend::drop: flush_to_disk failed: {e}");
         }
 
         // Sync header to ensure all metadata is written
         if let Err(e) = self.sync_header() {
-            eprintln!(
-                "[sqlitegraph] V3Backend::drop: sync_header failed: {e}"
-            );
+            eprintln!("[sqlitegraph] V3Backend::drop: sync_header failed: {e}");
         }
     }
 }
