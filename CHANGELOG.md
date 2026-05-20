@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [3.0.2] - 2026-05-19
+## [3.0.3] - 2026-05-20
 
 ### Added
 
@@ -32,6 +32,8 @@
   norm_squared 1.4–1.8x.
 - **~13x over scalar** (median), with cosine at 1536 dimensions reaching
   30x.
+
+## [3.0.2] - 2026-05-19
 
 ### Fixed
 
