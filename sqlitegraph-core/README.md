@@ -77,15 +77,15 @@ See [examples/](https://github.com/oldnordic/sqlitegraph/tree/main/sqlitegraph-c
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "2.4"
+sqlitegraph-core = "3.0"
 
 # OR Native V3 backend (graph-oriented storage)
-sqlitegraph = { version = "2.4", features = ["native-v3"] }
+sqlitegraph-core = { version = "3.0", features = ["native-v3"] }
 ```
 
 ```rust
-use sqlitegraph::backend::{GraphBackend, NodeSpec};
-use sqlitegraph::backend::sqlite::SqliteGraphBackend;
+use sqlitegraph_core::backend::{GraphBackend, NodeSpec};
+use sqlitegraph_core::backend::sqlite::SqliteGraphBackend;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = SqliteGraphBackend::in_memory()?;

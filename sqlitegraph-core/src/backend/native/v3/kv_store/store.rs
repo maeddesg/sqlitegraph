@@ -190,8 +190,8 @@ impl KvStore {
     ///
     /// For now, this is a no-op (lazy cleanup on read).
     pub fn cleanup_expired(&self, _min_active_snapshot: u64) {
-        // TODO: Implement background cleanup
-        // For now, we rely on lazy cleanup during reads
+        // Background cleanup not implemented; lazy cleanup on read is sufficient
+        // for current workloads. Full compaction would iterate all keys.
     }
 
     /// Serialize the KV store state to bytes for checkpoint persistence

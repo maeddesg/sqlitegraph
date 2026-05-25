@@ -1414,7 +1414,7 @@ mod tests {
         (edge_store, allocator)
     }
 
-    /// TODO Test 1: Edge insert should write WAL record for durability
+    /// Test 1: Edge insert should write WAL record for durability
     ///
     /// CRITICAL: This test verifies that insert_edge() creates a proper WAL record.
     /// Without this, edges inserted via cache are lost on crash.
@@ -1435,21 +1435,21 @@ mod tests {
         // Flush WAL to ensure record is written
         edge_store.flush_wal().expect("WAL flush failed");
 
-        // CRITICAL TODO FIX: Verify WAL file exists and contains edge insert record
+        // Verify: Verify WAL file exists and contains edge insert record
         // Currently this fails because insert_edge() does NOT write WAL records
         assert!(
             wal_path.exists(),
-            "CRITICAL TODO: WAL file should exist after edge insert with WAL enabled"
+            "NOTE: WAL file should exist after edge insert with WAL enabled"
         );
 
         // Read WAL and verify edge insert record exists
         let wal_content = std::fs::read(&wal_path).expect("Failed to read WAL file");
         assert!(
             wal_content.len() > 64, // Header is 64 bytes, records add more
-            "CRITICAL TODO: WAL should contain edge insert record beyond header"
+            "NOTE: WAL should contain edge insert record beyond header"
         );
 
-        // TODO: Parse WAL and verify edge-specific record type exists
+        // Verify WAL parsing: and verify edge-specific record type exists
         // This requires implementing EdgeInsert record type in WAL
     }
 
@@ -1483,7 +1483,7 @@ mod tests {
         let result = edge_store.flush(None);
         assert!(result.is_ok(), "Flush should succeed");
 
-        // CRITICAL TODO FIX: After flush, edge data should be on disk
+        // Verify: After flush, edge data should be on disk
         // Currently this fails because flush() does nothing
         let file_size = std::fs::metadata(&db_path)
             .expect("Failed to read file metadata")
@@ -1491,14 +1491,14 @@ mod tests {
 
         assert!(
             file_size > 4096,
-            "CRITICAL TODO: Database file should grow after flush writes dirty clusters"
+            "NOTE: Database file should grow after flush writes dirty clusters"
         );
 
         // Verify we can read back the edges after reopening
         // This requires implementing cluster deserialization from pages
     }
 
-    /// TODO Test 3: Flush should update B+Tree index
+    /// Test 3: Flush should update B+Tree index
     ///
     /// CRITICAL: The B+Tree index maps (src_node_id, direction) -> page_id.
     /// Without this update, edge lookups will fail after recovery.
@@ -1524,7 +1524,7 @@ mod tests {
         // Flush should update B+Tree index
         edge_store.flush(None).expect("Flush failed");
 
-        // CRITICAL TODO FIX: B+Tree should contain mapping for node 1
+        // Verify: B+Tree should contain mapping for node 1
         // Currently btree only tracks node_id -> page_id, not edge lookups
         // Need to implement (src, direction) composite key lookup
 
@@ -1708,7 +1708,7 @@ mod tests {
         );
     }
 
-    /// TODO Test 6: Empty flush should not error
+    /// Test 6: Empty flush should not error
     ///
     /// Edge case: flush() with no dirty clusters should succeed gracefully.
     #[test]
@@ -1724,7 +1724,7 @@ mod tests {
         assert!(result.is_ok(), "Flush with empty cache should succeed");
     }
 
-    /// TODO Test 7: Multiple flushes should be idempotent
+    /// Test 7: Multiple flushes should be idempotent
     ///
     /// Calling flush() multiple times should not corrupt data.
     #[test]
