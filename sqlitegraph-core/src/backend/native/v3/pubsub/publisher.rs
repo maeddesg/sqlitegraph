@@ -61,13 +61,20 @@ impl Publisher {
         let (tx, rx) = mpsc::channel();
 
         let id = {
-            let mut next = self.next_id.lock().unwrap();
+            let mut next = self
+                .next_id
+                .lock()
+                .expect("publisher next_id lock poisoned");
             let id = *next;
             *next = next.wrapping_add(1);
             SubscriberId::new(id)
         };
 
-        let mut senders = self.senders.lock().unwrap();
+        let mut senders = self
+            .senders
+            .lock()
+            .expect("publisher senders lock poisoned");
+
         senders.push((id, tx, filter));
 
         (id, rx)
@@ -81,7 +88,10 @@ impl Publisher {
     /// # Arguments
     /// * `subscriber_id` - The subscriber ID returned by subscribe()
     pub fn unsubscribe(&self, subscriber_id: SubscriberId) -> bool {
-        let mut senders = self.senders.lock().unwrap();
+        let mut senders = self
+            .senders
+            .lock()
+            .expect("publisher senders lock poisoned");
         let pos = senders.iter().position(|(id, _, _)| *id == subscriber_id);
 
         if let Some(pos) = pos {
@@ -102,7 +112,10 @@ impl Publisher {
     /// # Arguments
     /// * `event` - The event to emit
     pub fn emit(&self, event: PubSubEvent) {
-        let senders = self.senders.lock().unwrap();
+        let senders = self
+            .senders
+            .lock()
+            .expect("publisher senders lock poisoned");
 
         for (_, sender, filter) in senders.iter() {
             if filter.matches(&event) {
@@ -114,7 +127,10 @@ impl Publisher {
 
     /// Get the number of active subscribers
     pub fn subscriber_count(&self) -> usize {
-        let senders = self.senders.lock().unwrap();
+        let senders = self
+            .senders
+            .lock()
+            .expect("publisher senders lock poisoned");
         senders.len()
     }
 

@@ -315,7 +315,10 @@ impl PageOwnershipRegistry {
             self.register_allocation(page_id, subsystem, page_type);
         }
 
-        let record = self.pages.get_mut(&page_id).unwrap();
+        let record = self
+            .pages
+            .get_mut(&page_id)
+            .expect("invariant: page just registered");
         let is_conflict = record.record_write(
             subsystem,
             page_type,

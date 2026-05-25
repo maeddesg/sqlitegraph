@@ -828,7 +828,10 @@ impl crate::backend::GraphBackend for SqliteGraphBackend {
         if pub_guard.is_none() {
             *pub_guard = Some(Publisher::new());
         }
-        let (id, rx) = pub_guard.as_ref().unwrap().subscribe(filter);
+        let (id, rx) = pub_guard
+            .as_ref()
+            .expect("invariant: publisher just initialized")
+            .subscribe(filter);
         Ok((id, rx))
     }
 
@@ -976,7 +979,7 @@ fn bytes_to_string(bytes: &[u8]) -> String {
         if i > 0 {
             result.push(',');
         }
-        write!(result, "{}", byte).unwrap();
+        write!(result, "{}", byte).expect("infallible: writing to String");
     }
     result
 }

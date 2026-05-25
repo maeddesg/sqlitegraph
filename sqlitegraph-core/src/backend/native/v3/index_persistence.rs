@@ -242,14 +242,22 @@ pub fn restore_indexes(
 
     // Read kind index
     let kind_count_bytes = read_bytes(4)?;
-    let kind_count = u32::from_be_bytes(kind_count_bytes.try_into().unwrap()) as usize;
+    let kind_count = u32::from_be_bytes(
+        kind_count_bytes
+            .try_into()
+            .expect("invariant: read_bytes guaranteed 4 bytes"),
+    ) as usize;
 
     #[cfg(feature = "v3-forensics")]
     let kind_loop_start = std::time::Instant::now();
 
     for _ in 0..kind_count {
         let kind_len_bytes = read_bytes(4)?;
-        let kind_len = u32::from_be_bytes(kind_len_bytes.try_into().unwrap()) as usize;
+        let kind_len = u32::from_be_bytes(
+            kind_len_bytes
+                .try_into()
+                .expect("invariant: read_bytes guaranteed 4 bytes"),
+        ) as usize;
 
         let kind_bytes = read_bytes(kind_len)?;
         let kind_str = std::str::from_utf8(kind_bytes)
@@ -257,12 +265,20 @@ pub fn restore_indexes(
         let kind = kind_str.to_string();
 
         let node_count_bytes = read_bytes(4)?;
-        let node_count = u32::from_be_bytes(node_count_bytes.try_into().unwrap()) as usize;
+        let node_count = u32::from_be_bytes(
+            node_count_bytes
+                .try_into()
+                .expect("invariant: read_bytes guaranteed 4 bytes"),
+        ) as usize;
 
         let mut node_ids = Vec::with_capacity(node_count);
         for _ in 0..node_count {
             let node_id_bytes = read_bytes(8)?;
-            let node_id = i64::from_be_bytes(node_id_bytes.try_into().unwrap());
+            let node_id = i64::from_be_bytes(
+                node_id_bytes
+                    .try_into()
+                    .expect("invariant: read_bytes guaranteed 8 bytes"),
+            );
             node_ids.push(node_id);
         }
         kind_data.insert(kind, node_ids);
@@ -273,14 +289,22 @@ pub fn restore_indexes(
 
     // Read name index
     let name_count_bytes = read_bytes(4)?;
-    let name_count = u32::from_be_bytes(name_count_bytes.try_into().unwrap()) as usize;
+    let name_count = u32::from_be_bytes(
+        name_count_bytes
+            .try_into()
+            .expect("invariant: read_bytes guaranteed 4 bytes"),
+    ) as usize;
 
     #[cfg(feature = "v3-forensics")]
     let name_loop_start = std::time::Instant::now();
 
     for _ in 0..name_count {
         let name_len_bytes = read_bytes(4)?;
-        let name_len = u32::from_be_bytes(name_len_bytes.try_into().unwrap()) as usize;
+        let name_len = u32::from_be_bytes(
+            name_len_bytes
+                .try_into()
+                .expect("invariant: read_bytes guaranteed 4 bytes"),
+        ) as usize;
 
         let name_bytes = read_bytes(name_len)?;
         let name_str = std::str::from_utf8(name_bytes)
@@ -288,12 +312,20 @@ pub fn restore_indexes(
         let name = name_str.to_string();
 
         let node_count_bytes = read_bytes(4)?;
-        let node_count = u32::from_be_bytes(node_count_bytes.try_into().unwrap()) as usize;
+        let node_count = u32::from_be_bytes(
+            node_count_bytes
+                .try_into()
+                .expect("invariant: read_bytes guaranteed 4 bytes"),
+        ) as usize;
 
         let mut node_ids = Vec::with_capacity(node_count);
         for _ in 0..node_count {
             let node_id_bytes = read_bytes(8)?;
-            let node_id = i64::from_be_bytes(node_id_bytes.try_into().unwrap());
+            let node_id = i64::from_be_bytes(
+                node_id_bytes
+                    .try_into()
+                    .expect("invariant: read_bytes guaranteed 8 bytes"),
+            );
             node_ids.push(node_id);
         }
         name_data.insert(name, node_ids);

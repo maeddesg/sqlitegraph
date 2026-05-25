@@ -1,20 +1,22 @@
 # SQLiteGraph Changelog
 
-## [Unreleased]
+## [3.0.4] - 2026-05-26
 
 ### Fixed
-- Replaced 29 bare `.unwrap()` calls in `algo/` with `.expect("invariant: ...")` or idiomatic patterns
-- Fixed `is_none() + unwrap()` anti-pattern in `transitive_closure.rs` (2 sites) using `is_none_or()`
-- Fixed `stack.pop().unwrap()` in `scc.rs` and `graph_ops.rs` with documented invariants
-- Fixed `HashMap.get_mut().unwrap()` in `centrality.rs`, `critical_path.rs`, `topological_sort.rs` with documented invariants
-- Fixed `iter().next().unwrap()`, `.min().unwrap()`, `.position().unwrap()` in `cycle_basis.rs` with documented invariants
-- Runtime unwrap count in `algo/`: 29 -> 0
-- Fixed all pre-existing clippy warnings across workspace (43 fixes in examples, tests, benches, lib)
-- Removed dead code: unused `edge_count` helpers, unused constants, unused variants, unused imports
-- Replaced `Arc` with `Rc` for non-thread-shared snapshot tests
-- Fixed `println!("")` -> `println!()`, needless range loops, unnecessary casts, format-in-println
-- Added benchmark cases for `Incoming` and `Undirected` directions in `adjlist_benchmark.rs`
-- Clippy now passes clean: `cargo clippy --all-targets -- -D warnings` -> 0 errors
+- Replaced 46 bare `.unwrap()` calls in production code with `.expect("invariant: ...")`
+  - `algo/`: 29 sites (centrality, scc, transitive_closure, cycle_basis, critical_path, topological_sort, graph_ops, traversal, backend/centrality)
+  - `backend/native/v3/index_persistence.rs`: 8 `.try_into().unwrap()` in deserialization
+  - `backend/native/v3/pubsub/publisher.rs`: 5 `.lock().unwrap()` on poisoned-mutex-vulnerable paths
+  - `backend/sqlite/impl_.rs`: 2 sites (publisher init, infallible string write)
+  - `backend/native/v3/forensics.rs`: 1 `.get_mut().unwrap()`
+  - `backend/native/v3/storage/adaptive_page.rs`: 1 `.as_ref().unwrap()`
+- Fixed all pre-existing clippy warnings across workspace (43 fixes)
+  - Removed dead code: unused helpers, constants, variants, imports across examples/tests/benches
+  - Replaced `Arc` with `Rc` for non-thread-shared snapshot tests
+  - Fixed `println!("")` → `println!()`, needless range loops, unnecessary casts, needless borrows
+  - Added benchmark cases for `Incoming` and `Undirected` directions
+- Production bare `.unwrap()` count: **0** (all remaining unwraps are in `#[cfg(test)]` code)
+- `cargo clippy --all-targets -- -D warnings` now passes clean
 
 ## [1.5.3] - 2026-02-08
 

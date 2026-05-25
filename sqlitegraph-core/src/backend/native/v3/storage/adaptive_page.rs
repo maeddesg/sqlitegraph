@@ -129,7 +129,9 @@ impl AdaptivePageManager {
             self.config = Some(PageConfig::for_media(media_type));
         }
 
-        self.config.as_ref().unwrap()
+        self.config
+            .as_ref()
+            .expect("invariant: config just initialized")
     }
 
     /// Force re-detection of media type
