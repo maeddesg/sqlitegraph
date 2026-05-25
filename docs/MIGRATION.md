@@ -1,5 +1,9 @@
 # Migration Guide: SQLite to Native V2
 
+> **Deprecated:** The Native V2 backend was superseded by Native V3 in v3.0.0.
+> Use the V3 backend (`features = ["native-v3"]`) for graph-oriented storage.
+> This document is retained for historical reference only.
+
 **Last Updated:** 2026-02-10
 **Version:** v1.5.7
 

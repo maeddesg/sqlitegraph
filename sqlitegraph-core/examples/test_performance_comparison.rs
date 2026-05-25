@@ -38,13 +38,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════════════");
     println!("  Use SQLITE when:");
     println!("    • Primary workload is single-node lookups");
-    println!("    • Need mature, battle-tested storage");
+    println!("    • Widely-used storage with standard SQL tooling for debugging");
     println!("    • Debuggability with SQL is important");
     println!("");
     println!("  Use V3 when:");
     println!("    • Primary workload is graph traversal (BFS/DFS)");
     println!("    • Need high-throughput adjacency queries");
-    println!("    • Working with large graphs (unlimited scale)");
+    println!("    • Working with large graphs (see benchmarks for workload-specific limits)");
     println!("═══════════════════════════════════════════════════════════════════");
 
     Ok(())

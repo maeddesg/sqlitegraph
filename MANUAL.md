@@ -67,12 +67,12 @@ let graph = V3Backend::create("graph.graph")?;
 
 ### Backend Comparison
 
-| Characteristic | SQLite Backend | Native V3 Backend |
-|----------------|----------------|-------------------|
-| **Performance** | Standard SQLite | 10x faster for traversals |
-| **Transactions** | Full ACID | Atomic commits, WAL |
-| **Memory Usage** | SQLite overhead | Configurable buffers |
-| **Use Cases** | General purpose | High performance, large graphs |
+|| Characteristic | SQLite Backend | Native V3 Backend |
+||----------------|----------------|-------------------|
+|| **Performance** | Standard SQLite | See [benchmarks](#benchmarks) for workload-specific behavior |
+|| **Transactions** | Full ACID | Atomic commits, WAL |
+|| **Memory Usage** | SQLite overhead | Configurable buffers |
+|| **Use Cases** | General purpose | Traverse-heavy workloads, KV, pub/sub |
 
 ---
 

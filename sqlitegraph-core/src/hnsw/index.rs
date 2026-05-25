@@ -15,7 +15,7 @@
 //!
 //! # Integration with SQLiteGraph
 //!
-//! The HNSW index is designed to work seamlessly with SQLiteGraph:
+//! The HNSW index is designed to work with SQLiteGraph:
 //! - Uses SqliteGraphError for consistent error handling
 //! - Follows SQLiteGraph method naming conventions
 //! - Integrates with existing SQLite schemas

@@ -47,7 +47,7 @@ We *could* make clustered storage faster with:
 - Sequential allocation
 - No compression (keeps code simple)
 
-**Why:** Complexity introduces bugs. The 1.6-10x performance win from clustering alone is enough. Additional complexity would have diminishing returns.
+**Why:** Complexity introduces bugs. The measured performance improvement from clustering alone is enough. Additional complexity would have diminishing returns.
 
 ### MVCC-Lite
 

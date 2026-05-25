@@ -1,7 +1,7 @@
 //! HNSW Vector Storage Abstraction
 //!
 //! This module provides a unified storage abstraction for vector data that works
-//! seamlessly with both SQLite and Native backends. It handles vector persistence,
+//! with both SQLite and Native backends. It handles vector persistence,
 //! retrieval, and metadata management while maintaining consistency with the
 //! existing SQLiteGraph architecture.
 //!
@@ -33,7 +33,7 @@
 //! The storage abstraction automatically adapts to the active backend:
 //! - **SQLite Backend**: Stores vectors in dedicated `hnsw_vectors` table using BLOB columns
 //! - **Native Backend**: Stores vectors in binary format with clustering optimization
-//! - **HNSW Integration**: Seamless integration with similarity search capabilities
+//! - **HNSW Integration**: Integration with similarity search capabilities
 
 use crate::hnsw::errors::{HnswError, HnswStorageError};
 use rusqlite::{Connection, OptionalExtension};

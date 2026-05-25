@@ -738,7 +738,7 @@ pub struct HuggingFaceEmbeddingModel {
 **Success Criteria**:
 - Incremental updates < 1ms per vector
 - Support for 10+ embedding types per entity
-- Seamless integration with popular ML services
+- Integration with popular ML services
 - Auto-embedding accuracy > 90% of manual embeddings
 
 ---

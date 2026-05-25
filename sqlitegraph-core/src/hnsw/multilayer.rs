@@ -26,7 +26,7 @@
 //!
 //! # Integration Strategy
 //!
-//! The multi-layer system integrates seamlessly with existing HNSW components:
+//! The multi-layer system integrates with existing HNSW components:
 //! - Extends HnswConfig with multi-layer options
 //! - Wraps existing HnswIndex with multi-layer orchestration
 //! - Maintains full backward compatibility with single-layer mode
