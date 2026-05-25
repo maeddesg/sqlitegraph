@@ -77,7 +77,7 @@ fn run_forensics(cache_size: usize) -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "  Theoretical minimum:   {:8.1} ms (if clone were only cost)",
-        total_cloned_mb as f64 * 1000.0 / 3000.0 // Assume 3 GB/s memory bandwidth
+        total_cloned_mb * 1000.0 / 3000.0 // Assume 3 GB/s memory bandwidth
     );
 
     Ok(())

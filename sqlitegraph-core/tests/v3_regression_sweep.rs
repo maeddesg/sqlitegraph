@@ -102,7 +102,7 @@ fn check_integrity(backend: &V3Backend) -> IntegrityStats {
 
 #[test]
 fn scenario_a_10k_nodes_only() {
-    println!("\n{}", format!("{:#<80}", "SCENARIO A: 10K NODES ONLY"));
+    println!("\n{:#<80}", "SCENARIO A: 10K NODES ONLY");
     println!("{}", "=".repeat(80));
 
     let temp = TempDir::new().unwrap();
@@ -197,10 +197,7 @@ fn scenario_a_10k_nodes_only() {
 
 #[test]
 fn scenario_b_10k_nodes_50k_edges() {
-    println!(
-        "\n{}",
-        format!("{:#<80}", "SCENARIO B: 10K NODES + 50K EDGES")
-    );
+    println!("\n{:#<80}", "SCENARIO B: 10K NODES + 50K EDGES");
     println!("{}", "=".repeat(80));
 
     let temp = TempDir::new().unwrap();
@@ -345,10 +342,7 @@ fn scenario_b_10k_nodes_50k_edges() {
 
 #[test]
 fn scenario_c_10k_nodes_mixed_kinds_names() {
-    println!(
-        "\n{}",
-        format!("{:#<80}", "SCENARIO C: 10K NODES + MIXED KINDS/NAMES")
-    );
+    println!("\n{:#<80}", "SCENARIO C: 10K NODES + MIXED KINDS/NAMES");
     println!("{}", "=".repeat(80));
 
     let temp = TempDir::new().unwrap();
@@ -516,11 +510,8 @@ fn scenario_c_10k_nodes_mixed_kinds_names() {
 #[test]
 fn scenario_d_10k_nodes_50k_edges_mixed() {
     println!(
-        "\n{}",
-        format!(
-            "{:#<80}",
-            "SCENARIO D: 10K NODES + 50K EDGES + MIXED KINDS/NAMES"
-        )
+        "\n{:#<80}",
+        "SCENARIO D: 10K NODES + 50K EDGES + MIXED KINDS/NAMES"
     );
     println!("{}", "=".repeat(80));
 
@@ -720,13 +711,10 @@ fn scenario_d_10k_nodes_50k_edges_mixed() {
 #[test]
 fn test_repeated_run_stability_10k() {
     println!(
-        "\n{}",
+        "\n{:#<80}",
         format!(
-            "{:#<80}",
-            format!(
-                "REPEATED RUN STABILITY TEST (10K nodes, {} runs)",
-                REPEAT_RUNS
-            )
+            "REPEATED RUN STABILITY TEST (10K nodes, {} runs)",
+            REPEAT_RUNS
         )
     );
     println!("{}", "=".repeat(80));
@@ -801,10 +789,7 @@ fn test_repeated_run_stability_10k() {
 
 #[test]
 fn run_full_regression_sweep() {
-    println!(
-        "\n{}",
-        format!("{:#<80}", "V3 REGRESSION SWEEP - COMPREHENSIVE")
-    );
+    println!("\n{:#<80}", "V3 REGRESSION SWEEP - COMPREHENSIVE");
     println!("{}", "=".repeat(80));
     println!("Testing scenarios A-D across {} repeat runs", REPEAT_RUNS);
 
@@ -818,7 +803,7 @@ fn run_full_regression_sweep() {
     let overall_start = Instant::now();
 
     for (name, _test_fn) in scenarios {
-        println!("\n{}", format!("{:#<80}", name));
+        println!("\n{:#<80}", name);
 
         for run in 0..REPEAT_RUNS {
             println!("  Run {}...", run + 1);

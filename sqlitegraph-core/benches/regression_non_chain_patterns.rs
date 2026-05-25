@@ -35,11 +35,11 @@ fn create_star_graph(size: usize) -> (tempfile::TempDir, std::path::PathBuf, i64
 
     // Create star edges (center to all others)
     let center = node_ids[0];
-    for i in 1..=size {
+    for (i, node_id) in node_ids.iter().enumerate().skip(1).take(size) {
         graph
             .insert_edge(EdgeSpec {
                 from: center,
-                to: node_ids[i],
+                to: *node_id,
                 edge_type: "star".to_string(),
                 data: serde_json::json!({"spoke": i}),
             })

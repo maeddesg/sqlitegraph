@@ -128,7 +128,7 @@ fn main() {
     println!("  • Double RwLock:     + second lock acquisition (~50-100ns)");
     println!("  • Arc::clone:        Single atomic increment (~2-5ns)");
     println!("  • Vec::clone:        Heap alloc + memcpy of all elements");
-    println!("");
+    println!();
     println!("  The '70× faster' in benchmark report assumes:");
     println!("    - Cache is HOT (no B+tree lookup)");
     println!("    - Using Arc<[i64]> (not Vec<i64>)");

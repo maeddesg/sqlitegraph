@@ -155,12 +155,7 @@ mod tests {
 
     #[test]
     fn test_v3_format_version_greater_than_v2() {
-        assert!(
-            V3_FORMAT_VERSION > V2_FORMAT_VERSION,
-            "V3 format version ({}) should be greater than V2 ({})",
-            V3_FORMAT_VERSION,
-            V2_FORMAT_VERSION
-        );
+        const { assert!(V3_FORMAT_VERSION > V2_FORMAT_VERSION) };
     }
 
     #[test]
@@ -193,17 +188,11 @@ mod tests {
         // Verify B+Tree can handle 4 billion nodes with height 4
         // 128-ary tree with height 4: 128^4 = 268,435,456 nodes per leaf
         // This is more than sufficient for 4 billion nodes
-        assert!(
-            MAX_BTREE_HEIGHT >= 4,
-            "Max B+Tree height should be at least 4"
-        );
+        const { assert!(MAX_BTREE_HEIGHT >= 4) };
 
         // 254 keys allows for efficient branching factor
-        assert!(MAX_KEYS_PER_PAGE == 254, "Max keys per page should be 254");
-        assert!(
-            MAX_CHILDREN_PER_PAGE == MAX_KEYS_PER_PAGE + 1,
-            "Max children should be max keys + 1"
-        );
+        const { assert!(MAX_KEYS_PER_PAGE == 254) };
+        const { assert!(MAX_CHILDREN_PER_PAGE == MAX_KEYS_PER_PAGE + 1) };
     }
 
     #[test]

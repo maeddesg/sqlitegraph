@@ -1906,13 +1906,9 @@ mod tests {
             impact_radius(&graph, entity_ids[0], &config).expect("Impact radius should succeed");
 
         // With default weight 1.0, distance = hop count
-        for i in 0..5 {
+        for (i, entity_id) in entity_ids.iter().enumerate().take(5) {
             let expected_dist = i as f64;
-            let actual_dist = result
-                .distances
-                .get(&entity_ids[i])
-                .copied()
-                .unwrap_or(999.0);
+            let actual_dist = result.distances.get(entity_id).copied().unwrap_or(999.0);
             assert_eq!(
                 actual_dist, expected_dist,
                 "Node {} should have distance {}",

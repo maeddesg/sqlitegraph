@@ -71,8 +71,8 @@ fn dump_page_headers() {
 
         // Print first 32 bytes as hex
         print!("  First 32 bytes: ");
-        for i in 0..32 {
-            print!("{:02x} ", buffer[i]);
+        for byte in buffer.iter().take(32) {
+            print!("{:02x} ", byte);
         }
         println!();
     }

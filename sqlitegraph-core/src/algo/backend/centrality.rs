@@ -218,9 +218,9 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_test_backend() -> (V3Backend, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("invariant: temp dir creation succeeds");
         let db_path = temp_dir.path().join("test.graph");
-        let backend = V3Backend::create(&db_path).unwrap();
+        let backend = V3Backend::create(&db_path).expect("invariant: backend creation succeeds");
         (backend, temp_dir)
     }
 
@@ -234,7 +234,7 @@ mod tests {
                     file_path: None,
                     data: serde_json::json!({}),
                 })
-                .unwrap();
+                .expect("invariant: backend operation succeeds");
             nodes.push(id);
         }
         for i in 0..nodes.len() - 1 {
@@ -245,7 +245,7 @@ mod tests {
                     edge_type: "links".to_string(),
                     data: serde_json::json!({}),
                 })
-                .unwrap();
+                .expect("invariant: backend operation succeeds");
         }
         nodes
     }

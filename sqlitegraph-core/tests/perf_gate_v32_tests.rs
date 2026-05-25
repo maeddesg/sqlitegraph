@@ -119,10 +119,6 @@ fn test_chain_traversal_regression_check() {
             }
         );
     }
-
-    // Assert the test runs successfully
-    // Sequential I/O optimization should improve or maintain v1.3 performance
-    assert!(true, "Regression check completed");
 }
 
 /// Load Criterion benchmark results from target/criterion directory

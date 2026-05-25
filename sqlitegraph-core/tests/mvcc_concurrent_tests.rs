@@ -29,17 +29,6 @@ fn node_count(graph: &SqliteGraph) -> Result<i64, SqliteGraphError> {
     Ok(ids.len() as i64)
 }
 
-/// Helper: Get edge count from graph
-fn edge_count(graph: &SqliteGraph) -> Result<i64, SqliteGraphError> {
-    let entity_ids = graph.list_entity_ids()?;
-    let mut total_edges = 0;
-    for &id in &entity_ids {
-        let outgoing = graph.query().outgoing(id)?;
-        total_edges += outgoing.len();
-    }
-    Ok(total_edges as i64)
-}
-
 /// Helper: Warm the cache by reading all adjacency data
 fn warm_cache(graph: &SqliteGraph) -> Result<(), SqliteGraphError> {
     let entity_ids = graph.list_entity_ids()?;

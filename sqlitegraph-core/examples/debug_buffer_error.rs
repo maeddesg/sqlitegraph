@@ -100,6 +100,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn extract_error_value<'a>(error_str: &'a str, prefix: &str) -> Option<&'a str> {
     let start = error_str.find(prefix)?;
     let after_prefix = &error_str[start + prefix.len()..];
-    let end = after_prefix.find(|c| c == ',' || c == ')')?;
+    let end = after_prefix.find([',', ')'])?;
     Some(&after_prefix[..end])
 }

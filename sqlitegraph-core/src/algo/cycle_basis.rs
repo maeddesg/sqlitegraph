@@ -423,7 +423,10 @@ pub fn cycle_basis_bounded(
     // First, detect self-loops in single-node SCCs
     for component in &scc.components {
         if component.len() == 1 {
-            let node = *component.iter().next().unwrap();
+            let node = *component
+                .iter()
+                .next()
+                .expect("invariant: component is non-empty");
             // Check if this node has a self-loop
             if let Ok(outgoing) = graph.fetch_outgoing(node)
                 && outgoing.contains(&node)
@@ -833,10 +836,13 @@ fn canonicalize_cycle(mut cycle: Vec<i64>) -> Vec<i64> {
     }
 
     // Find the minimum element
-    let min_node = *cycle.iter().min().unwrap();
+    let min_node = *cycle.iter().min().expect("invariant: cycle is non-empty");
 
     // Find the position of the minimum element
-    let min_pos = cycle.iter().position(|&x| x == min_node).unwrap();
+    let min_pos = cycle
+        .iter()
+        .position(|&x| x == min_node)
+        .expect("invariant: min_node is member of cycle");
 
     // Rotate so minimum is first
     cycle.rotate_left(min_pos);
@@ -899,20 +905,6 @@ mod tests {
             .into_iter()
             .take(count)
             .collect()
-    }
-
-    /// Helper to add an edge between entities by index
-    fn add_edge(graph: &SqliteGraph, from_idx: i64, to_idx: i64) {
-        let ids: Vec<i64> = graph.all_entity_ids().expect("Failed to get IDs");
-
-        let edge = GraphEdge {
-            id: 0,
-            from_id: ids[from_idx as usize],
-            to_id: ids[to_idx as usize],
-            edge_type: "edge".to_string(),
-            data: serde_json::json!({}),
-        };
-        graph.insert_edge(&edge).ok();
     }
 
     // Test 1: Simple cycle (A -> B -> C -> A)

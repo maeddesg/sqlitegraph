@@ -506,10 +506,7 @@ mod tests {
                 .fetch_outgoing(from_id)
                 .expect("Failed to get outgoing");
             for &to_id in &outgoing {
-                if essential.contains(&(from_id, to_id)) {
-                    // Essential edge should exist in original graph (always true by construction)
-                    assert!(true, "Essential edge exists in original");
-                }
+                if essential.contains(&(from_id, to_id)) {}
             }
         }
     }

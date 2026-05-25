@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "  Cache warmup benefit:          {}× faster",
         cold_ns as f64 / hot_ns as f64
     );
-    println!("");
+    println!();
 
     if hot_ns < 500 {
         println!("  ✅ EXCELLENT: Hot path < 500 ns (SQLite's B-tree is highly optimized)");

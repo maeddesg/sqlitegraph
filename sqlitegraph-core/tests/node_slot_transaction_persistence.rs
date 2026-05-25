@@ -5,7 +5,7 @@
 //!
 //! Uses the public GraphBackend API (not raw file offsets) for V3 compatibility.
 
-use sqlitegraph::{EdgeSpec, GraphBackend, GraphConfig, NodeSpec, SnapshotId, open_graph};
+use sqlitegraph::{EdgeSpec, GraphConfig, NodeSpec, SnapshotId, open_graph};
 
 #[test]
 fn test_node_slots_persist_across_edge_transactions() {

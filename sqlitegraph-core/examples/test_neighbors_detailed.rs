@@ -2,9 +2,7 @@
 //!
 //! Measures each component separately to identify the bottleneck
 
-use sqlitegraph::{
-    BackendDirection, EdgeSpec, GraphBackend, GraphConfig, NeighborQuery, NodeSpec, SnapshotId,
-};
+use sqlitegraph::{BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId};
 use std::sync::Arc;
 use std::time::Instant;
 use tempfile::tempdir;

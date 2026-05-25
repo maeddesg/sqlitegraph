@@ -88,13 +88,6 @@ fn test_sequential_bfs_no_contention() {
             }
         }
     }
-
-    // Success if we get here
-    assert!(
-        true,
-        "All {} traversals completed successfully",
-        num_traversals
-    );
 }
 
 /// Test write and read operations mixed
@@ -176,9 +169,6 @@ fn test_write_read_mix() {
             }
         }
     }
-
-    // Success if we get here
-    assert!(true, "Write/read mix completed successfully");
 }
 
 /// Test multiple traversals on the same graph
@@ -252,9 +242,6 @@ fn test_multiple_traversal_isolation() {
             );
         }
     }
-
-    // Success if we get here
-    assert!(true, "Isolation test completed successfully");
 }
 
 /// Test for deadlock scenarios with multiple traversals
@@ -330,12 +317,5 @@ fn test_no_deadlock_multiple_traversals() {
         elapsed < timeout,
         "Test took too long: {:?} (possible blocking)",
         elapsed
-    );
-
-    // Success if we get here
-    assert!(
-        true,
-        "All {} traversals completed successfully without deadlock",
-        num_traversals * 5
     );
 }

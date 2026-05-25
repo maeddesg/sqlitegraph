@@ -201,13 +201,39 @@ fn benchmark_adjlist_queries(c: &mut Criterion) {
 
         // Benchmark neighbor queries
         group.bench_with_input(
-            BenchmarkId::new("neighbor_query", num_nodes),
+            BenchmarkId::new("neighbor_query_outgoing", num_nodes),
             &num_nodes,
             |b, _| {
                 let mut rng = StdRng::seed_from_u64(42);
                 b.iter(|| {
                     let node_id = rng.gen_range(1..num_nodes) as u64;
                     let neighbors = graph.neighbors(node_id, Direction::Outgoing);
+                    black_box(neighbors);
+                });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("neighbor_query_incoming", num_nodes),
+            &num_nodes,
+            |b, _| {
+                let mut rng = StdRng::seed_from_u64(42);
+                b.iter(|| {
+                    let node_id = rng.gen_range(1..num_nodes) as u64;
+                    let neighbors = graph.neighbors(node_id, Direction::Incoming);
+                    black_box(neighbors);
+                });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("neighbor_query_undirected", num_nodes),
+            &num_nodes,
+            |b, _| {
+                let mut rng = StdRng::seed_from_u64(42);
+                b.iter(|| {
+                    let node_id = rng.gen_range(1..num_nodes) as u64;
+                    let neighbors = graph.neighbors(node_id, Direction::Undirected);
                     black_box(neighbors);
                 });
             },

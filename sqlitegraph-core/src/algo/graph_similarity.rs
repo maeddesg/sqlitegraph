@@ -768,20 +768,6 @@ mod tests {
         graph.insert_edge(&edge).ok();
     }
 
-    /// Helper to add an edge with a specific type
-    fn add_typed_edge(graph: &SqliteGraph, from_idx: i64, to_idx: i64, edge_type: &str) {
-        let ids: Vec<i64> = graph.all_entity_ids().expect("Failed to get IDs");
-
-        let edge = GraphEdge {
-            id: 0,
-            from_id: ids[from_idx as usize],
-            to_id: ids[to_idx as usize],
-            edge_type: edge_type.to_string(),
-            data: serde_json::json!({}),
-        };
-        graph.insert_edge(&edge).ok();
-    }
-
     // Test 1: Identical graphs return isomorphic=true, similarity=1.0
     #[test]
     fn test_structural_similarity_identical() {

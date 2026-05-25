@@ -12,11 +12,6 @@
 use sqlitegraph::{SnapshotId, backend::GraphBackend};
 use std::io::Write;
 
-/// Helper: Convert bytes to hex string for display
-fn bytes_to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
-}
-
 /// Helper: Create a test key
 fn test_key(id: u8) -> Vec<u8> {
     vec![
@@ -502,9 +497,6 @@ NOW BOTH BACKENDS HAVE DURABLE KV:
 "#;
 
     println!("{}", documentation);
-
-    // This test always passes - it's documentation
-    assert!(true, "V3 KV durability with checkpoint is documented");
 }
 
 // ============================================================================

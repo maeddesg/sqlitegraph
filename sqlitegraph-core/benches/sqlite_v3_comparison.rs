@@ -652,6 +652,7 @@ fn bench_kv_reopen(c: &mut Criterion) {
 /// SEMANTIC NOTE:
 /// - SQLite: Uses indexed query (O(log n))
 /// - V3: Uses O(n) scan (current implementation)
+///
 /// Results are correct, but V3 will be slower for large graphs.
 fn bench_query_by_kind(c: &mut Criterion) {
     let mut group = c.benchmark_group("query/by_kind");
@@ -675,8 +676,8 @@ fn bench_query_by_kind(c: &mut Criterion) {
                     backend
                 },
                 |backend| {
-                    let _ =
-                        black_box(backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind"));
+                    let _result = backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind");
+                    let _ = black_box(_result);
                 },
                 criterion::BatchSize::SmallInput,
             );
@@ -694,7 +695,8 @@ fn bench_query_by_kind(c: &mut Criterion) {
                     (backend, temp)
                 },
                 |(backend, _temp_dir)| {
-                    black_box(backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind"));
+                    let _ =
+                        black_box(backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind"));
                 },
                 criterion::BatchSize::SmallInput,
             );
@@ -709,6 +711,7 @@ fn bench_query_by_kind(c: &mut Criterion) {
 /// SEMANTIC NOTE:
 /// - SQLite: Uses SQL GLOB pattern matching (wildcards: *, ?, [chars])
 /// - V3: Uses case-sensitive substring matching
+///
 /// Results are NOT directly comparable due to semantic difference!
 fn bench_query_by_name_pattern(c: &mut Criterion) {
     let mut group = c.benchmark_group("query/by_name_pattern");

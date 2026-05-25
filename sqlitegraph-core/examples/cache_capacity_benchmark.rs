@@ -236,7 +236,7 @@ fn print_summary(results: &[(String, usize, usize, f64)]) {
     for (op, node_count, cache_size, time) in results {
         grouped
             .entry((op.clone(), *node_count))
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((*cache_size, *time));
     }
 

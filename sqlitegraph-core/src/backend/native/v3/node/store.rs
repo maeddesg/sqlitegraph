@@ -1843,10 +1843,6 @@ impl Default for TraversalCacheBuilder {
 mod tests {
     use super::*;
 
-    fn test_page(page_id: u64) -> Arc<NodePage> {
-        Arc::new(NodePage::new(page_id))
-    }
-
     #[test]
     fn test_cache_creation() {
         let cache = TraversalCache::new(16);

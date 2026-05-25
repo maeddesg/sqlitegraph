@@ -19,6 +19,7 @@ fn test_file_coordinator_write() {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&db_path)
             .unwrap();
         file.write_all(&header_bytes).unwrap();

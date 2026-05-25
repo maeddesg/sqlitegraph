@@ -1,5 +1,21 @@
 # SQLiteGraph Changelog
 
+## [Unreleased]
+
+### Fixed
+- Replaced 29 bare `.unwrap()` calls in `algo/` with `.expect("invariant: ...")` or idiomatic patterns
+- Fixed `is_none() + unwrap()` anti-pattern in `transitive_closure.rs` (2 sites) using `is_none_or()`
+- Fixed `stack.pop().unwrap()` in `scc.rs` and `graph_ops.rs` with documented invariants
+- Fixed `HashMap.get_mut().unwrap()` in `centrality.rs`, `critical_path.rs`, `topological_sort.rs` with documented invariants
+- Fixed `iter().next().unwrap()`, `.min().unwrap()`, `.position().unwrap()` in `cycle_basis.rs` with documented invariants
+- Runtime unwrap count in `algo/`: 29 -> 0
+- Fixed all pre-existing clippy warnings across workspace (43 fixes in examples, tests, benches, lib)
+- Removed dead code: unused `edge_count` helpers, unused constants, unused variants, unused imports
+- Replaced `Arc` with `Rc` for non-thread-shared snapshot tests
+- Fixed `println!("")` -> `println!()`, needless range loops, unnecessary casts, format-in-println
+- Added benchmark cases for `Incoming` and `Undirected` directions in `adjlist_benchmark.rs`
+- Clippy now passes clean: `cargo clippy --all-targets -- -D warnings` -> 0 errors
+
 ## [1.5.3] - 2026-02-08
 
 ### 🐛 Critical Bug Fixes

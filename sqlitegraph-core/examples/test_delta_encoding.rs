@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Calculate space savings
     let space_saved = uncompressed_size.saturating_sub(serialized.len());
-    let compression_ratio = if serialized.len() > 0 {
+    let compression_ratio = if !serialized.is_empty() {
         (space_saved as f64 / uncompressed_size as f64) * 100.0
     } else {
         0.0

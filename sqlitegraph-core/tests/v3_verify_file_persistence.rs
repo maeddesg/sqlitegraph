@@ -52,8 +52,8 @@ fn test_persistence_across_reopen() {
     let mut buffer = vec![0u8; 1024];
     file.read_exact(&mut buffer).unwrap();
     println!("First 100 bytes of file:");
-    for i in 0..100 {
-        print!("{:02x} ", buffer[i]);
+    for (i, byte) in buffer.iter().enumerate().take(100) {
+        print!("{:02x} ", byte);
         if (i + 1) % 16 == 0 {
             println!();
         }

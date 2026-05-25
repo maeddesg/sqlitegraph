@@ -111,7 +111,10 @@ pub fn pagerank(
                 // Distribute score evenly to all outgoing neighbors
                 let share = score / out_count as f64;
                 for &neighbor in &graph.fetch_outgoing(id)? {
-                    *new_scores.get_mut(&neighbor).unwrap() += damping * share;
+                    *new_scores
+                        .get_mut(&neighbor)
+                        .expect("invariant: neighbor in scores from initialization") +=
+                        damping * share;
                 }
             }
         }
@@ -224,7 +227,10 @@ where
                 // Distribute score evenly to all outgoing neighbors
                 let share = score / out_count as f64;
                 for &neighbor in &graph.fetch_outgoing(id)? {
-                    *new_scores.get_mut(&neighbor).unwrap() += damping * share;
+                    *new_scores
+                        .get_mut(&neighbor)
+                        .expect("invariant: neighbor in scores from initialization") +=
+                        damping * share;
                 }
             }
         }
@@ -350,11 +356,15 @@ pub fn betweenness_centrality(graph: &SqliteGraph) -> Result<Vec<(i64, f64)>, Sq
 
             for &v in predecessors.get(&w).unwrap_or(&vec![]) {
                 let contribution = (sigma[&v] / sigma[&w]) * (1.0 + delta[&w]);
-                *delta.get_mut(&v).unwrap() += contribution;
+                *delta
+                    .get_mut(&v)
+                    .expect("invariant: v in delta from initialization") += contribution;
             }
 
             if w != s {
-                *centrality.get_mut(&w).unwrap() += delta[&w];
+                *centrality
+                    .get_mut(&w)
+                    .expect("invariant: w in centrality from initialization") += delta[&w];
             }
         }
     }
@@ -467,11 +477,15 @@ where
 
             for &v in predecessors.get(&w).unwrap_or(&vec![]) {
                 let contribution = (sigma[&v] / sigma[&w]) * (1.0 + delta[&w]);
-                *delta.get_mut(&v).unwrap() += contribution;
+                *delta
+                    .get_mut(&v)
+                    .expect("invariant: v in delta from initialization") += contribution;
             }
 
             if w != s {
-                *centrality.get_mut(&w).unwrap() += delta[&w];
+                *centrality
+                    .get_mut(&w)
+                    .expect("invariant: w in centrality from initialization") += delta[&w];
             }
         }
     }

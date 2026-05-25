@@ -2437,11 +2437,11 @@ mod tests {
         let center_id = entity_ids[0];
 
         // Connect center to all leaves
-        for i in 1..entity_ids.len() {
+        for target_id in entity_ids.iter().skip(1) {
             let edge = GraphEdge {
                 id: 0,
                 from_id: center_id,
-                to_id: entity_ids[i],
+                to_id: *target_id,
                 edge_type: "edge".to_string(),
                 data: serde_json::json!({}),
             };

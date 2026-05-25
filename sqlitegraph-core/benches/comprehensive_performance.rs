@@ -21,7 +21,6 @@ use bench_utils::create_benchmark_temp_dir;
 const SAMPLE_SIZE: usize = 100;
 const WARM_UP_TIME: Duration = Duration::from_secs(5);
 const MEASURE_TIME: Duration = Duration::from_secs(15);
-const REGRESSION_THRESHOLD: f64 = 0.10; // 10% regression threshold
 
 // ============================================================================
 // WAL Recovery Benchmarks

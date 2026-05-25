@@ -20,17 +20,6 @@ fn node_count(graph: &SqliteGraph) -> Result<i64, SqliteGraphError> {
     Ok(ids.len() as i64)
 }
 
-/// Helper: Get edge count from graph
-fn edge_count(graph: &SqliteGraph) -> Result<i64, SqliteGraphError> {
-    let entity_ids = graph.list_entity_ids()?;
-    let mut total_edges = 0;
-    for &id in &entity_ids {
-        let outgoing = graph.query().outgoing(id)?;
-        total_edges += outgoing.len();
-    }
-    Ok(total_edges as i64)
-}
-
 /// Helper: Warm the cache by reading all adjacency data
 fn warm_cache(graph: &SqliteGraph) -> Result<(), SqliteGraphError> {
     let entity_ids = graph.list_entity_ids()?;
@@ -378,13 +367,13 @@ fn test_snapshot_clone_stress() -> Result<(), SqliteGraphError> {
     let graph = create_test_graph()?;
     warm_cache(&graph)?;
 
-    let snapshot = Arc::new(graph.acquire_snapshot()?);
+    let snapshot = std::rc::Rc::new(graph.acquire_snapshot()?);
 
     let start = Instant::now();
 
     // Clone 10K times
     for _ in 0..10_000 {
-        let _clone = Arc::clone(&snapshot);
+        let _clone = std::rc::Rc::clone(&snapshot);
     }
 
     let duration = start.elapsed();
@@ -783,8 +772,8 @@ fn test_snapshot_clone_independence() -> Result<(), SqliteGraphError> {
     let graph = create_test_graph()?;
     warm_cache(&graph)?;
 
-    let snapshot1 = Arc::new(graph.acquire_snapshot()?);
-    let snapshot2 = Arc::clone(&snapshot1);
+    let snapshot1 = std::rc::Rc::new(graph.acquire_snapshot()?);
+    let snapshot2 = std::rc::Rc::clone(&snapshot1);
 
     // Both should see same data
     assert_eq!(snapshot1.node_count(), snapshot2.node_count());
@@ -1001,5 +990,3 @@ fn test_partial_modification_state() -> Result<(), SqliteGraphError> {
 
     Ok(())
 }
-
-use std::sync::Arc;

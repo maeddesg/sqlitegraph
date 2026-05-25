@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════════════");
     println!("  SQLiteGraph Backend Performance Comparison");
     println!("═══════════════════════════════════════════════════════════════════");
-    println!("");
+    println!();
     println!("  This test measures three distinct operations:");
     println!("  1. POINT LOOKUP:    Single node lookup by ID");
     println!("  2. ADJACENCY FETCH: Getting neighbors (warm cache)");
@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("    • Primary workload is single-node lookups");
     println!("    • Widely-used storage with standard SQL tooling for debugging");
     println!("    • Debuggability with SQL is important");
-    println!("");
+    println!();
     println!("  Use V3 when:");
     println!("    • Primary workload is graph traversal (BFS/DFS)");
     println!("    • Need high-throughput adjacency queries");
@@ -61,7 +61,7 @@ fn test_point_lookup() -> Result<(), Box<dyn std::error::Error>> {
     // SQLite
     {
         let temp_dir = tempdir()?;
-        let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
+        let graph = open_graph(temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
 
         let mut node_ids = Vec::new();
         for i in 0..1000 {
@@ -92,7 +92,7 @@ fn test_point_lookup() -> Result<(), Box<dyn std::error::Error>> {
     // V3
     {
         let temp_dir = tempdir()?;
-        let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::native())?;
+        let graph = open_graph(temp_dir.path().join("test.db"), &GraphConfig::native())?;
 
         let mut node_ids = Vec::new();
         for i in 0..1000 {
@@ -147,7 +147,7 @@ fn test_adjacency_fetch() -> Result<(), Box<dyn std::error::Error>> {
     // SQLite
     {
         let temp_dir = tempdir()?;
-        let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
+        let graph = open_graph(temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
 
         let mut node_ids = Vec::new();
         for i in 0..100 {
@@ -193,7 +193,7 @@ fn test_adjacency_fetch() -> Result<(), Box<dyn std::error::Error>> {
     // V3
     {
         let temp_dir = tempdir()?;
-        let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::native())?;
+        let graph = open_graph(temp_dir.path().join("test.db"), &GraphConfig::native())?;
 
         let mut node_ids = Vec::new();
         for i in 0..100 {
@@ -259,7 +259,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
     // SQLite
     {
         let temp_dir = tempdir()?;
-        let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
+        let graph = open_graph(temp_dir.path().join("test.db"), &GraphConfig::sqlite())?;
 
         let mut node_ids = Vec::new();
         for i in 0..100 {
@@ -296,7 +296,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
     // V3
     {
         let temp_dir = tempdir()?;
-        let graph = open_graph(&temp_dir.path().join("test.db"), &GraphConfig::native())?;
+        let graph = open_graph(temp_dir.path().join("test.db"), &GraphConfig::native())?;
 
         let mut node_ids = Vec::new();
         for i in 0..100 {

@@ -528,12 +528,8 @@ fn test_v3_bfs_chain_reaches_all() {
         "BFS from first node should reach all 9 other nodes in chain"
     );
     // Verify they're in order
-    for i in 1..10 {
-        assert!(
-            reachable.contains(&ids[i]),
-            "Should reach node at index {}",
-            i
-        );
+    for (i, id) in ids.iter().enumerate().skip(1).take(9) {
+        assert!(reachable.contains(id), "Should reach node at index {}", i);
     }
 }
 

@@ -10,7 +10,9 @@ use sqlitegraph::backend::native::v3::forensics::FORENSIC_COUNTERS;
 #[cfg(feature = "v3-forensics")]
 use std::sync::atomic::Ordering;
 
+#[cfg(feature = "v3-forensics")]
 const SMALL_NODES: usize = 100;
+#[cfg(feature = "v3-forensics")]
 const MEDIUM_NODES: usize = 10_000;
 
 #[cfg(feature = "v3-forensics")]

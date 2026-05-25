@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test 4: Empty RwLock read (just the lock overhead)
     let start = Instant::now();
     for _ in 0..ITERATIONS {
-        let _ = cache.read();
+        let _guard = cache.read();
     }
     let time4 = start.elapsed();
     println!(

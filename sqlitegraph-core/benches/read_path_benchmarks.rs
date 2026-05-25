@@ -545,9 +545,9 @@ fn bench_cache_hit_sequential(criterion: &mut Criterion) {
             }
 
             // Sequential access pattern (cache-friendly)
-            for i in 0..100 {
+            for node_id in node_ids.iter().take(100) {
                 let _neighbors = graph
-                    .neighbors(SnapshotId::current(), node_ids[i], NeighborQuery::default())
+                    .neighbors(SnapshotId::current(), *node_id, NeighborQuery::default())
                     .expect("Failed to get neighbors");
             }
         });
@@ -657,9 +657,9 @@ fn bench_cache_eviction(criterion: &mut Criterion) {
             }
 
             // Access nodes in pattern that triggers eviction
-            for i in 0..500 {
+            for node_id in node_ids.iter().take(500) {
                 let _neighbors = graph
-                    .neighbors(SnapshotId::current(), node_ids[i], NeighborQuery::default())
+                    .neighbors(SnapshotId::current(), *node_id, NeighborQuery::default())
                     .expect("Failed to get neighbors");
             }
         });

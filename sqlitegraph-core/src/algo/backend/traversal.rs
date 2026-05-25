@@ -116,9 +116,9 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_backend() -> (V3Backend, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("invariant: temp dir creation succeeds");
         let db_path = temp_dir.path().join("test.graph");
-        let backend = V3Backend::create(&db_path).unwrap();
+        let backend = V3Backend::create(&db_path).expect("invariant: backend creation succeeds");
         (backend, temp_dir)
     }
 
@@ -130,7 +130,7 @@ mod tests {
                 file_path: None,
                 data: serde_json::json!({}),
             })
-            .unwrap();
+            .expect("invariant: backend operation succeeds");
 
         let mut children = Vec::new();
         for i in 0..3 {
@@ -141,7 +141,7 @@ mod tests {
                     file_path: None,
                     data: serde_json::json!({}),
                 })
-                .unwrap();
+                .expect("invariant: backend operation succeeds");
 
             backend
                 .insert_edge(EdgeSpec {
@@ -150,7 +150,7 @@ mod tests {
                     edge_type: "links".to_string(),
                     data: serde_json::json!({}),
                 })
-                .unwrap();
+                .expect("invariant: backend operation succeeds");
 
             children.push(child);
         }

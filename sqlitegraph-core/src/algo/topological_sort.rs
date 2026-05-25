@@ -218,7 +218,9 @@ pub fn topological_sort(graph: &SqliteGraph) -> Result<Vec<i64>, TopoError> {
                 explanation: format!("Failed to get outgoing edges: {}", e),
             })?
         {
-            let deg = in_degree.get_mut(&target).unwrap();
+            let deg = in_degree
+                .get_mut(&target)
+                .expect("invariant: target in in_degree from initialization");
             *deg -= 1;
             if *deg == 0 {
                 queue.push_back(target);

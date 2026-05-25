@@ -680,7 +680,6 @@ impl MultiLayerNodeManager {
 }
 
 /// Multi-layer error types for enhanced error reporting
-
 #[cfg(test)]
 mod tests {
     use super::*;

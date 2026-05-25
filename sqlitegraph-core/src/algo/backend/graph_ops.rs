@@ -91,7 +91,7 @@ pub fn strongly_connected_components(
         if lowlinks[&v] == indices[&v] {
             let mut component = Vec::new();
             loop {
-                let w = stack.pop().unwrap();
+                let w = stack.pop().expect("invariant: stack non-empty during DFS");
                 on_stack.remove(&w);
                 node_to_component.insert(w, components.len());
                 component.push(w);
@@ -282,9 +282,9 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_backend() -> (V3Backend, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("invariant: temp dir creation succeeds");
         let db_path = temp_dir.path().join("test.graph");
-        let backend = V3Backend::create(&db_path).unwrap();
+        let backend = V3Backend::create(&db_path).expect("invariant: backend creation succeeds");
         (backend, temp_dir)
     }
 

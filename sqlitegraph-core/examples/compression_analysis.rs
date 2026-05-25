@@ -53,7 +53,7 @@ fn generate_web_graph_pattern(page_count: usize) -> Vec<i64> {
     for hub_id in 1..=hub_count {
         let links_per_hub = 50 + (hub_id as i64 % 51);
         for i in 0..links_per_hub {
-            let target_id = 1i64 + (i as i64 % page_count as i64);
+            let target_id = 1i64 + (i % page_count as i64);
             ids.push(target_id);
         }
     }

@@ -220,13 +220,27 @@ fn strongconnect(
             )?;
             lowlink.insert(
                 v,
-                (*lowlink.get(&v).unwrap()).min(*lowlink.get(&w).unwrap()),
+                (*lowlink
+                    .get(&v)
+                    .expect("invariant: v in lowlink from DFS entry"))
+                .min(
+                    *lowlink
+                        .get(&w)
+                        .expect("invariant: w in lowlink from DFS entry"),
+                ),
             );
         } else if on_stack.contains(&w) {
             // Successor w is in stack S and hence in the current SCC
             lowlink.insert(
                 v,
-                (*lowlink.get(&v).unwrap()).min(*indices.get(&w).unwrap()),
+                (*lowlink
+                    .get(&v)
+                    .expect("invariant: v in lowlink from DFS entry"))
+                .min(
+                    *indices
+                        .get(&w)
+                        .expect("invariant: w has index from DFS visit"),
+                ),
             );
         }
     }
@@ -235,7 +249,9 @@ fn strongconnect(
     if lowlink.get(&v) == indices.get(&v) {
         let mut component = HashSet::new();
         loop {
-            let w = stack.pop().unwrap();
+            let w = stack
+                .pop()
+                .expect("invariant: stack non-empty when processing SCC root");
             on_stack.remove(&w);
             component.insert(w);
             node_to_component.insert(w, components.len());

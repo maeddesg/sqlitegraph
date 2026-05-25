@@ -33,7 +33,7 @@ fn main() {
         let outer = RwLock::new(inner);
 
         {
-            let inner_lock = outer.write().unwrap();
+            let inner_lock = outer.read().unwrap();
             let mut map = inner_lock.write().unwrap();
             map.insert(1, (2..=21).collect::<Vec<i64>>());
         }

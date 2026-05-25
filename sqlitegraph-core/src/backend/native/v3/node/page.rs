@@ -1236,8 +1236,8 @@ mod tests {
         assert_eq!(PAGE_HEADER_SIZE, 32);
         assert_eq!(MAX_PAGE_SIZE, 4096);
         assert_eq!(USABLE_SIZE, 4064);
-        assert!(MAX_NODE_CAPACITY > 0);
-        assert!(MAX_NODE_CAPACITY <= 100); // Should be reasonable
+        const { assert!(MAX_NODE_CAPACITY > 0) };
+        const { assert!(MAX_NODE_CAPACITY <= 100) };
     }
 
     #[test]

@@ -121,11 +121,11 @@ fn bench_snapshot_clone(c: &mut Criterion) {
     let graph = create_benchmark_graph(1_000);
     warm_cache(&graph).expect("Failed to warm cache");
 
-    let snapshot = Arc::new(graph.acquire_snapshot().unwrap());
+    let snapshot = std::rc::Rc::new(graph.acquire_snapshot().unwrap());
 
     group.bench_function("arc_clone_1000", |b| {
         b.iter(|| {
-            let _clone = black_box(Arc::clone(&snapshot));
+            let _clone = black_box(std::rc::Rc::clone(&snapshot));
         })
     });
 

@@ -65,13 +65,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Benchmark statistics for a single cache size
 #[derive(Debug, Clone)]
 struct BenchmarkStats {
-    cache_size: usize,
-    // Warm cache metrics (same instance after inserts)
     warm_time_per_lookup_ns: f64,
-    warm_throughput: f64,
-    // Reopen metrics (cold cache after reopen)
     reopen_time_per_lookup_ns: f64,
-    reopen_throughput: f64,
     // Cache hit rates (from forensics)
     warm_cache_hits: u64,
     warm_cache_misses: u64,
@@ -84,7 +79,7 @@ struct BenchmarkStats {
     reopen_page_reads: u64,
 }
 
-fn run_benchmark(cache_size: usize) -> Result<BenchmarkStats, Box<dyn std::error::Error>> {
+fn run_benchmark(_cache_size: usize) -> Result<BenchmarkStats, Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("cache_sweep.db");
 
@@ -146,11 +141,8 @@ fn run_benchmark(cache_size: usize) -> Result<BenchmarkStats, Box<dyn std::error
     let reopen_forensics = ForensicsReading::default();
 
     Ok(BenchmarkStats {
-        cache_size,
         warm_time_per_lookup_ns: warm_stats.time_per_lookup_ns,
-        warm_throughput: warm_stats.throughput,
         reopen_time_per_lookup_ns: reopen_stats.time_per_lookup_ns,
-        reopen_throughput: reopen_stats.throughput,
         warm_cache_hits: warm_forensics.node_page_cache_hit_count,
         warm_cache_misses: warm_forensics.node_page_cache_miss,
         warm_hit_rate: warm_forensics.node_page_cache_hit_rate(),

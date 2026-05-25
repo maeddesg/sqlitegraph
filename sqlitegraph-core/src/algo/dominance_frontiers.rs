@@ -729,42 +729,6 @@ mod tests {
         graph
     }
 
-    /// Helper: Create if-else-if CFG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 4, 3 -> 5, 4 -> 5
-    fn create_if_else_if_cfg() -> SqliteGraph {
-        let graph = SqliteGraph::open_in_memory().expect("Failed to create graph");
-
-        // Create 6 nodes
-        for i in 0..6 {
-            let entity = GraphEntity {
-                id: 0,
-                kind: "node".to_string(),
-                name: format!("node_{}", i),
-                file_path: Some(format!("node_{}.rs", i)),
-                data: serde_json::json!({"index": i}),
-            };
-            graph
-                .insert_entity(&entity)
-                .expect("Failed to insert entity");
-        }
-
-        let entity_ids: Vec<i64> = graph.list_entity_ids().expect("Failed to get IDs");
-
-        // Create if-else-if: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 4, 3 -> 5, 4 -> 5
-        let edges = vec![(0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 5)];
-        for (from_idx, to_idx) in edges {
-            let edge = GraphEdge {
-                id: 0,
-                from_id: entity_ids[from_idx],
-                to_id: entity_ids[to_idx],
-                edge_type: "next".to_string(),
-                data: serde_json::json!({}),
-            };
-            graph.insert_edge(&edge).expect("Failed to insert edge");
-        }
-
-        graph
-    }
-
     #[test]
     fn test_dominance_frontiers_linear_chain() {
         // Scenario: Linear chain 0 -> 1 -> 2 -> 3

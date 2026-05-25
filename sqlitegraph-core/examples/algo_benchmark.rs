@@ -660,8 +660,8 @@ fn print_summary(results: &[BenchmarkResult]) {
     for ((nodes, edges), group) in by_size {
         println!("\n--- Graph: {} nodes, {} edges ---", nodes, edges);
         println!(
-            "{:<35} {:<12} {:<12} {:<10} {}",
-            "Algorithm", "SQLite(ms)", "V3(ms)", "Speedup", "Status"
+            "{:<35} {:<12} {:<12} {:<10} Status",
+            "Algorithm", "SQLite(ms)", "V3(ms)", "Speedup"
         );
         println!("{}", "-".repeat(90));
 
@@ -741,10 +741,11 @@ fn print_summary(results: &[BenchmarkResult]) {
         if let (Some(s), Some(v)) = (
             group.iter().find(|r| r.backend == "SQLite"),
             group.iter().find(|r| r.backend == "V3"),
-        ) {
-            if s.success && v.success && v.elapsed_ms > 0.0 {
-                speedups.push(s.elapsed_ms / v.elapsed_ms);
-            }
+        ) && s.success
+            && v.success
+            && v.elapsed_ms > 0.0
+        {
+            speedups.push(s.elapsed_ms / v.elapsed_ms);
         }
     }
     if !speedups.is_empty() {

@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "  Cache warmup benefit:             {}× faster",
         cold_ns as f64 / hot_ns as f64
     );
-    println!("");
+    println!();
 
     if hot_ns < 1000 {
         println!("  ✅ EXCELLENT: Hot path < 1 μs (cached adjacency is fast)");

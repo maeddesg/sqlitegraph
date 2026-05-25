@@ -255,6 +255,7 @@ fn run_decomposition(
 }
 
 /// Forensic counter readings
+#[cfg(feature = "v3-forensics")]
 #[derive(Debug, Clone, Default)]
 struct ForensicsReading {
     btree_lookup_calls: u64,

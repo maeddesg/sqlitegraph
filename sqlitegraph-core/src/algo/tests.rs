@@ -109,9 +109,6 @@ fn test_algorithms_are_send() {
             reduction_ratio: 0.0,
         };
     };
-
-    // If this compiles, all the algorithm functions are Send
-    assert!(true);
 }
 
 #[test]

@@ -141,8 +141,6 @@ fn bench_memory_event_queue(criterion: &mut Criterion) {
     group.measurement_time(MEASURE);
     group.warm_up_time(WARM_UP);
 
-    const SIZE: usize = 100;
-
     // Test with different commit counts (events in queue)
     for &commit_count in &[10, 50, 100] {
         group.throughput(Throughput::Elements(commit_count as u64));

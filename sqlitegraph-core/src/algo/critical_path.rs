@@ -380,7 +380,9 @@ pub fn critical_path(
             }
 
             let new_dist = dist_u + weight;
-            let dist_v = distances.get_mut(&v).unwrap();
+            let dist_v = distances
+                .get_mut(&v)
+                .expect("invariant: v in distances from initialization");
 
             // Use MAX for longest path (opposite of shortest path)
             if new_dist > *dist_v {
@@ -535,7 +537,9 @@ where
             }
 
             let new_dist = dist_u + weight;
-            let dist_v = distances.get_mut(&v).unwrap();
+            let dist_v = distances
+                .get_mut(&v)
+                .expect("invariant: v in distances from initialization");
 
             if new_dist > *dist_v {
                 *dist_v = new_dist;

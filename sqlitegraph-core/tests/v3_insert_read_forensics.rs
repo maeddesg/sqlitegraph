@@ -9,12 +9,14 @@ use sqlitegraph::backend::native::v3::forensics::{
     FORENSIC_COUNTERS, ForensicDelta, ForensicSnapshot,
 };
 
+#[cfg(feature = "v3-forensics")]
 fn print_header(name: &str) {
     println!("\n{}", "=".repeat(70));
     println!("  {}", name);
     println!("{}", "=".repeat(70));
 }
 
+#[cfg(feature = "v3-forensics")]
 fn reset_counters() {
     #[cfg(feature = "v3-forensics")]
     FORENSIC_COUNTERS.reset();

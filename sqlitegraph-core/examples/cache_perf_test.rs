@@ -38,8 +38,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // First 1000 lookups (cold cache)
     println!("First 1000 lookups (cold cache)...");
     let start = Instant::now();
-    for i in 0..1000 {
-        backend.get_node(SnapshotId::current(), node_ids[i])?;
+    for node_id in node_ids.iter().take(1000) {
+        backend.get_node(SnapshotId::current(), *node_id)?;
     }
     let cold_time = start.elapsed();
     println!("  Total time: {:?}", cold_time);
@@ -48,8 +48,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Second 1000 lookups (warm cache)
     println!("Second 1000 lookups (warm cache)...");
     let start = Instant::now();
-    for i in 0..1000 {
-        backend.get_node(SnapshotId::current(), node_ids[i])?;
+    for node_id in node_ids.iter().take(1000) {
+        backend.get_node(SnapshotId::current(), *node_id)?;
     }
     let warm_time = start.elapsed();
     println!("  Total time: {:?}", warm_time);

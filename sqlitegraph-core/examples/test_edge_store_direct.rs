@@ -91,7 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut found_count = 0;
     for _ in 0..ITERATIONS {
         let cache_read = cache.read();
-        if let Some(_) = cache_read.get(&key) {
+        if cache_read.get(&key).is_some() {
             found_count += 1;
         }
     }
@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut found_count = 0;
     for _ in 0..ITERATIONS {
         let map = simple_map.lock().unwrap();
-        if let Some(_) = map.get(&key) {
+        if map.get(&key).is_some() {
             found_count += 1;
         }
     }

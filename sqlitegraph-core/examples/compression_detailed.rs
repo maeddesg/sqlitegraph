@@ -144,7 +144,7 @@ fn analyze_pattern(name: &str, ids: &[i64]) {
     );
 
     // Calculate expected vs actual compressed size
-    let expected_bytes = small_deltas * 1 + medium_deltas * 2 + large_deltas * 3; // Rough estimate
+    let expected_bytes = small_deltas + medium_deltas * 2 + large_deltas * 3;
     println!(
         "  Expected size:    ~{} bytes (based on delta distribution)",
         expected_bytes

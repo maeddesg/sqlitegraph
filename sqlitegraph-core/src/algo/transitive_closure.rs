@@ -274,8 +274,7 @@ pub fn transitive_closure(
                         return Ok(closure);
                     }
 
-                    // Continue BFS if depth allows
-                    if max_depth.is_none() || depth + 1 < max_depth.unwrap() {
+                    if max_depth.is_none_or(|md| depth + 1 < md) {
                         queue.push_back((neighbor, depth + 1));
                     }
                 }
@@ -388,8 +387,7 @@ where
                         return Ok(closure);
                     }
 
-                    // Continue BFS if depth allows
-                    if max_depth.is_none() || depth + 1 < max_depth.unwrap() {
+                    if max_depth.is_none_or(|md| depth + 1 < md) {
                         queue.push_back((neighbor, depth + 1));
                     }
                 }

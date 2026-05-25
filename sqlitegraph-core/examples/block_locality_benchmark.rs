@@ -16,11 +16,10 @@ struct BenchmarkConfig {
 /// Access patterns to test
 #[derive(Debug)]
 enum AccessPattern {
-    Sequential,      // Access nodes 1, 2, 3, ... N
-    Reverse,         // Access nodes N, N-1, ... 1
-    Random,          // Access nodes in random order
-    BlockSequential, // Access nodes block-by-block: 1-128, 1-128, 129-256, ...
-    BlockSkip,       // Access alternating blocks (tests block retention)
+    Sequential,
+    Random,
+    BlockSequential,
+    BlockSkip,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -182,7 +181,6 @@ fn run_benchmark(
 fn generate_access_sequence(count: usize, pattern: &AccessPattern) -> Vec<i64> {
     match pattern {
         AccessPattern::Sequential => (1..=count as i64).collect(),
-        AccessPattern::Reverse => (1..=count as i64).rev().collect(),
         AccessPattern::Random => {
             use std::collections::HashSet;
             let mut rng = rand::thread_rng();

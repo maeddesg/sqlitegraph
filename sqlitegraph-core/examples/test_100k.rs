@@ -1,7 +1,7 @@
 //! Test 100k node batch insertion
 
+use sqlitegraph::backend::NodeSpec;
 use sqlitegraph::backend::native::v3::V3Backend;
-use sqlitegraph::backend::{GraphBackend, NodeSpec};
 use std::time::Instant;
 use tempfile::TempDir;
 

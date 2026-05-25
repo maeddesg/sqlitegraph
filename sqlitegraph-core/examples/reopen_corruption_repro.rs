@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     for i in (0..32).step_by(4) {
                         let end = (i + 4).min(32);
                         let bytes = &first_page[i..end];
-                        let vals: Vec<u8> = bytes.iter().copied().collect();
+                        let vals: Vec<u8> = bytes.to_vec();
                         println!("  [{}..{}]: {:?}", i, end, vals);
                     }
 
