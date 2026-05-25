@@ -9,7 +9,7 @@
 - **Files analyzed:** 30
 - **Risk level:** Medium
 
-The algorithm modules contain 406 `unwrap()` calls across 30 source files. While many are in test code (which is excluded from this analysis), the production code patterns show several categories of risk. The most common pattern is `HashMap::get().unwrap()` which assumes key existence that is algorithmically guaranteed but not enforced at the type level.
+The algorithm modules contain 406 `unwrap()` calls across 30 source files. While many are in test code (which is excluded from this analysis), the runtime code patterns show several categories of risk. The most common pattern is `HashMap::get().unwrap()` which assumes key existence that is algorithmically guaranteed but not enforced at the type level.
 
 ## Unwrap Calls by File
 
@@ -105,7 +105,7 @@ let w = stack.pop().unwrap();
 **Files:** `algo/backend/*.rs`
 **Total unwraps:** 51
 
-The backend wrappers (`centrality.rs`, `graph_ops.rs`, `traversal.rs`) provide `GraphBackend` trait implementations. Most unwraps are in test code (excluded from this count), but production code shows:
+The backend wrappers (`centrality.rs`, `graph_ops.rs`, `traversal.rs`) provide `GraphBackend` trait implementations. Most unwraps are in test code (excluded from this count), but runtime code shows:
 
 ```rust
 // backend/graph_ops.rs:94 - Tarjan's SCC

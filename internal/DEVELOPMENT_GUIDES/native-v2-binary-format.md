@@ -14,7 +14,7 @@ The Native V2 backend is **deprecated as of v2.0.0** and will be removed in v1.7
 ### Migration Path
 
 1. **V2 → V3 (Recommended)**: Native V3 is the modern replacement
-2. **V2 → SQLite**: Stable, battle-tested alternative
+2. **V2 → SQLite**: Stable, mature alternative
 
 ### V2 Limitations
 

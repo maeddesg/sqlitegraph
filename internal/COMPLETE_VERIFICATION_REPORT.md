@@ -12,7 +12,7 @@ We verified **3 major features** that were documented with unverified performanc
 | Feature | Previous Claim | Actual Result | Status |
 |---------|---------------|---------------|--------|
 | **LRU Cache** | "2.8× faster" | **114× faster** | ✅ **Exceeds claim by 40×** |
-| **Parallel BFS** | "3.2× faster" | **2× slower** | ❌ **Has bugs, not production-ready** |
+| **Parallel BFS** | "3.2× faster" | **2× slower** | ❌ **Has bugs, not validated** |
 | **Adaptive Pages** | "15% faster" | **15-25% faster** | ✅ **Claim validated** |
 | **Delta Encoding** | "42% space savings" | **75-87% space savings** | ✅ **Exceeds claim by 1.8×** |
 
@@ -56,10 +56,10 @@ We verified **3 major features** that were documented with unverified performanc
 3. **Thread Overhead:** Rayon coordination outweighs benefits
 4. **Small Batches:** Default batch_size creates too many small chunks
 
-**Conclusion:** The parallel BFS implementation is **not production-ready**. It has thread-safety bugs and is slower than sequential BFS.
+**Conclusion:** The parallel BFS implementation is **not validated**. It has thread-safety bugs and is slower than sequential BFS.
 
 **Recommendation:** 
-- ⚠️ **Do NOT use in production**
+- ⚠️ **Do not use for general workloads**
 - 🔧 Needs major refactoring to fix data races
 - 📝 Remove "3.2× faster" claim from documentation
 
@@ -122,7 +122,7 @@ We verified **3 major features** that were documented with unverified performanc
 
 1. **Parallel BFS:**
    - ❌ **Remove** "3.2× faster" claim
-   - ⚠️ **Add warning:** "Not production-ready - has thread-safety bugs"
+   - ⚠️ **Add warning:** "Not validated - has thread-safety bugs"
    - 📝 **Document:** Sequential is 1.8-2× faster in tests
 
 2. **LRU Cache:**
@@ -141,7 +141,7 @@ We verified **3 major features** that were documented with unverified performanc
 
 ## Feature Status Matrix
 
-| Feature | Implemented | Verified | Production-Ready | Performance |
+| Feature | Implemented | Verified | Validated | Performance |
 |---------|------------|----------|------------------|------------|
 | **LRU Cache** | ✅ | ✅ | ✅ | **114× faster** ✅ |
 | **Parallel BFS** | ✅ | ✅ | ❌ **NO** | **2× slower** ⚠️ |
@@ -152,7 +152,7 @@ We verified **3 major features** that were documented with unverified performanc
 
 ## Recommendations
 
-### For Production Use
+### For General Use
 
 1. ✅ **Enable LRU Cache** - Excellent performance (114× speedup)
 2. ✅ **Enable Adaptive Page Sizing** - 15-25% improvement
@@ -187,6 +187,6 @@ We verified **3 major features** that were documented with unverified performanc
 - Adaptive Page Sizing: 15-25% (claimed 15%)
 
 **One feature needs work:**
-- Parallel BFS: Has bugs, slower than sequential, not production-ready
+- Parallel BFS: Has bugs, slower than sequential, not validated
 
 **Overall:** v2.1.0 has **3 excellent features** (LRU cache, adaptive pages, delta encoding) that should be enabled, but **parallel BFS needs fixes** before it can be used.

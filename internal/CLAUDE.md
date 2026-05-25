@@ -3,7 +3,7 @@
 ## Project Overview
 
 SQLiteGraph is an embedded graph database with dual backend support:
-- **V2 Backend**: SQLite-based (mature, ACID transactions, production-ready)
+- **V2 Backend**: SQLite-based (mature, ACID transactions, validated)
 - **V3 Backend**: Native B+Tree index (experimental, unlimited capacity, HNSW vector search)
 
 Published on crates.io as `sqlitegraph` crate. See README.md for user-facing documentation.

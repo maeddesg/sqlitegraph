@@ -1,7 +1,7 @@
 # V3 Backend Unwrap Analysis
 
 **Generated:** 2026-03-15
-**Scope:** V3 Backend production code (excluding tests)
+**Scope:** V3 Backend runtime code (excluding tests)
 **Analyzed Files:** 21 production source files
 
 ## Executive Summary
@@ -10,7 +10,7 @@
 - **Files analyzed:** 21 (excluding test files)
 - **Risk level:** **HIGH**
 
-The V3 backend contains a significant number of `unwrap()` calls across critical storage, WAL, and serialization paths. While many are in test code (which was excluded), the production code still has numerous unwrap calls that could cause panics in production environments, particularly in:
+The V3 backend contains a significant number of `unwrap()` calls across critical storage, WAL, and serialization paths. While many are in test code (which was excluded), the runtime code still has numerous unwrap calls that could cause panics in deployed environments, particularly in:
 
 - WAL record serialization/deserialization
 - B+Tree page packing/unpacking
@@ -499,5 +499,5 @@ All test code unwrap calls are in `#[cfg(test)]` modules in:
 
 *Analysis generated: 2026-03-15*
 *Total unwrap calls analyzed: 346*
-*Production code calls requiring attention: 245*
+*Runtime code calls requiring attention: 245*
 *Test code calls: 101*

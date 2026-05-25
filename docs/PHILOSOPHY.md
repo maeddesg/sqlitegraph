@@ -103,7 +103,7 @@ Full MVCC includes:
 |----------------|-------------------|
 | Proven reliability | Performance for star patterns |
 | Ecosystem tooling | Smaller file sizes |
-| Unlimited scale | Pub/Sub events |
+| Graph-oriented storage | Pub/Sub events |
 | SQL query language | Clustered edge storage |
 
 **Unified API:**

@@ -1,7 +1,7 @@
 # Chunked Parallel BFS - Minecraft-Style Processing
 
 **Date:** 2026-04-23
-**Status:** ✅ Production-ready
+**Status:** Validated with documented thread cap
 
 ## Architecture
 

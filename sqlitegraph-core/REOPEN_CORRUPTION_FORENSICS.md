@@ -133,7 +133,7 @@ let validated = NodePage::unpack(&packed)?;
 - Don't use V3 for data that must persist
 
 **For developers:**
-- DO NOT ship V3 in production until this is fixed
+- Do not recommend V3 for general workloads until this is fixed
 - DO NOT use V3 for any critical data
 - Add reopen stress tests to CI
 

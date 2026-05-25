@@ -8,8 +8,9 @@ Cypher-inspired queries, and HNSW vector search.
 
 **Positioning:** Single-binary embedded database (no server). Persistent storage with
 atomic batch commits. Graph algorithms + HNSW vector search in one engine.
-SQLite: stable, mature, excellent for adjacency queries. V3: high-performance,
-designed for large-scale graphs, faster for bulk traversals. See benchmarks below.
+SQLite: stable, mature, and easy to inspect with standard tooling. Native V3:
+graph-oriented storage with cache, KV, pub/sub, and traversal features. See the
+benchmarks below for workload-specific behavior.
 
 ## What's New in v3.0.0
 
@@ -34,7 +35,7 @@ See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md)
 |---------|--------|-----------|
 | Status | Stable | Stable |
 | Storage | `.db` file | `.graph` file |
-| Max nodes | Unlimited | Unlimited |
+| Capacity model | Storage-limited | Storage-limited |
 | Graph algorithms | 35+ | 35+ |
 | HNSW vectors | Yes | Yes |
 | Pub/Sub | Yes | Yes |
@@ -74,7 +75,7 @@ cargo bench --features native-v3 --bench backend_comparison
 # SQLite backend (default)
 sqlitegraph = "3.0"
 
-# OR Native V3 backend (faster traversals)
+# OR Native V3 backend (graph-oriented storage)
 sqlitegraph = { version = "3.0", features = ["native-v3"] }
 ```
 
@@ -206,4 +207,4 @@ Tools built on SQLiteGraph:
 
 ## License
 
-GPL-3.0
+GPL-3.0-only

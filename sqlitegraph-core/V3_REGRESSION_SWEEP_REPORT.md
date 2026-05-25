@@ -84,7 +84,7 @@ The regression sweep revealed **3 active corruption bugs** in Native V3:
 
 1. **Page Overflow Bug (CRITICAL)**
    - **Symptom:** Nodes with larger payloads cause page overflow
-   - **Impact:** Cannot use V3 for production workloads with realistic data sizes
+   - **Impact:** Cannot use V3 for real workloads with realistic data sizes
    - **Likely cause:** Node serialization exceeding PAGE_SIZE (4096) without proper splitting
 
 2. **Edge-Induced Node Corruption (CRITICAL)**
@@ -127,7 +127,7 @@ The regression sweep revealed **3 active corruption bugs** in Native V3:
    - Create minimal reproducers for each bug
    - Binary search to find exact failure threshold
 
-### BEFORE MARKING "PRODUCTION READY"
+### BEFORE MARKING "VALIDATED"
 
 4. **Fix all HIGH PRIORITY bugs above**
 5. **Re-run this regression sweep - must pass 100%**
@@ -139,7 +139,7 @@ The regression sweep revealed **3 active corruption bugs** in Native V3:
 
 ## CONCLUSION
 
-**Native V3 is NOT ready for production use.**
+**Native V3 is NOT validated for the documented paths.**
 
 The regression sweep successfully detected critical page boundary and corruption bugs that prevent:
 - Nodes with realistic payload sizes

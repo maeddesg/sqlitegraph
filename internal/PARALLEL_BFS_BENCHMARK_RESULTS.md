@@ -156,7 +156,7 @@ The current benchmarks test up to 10K nodes. Test with 100K+ nodes to see if par
 3. Small batch sizes
 4. Potential data races in `next_level` collection
 
-**Recommendation:** Do NOT use the current parallel BFS implementation in production. Either:
+**Recommendation:** Do not use the current parallel BFS implementation for general workloads. Either:
 
 1. Fix the thread-safety issues (use DashMap, fix next_level race)
 2. Remove the parallel BFS entirely

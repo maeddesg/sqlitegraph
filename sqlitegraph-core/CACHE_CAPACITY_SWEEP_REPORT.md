@@ -296,9 +296,9 @@ A focused benchmark that:
 | Implementation | Physical placement | Cache capacity |
 | Best result | No benefit | 1.38x get_node, -3x insert |
 | Changed behavior? | Yes | Yes |
-| Production ready? | Failed | **Mixed** |
+| Validated? | Failed | **Mixed** |
 
-**Cache sizing is a more promising direction than block-locality, but the insert regression must be understood before any production change.**
+**Cache sizing is a more promising direction than block-locality, but the insert regression must be understood before any default change.**
 
 ---
 

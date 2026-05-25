@@ -37,7 +37,7 @@ This guide explains how to migrate from the SQLite backend to the Native V2 back
 | Unlimited nodes | Large graphs (>2K) |
 | Deep traversal | Chain-like graphs |
 | SQL tooling | Debugging, ad-hoc queries |
-| Ecosystem maturity | Production environments |
+| Ecosystem maturity | Deployed environments |
 
 ### Decision Flowchart
 

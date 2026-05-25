@@ -638,7 +638,7 @@ Include:
 1. **SQLiteGraph version:** `cargo tree | grep sqlitegraph`
 2. **Rust version:** `rustc --version`
 3. **OS and version:** `uname -a`
-4. **Minimal reproduction code**
+4. **Minimal reruntime code**
 5. **Error message (full)**
 6. **Expected behavior**
 7. **Actual behavior**

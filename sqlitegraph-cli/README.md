@@ -72,9 +72,10 @@ sqlitegraph --backend sqlite --db mygraph.db [command]
 ```
 
 ### Native V3 Backend
-- 10-20x faster traversals
-- Unlimited node capacity
 - Binary format for graph workloads
+- Cache, KV, and pub/sub support
+- Parallel traversal support for supported commands
+- Workload-dependent performance; see the repository benchmarks
 
 ```bash
 sqlitegraph --backend v3 --db mygraph.db [command]
@@ -162,4 +163,4 @@ This CLI is part of the SQLiteGraph ecosystem:
 
 ## License
 
-GPL-3.0
+GPL-3.0-only

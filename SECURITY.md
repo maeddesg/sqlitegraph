@@ -27,9 +27,9 @@ Please keep security vulnerabilities confidential until they have been responsib
 - **Assessment**: Within 14 days  
 - **Fix release**: As soon as practicable, based on severity
 
-### GPL-3.0-or-later Compliance
+### GPL-3.0-only Compliance
 
-This project is licensed under GPL-3.0-or-later. Security fixes and patches must comply with these license terms. All security-related contributions will be accepted under the same license.
+This project is licensed under GPL-3.0-only. Security fixes and patches must comply with these license terms. All security-related contributions will be accepted under the same license.
 
 ### What to Report
 
@@ -53,7 +53,7 @@ Users should:
 - Keep dependencies updated
 - Review database permissions
 - Use input validation for external data
-- Monitor access logs in production environments
+- Monitor access logs in deployed environments
 
 ### Contact
 

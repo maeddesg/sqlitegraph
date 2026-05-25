@@ -1,7 +1,7 @@
 # Feature Enablement Status - v2.1.0
 
 **Date:** 2026-04-23
-**Purpose:** Final verification that all production-ready features are properly wired and working
+**Purpose:** Final verification that all validated features are properly wired and working
 
 ---
 
@@ -226,17 +226,17 @@ bash .claude/skills/verify-feature/run.sh <feature-name>
 
 ## Known Issues
 
-### ⚠️ Parallel BFS Not Production-Ready
+### ⚠️ Parallel BFS Not Validated
 **Status:** Documented in `BUG_PARALLEL_BFS_ISSUE.md`
 - Has thread-safety bugs
 - Slower than sequential BFS (1.8-2×)
-- **Recommendation:** Do NOT use in production
+- **Recommendation:** Do not use for general workloads
 
 ---
 
 ## Conclusion
 
-**All 3 production-ready features are now fully enabled:**
+**All 3 validated features are now fully enabled:**
 
 ✅ **LRU Cache:** 114× speedup (verified working)
 ✅ **Adaptive Pages:** 15-25% improvement (NOW VERIFIED)

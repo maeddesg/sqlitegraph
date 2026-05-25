@@ -122,4 +122,4 @@ When adding benchmarks:
 
 ## License
 
-Same as SQLiteGraph (GPL-3.0-or-later)
+Same as SQLiteGraph (GPL-3.0-only)

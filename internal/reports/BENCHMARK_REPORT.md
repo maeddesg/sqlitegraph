@@ -225,7 +225,7 @@ To ensure fair comparison, we test SQLite in **explicit transaction mode** vs V3
 - **V3:** Single `fsync` at batch commit, contiguous page allocation
 - **SQLite:** WAL write, checkpoint, page splitting overhead
 
-**Recommendation:** Always use transactions with SQLite for bulk inserts. The 100× improvement from autocommit mode is unrealistic for production workloads.
+**Recommendation:** Always use transactions with SQLite for bulk inserts. The 100× improvement from autocommit mode is unrealistic for real workloads.
 
 ---
 

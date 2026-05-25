@@ -96,7 +96,7 @@ cargo clippy --fix --allow-dirty --allow-staged
 
 ### Code Quality Rules
 
-1. **No unwrap() in production code**
+1. **No unwrap() in runtime code**
    ```rust
    // Bad
    let node = graph.get_node(id).unwrap();
@@ -555,7 +555,7 @@ Include:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the GPL-3.0-or-later license.
+By contributing, you agree that your contributions will be licensed under the GPL-3.0-only license.
 
 ---
 

@@ -41,7 +41,7 @@ SQLiteGraph
 Users select backend via `GraphConfig`:
 
 ```rust
-// SQLite backend - unlimited scale
+// SQLite backend - storage-backed capacity
 let cfg = GraphConfig::sqlite();
 
 // Native V2 - performance, 2048 node limit
@@ -262,13 +262,13 @@ Backend Selection Guide:
 │ Vector similarity search  │ Native V2     │ 2048 nodes    │
 │ Large knowledge graphs    │ SQLite        │ Unlimited     │
 │ Analytics workloads       │ SQLite        │ Unlimited     │
-│ Enterprise applications   │ SQLite        │ Unlimited     │
+│ Applications   │ SQLite        │ Unlimited     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **Rationale:**
 - Acknowledge V2's sweet spot (small, dense, read-heavy graphs)
-- Lean into SQLite for large-scale workloads
+- Lean into SQLite for broad workloads
 - Clear user guidance based on requirements
 - No false promise of "general purpose"
 
@@ -314,7 +314,7 @@ Backend Selection Guide:
 | Dense neighborhoods | 2-10x faster | Clustered edges shine |
 | Vector search | 5-20x faster | HNSW + in-memory |
 | Pub/Sub fanout | 10-50x faster | In-process channels |
-| KV operations | 5-10x faster | In-memory HashMap |
+| KV operations | workload-dependent faster | In-memory HashMap |
 
 ### Where SQLite Wins
 
@@ -449,7 +449,7 @@ Both have:
 **Implementation Approach:**
 - Only storage layer changes (fixed slots → dynamic pages)
 - All other code remains identical
-- O(1) → O(log n) lookup is acceptable trade-off for unlimited scale
+- O(1) → O(log n) lookup is acceptable trade-off for storage-backed capacity
 - Migration tool optional (V2 → V3 export)
 
 ---

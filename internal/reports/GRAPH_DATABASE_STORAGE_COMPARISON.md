@@ -310,11 +310,11 @@ offset = node_data_offset + ((node_id - 1) × 4096)
 └─────────────────────────────────────────────┘
          │                    │
          ▼                    ▼
-    O(log n) lookup    Unlimited scale
+    O(log n) lookup    Storage-backed capacity
 ```
 
 **Pros:**
-- Unlimited scale (4B+ nodes)
+- Storage-backed capacity (4B+ nodes)
 - Page-level compression (~64 nodes/page vs 1/slot)
 - LRU cache mitigates O(log n) cost
 - Transactional page allocation
@@ -456,7 +456,7 @@ V3 advantages:
 
 ### Academic Research
 - [LiveGraph: Transactional Graph Storage (Tsinghua, 2020)](https://pacman.cs.tsinghua.edu.cn/~cwg/publication/livegraph-2020/livegraph-2020.pdf)
-- [LSMGraph: High-Performance Dynamic Graph Storage (ArXiv, Nov 2024)](https://arxiv.org/html/2411.06392v2)
+- [LSMGraph: Performance-focused Dynamic Graph Storage (ArXiv, Nov 2024)](https://arxiv.org/html/2411.06392v2)
 - [BACH: Bridging Adjacency List and CSR (VLDB 2024)](https://www.vldb.org/pvldb/vol18/p1509-miao.pdf)
 - [PCSR: Packed Compressed Sparse Row](https://itshelenxu.github.io/files/papers/pcsr.pdf)
 - [VCSR: Mutable CSR Graph Format](https://webpages.charlotte.edu/ddai/data/dong-ccgrid-22.pdf)

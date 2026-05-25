@@ -28,7 +28,7 @@
 
 **Location:** `reopen/cost/v3/medium` benchmark (10K nodes, 50K edges)
 
-**Impact:** V3 cannot reliably reopen databases after medium-scale writes. This is a correctness issue that must be fixed before V3 can be considered usable for production.
+**Impact:** V3 cannot reliably reopen databases after medium-scale writes. This is a correctness issue that must be fixed before V3 can be recommended for general workloads.
 
 ### Recent Fix Impact Assessment
 

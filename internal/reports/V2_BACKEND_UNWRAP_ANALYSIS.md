@@ -78,7 +78,7 @@ The V2 backend represents a significant portion of the codebase's unwrap usage d
 | File | Unwrap Count | Notes |
 |------|--------------|-------|
 | `pubsub/tests.rs` | 38 | Pub/sub testing |
-| `pubsub/publisher.rs` | 15 | **Production code concern** - lock unwraps |
+| `pubsub/publisher.rs` | 15 | **Runtime code concern** - lock unwraps |
 
 **Note:** `publisher.rs` contains production unwraps on mutex locks:
 - `self.next_id.lock().unwrap()` (line 102)
@@ -207,13 +207,13 @@ unsafe { EdgeStore::new(mem::transmute::<&mut _, &'static mut _>(graph_file)) }
 
 **Location:** `v2/wal/transaction_coordinator.rs`
 
-**Issue:** Complex state machine with many unwraps in test code. While most are in tests, the production code has complex locking patterns.
+**Issue:** Complex state machine with many unwraps in test code. While most are in tests, the runtime code has complex locking patterns.
 
 ### PubSub Publisher Lock Unwraps
 
 **Location:** `v2/pubsub/publisher.rs`
 
-**Issue:** Production code uses unwrap on mutex locks:
+**Issue:** Runtime code uses unwrap on mutex locks:
 
 ```rust
 let mut senders = self.senders.lock().unwrap();

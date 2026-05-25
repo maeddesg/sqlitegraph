@@ -19,7 +19,7 @@ All **3 critical thread-safety bugs** have been fixed:
 - **Before:** Sequential was 1.8-2× faster (with data races)
 - **After:** Parallel is competitive (1.0-1.16× speedup) and thread-safe
 
-**Status:** ⚠️ **Conditionally production-ready**
+**Status:** ⚠️ **Conditionally validated**
 - Safe to use (no data races)
 - Not universally faster (only 1.0-1.16× speedup)
 - Best for small graphs (<1000 nodes) with wide levels
@@ -29,7 +29,7 @@ All **3 critical thread-safety bugs** have been fixed:
 
 ## Summary
 
-The parallel BFS implementation in SQLiteGraph v2.1.0 has critical thread-safety bugs and is **1.8-2× slower** than sequential BFS. This feature should **NOT be used in production** until fixed.
+The parallel BFS implementation in SQLiteGraph v2.1.0 has critical thread-safety bugs and is **1.8-2× slower** than sequential BFS. This feature should **not be used for general workloads** until fixed.
 
 ## Current Behavior
 
@@ -177,7 +177,7 @@ cargo bench --bench parallel_bfs --features native-v3
 - docs/ARCHITECTURE.md: "3.2× faster than sequential BFS"
 
 ### Required Update
-- ⚠️ Add warning: "NOT production-ready - has thread-safety bugs"
+- ⚠️ Add warning: "NOT validated - has thread-safety bugs"
 - ❌ Remove "3.2× faster" claim
 - ✅ Add: "Sequential is 1.8-2× faster" (actual measured)
 
@@ -198,7 +198,7 @@ cargo bench --bench parallel_bfs --features native-v3
 
 4. **`API.md`**
    - Remove "3.2× faster" claim
-   - Add production warning
+   - Add general-use warning
 
 ## Verification Steps
 
@@ -217,7 +217,7 @@ cargo bench --bench parallel_bfs --features native-v3
 
 ## Conclusion
 
-The parallel BFS implementation is **NOT production-ready** and should be disabled until:
+The parallel BFS implementation is **NOT validated** and should be disabled until:
 1. Data races are fixed
 2. Performance is actually improved (not degraded)
 3. Thread-safety tests pass

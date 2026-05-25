@@ -278,7 +278,7 @@ let header = unsafe {
 
 These are in doc comments (`/// #`) and are not actual unsafe code - they're just placeholder values for documentation examples.
 
-**Risk Level:** NONE - Not compiled in production code
+**Risk Level:** NONE - Not compiled in runtime code
 
 ---
 

@@ -32,7 +32,7 @@ Files with unwrap(): 313
 | v3/index/page.rs | 24 | 8 | 16 | 0 | **High** |
 | v3/backend.rs | 22 | 7 | 15 | 0 | **High** |
 
-**Key Finding:** Most V3 backend unwraps are in test code, not production code.
+**Key Finding:** Most V3 backend unwraps are in test code, not runtime code.
 
 ### Production Code Unwraps in V3 Backend
 

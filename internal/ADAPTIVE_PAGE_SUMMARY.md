@@ -58,7 +58,7 @@ This document summarizes the performance benchmark results for SQLiteGraph's ada
 
 ## Recommendations
 
-### For Production Use: **ENABLE** the adaptive page sizing feature
+### For General Use: **ENABLE** the adaptive page sizing feature
 
 **Reasons:**
 
@@ -143,14 +143,14 @@ println!("Using {} byte pages for {:?}",
 
 ## Conclusion
 
-The adaptive page sizing feature is **production-ready** and provides:
+The adaptive page sizing feature is **validated** and provides:
 
 - **15-25% performance improvement** for appropriate workloads
 - **Negligible overhead** (< 0.001 ms)
 - **Automatic optimization** based on storage media
 - **Safe fallbacks** for unknown configurations
 
-**Recommendation: Enable by default in production.**
+**Recommendation: Enable by default for general file-backed use.**
 
 ## Files Created
 

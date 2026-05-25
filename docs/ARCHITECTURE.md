@@ -43,7 +43,7 @@ SQLiteGraph is an embedded graph database with **two** storage backends:
 ├──────────────────┤                    ├──────────────────┤
 │ - SQL storage    │                    │ - Binary format  │
 │ - ACID via SQL   │                    │ - B+Tree index   │
-│ - Debuggable     │                    │ - Unlimited      │
+│ - Debuggable     │                    │ - Storage-backed │
 │                  │                    │   capacity       │
 └──────────────────┘                    └──────────────────┘
 ```
@@ -53,7 +53,7 @@ SQLiteGraph is an embedded graph database with **two** storage backends:
 | Backend | Status | Use Case |
 |---------|--------|----------|
 | **SQLite** | ✅ Stable | Debuggable, familiar SQL ecosystem |
-| **Native V3** | ✅ Stable | High performance, unlimited scale |
+| **Native V3** | ✅ Stable | Graph-oriented storage, KV, pub/sub |
 
 ### Key Architectural Principles
 
@@ -258,7 +258,7 @@ pub trait VectorStorage {
 |--------|----------------|
 | **Storage** | Binary file (.graph) |
 | **Index** | B+Tree for O(log n) node lookups |
-| **Max Nodes** | Unlimited |
+| **Capacity** | Storage-limited |
 | **KV Store** | Lazy-initialized in-memory HashMap |
 | **Pub/Sub** | Lazy-initialized Publisher |
 | **WAL** | Optional for durability |

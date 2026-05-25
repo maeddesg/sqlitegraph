@@ -300,7 +300,7 @@ V3 excels at small-scale traversals due to contiguous page storage and LRU cache
 ### Documentation
 - **Comprehensive documentation sync** - Removed all exaggerated language, verified performance claims
   - Fixed API.md: removed "not yet verified" notes, corrected version references to v2.1.1 for Parallel BFS
-  - Fixed README.md: honest Parallel BFS framing, removed "unlimited scale" exaggerations
+  - Fixed README.md: honest Parallel BFS framing, removed broad scale claims
   - Updated benches/README.md: replaced unverified claims with verified data from COMPLETE_VERIFICATION_REPORT.md
   - Added `docs/SNAPSHOTID_MIGRATION.md` - comprehensive migration guide for SnapshotId API changes
   - Updated all README files for v2.1.3 release consistency
@@ -309,7 +309,7 @@ V3 excels at small-scale traversals due to contiguous page storage and LRU cache
 - **Both README files updated** - Ensured consistency for GitHub/crates.io release
   - Root README.md and benches/README.md both updated
   - Removed marketing language, kept only verified factual claims
-  - Ready for production deployment
+  - Documentation ready for the release
 
 ---
 
@@ -567,7 +567,7 @@ V3 excels at small-scale traversals due to contiguous page storage and LRU cache
 ## [2.0.6] - 2026-02-20
 
 ### Fixed
-- **V3 Edge Store Durability (Critical Production Fix)**
+- **V3 Edge Store Durability (Critical Durability Fix)**
   - Fixed 4 critical TODOs in `edge_compat.rs` that caused data loss on crash
   - **WAL Record for Edge Insert**: `insert_edge()` now writes WAL records for durability
   - **Dirty Cluster Flush**: `flush()` now writes dirty clusters to disk pages with proper sync
@@ -685,7 +685,7 @@ V3 excels at small-scale traversals due to contiguous page storage and LRU cache
 ### Deprecated
 - **Native V2 Backend**
   - Marked as deprecated in documentation
-  - Hard 2048 node limit makes it unsuitable for production
+  - Hard 2048 node limit makes it unsuitable for general use
   - Will be removed in v2.1.0
   - Migration path: V2 → V3 (or V2 → SQLite → V3 as intermediate)
 
@@ -834,7 +834,7 @@ V3 excels at small-scale traversals due to contiguous page storage and LRU cache
 ### User Impact
 - Graph operations (cycles, reachable, dead-code) now produce clean output
 - Watcher runs silently without debug spam
-- Algorithm commands are much more readable in production use
+- Algorithm commands are much more readable in normal CLI use
 
 ---
 
@@ -961,10 +961,10 @@ V3 excels at small-scale traversals due to contiguous page storage and LRU cache
 ### User Impact
 - Native-v2 backend now produces clean output (no spurious debug messages)
 - Matches SQLite backend behavior (silent during normal operation)
-- Improved user experience for production use
+- Improved user experience for normal CLI use
 
 ### Developer Notes
-- Debug functions in `debug.rs` remain for test/development use but are not called in production
+- Debug functions in `debug.rs` remain for test/development use but are not called in normal builds
 - Environment-gated debug features remain intact: `EDGE_CLUSTER_DEBUG`, `TX_BEGIN_AUDIT`, `PHASE75_INSTRUMENTATION`
 
 ---
@@ -992,7 +992,7 @@ V3 excels at small-scale traversals due to contiguous page storage and LRU cache
 - **hnsw/index.rs**: Fixed missing `hnsw_config` and `HnswIndexError` imports causing 3 compilation errors
 
 ### Rationale
-The debug instrumentation was vestigial forensic code from corruption debugging. It can be restored from git history if needed. Production builds benefit from cleaner code with zero runtime overhead.
+The debug instrumentation was vestigial forensic code from corruption debugging. It can be restored from git history if needed. Normal builds benefit from cleaner code with zero runtime overhead.
 
 ### Test Results
 - ✅ 16/16 hnsw::index tests pass
@@ -1018,7 +1018,7 @@ The debug instrumentation was vestigial forensic code from corruption debugging.
 ### Summary
 - **Zero code changes** from v1.5.0
 - **Documentation completed** for v1.5.0 features
-- **Ready for production use** with complete API reference
+- **Documented API reference** for the v1.5.0 features
 
 ---
 
@@ -1411,7 +1411,7 @@ Projects using `Rc<SqliteGraphBackend>` can now migrate to `Rc<dyn GraphBackend>
 
 ## [1.0.0] - 2026-01-17
 
-### v1.0 Production Release
+### v1.0 Release
 **Phase 8-10 completion: Graph algorithms, developer tooling, and comprehensive documentation**
 
 ### Phase 8: Graph Algorithms
@@ -1462,7 +1462,7 @@ Projects using `Rc<SqliteGraphBackend>` can now migrate to `Rc<dyn GraphBackend>
 - **10 Phases Complete**: From foundation cleanup to comprehensive testing
 - **41 Plans Executed**: Across all phases with autonomous agents
 - **Test Coverage**: 300+ tests passing (WAL, concurrent, algorithms, HNSW, MVCC)
-- **Graph Algorithms**: 4 production algorithms implemented
+- **Graph Algorithms**: 4 graph algorithms implemented
 - **Documentation**: Comprehensive rustdoc for all public modules
 - **Developer Tools**: Introspection API, progress tracking, enhanced CLI
 
@@ -1623,7 +1623,7 @@ Remaining warnings serve as **valuable indicators** of future implementation wor
 #### 🔧 Developer Experience Improvements
 - **Cleaner compilation output**: Eliminated noisy, truly problematic warnings
 - **Preserved intent markers**: Mock/placeholder warnings serve as future implementation guides
-- **Enhanced methodology**: SME approach proven for large-scale codebase optimization
+- **Enhanced methodology**: SME approach used for broad codebase cleanup
 - **Zero regression**: All functionality preserved while dramatically improving code hygiene
 
 #### Status
@@ -1637,10 +1637,10 @@ Remaining warnings serve as **valuable indicators** of future implementation wor
 
 ## [0.2.5] - 2025-12-21
 
-### 🚀 Complete V2 Native Backend Production Release
+### Complete V2 Native Backend Release
 **Comprehensive V2 architecture with advanced snapshot system, WAL implementation, and atomic operations**
 
-#### Major Production Features
+#### Major Features
 
 **🗄️ Advanced V2 Snapshot System with Crash Recovery**
 - **Atomic Export/Import**: Complete snapshot export/import system with lifecycle management
@@ -1651,23 +1651,23 @@ Remaining warnings serve as **valuable indicators** of future implementation wor
 
 **📝 Write-Ahead Logging (WAL) System Available**
 - **Complete Transaction Logging**: Full ACID compliance with WAL-based durability
-- **High-Performance Checkpointing**: Efficient background checkpoint operations
+- **Checkpointing**: Efficient background checkpoint operations
 - **Crash Recovery**: Automatic recovery from incomplete transactions
 - **Concurrent Read/Write**: Multiple readers with single writer support
 - **Configurable WAL Modes**: Tunable performance characteristics for different workloads
 
 **⚡ Advanced V2 Cluster Architecture**
-- **Production-Grade Clustering**: 10-20x performance improvement over traditional approaches
+- **Clustered Layout**: Sequential adjacency layout for graph traversal workloads
 - **Optimized Memory Layout**: Sequential I/O patterns for maximum throughput
-- **Cluster Metadata Management**: Robust cluster allocation and lifecycle management
-- **Atomic Cluster Commits**: Guaranteed cluster-level transaction atomicity
+- **Cluster Metadata Management**: Cluster allocation and lifecycle management
+- **Atomic Cluster Commits**: Cluster-level transaction atomicity
 - **Advanced Compaction**: Intelligent space management and defragmentation
 
 #### Enhanced HNSW Vector Search (1536 Dimension Support) **Updated**
 - **OpenAI Embedding Optimization**: Native support for 1536-dimensional OpenAI embeddings
 - **Multi-Layer Architecture**: Enhanced HNSW implementation with configurable layers
 - **Advanced Distance Metrics**: Support for Cosine, Euclidean, Dot Product, and Manhattan distances
-- **Production Benchmarks**: Comprehensive performance validation up to 4096 dimensions
+- **Benchmarks**: Comprehensive performance validation up to 4096 dimensions
 - **Memory Efficiency**: Optimized memory usage patterns for large vector datasets
 
 #### Testing and Quality Assurance
@@ -1683,19 +1683,19 @@ Remaining warnings serve as **valuable indicators** of future implementation wor
 **🔒 Enhanced Safety and Integrity**
 - **Advanced Corruption Prevention**: Multi-layer corruption detection and prevention
 - **Atomic File Operations**: Cross-platform safe file operations with proper error handling
-- **V2 Cluster Integrity**: Robust cluster metadata validation and consistency checks
-- **Transaction Rollback Safety**: Complete transaction rollback with guaranteed cleanup
+- **V2 Cluster Integrity**: Cluster metadata validation and consistency checks
+- **Transaction Rollback Safety**: Complete transaction rollback with cleanup paths
 - **Resource Management**: Improved memory and file handle management
 
 #### Performance Improvements
 
-**📊 Production-Grade Performance Metrics**
+**Performance Metrics**
 - **Native V2 Backend**: 50K-100K operations/second throughput
 - **Sub-millisecond Queries**: Average adjacency query response under 1ms
-- **10-20x Performance Improvement**: Over traditional adjacency approaches
+- **Traversal Improvements**: Workload-dependent improvements over the earlier adjacency layout
 - **Memory-mapped I/O**: 400MB/s read throughput, 200MB/s write throughput
 - **70%+ Storage Efficiency**: Optimized binary format over V1 legacy
-- **5-10x Write Throughput**: WAL-enabled high-performance writes
+- **Write Throughput**: WAL-enabled write path improvements
 
 **🎯 Advanced Optimizations**
 - **CPU Profile Tuning**: Automatic CPU detection and optimization selection
@@ -1714,7 +1714,7 @@ Remaining warnings serve as **valuable indicators** of future implementation wor
 - **Rich Documentation**: Complete API documentation with examples
 
 **📚 Documentation and Tooling**
-- **Comprehensive Manual**: Complete operator manual with production deployment guides
+- **Comprehensive Manual**: Complete operator manual with configuration and usage guides
 - **API Documentation**: Full API reference with examples and best practices
 - **Performance Analysis**: Detailed performance characteristics and optimization guides
 - **Migration Guides**: Step-by-step migration from V1 to V2 architecture
@@ -1755,7 +1755,7 @@ Remaining warnings serve as **valuable indicators** of future implementation wor
 
 #### Security and Reliability
 
-**🔐 Production-Grade Security**
+**Security**
 - **Input Validation**: Comprehensive input validation and sanitization
 - **Resource Limits**: Protection against resource exhaustion attacks
 - **Safe File Operations**: Atomic file operations preventing data corruption
@@ -1915,25 +1915,25 @@ Remaining warnings serve as **valuable indicators** of future implementation wor
 
 ## [0.2.1] - 2024-12-18
 
-### 🚀 V2 Native Backend Production Release (Patch)
-**Version bump for publication - includes all V2 production features from 0.2.0**
+### V2 Native Backend Release (Patch)
+**Version bump for publication - includes all V2 features from 0.2.0**
 
 #### Changes from 0.2.0
 - **Version bump**: 0.2.0 → 0.2.1 for crates.io publication
-- **No code changes**: All V2 production features from 0.2.0 included
+- **No code changes**: All V2 features from 0.2.0 included
 
-#### V2 Backend Production Status ✅
+#### V2 Backend Status
 - **Feature flag**: `native-v2` (stable)
 - **Confirmed working**: 10+ nodes, 20+ edges insertion and retrieval functional
 - **Transaction system**: Atomic commits working perfectly
 - **Corruption prevention**: All critical fixes in place and tested
-- **Performance**: High-performance native backend with clustered adjacency
+- **Performance**: Native backend with clustered adjacency
 
 ---
 
 ## [0.2.0] - 2024-12-18
 
-### 🚀 V2 Native Backend Production Release
+### V2 Native Backend Release
 **Native V2 backend is now stable and no longer experimental**
 
 #### Breaking Changes
@@ -1941,12 +1941,12 @@ Remaining warnings serve as **valuable indicators** of future implementation wor
 - **Cargo.toml updates**: V2 backend properly documented as stable
 - **Test cleanup**: Removed problematic V1→V2 API mismatch tests
 
-#### V2 Backend Production Status ✅
+#### V2 Backend Status
 - **Feature flag**: `native-v2` (stable, replaces confusing `v2_experimental`)
 - **Confirmed working**: 10+ nodes, 20+ edges insertion and retrieval functional
 - **Transaction system**: Atomic commits working perfectly
 - **Corruption prevention**: All critical fixes in place and tested
-- **Performance**: High-performance native backend with clustered adjacency
+- **Performance**: Native backend with clustered adjacency
 
 #### Cargo.toml Changes
 ```toml
@@ -1979,7 +1979,7 @@ v2_experimental = ["native-v2"]  # Alias for backwards compatibility
 - Library tests: 69/69 passing
 
 #### User Impact
-- **V2 now recommended for high-performance use cases**
+- **V2 now available for clustered-adjacency use cases**
 - **SQLite backend remains default for stability**
 - **Backward compatibility maintained** via `v2_experimental` alias
 - **Clear backend selection** documented in Cargo.toml

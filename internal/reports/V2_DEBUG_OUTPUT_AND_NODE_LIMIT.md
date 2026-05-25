@@ -155,7 +155,7 @@ From `.planning/REQUIREMENTS.md`:
 
 **V2 is not broken** - it's designed for a specific use case (small graphs with fast lookups). The 2048 limit is a feature, not a bug.
 
-**V3 is the correct path** for unlimited scale. The planning is complete (27 requirements mapped to phases). Ready to start Phase 61.
+**V3 is the correct path** for storage-backed capacity. The planning is complete (27 requirements mapped to phases). Ready to start Phase 61.
 
 ---
 

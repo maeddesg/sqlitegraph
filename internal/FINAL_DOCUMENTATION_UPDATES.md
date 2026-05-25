@@ -12,7 +12,7 @@
 - **Fix:** Updated MIN_KEYS from 126 to 125
 - **Result:** Benchmarks now run successfully at 100K+ nodes
 
-### ✅ Enabled All Production-Ready Features (PROPERLY)
+### ✅ Enabled All Validated Features (PROPERLY)
 
 Ran comprehensive implementation and verification on **3 features**:
 
@@ -108,12 +108,12 @@ Ran comprehensive benchmarks and verification:
   - Data race in `next_level` vector
   - Mutex contention in visited set
   - Thread overhead outweighs benefits
-- **Status:** ❌ NOT production-ready
+- **Status:** ❌ NOT validated
 - **Recommendation:** Disable until fixed
 
 ---
 
-## Production Recommendations
+## Usage Recommendations
 
 ### ✅ Use These Features (All 3 Verified)
 
@@ -176,7 +176,7 @@ This is now part of the standard workflow for all feature work.
 **After (Proper Fix):**
 - ✅ All numbers from actual benchmarks
 - ✅ All features end-to-end wired
-- ✅ Warnings about non-production-ready features
+- ✅ Warnings about non-validated features
 - ✅ Accurate performance data
 - ✅ Automated verification prevents future issues
 
@@ -258,7 +258,7 @@ All edge_compat, backend, and V3 tests passing.
 
 The SQLiteGraph v2.1.0 performance improvements are now **fully verified**:
 
-**✅ Excellent features (use in production):**
+**Validated features:**
 - LRU Cache: 114× speedup
 - Adaptive Pages: 15-25% improvement (NOW PROPERLY WIRED)
 - Delta Encoding: 75-87% space savings

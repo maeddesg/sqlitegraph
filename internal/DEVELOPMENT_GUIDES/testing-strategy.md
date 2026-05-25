@@ -151,7 +151,7 @@ fn test_sqlite_to_v3_migration() {
 
 ---
 
-## V3 Production Readiness Testing
+## V3 Release Readiness Testing
 
 ### Phase 1: V3 Correctness
 

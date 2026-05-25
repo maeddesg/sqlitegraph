@@ -47,7 +47,7 @@
 ```rust
 /// HNSW Vector Search Module
 ///
-/// This module provides high-performance vector search capabilities
+/// This module provides vector search capabilities
 /// using Hierarchical Navigable Small World (HNSW) algorithm.
 ///
 /// ## Architecture
@@ -254,7 +254,7 @@ let real_embedding = generate_test_embedding(768); // Actually generates
 ```rust
 //! Hierarchical Navigable Small World (HNSW) Vector Search
 //!
-//! This module provides production-ready HNSW implementation with:
+//! This module provides an HNSW implementation with:
 //! - SIMD-optimized distance calculations
 //! - Multi-threaded index construction
 //! - Dynamic updates without full rebuilds

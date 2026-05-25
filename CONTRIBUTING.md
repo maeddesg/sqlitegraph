@@ -63,7 +63,7 @@ cargo doc --workspace --no-deps
 ### Testing Requirements
 
 - No mocks or stubs for critical paths
-- Real backends only (no fakes for production code)
+- Real backends only (no fakes for runtime code)
 - Integration tests must use actual SQLite databases
 - Deterministic test data and ordering
 

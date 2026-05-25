@@ -17,7 +17,7 @@
 1. **Unified Storage**: Graph topology + vector embeddings in a single embedded database
 2. **Hybrid Queries**: Combine graph traversals with vector similarity in single operations
 3. **Embedded Performance**: No external dependencies, perfect for edge/AI applications
-4. **Production Ready**: Leverage existing WAL mode and Native V2 performance
+4. **Integration Path**: Leverage existing WAL mode and Native V2 performance
 
 **Competitive Analysis**: Based on 2024 benchmarks, SQLiteGraph can differentiate by offering vector capabilities at 4,180 QPS while maintaining sub-20ms latency for hybrid queries [3].
 
@@ -37,8 +37,8 @@
 **Leading Rust Implementations**:
 ```toml
 # Primary candidates for integration
-hnsw-rs = "0.13"      # Production-ready, maintained
-sonic-rs = "0.2"      # High-performance, async support
+hnsw-rs = "0.13"      # maintained HNSW implementation
+sonic-rs = "0.2"      # async-capable JSON parser
 ann-rs = "0.8"        # Comprehensive ANN library
 ```
 
@@ -48,7 +48,7 @@ ann-rs = "0.8"        # Comprehensive ANN library
 
 | Database      | QPS     | Latency   | Storage        | Use Case              |
 |---------------|---------|-----------|----------------|-----------------------|
-| Milvus        | 8,950   | 2.3ms     | Distributed    | Enterprise scale      |
+| Milvus        | 8,950   | 2.3ms     | Distributed    | Managed/distributed use |
 | Qdrant        | 7,820   | 8.7ms     | Hybrid         | Real-time applications|
 | pgvector      | 5,340   | 12.4ms    | PostgreSQL ext | SQL workloads         |
 | **SQLiteGraph** | 4,180   | 18.6ms    | **Embedded**    | **Edge/AI applications**|
@@ -67,8 +67,8 @@ ann-rs = "0.8"        # Comprehensive ANN library
 
 **Key Libraries**:
 ```rust
-// High-performance vector math
-fast-simd-rust/vector-math = "0.4"  // Production ready
+// Vector math
+fast-simd-rust/vector-math = "0.4"
 std::arch = "1.80"                   // Built-in SIMD support
 ```
 
@@ -211,7 +211,7 @@ pub enum FusionMethod {
 
 ### 3. SIMD-Optimized Distance Calculations
 
-**High-Performance Vector Operations**:
+**Performance-focused Vector Operations**:
 ```rust
 // SIMD-accelerated distance calculations
 mod simd_distance {
@@ -445,7 +445,7 @@ pub fn reciprocal_rank_fusion(
 
 ### Phase 3: Performance & Scale (4-5 weeks)
 
-**Objective**: Production-grade performance and scalability
+**Objective**: Performance and scalability work
 
 **Week 1-2: SIMD Optimization**
 ```rust
@@ -1451,7 +1451,7 @@ pub struct SqliteGraphAdvantages {
 | Phase 2 | 3-4 weeks | 2 engineers | $80K  | Hybrid query fusion |
 | Phase 3 | 4-5 weeks | 3 engineers | $150K | Performance optimization |
 | Phase 4 | 3-4 weeks | 2 engineers | $80K  | Advanced features |
-| **Total** | **14-19 weeks** | **2-3 engineers** | **$430K** | **Production-ready HNSW** |
+| **Total** | **14-19 weeks** | **2-3 engineers** | **$430K** | **Validated HNSW integration** |
 
 ### 2. Market Opportunity
 
@@ -1494,7 +1494,7 @@ pub struct SqliteGraphAdvantages {
 - **Probability**: Medium
 - **Impact**: High
 - **Mitigation**:
-  - Use battle-tested `hnsw-rs` library initially
+  - Use mature `hnsw-rs` library initially
   - Gradual migration to custom implementation
   - Extensive automated testing
 
@@ -1582,7 +1582,7 @@ pub struct SqliteGraphAdvantages {
 - ARR growth: 200% Year-over-Year
 - Customer retention: > 90%
 - Average contract value: $20K+
-- Enterprise customer percentage: > 60%
+- Customer percentage: > 60%
 
 ### 3. Market Position Metrics
 
@@ -1668,7 +1668,7 @@ SQLiteGraph is at a **strategic inflection point** where adding HNSW vector sear
 - Scaling to 1M+ vectors demonstrated
 
 **Phase 3 Gate**:
-- Production-ready performance achieved
+- Performance target achieved
 - Comprehensive test coverage
 - Documentation and examples complete
 - Beta customers successfully using in production

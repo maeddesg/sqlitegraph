@@ -15,7 +15,7 @@ The SQLiteGraph CLI (`sqlitegraph-cli`) uses the `clap` crate for argument parsi
 
 | Backend | CLI Flag | Status |
 |---------|----------|--------|
-| SQLite | `--backend sqlite` | Stable, recommended for production |
+| SQLite | `--backend sqlite` | Stable, recommended default |
 | Native V3 | `--backend native` | New in v2.0.0, recommended for development |
 | Native V2 | `--backend v2` | Deprecated, removal in v1.7.0 |
 

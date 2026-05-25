@@ -271,7 +271,7 @@ Otherwise, use **sequential BFS** for better performance.
 
 ## Production Readiness
 
-### Status: ⚠️ **CONDITIONALLY PRODUCTION-READY**
+### Status: Validated with caveats
 
 The parallel BFS implementation is now **thread-safe and no longer has bugs**, but it's **not universally faster** than sequential BFS.
 
@@ -292,13 +292,13 @@ The parallel BFS implementation is now **thread-safe and no longer has bugs**, b
 ### Before (v2.1.0)
 - **Bugs:** 3 critical data races
 - **Performance:** 1.8-2× slower than sequential
-- **Status:** ❌ NOT production-ready (unsafe)
+- **Status:** ❌ NOT validated (unsafe)
 - **Recommendation:** Disable until fixed
 
 ### After (v2.1.1)
 - **Bugs:** 0 data races (all fixed)
 - **Performance:** Competitive with sequential (1.0-1.16×)
-- **Status:** ⚠️ Conditionally production-ready (safe but not always faster)
+- **Status:** ⚠️ Conditionally validated (safe but not always faster)
 - **Recommendation:** Use for small graphs with wide levels
 
 ---
@@ -340,4 +340,4 @@ The parallel BFS implementation is now **thread-safe and no longer has bugs**, b
 **Labels:** bug-fix, thread-safety, parallel-bfs, v2.1.1
 **Milestone:** v2.1.1 (bug fix release)
 **Status:** ✅ CRITICAL BUGS FIXED
-**Quality:** All tests passing, thread-safe, production-ready with caveats
+**Quality:** All tests passing, thread-safe, validated with caveats

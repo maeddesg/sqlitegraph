@@ -133,6 +133,6 @@ at [https://www.contributor-covenant.org/translations][translations].
 
 ## GPL License Note
 
-All contributions to this project must comply with the GPL-3.0-or-later license.
+All contributions to this project must comply with the GPL-3.0-only license.
 By contributing to this project, you agree that your contributions will be
 licensed under the same terms as the project.

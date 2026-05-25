@@ -6,7 +6,7 @@
 ## Executive Summary
 
 - **Total unwrap calls found:** 7
-- **Files analyzed:** 16 (production code only, excluding `*_tests.rs`)
+- **Files analyzed:** 16 (runtime code only, excluding `*_tests.rs`)
 - **Risk level:** Medium
 
 The HNSW module has a relatively low number of unwrap calls, with most being in low-risk contexts. The highest risk locations involve timestamp generation and SIMD operations near unsafe blocks.
@@ -155,4 +155,4 @@ The HNSW module demonstrates good unwrap hygiene:
 3. **No user-input unwraps** - No unwrap on user-provided vector data
 4. **SIMD safety** - Unwrap calls are outside actual unsafe blocks
 
-**Recommendation:** No immediate action required. The codebase could benefit from explicit safety comments for future maintainers, but the current unwrap usage is acceptable for production use.
+**Recommendation:** No immediate action required. The codebase could benefit from explicit safety comments for future maintainers, but the current unwrap usage is acceptable for general use.

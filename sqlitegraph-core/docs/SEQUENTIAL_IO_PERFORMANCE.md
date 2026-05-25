@@ -56,7 +56,7 @@ Unified context combining:
 ### Three-Tier Lookup (get_neighbors_optimized)
 
 ```
-L1: Check SequentialReadBuffer (fastest)
+L1: Check SequentialReadBuffer (fast path)
    ├─ Hit → Return neighbors from buffer
    └─ Miss → Continue to L2
 
@@ -109,7 +109,7 @@ To achieve the 3x target, Plan 32-04 will implement actual neighbor extraction f
 
 ### Analysis
 
-- **Window 4**: Fastest prefetch, but caches fewer nodes. More frequent prefetches needed for long chains.
+- **Window 4**: Fast path prefetch, but caches fewer nodes. More frequent prefetches needed for long chains.
 - **Window 8**: Default, balanced for most workloads. 1.57x slower than window 4, but 2x more nodes per prefetch.
 - **Window 16**: 1.69x slower than window 8, but 2x more nodes per prefetch. Better for very long chains.
 - **Window 32**: 1.83x slower than window 16, but 2x more nodes. Diminishing returns on memory vs benefit.

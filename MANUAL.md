@@ -399,7 +399,7 @@ let results = hnsw.search(&query, k)?;
 |--------|----------|-------|
 | **Cosine** | Text embeddings | Fast |
 | **Euclidean** | General similarity | Medium |
-| **Dot Product** | Normalized vectors | Fastest |
+| **Dot Product** | Normalized vectors | Very fast |
 | **Manhattan** | Sparse vectors | Slow |
 
 ### CLI Commands
@@ -1216,7 +1216,7 @@ with the IDs returned during node creation.
 ## Architecture Status
 
 **Current feature areas:**
-- Graph Algorithms Library: 35 production algorithms across 13 categories
+- Graph Algorithms Library: 35 graph algorithms across 13 categories
   - Core Graph Theory: WCC, SCC, Transitive Closure, Transitive Reduction, Topological Sort
   - Reachability: Forward, Backward, Can-Reach, Unreachable Nodes
   - CFG Analysis: Dominators, Post-Dominators, Control Dependence, Dominance Frontiers, Natural Loops

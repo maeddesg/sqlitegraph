@@ -14,7 +14,7 @@ This document provides a quick overview of the main API surface.
 | Backend | Status | Module | Best For |
 |---------|--------|--------|----------|
 | **SQLite** | ✅ Stable | `backend::sqlite` | Debuggable, SQL ecosystem |
-| **Native V3** | ✅ Stable | `backend::native::v3` | Performance, unlimited scale |
+| **Native V3** | ✅ Stable | `backend::native::v3` | Graph-oriented storage, KV, pub/sub |
 
 ---
 
