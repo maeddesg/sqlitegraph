@@ -91,10 +91,9 @@ main
 test_*_api
 *.sqlitegraph-*insert_bench_fixed.txt
 
-# Internal development docs (kept for reference but not in git)
+# Internal development docs (kept locally, not in git)
+internal/
 docs/internal/
-# Note: internal/ folder IS tracked in git for team sharing
-# It's excluded from crates.io publication via package manifest
 
 # Agent instructions — local only, not for repo
 **/CLAUDE.md
