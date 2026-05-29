@@ -1,5 +1,15 @@
 # SQLiteGraph Changelog
 
+## [3.0.6] - 2026-05-29
+
+### Added
+
+- **TypedDiGraph::find_edge** — returns `Option<EdgeIndex>` for a directed edge
+  between two nodes. O(out-degree) lookup.
+- **TypedDiGraph::iter_edges** — returns an iterator over all valid edges as
+  `EdgeRef { source, target, weight }` references.
+- **EdgeRef\<W\>** — public struct for edge iteration results.
+
 ## [3.0.5] - 2026-05-29
 
 ### Added

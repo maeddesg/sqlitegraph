@@ -265,6 +265,31 @@ impl<N, E> TypedDiGraph<N, E> {
     pub fn raw_edge_count(&self) -> usize {
         self.edges.len()
     }
+
+    pub fn find_edge(&self, from: NodeIndex, to: NodeIndex) -> Option<EdgeIndex> {
+        self.adj_out
+            .get(from.0)?
+            .iter()
+            .find(|(_, target)| *target == to.0)
+            .map(|(edge_idx, _)| EdgeIndex(*edge_idx))
+    }
+
+    pub fn iter_edges(&self) -> impl Iterator<Item = EdgeRef<&E>> + '_ {
+        self.edges.iter().filter_map(|entry| {
+            let e = entry.as_ref()?;
+            Some(EdgeRef {
+                source: NodeIndex(e.from),
+                target: NodeIndex(e.to),
+                weight: e.weight.as_ref()?,
+            })
+        })
+    }
+}
+
+pub struct EdgeRef<W> {
+    pub source: NodeIndex,
+    pub target: NodeIndex,
+    pub weight: W,
 }
 
 impl<N, E> Default for TypedDiGraph<N, E> {
