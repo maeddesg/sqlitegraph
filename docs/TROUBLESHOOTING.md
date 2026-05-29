@@ -47,9 +47,9 @@ vcpkg install sqlite3
 # Then set SQLITE3_LIB_PATH environment variable
 ```
 
-### "Feature native-v2 not found"
+### "Feature native-v3 not found"
 
-**Symptom:** Build fails with `error: unused manifest key: sqlitegraph/native-v2`
+**Symptom:** Build fails with `error: unused manifest key: sqlitegraph-core/native-v3`
 
 **Cause:** Native V2 is a feature flag, not a separate crate.
 
@@ -58,7 +58,7 @@ vcpkg install sqlite3
 ```toml
 # In your Cargo.toml
 [dependencies]
-sqlitegraph = { version = "1.5.7", features = ["native-v2"] }
+sqlitegraph = { version = "3.0", features = ["native-v3"] }
 ```
 
 ### "Functionality mismatch: expected 7, found 5" (Internal)
@@ -125,7 +125,7 @@ for handle in handles {
 }
 ```
 
-**Solution (Native V2):** Native V2 also serializes writes via WAL. Use a similar approach.
+**Solution (Native V2):** Native V3 also serializes writes via WAL. Use a similar approach.
 
 ### "Node not found: 12345"
 
@@ -222,7 +222,7 @@ println!("Cache hits: {}/{}", stats.cache_hits(), stats.cache_lookups());
    }
    ```
 
-3. **Consider Native V2 for star-pattern graphs:**
+3. **Consider Native V3 for star-pattern graphs:**
    ```bash
    # Benchmark both backends
    time sqlitegraph --backend sqlite --db mygraph.db bfs --start 1 --max-depth 5
@@ -282,8 +282,8 @@ let graph = open_graph("mygraph.db", &cfg)?;
    let graph = open_graph("mygraph.db", &cfg)?;
    ```
 
-3. **Use Native V2 for write-heavy workloads:**
-   - Native V2: 1.3-3.2x faster inserts
+3. **Use Native V3 for write-heavy workloads:**
+   - Native V3: 1.3-3.2x faster inserts
 
 ---
 
@@ -400,7 +400,7 @@ let value = graph.kv_get(&key)?;
 **Solution:** Upgrade to latest version:
 ```toml
 [dependencies]
-sqlitegraph = "1.5.7"
+sqlitegraph-core = "3.0"
 ```
 
 If the issue persists, the database may be corrupted:

@@ -40,7 +40,7 @@ cargo build --workspace
 cargo test --workspace
 
 # Run with Native V2 feature
-cargo build --workspace --features native-v2
+cargo build --workspace --features native-v3
 ```
 
 ### Development Tools
@@ -200,7 +200,7 @@ impl GraphBackend for MyBackend {
 
 ```bash
 # All tests
-cargo test --workspace --features native-v2
+cargo test --workspace --features native-v3
 
 # Integration tests
 cargo test --test api_ergonomics_tests
@@ -488,7 +488,7 @@ Brief description of changes.
 6. Add to MANUAL.md Section 4
 7. Add CLI command if applicable
 
-### Adding to Native V2 Backend
+### Adding to Native V3 Backend
 
 1. Understand the V2 format (see ARCHITECTURE.md)
 2. Update WAL records if adding new operations
@@ -521,7 +521,7 @@ Brief description of changes.
 Include:
 - Minimal reproduction case
 - Rust version (`rustc --version`)
-- Backend used (SQLite or Native V2)
+- Backend used (SQLite or Native V3)
 - Error messages and stack traces
 - Expected vs actual behavior
 

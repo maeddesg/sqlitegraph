@@ -36,7 +36,7 @@ This index provides navigation for all SQLiteGraph documentation.
    - Performance benchmarks
 
 2. **[MANUAL.md](../MANUAL.md)** - Detailed guide
-   - Backend selection (SQLite vs Native V2)
+   - Backend selection (SQLite vs Native V3)
    - Core operations
    - Graph algorithms
    - Vector search (HNSW)
@@ -60,7 +60,7 @@ This index provides navigation for all SQLiteGraph documentation.
 | **Vector Search** | MANUAL.md | HNSW Vector Search |
 | **Pub/Sub Events** | MANUAL.md | Section 14: Pub/Sub Events |
 | **Error Handling** | MANUAL.md | Error Handling |
-| **Migration** | MIGRATION.md | SQLite to Native V2 |
+| **Migration** | MIGRATION.md | SQLite to Native V3 |
 | **Troubleshooting** | TROUBLESHOOTING.md | Common Issues |
 | **Design Philosophy** | PHILOSOPHY.md | Principles |
 

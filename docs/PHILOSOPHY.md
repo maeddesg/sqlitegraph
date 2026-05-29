@@ -35,7 +35,7 @@ The core principles that guide SQLiteGraph's development.
 
 **Examples:**
 
-### Clustered Storage (Native V2)
+### Clustered Storage (Native V3)
 
 We *could* make clustered storage faster with:
 - Complex rebalancing algorithms
@@ -99,7 +99,7 @@ Full MVCC includes:
 
 **Why two backends:**
 
-| SQLite Backend | Native V2 Backend |
+| SQLite Backend | Native V3 Backend |
 |----------------|-------------------|
 | Proven reliability | Performance for star patterns |
 | Ecosystem tooling | Smaller file sizes |
@@ -188,7 +188,7 @@ Each command:
 
 | Limitation | Why It Exists | Plan |
 |------------|---------------|------|
-| ~2,048 nodes (Native V2) | 8MB node region keeps format simple | V3 backend with dynamic allocation |
+| ~2,048 nodes (Native V3) | 8MB node region keeps format simple | V3 backend with dynamic allocation |
 | Single writer | Simplifies concurrency | Future: multi-writer with conflict resolution |
 | No distributed queries | Embedded-only design | Not planned |
 | Chain traversal regression (V2) | Cluster lookup overhead | Not planned; use SQLite for chains |
@@ -333,11 +333,11 @@ txn.commit()?;  // Clear when data is written
 
 ```toml
 # Bad: Features enabled by default
-sqlitegraph = "1.5.7"  # What features are enabled?
+sqlitegraph-core = "3.0"  # What features are enabled?
 
 # Good: Explicit opt-in
-sqlitegraph = { version = "1.5.7", features = ["native-v2"] }
-sqlitegraph = "1.5.7"  # SQLite only, no features
+sqlitegraph = { version = "1.5.7", features = ["native-v3"] }
+sqlitegraph-core = "3.0"  # SQLite only, no features
 ```
 
 ### No Global State

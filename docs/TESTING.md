@@ -169,7 +169,7 @@ cargo test test_bfs_traversal
 cargo test --test bfs_tests
 
 # Run tests with Native V2 feature
-cargo test --workspace --features native-v2
+cargo test --workspace --features native-v3
 
 # Run tests with debug output
 cargo test --workspace --features debug
@@ -552,7 +552,7 @@ The project uses GitHub Actions for CI. Key workflows:
 
 ```bash
 # Run what CI runs
-cargo test --workspace --features native-v2
+cargo test --workspace --features native-v3
 cargo test --workspace --doc
 cargo clippy -- --deny warnings
 ```
@@ -588,7 +588,7 @@ cargo clippy -- --deny warnings
 cargo install cargo-tarpaulin
 
 # Generate coverage report
-cargo tarpaulin --workspace --features native-v2 --out Html
+cargo tarpaulin --workspace --features native-v3 --out Html
 
 # Open report
 open tarpaulin-report.html

@@ -1,5 +1,12 @@
 # SQLiteGraph Changelog
 
+## [3.0.7] - 2026-05-29
+
+### Added
+
+- **TypedDiGraph Clone derive** — `TypedDiGraph<N, E>` now implements `Clone`
+  (requires `N: Clone, E: Clone`).
+
 ## [3.0.6] - 2026-05-29
 
 ### Added

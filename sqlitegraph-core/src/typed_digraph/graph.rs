@@ -36,12 +36,14 @@ impl From<usize> for EdgeIndex {
     }
 }
 
+#[derive(Clone)]
 struct EdgeEntry<E> {
     from: usize,
     to: usize,
     weight: Option<E>,
 }
 
+#[derive(Clone)]
 pub struct TypedDiGraph<N, E> {
     nodes: Vec<Option<N>>,
     edges: Vec<Option<EdgeEntry<E>>>,
