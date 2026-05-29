@@ -98,6 +98,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## TypedDiGraph (In-Memory)
+
+A lightweight in-memory directed graph with typed node and edge weights,
+independent of the `GraphBackend` persistence layer. Useful for build-system
+DAGs, dependency graphs, and analysis passes that don't need disk storage.
+
+```rust
+use sqlitegraph::typed_digraph::{TypedDiGraph, NodeIndex, Direction};
+use sqlitegraph::typed_digraph::algo::{toposort, tarjan_scc, Dfs};
+
+let mut g = TypedDiGraph::<&str, i32>::new();
+let a = g.add_node("compile");
+let b = g.add_node("link");
+let c = g.add_node("run");
+g.add_edge(a, b, 1);
+g.add_edge(b, c, 2);
+
+// Topological order
+let order = toposort(&g).expect("acyclic");
+assert_eq!(order, vec![a, b, c]);
+
+// DFS traversal
+let mut dfs = Dfs::new(&g, a);
+assert_eq!(dfs.by_ref().collect::<Vec<_>>(), vec![a, b, c]);
+```
+
+New in v3.0.5. See [API.md](API.md#typeddigraph-api) for the full method list.
+
 ## CLI
 
 ```bash

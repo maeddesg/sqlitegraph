@@ -207,6 +207,34 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 | **Security** | `algo::taint_forward` | Security analysis |
 | **ML** | `algo::subgraph_isomorphism` | Pattern matching |
 
+### TypedDiGraph (In-Memory, v3.0.5+)
+
+`TypedDiGraph<N, E>` is a lightweight in-memory directed graph with generic
+node and edge weights. It does **not** implement `GraphBackend` — no SQLite, no
+disk I/O. Use it for transient analysis passes, build DAGs, and dependency
+graphs where persistence is unnecessary.
+
+```rust
+use sqlitegraph::typed_digraph::{TypedDiGraph, NodeIndex, Direction};
+use sqlitegraph::typed_digraph::algo::{toposort, tarjan_scc, is_cyclic_directed, Dfs};
+
+let mut g = TypedDiGraph::<&str, ()>::new();
+let a = g.add_node("compile");
+let b = g.add_node("link");
+let c = g.add_node("run");
+g.add_edge(a, b, ());
+g.add_edge(b, c, ());
+
+assert!(!is_cyclic_directed(&g));
+let order = toposort(&g).expect("acyclic");
+let sccs = tarjan_scc(&g);
+
+let mut dfs = Dfs::new(&g, a);
+let visited: Vec<NodeIndex> = dfs.by_ref().collect();
+```
+
+See [API.md](API.md#typeddigraph-api) for the full method reference.
+
 ---
 
 ## 5. Testing
@@ -361,13 +389,13 @@ match graph.insert_entity(&entity) {
 ### Debug Features
 
 ```toml
-# Enable V2 I/O tracing
-sqlitegraph = { version = "1.3", features = ["trace_v2_io"] }
+# Enable V3 I/O tracing
+sqlitegraph-core = { version = "3.0", features = ["trace_v3_io"] }
 ```
 
 ```bash
 # Run with debug output
-RUST_LOG=debug cargo run --features trace_v2_io
+RUST_LOG=debug cargo run --features trace_v3_io
 ```
 
 ---

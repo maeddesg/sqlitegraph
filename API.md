@@ -307,6 +307,57 @@ See [GRAPH_ALGORITHMS_GUIDE.md](docs/GRAPH_ALGORITHMS_GUIDE.md) for complete lis
 
 ---
 
+## TypedDiGraph API
+
+A lightweight in-memory directed graph with generic node (`N`) and edge (`E`)
+weights. Independent of `GraphBackend` — no SQLite, no disk I/O. Designed for
+build DAGs, dependency graphs, and transient analysis passes.
+
+```rust
+use sqlitegraph::typed_digraph::{TypedDiGraph, NodeIndex, EdgeIndex, Direction};
+use sqlitegraph::typed_digraph::algo::{is_cyclic_directed, tarjan_scc, toposort, Dfs};
+```
+
+### Construction & Mutation
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `new` | `TypedDiGraph<N, E>::new()` | Empty graph |
+| `add_node` | `(&mut self, N) -> NodeIndex` | Insert node, return index |
+| `add_edge` | `(&mut self, NodeIndex, NodeIndex, E) -> EdgeIndex` | Insert directed edge |
+| `remove_node` | `(&mut self, NodeIndex) -> Option<N>` | Remove node and its edges |
+| `remove_edge` | `(&mut self, EdgeIndex) -> Option<E>` | Remove single edge |
+| `clear` | `(&mut self)` | Remove all nodes and edges |
+
+### Queries
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `node_count` | `(&self) -> usize` | Number of valid nodes |
+| `edge_count` | `(&self) -> usize` | Number of valid edges |
+| `raw_node_count` | `(&self) -> usize` | Slots including removed |
+| `contains_node` | `(&self, NodeIndex) -> bool` | Node validity check |
+| `node_weight` | `(&self, NodeIndex) -> Option<&N>` | Borrow node weight |
+| `node_weight_mut` | `(&mut self, NodeIndex) -> Option<&mut N>` | Mutably borrow |
+| `edge_weight` | `(&self, EdgeIndex) -> Option<&E>` | Borrow edge weight |
+| `edge_endpoints` | `(&self, EdgeIndex) -> Option<(NodeIndex, NodeIndex)>` | Source and target |
+| `neighbors_directed` | `(&self, NodeIndex, Direction) -> impl Iterator` | Adjacent nodes |
+| `node_indices` | `(&self) -> impl Iterator<Item = NodeIndex>` | All valid node IDs |
+| `edge_indices` | `(&self) -> impl Iterator<Item = EdgeIndex>` | All valid edge IDs |
+| `degree` | `(&self, NodeIndex) -> usize` | Undirected degree |
+| `degrees` | `(&self, NodeIndex) -> (usize, usize)` | `(in_degree, out_degree)` |
+
+### Algorithms
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `is_cyclic_directed` | `(&TypedDiGraph<N,E>) -> bool` | Cycle detection |
+| `tarjan_scc` | `(&TypedDiGraph<N,E>) -> Vec<Vec<NodeIndex>>` | Strongly connected components |
+| `toposort` | `(&TypedDiGraph<N,E>) -> Result<Vec<NodeIndex>, CycleError>` | Topological sort |
+| `Dfs::new` | `(&TypedDiGraph<N,E>, NodeIndex) -> Dfs` | Depth-first visitor (implements `Iterator`) |
+
+---
+
 ## Cypher-Inspired Query API
 
 The query parser and executor live in `sqlitegraph::cypher` and currently
