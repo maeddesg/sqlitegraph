@@ -317,6 +317,8 @@ pub mod pattern_engine; // Already exported above
 pub mod query; // Already exported above
 pub mod recovery; // Already exported above
 
+pub mod typed_digraph;
+
 // Modules that need to remain public for specific use cases
 pub mod bench_gates; // Public for tests
 pub mod bench_meta; // Public for tests

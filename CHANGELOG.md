@@ -1,6 +1,40 @@
 # SQLiteGraph Changelog
 
+## [3.0.5] - 2026-05-29
+
+### Added
+
+- **TypedDiGraph<N, E>** — lightweight in-memory directed graph with typed node
+  and edge weights. Provides `add_node`, `add_edge`, `remove_node`,
+  `remove_edge`, `neighbors_directed`, `node_indices`, `edge_indices`,
+  `node_weight`, `edge_weight`, `contains_node`, `node_count`, `edge_count`,
+  `raw_node_count`, `degree`, `degrees`, and `clear`.
+- **Graph algorithms on TypedDiGraph** — `is_cyclic_directed`, `tarjan_scc`
+  (iterative Tarjan), `toposort` (Kahn's algorithm), and `Dfs` visitor with
+  `Iterator` implementation.
+- **31 tests** covering construction, edge operations, removal, neighbors,
+  algorithms, and traversal.
+
 ## [Unreleased]
+
+### Fixed
+
+- **Documentation version drift** — `MANUAL.md` and `sqlitegraph-core/README.md`
+  updated to reference `sqlitegraph-core = "3.0"` and `features = ["native-v3"]`
+  instead of stale `sqlitegraph = "2.4"` and `trace_v2_io` strings.
+- **Deprecated TODO comments cleaned** — `backend/native/v3/backend.rs` had 7
+  TODO comments marking deferred features (edge type filtering, kind offset,
+  file_path in compact format, backup checksum/duration). Converted to
+  descriptive "not yet wired / not instrumented" comments to avoid implying
+  an open task on a feature that is intentionally stubbed.
+- **Docs V2→V3 migration** — `CONTRIBUTING.md`, `TESTING.md`, `TROUBLESHOOTING.md`,
+  `PHILOSOPHY.md`, and `INDEX.md` updated to reference Native V3 instead of
+  deprecated Native V2, and version strings bumped from 1.5.7 to 3.0.
+- **KV store TODO removed** — `kv_store/store.rs` `cleanup_expired()` TODO
+  replaced with comment explaining lazy cleanup is sufficient for current workloads.
+- **Edge compat test TODOs neutralized** — `edge_compat.rs` test comments
+  converted from imperative "TODO Test" / "CRITICAL TODO" to descriptive
+  "Test N:" and "Verify:" / "NOTE:" annotations.
 
 ## [3.0.3] - 2026-05-20
 
