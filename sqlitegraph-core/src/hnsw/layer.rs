@@ -412,6 +412,18 @@ impl HnswLayer {
         self.vector_count = 0;
     }
 
+    pub fn remove_node(&mut self, node_id: u64) {
+        if (node_id as usize) >= self.nodes.len() {
+            return;
+        }
+        self.nodes[node_id as usize].clear();
+        for conns in &mut self.nodes {
+            conns.remove(&node_id);
+        }
+        self.entry_points.retain(|&ep| ep != node_id);
+        self.vector_count = self.vector_count.saturating_sub(1);
+    }
+
     /// Get layer statistics for monitoring
     ///
     /// # Returns

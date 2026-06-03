@@ -590,3 +590,93 @@ fn test_hnsw_graph_autoload() {
             .unwrap();
     }
 }
+
+/// Regression: HnswIndex::delete_vector removes a single vector by ID
+#[test]
+fn test_hnsw_delete_single_vector() {
+    let temp_dir = TempDir::new().unwrap();
+    let _db_path = temp_dir.path().join("test.db");
+
+    let mut hnsw = {
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        HnswIndex::new("delete_vec_test", config).unwrap()
+    };
+
+    let _id_a = hnsw.insert_vector(&[1.0, 0.0, 0.0], None).unwrap();
+    let id_b = hnsw.insert_vector(&[0.0, 1.0, 0.0], None).unwrap();
+    let _id_c = hnsw.insert_vector(&[0.0, 0.0, 1.0], None).unwrap();
+
+    assert_eq!(hnsw.vector_count(), 3);
+
+    hnsw.delete_vector(id_b).unwrap();
+    assert_eq!(
+        hnsw.vector_count(),
+        2,
+        "vector_count must decrease after delete"
+    );
+
+    let results = hnsw.search(&[1.0, 0.0, 0.0], 2).unwrap();
+    assert!(!results.is_empty(), "search must still return results");
+    let returned_ids: Vec<u64> = results.iter().map(|(id, _)| *id).collect();
+    assert!(
+        !returned_ids.contains(&id_b),
+        "deleted vector must not appear in search results"
+    );
+}
+
+/// Regression: SqliteGraph::delete_hnsw_vector removes vector from persistent index
+#[test]
+fn test_graph_delete_hnsw_vector() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+
+    let mut vector_ids: Vec<u64> = Vec::new();
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        {
+            let _guard = graph.hnsw_index_persistent("del_test", config).unwrap();
+        }
+
+        for i in 0..5 {
+            let v = vec![i as f32, 0.0, 0.0];
+            let id = graph
+                .get_hnsw_index_mut("del_test", |idx| idx.insert_vector(&v, None))
+                .unwrap()
+                .unwrap();
+            vector_ids.push(id);
+        }
+
+        graph
+            .get_hnsw_index_ref("del_test", |idx| {
+                assert_eq!(idx.vector_count(), 5);
+            })
+            .unwrap();
+    }
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        graph.delete_hnsw_vector("del_test", vector_ids[2]).unwrap();
+
+        graph
+            .get_hnsw_index_ref("del_test", |idx| {
+                assert_eq!(
+                    idx.vector_count(),
+                    4,
+                    "count must be 4 after deleting 1 vector"
+                );
+            })
+            .unwrap();
+
+        let results = graph
+            .get_hnsw_index_ref("del_test", |idx| idx.search(&[0.0, 0.0, 0.0], 5))
+            .unwrap()
+            .unwrap();
+        let returned_ids: Vec<u64> = results.iter().map(|(id, _)| *id).collect();
+        assert!(
+            !returned_ids.contains(&vector_ids[2]),
+            "deleted vector must not appear in results"
+        );
+    }
+}

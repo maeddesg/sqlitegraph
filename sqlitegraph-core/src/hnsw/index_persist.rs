@@ -479,4 +479,19 @@ impl HnswIndex {
 
         Ok(())
     }
+
+    pub fn delete_vector(&mut self, id: u64) -> Result<(), crate::hnsw::errors::HnswError> {
+        let node_id = if let Some(manager) = &self.multi_layer_manager {
+            manager.get_local_id(id, 0).unwrap_or(id)
+        } else {
+            id - 1
+        };
+        self.storage.delete_vector(id)?;
+        for layer in &mut self.layers {
+            layer.remove_node(node_id);
+        }
+        self.entry_points.retain(|&ep| ep != id);
+        self.vector_count = self.vector_count.saturating_sub(1);
+        Ok(())
+    }
 }

@@ -1,5 +1,19 @@
 # SQLiteGraph Changelog
 
+## [3.0.9] - 2026-06-03
+
+### Added
+
+- **`HnswIndex::delete_vector(id)`** — removes a single vector from the index
+  by ID. Clears the node's connections from all HNSW layers, removes from
+  entry points, and deletes from the storage backend. O(degree × layers).
+- **`SqliteGraph::delete_hnsw_vector(index_name, vector_id)`** — public API
+  for removing a single vector from a named persistent HNSW index. Acquires
+  the HNSW mutex, delegates to `HnswIndex::delete_vector`.
+- **`HnswLayer::remove_node(node_id)`** — clears a node's connections, removes
+  it from all neighbor sets, and removes from entry points.
+- **2 regression tests** for per-vector deletion (in-memory and persistent).
+
 ## [3.0.8] - 2026-06-03
 
 ### Fixed

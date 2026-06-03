@@ -645,4 +645,26 @@ impl crate::SqliteGraph {
             .map_err(|e| crate::SqliteGraphError::invalid_input(format!("delete HNSW index: {}", e)))?;
         Ok(())
     }
+
+    pub fn delete_hnsw_vector(
+        &self,
+        index_name: &str,
+        vector_id: u64,
+    ) -> Result<(), crate::SqliteGraphError> {
+        let mut indexes = self.hnsw_indexes.lock().map_err(|e| {
+            crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e))
+        })?;
+        let hnsw = indexes
+            .get_mut(index_name)
+            .ok_or_else(|| {
+                crate::SqliteGraphError::invalid_input(format!(
+                    "HNSW index '{}' not found",
+                    index_name
+                ))
+            })?;
+        hnsw.delete_vector(vector_id).map_err(|e| {
+            crate::SqliteGraphError::invalid_input(format!("delete vector: {}", e))
+        })?;
+        Ok(())
+    }
 }
