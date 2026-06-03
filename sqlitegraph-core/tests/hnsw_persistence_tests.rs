@@ -277,7 +277,265 @@ fn test_hnsw_distance_metric_preservation() {
     }
 }
 
-/// Test SqliteGraph auto-loads HNSW indexes
+/// Regression: delete_index must remove vectors from hnsw_vectors (Bug 4)
+///
+/// Before fix: delete_index only deleted from hnsw_indexes. FK CASCADE
+/// didn't fire because pool connections lack PRAGMA foreign_keys=ON.
+#[test]
+fn test_delete_index_removes_vectors() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+
+    let index_id = {
+        let conn = Connection::open(&db_path).unwrap();
+        ensure_schema(&conn).unwrap();
+
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        let hnsw = HnswIndex::new("cascade_test", config).unwrap();
+        hnsw.save_metadata(&conn).unwrap();
+
+        conn.query_row(
+            "SELECT id FROM hnsw_indexes WHERE name = ?",
+            ["cascade_test"],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap()
+    };
+
+    {
+        let conn = Connection::open(&db_path).unwrap();
+        for v in &[vec![1.0_f32, 0.0, 0.0], vec![0.0, 1.0, 0.0]] {
+            let bytes = bytemuck::cast_slice::<f32, u8>(v).to_vec();
+            conn.execute(
+                "INSERT INTO hnsw_vectors (index_id, vector_data, metadata, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![index_id, bytes, None::<String>, 1000, 1000],
+            ).unwrap();
+        }
+    }
+
+    {
+        let conn = Connection::open(&db_path).unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM hnsw_vectors WHERE index_id = ?1",
+                [index_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 2, "vectors should exist before delete");
+    }
+
+    {
+        let conn = Connection::open(&db_path).unwrap();
+        HnswIndex::delete_index(&conn, "cascade_test").unwrap();
+    }
+
+    {
+        let conn = Connection::open(&db_path).unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM hnsw_vectors WHERE index_id = ?1",
+                [index_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0, "delete_index must remove all vectors (Bug 4)");
+    }
+}
+
+/// Regression: SqliteGraph.delete_hnsw_index must remove vectors via pool (Bug 4 real path)
+///
+/// Before fix: pool connections lack PRAGMA foreign_keys=ON, so CASCADE never
+/// fires and hnsw_vectors rows are orphaned. This test proves it by checking
+/// raw row count after delete — the FK constraint is in DDL but won't cascade
+/// without the pragma.
+#[test]
+fn test_graph_delete_hnsw_index_removes_vectors() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    let index_id: i64;
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        {
+            let _guard = graph
+                .hnsw_index_persistent("graph_cascade", config)
+                .unwrap();
+        }
+
+        graph
+            .get_hnsw_index_mut("graph_cascade", |idx| {
+                idx.insert_vector(&[1.0, 0.0, 0.0], None)
+            })
+            .unwrap()
+            .unwrap();
+
+        graph
+            .get_hnsw_index_mut("graph_cascade", |idx| {
+                idx.insert_vector(&[0.0, 1.0, 0.0], None)
+            })
+            .unwrap()
+            .unwrap();
+
+        let conn = Connection::open(&db_path).unwrap();
+        index_id = conn
+            .query_row(
+                "SELECT id FROM hnsw_indexes WHERE name = ?",
+                ["graph_cascade"],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap();
+
+        let count_before: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM hnsw_vectors WHERE index_id = ?1",
+                [index_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            count_before >= 2,
+            "vectors must exist before delete, got {}",
+            count_before
+        );
+    }
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        graph.delete_hnsw_index("graph_cascade").unwrap();
+    }
+
+    {
+        let conn = Connection::open(&db_path).unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM hnsw_vectors WHERE index_id = ?1",
+                [index_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            count, 0,
+            "delete_hnsw_index must remove all vectors via pool (Bug 4), got {} orphaned rows",
+            count
+        );
+    }
+}
+
+/// Regression: delete+recreate persistent index via SqliteGraph (Bug 1 + Bug 4)
+///
+/// Before fix: hnsw_index_persistent uses auto-increment rowids that become
+/// stale after delete, causing InvalidNodeId when HNSW layers expect
+/// sequential 0-based IDs.
+#[test]
+fn test_persistent_index_delete_and_recreate() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        {
+            let _guard = graph
+                .hnsw_index_persistent("recreate_test", config)
+                .unwrap();
+        }
+
+        graph
+            .get_hnsw_index_mut("recreate_test", |idx| {
+                idx.insert_vector(&[1.0, 0.0, 0.0], None)
+            })
+            .unwrap()
+            .unwrap();
+
+        graph
+            .get_hnsw_index_mut("recreate_test", |idx| {
+                idx.insert_vector(&[0.0, 1.0, 0.0], None)
+            })
+            .unwrap()
+            .unwrap();
+
+        let results = graph
+            .get_hnsw_index_ref("recreate_test", |idx| idx.search(&[1.0, 0.0, 0.0], 1))
+            .unwrap()
+            .unwrap();
+        assert!(
+            !results.is_empty(),
+            "search should find results before delete"
+        );
+    }
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        graph.delete_hnsw_index("recreate_test").unwrap();
+    }
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        {
+            let _guard = graph
+                .hnsw_index_persistent("recreate_test", config)
+                .unwrap();
+        }
+
+        for i in 0..5 {
+            let v = vec![i as f32, 0.0, 0.0];
+            graph
+                .get_hnsw_index_mut("recreate_test", |idx| idx.insert_vector(&v, None))
+                .unwrap()
+                .unwrap();
+        }
+
+        let results = graph
+            .get_hnsw_index_ref("recreate_test", |idx| idx.search(&[4.0, 0.0, 0.0], 1))
+            .unwrap()
+            .unwrap();
+        assert!(
+            !results.is_empty(),
+            "search must work after delete+recreate (Bug 1)"
+        );
+    }
+}
+
+/// Regression: persistent index survives process restart via SqliteGraph (Bug 3 partial)
+#[test]
+fn test_persistent_index_survives_reopen() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        {
+            let _guard = graph.hnsw_index_persistent("survive_test", config).unwrap();
+        }
+
+        for i in 0..3 {
+            let v = vec![i as f32, 0.0, 0.0];
+            graph
+                .get_hnsw_index_mut("survive_test", |idx| idx.insert_vector(&v, None))
+                .unwrap()
+                .unwrap();
+        }
+    }
+
+    {
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        let names = graph.list_hnsw_indexes().unwrap();
+        assert!(
+            names.contains(&"survive_test".to_string()),
+            "index must survive reopen (Bug 3)"
+        );
+
+        graph
+            .get_hnsw_index_ref("survive_test", |idx| {
+                assert_eq!(idx.vector_count(), 3, "vectors must survive reopen");
+            })
+            .unwrap();
+    }
+}
 ///
 /// NOTE: This test manually persists vectors to work around current limitations.
 #[test]

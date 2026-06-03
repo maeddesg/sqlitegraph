@@ -1,5 +1,32 @@
 # SQLiteGraph Changelog
 
+## [3.0.8] - 2026-06-03
+
+### Fixed
+
+- **HNSW persistent index `InvalidNodeId` after delete+recreate** —
+  `SQLiteVectorStorage::store_vector()` used SQLite auto-increment for vector
+  IDs, but HNSW layers expect sequential 0-based node IDs. After deleting an
+  index and recreating it, auto-increment returned stale high values, causing
+  `InvalidNodeId(N)` panics on insert. Fixed by tracking a per-index sequential
+  counter (`next_vector_id`) initialized from `MAX(id) + 1 WHERE index_id = ?`
+  at construction (`storage.rs`).
+
+### Added
+
+- **4 HNSW persistence regression tests** — `test_delete_index_removes_vectors`,
+  `test_graph_delete_hnsw_index_removes_vectors`,
+  `test_persistent_index_delete_and_recreate`,
+  `test_persistent_index_survives_reopen`. Covers delete cascade, delete+recreate
+  ID sequence, and cross-session persistence via `SqliteGraph` pool.
+
+### Known Limitations
+
+- HNSW index metadata and vectors are persisted via SQLite, but the graph
+  structure (neighbor lists, entry points, layer assignments) must be rebuilt
+  from the stored vectors when the index is re-opened. For large indexes this
+  is O(N). A future update will persist the graph structure directly.
+
 ## [3.0.7] - 2026-05-29
 
 ### Added
