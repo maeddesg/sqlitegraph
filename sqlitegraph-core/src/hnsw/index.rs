@@ -647,7 +647,7 @@ mod tests {
             dimension: 64,
             m: 16,
             ef_construction: 200,
-            ef_search: 50,
+            ef_search: 200,
             ml: 16,
             distance_metric: DistanceMetric::Euclidean,
             enable_multilayer: true, // Test multi-layer recall
