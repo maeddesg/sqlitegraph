@@ -1,5 +1,13 @@
 # SQLiteGraph Changelog
 
+## [3.1.2] - 2026-06-04
+
+### Fixed
+- `store_vector` now uses `INSERT` without explicit `id` + `last_insert_rowid()` instead of
+  `SELECT MAX(id) + 1`. Removes a TOCTOU race where two concurrent writers to the same DB
+  could compute the same next-id and collide on PRIMARY KEY. `store_vector_with_id` (used
+  only for topology restore) retains explicit-id `INSERT OR IGNORE` semantics unchanged.
+
 ## [3.0.4] - 2026-05-26
 
 ### Fixed

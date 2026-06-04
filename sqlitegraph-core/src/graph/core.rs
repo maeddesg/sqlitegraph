@@ -288,11 +288,14 @@ impl SqliteGraph {
                                     true
                                 }
                             };
-                            if needs_rebuild {
-                                if let Err(e) = hnsw.load_vectors_and_rebuild(conn) {
-                                    eprintln!("Warning: rebuild failed for '{}': {}", name, e);
-                                    continue;
-                                }
+                            if needs_rebuild
+                                && let Err(rebuild_err) = hnsw.load_vectors_and_rebuild(conn)
+                            {
+                                eprintln!(
+                                    "Warning: rebuild failed for '{}': {}",
+                                    name, rebuild_err
+                                );
+                                continue;
                             }
                         }
                         Err(e) => {

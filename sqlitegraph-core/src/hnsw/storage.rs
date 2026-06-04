@@ -459,7 +459,6 @@ fn deserialize_vector(bytes: &[u8]) -> Result<Vec<f32>, HnswError> {
 pub struct SQLiteVectorStorage {
     index_id: i64,
     conn: Connection,
-    next_vector_id: u64,
 }
 
 impl SQLiteVectorStorage {
@@ -474,18 +473,7 @@ impl SQLiteVectorStorage {
     ///
     /// New SQLiteVectorStorage instance
     pub fn new(index_id: i64, conn: Connection) -> Self {
-        let next_vector_id = conn
-            .query_row(
-                "SELECT COALESCE(MAX(id), 0) + 1 FROM hnsw_vectors",
-                [],
-                |row| row.get::<_, u64>(0),
-            )
-            .unwrap_or(1);
-        Self {
-            index_id,
-            conn,
-            next_vector_id,
-        }
+        Self { index_id, conn }
     }
 }
 
@@ -499,18 +487,15 @@ impl VectorStorage for SQLiteVectorStorage {
             .unwrap_or_default()
             .as_secs() as i64;
 
-        let vector_id = self.next_vector_id;
-        self.next_vector_id += 1;
-
         self.conn
             .execute(
-                "INSERT INTO hnsw_vectors (id, index_id, vector_data, metadata, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                rusqlite::params![vector_id, &self.index_id, &vector_bytes, &metadata_json, now, now,],
+                "INSERT INTO hnsw_vectors (index_id, vector_data, metadata, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![&self.index_id, &vector_bytes, &metadata_json, now, now],
             )
             .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
 
-        Ok(vector_id)
+        Ok(self.conn.last_insert_rowid() as u64)
     }
 
     fn store_vector_with_id(
