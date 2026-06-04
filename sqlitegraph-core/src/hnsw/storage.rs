@@ -386,6 +386,10 @@ pub trait VectorStorage: Send {
     ///
     /// Storage statistics for monitoring
     fn get_statistics(&self) -> Result<VectorStorageStats, HnswError>;
+
+    fn as_sqlite_connection(&self) -> Option<(&rusqlite::Connection, i64)> {
+        None
+    }
 }
 
 /// Vector storage statistics
@@ -472,8 +476,8 @@ impl SQLiteVectorStorage {
     pub fn new(index_id: i64, conn: Connection) -> Self {
         let next_vector_id = conn
             .query_row(
-                "SELECT COALESCE(MAX(id), 0) + 1 FROM hnsw_vectors WHERE index_id = ?1",
-                [index_id],
+                "SELECT COALESCE(MAX(id), 0) + 1 FROM hnsw_vectors",
+                [],
                 |row| row.get::<_, u64>(0),
             )
             .unwrap_or(1);
@@ -707,6 +711,10 @@ impl VectorStorage for SQLiteVectorStorage {
             total_dimensions as usize,
             "SQLite".to_string(),
         ))
+    }
+
+    fn as_sqlite_connection(&self) -> Option<(&rusqlite::Connection, i64)> {
+        Some((&self.conn, self.index_id))
     }
 }
 

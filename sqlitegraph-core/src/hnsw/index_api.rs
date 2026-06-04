@@ -202,6 +202,7 @@ impl HnswIndex {
         }
 
         self.vector_count += 1;
+        let _ = self.persist_topology();
         Ok(vector_id)
     }
 
@@ -542,8 +543,11 @@ impl crate::SqliteGraph {
 
             // Create index with storage using the index_id we just retrieved
             let storage = Box::new(crate::hnsw::storage::SQLiteVectorStorage::new(index_id, conn_for_storage));
-            HnswIndex::with_storage(name, config, storage)
-                .map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to create HNSW index: {}", e)))?
+            let mut idx = HnswIndex::with_storage(name, config, storage)
+                .map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to create HNSW index: {}", e)))?;
+            idx.restore_topology()
+                .map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to restore HNSW topology: {}", e)))?;
+            idx
         } else {
             // For in-memory databases, use in-memory storage
             HnswIndex::new(name, config)

@@ -492,6 +492,133 @@ impl HnswIndex {
         }
         self.entry_points.retain(|&ep| ep != id);
         self.vector_count = self.vector_count.saturating_sub(1);
+        self.persist_topology()?;
+        Ok(())
+    }
+
+    pub fn persist_topology(&self) -> Result<(), crate::hnsw::errors::HnswError> {
+        use crate::hnsw::errors::HnswStorageError;
+
+        let Some((conn, index_id)) = self.storage.as_sqlite_connection() else {
+            return Ok(());
+        };
+
+        conn.execute(
+            "DELETE FROM hnsw_layers WHERE index_id = ?",
+            [index_id],
+        )
+        .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+
+        conn.execute(
+            "DELETE FROM hnsw_entry_points WHERE index_id = ?",
+            [index_id],
+        )
+        .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+
+        for layer in &self.layers {
+            for (&node_id, connections) in layer.nodes_iter() {
+                if connections.is_empty() {
+                    continue;
+                }
+                let connections_bytes: Vec<u8> = connections
+                    .iter()
+                    .flat_map(|c| c.to_le_bytes())
+                    .collect();
+                conn.execute(
+                    "INSERT OR REPLACE INTO hnsw_layers (index_id, layer_level, node_id, connections)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![index_id, layer.level() as i64, node_id as i64, connections_bytes],
+                )
+                .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+            }
+        }
+
+        for &ep in &self.entry_points {
+            conn.execute(
+                "INSERT OR REPLACE INTO hnsw_entry_points (index_id, node_id) VALUES (?1, ?2)",
+                rusqlite::params![index_id, ep as i64],
+            )
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+        }
+
+        Ok(())
+    }
+
+    pub fn restore_topology(&mut self) -> Result<(), crate::hnsw::errors::HnswError> {
+        use crate::hnsw::errors::HnswStorageError;
+
+        let Some((conn, index_id)) = self.storage.as_sqlite_connection() else {
+            return Ok(());
+        };
+
+        let has_layers: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM hnsw_layers WHERE index_id = ? LIMIT 1)",
+                [index_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if !has_layers {
+            return Ok(());
+        }
+
+        for layer in &mut self.layers {
+            layer.clear();
+        }
+        self.entry_points.clear();
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT layer_level, node_id, connections FROM hnsw_layers WHERE index_id = ? ORDER BY layer_level, node_id",
+            )
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+
+        let rows = stmt
+            .query_map([index_id], |row| {
+                let level: i64 = row.get(0)?;
+                let node_id: i64 = row.get(1)?;
+                let connections_blob: Vec<u8> = row.get(2)?;
+                Ok((level, node_id, connections_blob))
+            })
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+
+        for row in rows {
+            let (level, node_id, connections_blob) = row
+                .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+            let level_idx = level as usize;
+            if level_idx >= self.layers.len() {
+                continue;
+            }
+            let layer = &mut self.layers[level_idx];
+            if !layer.contains_node(node_id as u64) {
+                let _ = layer.add_node(node_id as u64);
+            }
+            let connections: std::collections::HashSet<u64> = connections_blob
+                .chunks_exact(8)
+                .map(|chunk| {
+                    let bytes: [u8; 8] = chunk.try_into().unwrap_or([0; 8]);
+                    u64::from_le_bytes(bytes)
+                })
+                .collect();
+            for &neighbor in &connections {
+                let _ = layer.add_connection(node_id as u64, neighbor);
+            }
+        }
+
+        let mut ep_stmt = conn
+            .prepare("SELECT node_id FROM hnsw_entry_points WHERE index_id = ?")
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+
+        self.entry_points = ep_stmt
+            .query_map([index_id], |row| row.get::<_, i64>(0))
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?
+            .map(|r| r.map(|v| v as u64))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+
+        self.vector_count = self.layers.first().map(|l| l.node_count()).unwrap_or(0);
+
         Ok(())
     }
 }

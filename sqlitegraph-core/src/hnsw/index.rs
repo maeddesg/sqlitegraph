@@ -853,4 +853,190 @@ mod tests {
             "LevelDistributor should be initialized"
         );
     }
+
+    #[test]
+    fn test_topology_persistence_cross_session() {
+        use std::fs;
+
+        let test_dir = "/tmp/test_hnsw_topology_cross_session";
+        let db_path = format!("{}/test.db", test_dir);
+        let _ = fs::remove_dir_all(test_dir);
+        fs::create_dir_all(test_dir).unwrap();
+
+        let vectors: Vec<Vec<f32>> = (0..20)
+            .map(|i| (0..8).map(|j| ((i * 8 + j) as f32 * 0.1).sin()).collect())
+            .collect();
+
+        let session1_results = {
+            let graph = SqliteGraph::open(&db_path).unwrap();
+            let config = HnswConfigBuilder::new()
+                .dimension(8)
+                .m_connections(4)
+                .distance_metric(DistanceMetric::Euclidean)
+                .build()
+                .unwrap();
+
+            {
+                let _indexes = graph.hnsw_index_persistent("topo_test", config).unwrap();
+            }
+
+            for vector in &vectors {
+                graph
+                    .get_hnsw_index_mut("topo_test", |idx| idx.insert_vector(vector, None).unwrap())
+                    .unwrap();
+            }
+
+            let query = vectors[0].clone();
+            graph
+                .get_hnsw_index_ref("topo_test", |idx| {
+                    idx.search(&query, 5)
+                        .unwrap()
+                        .into_iter()
+                        .map(|(id, dist)| (id, dist.to_bits()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap()
+        };
+
+        assert!(
+            !session1_results.is_empty(),
+            "session 1 should return results"
+        );
+
+        let session2_results = {
+            let graph = SqliteGraph::open(&db_path).unwrap();
+
+            let query = vectors[0].clone();
+            graph
+                .get_hnsw_index_ref("topo_test", |idx| {
+                    let stats = idx.statistics().unwrap();
+                    assert!(
+                        stats.vector_count > 0,
+                        "restored index should have vectors, got {}",
+                        stats.vector_count
+                    );
+                    idx.search(&query, 5)
+                        .unwrap()
+                        .into_iter()
+                        .map(|(id, dist)| (id, dist.to_bits()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap()
+        };
+
+        assert!(
+            !session2_results.is_empty(),
+            "session 2 should return results after restore"
+        );
+
+        assert_eq!(
+            session1_results, session2_results,
+            "cross-session search results must match"
+        );
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_multi_index_coexistence() {
+        use std::fs;
+
+        let test_dir = "/tmp/test_hnsw_multi_index_coexist";
+        let db_path = format!("{}/test.db", test_dir);
+        let _ = fs::remove_dir_all(test_dir);
+        fs::create_dir_all(test_dir).unwrap();
+
+        {
+            let graph = SqliteGraph::open(&db_path).unwrap();
+
+            let config_a = HnswConfigBuilder::new()
+                .dimension(4)
+                .m_connections(4)
+                .distance_metric(DistanceMetric::Euclidean)
+                .build()
+                .unwrap();
+
+            {
+                let _indexes = graph.hnsw_index_persistent("index_a", config_a).unwrap();
+            }
+
+            for i in 0..10u32 {
+                let v = vec![i as f32, (i * 2) as f32, (i * 3) as f32, (i * 4) as f32];
+                graph
+                    .get_hnsw_index_mut("index_a", |idx| idx.insert_vector(&v, None).unwrap())
+                    .unwrap();
+            }
+
+            let config_b = HnswConfigBuilder::new()
+                .dimension(4)
+                .m_connections(4)
+                .distance_metric(DistanceMetric::Euclidean)
+                .build()
+                .unwrap();
+
+            {
+                let _indexes_b = graph.hnsw_index_persistent("index_b", config_b).unwrap();
+            }
+
+            for i in 100..110u32 {
+                let v = vec![
+                    (i as f32).sin(),
+                    (i as f32).cos(),
+                    (i as f32).tan(),
+                    (i as f32 * 0.5),
+                ];
+                graph
+                    .get_hnsw_index_mut("index_b", |idx| idx.insert_vector(&v, None).unwrap())
+                    .unwrap();
+            }
+
+            let results_a = graph
+                .get_hnsw_index_ref("index_a", |idx| {
+                    idx.search(&[1.0, 2.0, 3.0, 4.0], 3).unwrap()
+                })
+                .unwrap();
+            assert!(!results_a.is_empty(), "index_a should have results");
+
+            let results_b = graph
+                .get_hnsw_index_ref("index_b", |idx| {
+                    idx.search(&[0.0, 1.0, 0.0, 50.0], 3).unwrap()
+                })
+                .unwrap();
+            assert!(!results_b.is_empty(), "index_b should have results");
+
+            let ids_a: std::collections::HashSet<u64> =
+                results_a.iter().map(|(id, _)| *id).collect();
+            let ids_b: std::collections::HashSet<u64> =
+                results_b.iter().map(|(id, _)| *id).collect();
+
+            assert!(
+                ids_a.intersection(&ids_b).count() == 0,
+                "indices must not share vector IDs: A={:?} B={:?}",
+                ids_a,
+                ids_b
+            );
+        }
+
+        {
+            let graph2 = SqliteGraph::open(&db_path).unwrap();
+
+            let restored_a = graph2
+                .get_hnsw_index_ref("index_a", |idx| {
+                    let stats = idx.statistics().unwrap();
+                    assert!(
+                        stats.vector_count == 10,
+                        "restored index_a should have 10 vectors, got {}",
+                        stats.vector_count
+                    );
+                    idx.search(&[1.0, 2.0, 3.0, 4.0], 3).unwrap()
+                })
+                .unwrap();
+            assert!(
+                !restored_a.is_empty(),
+                "restored index_a should have results"
+            );
+        }
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
 }

@@ -1,5 +1,53 @@
 # SQLiteGraph Changelog
 
+## [3.1.0] - 2026-06-04
+
+### Changed
+
+- **`HnswLayer.nodes` internal representation changed from `Vec<HashSet<u64>>` to
+  `HashMap<u64, HashSet<u64>>`**. Node IDs are now HashMap keys instead of Vec
+  indices. `add_node(7756)` works without requiring all preceding IDs to exist.
+  This eliminates the sequential-ID constraint that blocked multi-index
+  coexistence in a single database.
+
+### Added
+
+- **`HnswIndex::persist_topology()`** — writes the in-memory HNSW graph topology
+  (layer connections + entry points) to `hnsw_layers` and `hnsw_entry_points`
+  SQLite tables. Automatically called after every `insert_vector` and
+  `delete_vector` when using `SQLiteVectorStorage`. No-op for in-memory storage.
+- **`HnswIndex::restore_topology()`** — loads persisted topology from the
+  `hnsw_layers` / `hnsw_entry_points` tables and rebuilds the in-memory graph
+  without re-embedding. Automatically called by `hnsw_index_persistent()` when
+  opening an existing index. Falls through to the existing rebuild path if no
+  persisted topology is found.
+- **`HnswLayer::nodes_iter()`** — public iterator over `(node_id, connections)`.
+- **`VectorStorage::as_sqlite_connection()`** — trait method (default `None`)
+  exposing the underlying SQLite connection and `index_id`. Implemented by
+  `SQLiteVectorStorage`.
+- **2 regression tests**: `test_topology_persistence_cross_session` (insert →
+  close → reopen → identical search results), `test_multi_index_coexistence`
+  (two HNSW indices in the same database, no ID collisions, cross-session
+  restore).
+
+### Fixed
+
+- **Multi-index coexistence**: Creating a second HNSW index in a database that
+  already has vectors with auto-increment IDs no longer fails at the HNSW layer
+  level. `add_node(global_id)` accepts any non-duplicate ID.
+
+### Known Limitations
+
+- `SQLiteVectorStorage::new()` still initializes `next_vector_id` from
+  per-index `MAX(id)` rather than global `MAX(id)`. A second index created via
+  `hnsw_index_persistent` in the same process session works because the ID
+  counter starts fresh. Cross-process multi-index insert (e.g., two processes
+  inserting into different indices simultaneously) may still collide. This will
+  be addressed in a follow-up patch.
+- Topology persistence uses row-per-node in `hnsw_layers`. For indices with
+  >100k vectors this results in many rows. Bulk INSERT and connection-column
+  compression are deferred to a future optimization pass.
+
 ## [3.0.9] - 2026-06-03
 
 ### Added

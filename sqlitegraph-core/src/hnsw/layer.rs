@@ -21,7 +21,7 @@
 //! ```
 
 use crate::hnsw::errors::{HnswError, HnswIndexError};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// HNSW layer containing nodes and their connections
 ///
@@ -37,7 +37,7 @@ pub struct HnswLayer {
     max_connections: usize,
 
     /// Nodes in this layer: node_id -> connections
-    nodes: Vec<HashSet<u64>>,
+    nodes: HashMap<u64, HashSet<u64>>,
 
     /// Entry points for efficient navigation (sorted for deterministic search)
     entry_points: Vec<u64>,
@@ -75,7 +75,7 @@ impl HnswLayer {
         Self {
             level,
             max_connections,
-            nodes: Vec::new(),
+            nodes: HashMap::new(),
             entry_points: Vec::new(),
             vector_count: 0,
         }
@@ -104,6 +104,10 @@ impl HnswLayer {
         self.level
     }
 
+    pub fn nodes_iter(&self) -> impl Iterator<Item = (&u64, &HashSet<u64>)> {
+        self.nodes.iter()
+    }
+
     /// Get maximum connections per node
     pub fn max_connections(&self) -> usize {
         self.max_connections
@@ -129,7 +133,7 @@ impl HnswLayer {
     ///
     /// true if node exists, false otherwise
     pub fn contains_node(&self, node_id: u64) -> bool {
-        node_id < self.nodes.len() as u64
+        self.nodes.contains_key(&node_id)
     }
 
     /// Get connections for a specific node
@@ -145,7 +149,7 @@ impl HnswLayer {
         if !self.contains_node(node_id) {
             return Err(HnswError::Index(HnswIndexError::NodeNotFound(node_id)));
         }
-        Ok(&self.nodes[node_id as usize])
+        Ok(&self.nodes[&node_id])
     }
 
     /// Add a node to this layer
@@ -174,11 +178,11 @@ impl HnswLayer {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn add_node(&mut self, node_id: u64) -> Result<(), HnswError> {
-        if node_id != self.nodes.len() as u64 {
+        if self.nodes.contains_key(&node_id) {
             return Err(HnswError::Index(HnswIndexError::InvalidNodeId(node_id)));
         }
 
-        self.nodes.push(HashSet::new());
+        self.nodes.insert(node_id, HashSet::new());
         self.vector_count += 1;
 
         // Add as entry point if this is one of the first nodes
@@ -218,7 +222,7 @@ impl HnswLayer {
             return Err(HnswError::Index(HnswIndexError::NodeNotFound(to_node)));
         }
 
-        self.nodes[from_node as usize].insert(to_node);
+        self.nodes.get_mut(&from_node).unwrap().insert(to_node);
         Ok(())
     }
 
@@ -252,8 +256,8 @@ impl HnswLayer {
         }
 
         // Add bidirectional connection
-        self.nodes[node_a as usize].insert(node_b);
-        self.nodes[node_b as usize].insert(node_a);
+        self.nodes.get_mut(&node_a).unwrap().insert(node_b);
+        self.nodes.get_mut(&node_b).unwrap().insert(node_a);
 
         // Prune connections if needed
         self.prune_connections(node_a);
@@ -275,7 +279,7 @@ impl HnswLayer {
             return;
         }
 
-        let connections = &mut self.nodes[node_id as usize];
+        let connections = self.nodes.get_mut(&node_id).unwrap();
         if connections.len() > self.max_connections {
             // NOTE: Pruning by node_id is a simplistic approach that can disconnect
             // the graph. Proper HNSW implementations prune by distance, keeping
@@ -314,7 +318,7 @@ impl HnswLayer {
             return;
         }
 
-        let connections = &mut self.nodes[node_id as usize];
+        let connections = self.nodes.get_mut(&node_id).unwrap();
         if connections.len() > self.max_connections {
             // Sort by distance, keep the closest ones
             let mut conn_with_dist: Vec<(u64, f32)> = connections
@@ -368,8 +372,7 @@ impl HnswLayer {
         let mut candidates: Vec<(u64, usize)> = self
             .nodes
             .iter()
-            .enumerate()
-            .map(|(id, connections)| (id as u64, connections.len()))
+            .map(|(id, connections)| (*id, connections.len()))
             .collect();
 
         candidates.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
@@ -397,7 +400,7 @@ impl HnswLayer {
         let nodes_size = self.nodes.len() * std::mem::size_of::<HashSet<u64>>();
         let connections_size: usize = self
             .nodes
-            .iter()
+            .values()
             .map(|conns| conns.len() * std::mem::size_of::<u64>())
             .sum();
         let entry_points_size = self.entry_points.len() * std::mem::size_of::<u64>();
@@ -413,11 +416,11 @@ impl HnswLayer {
     }
 
     pub fn remove_node(&mut self, node_id: u64) {
-        if (node_id as usize) >= self.nodes.len() {
+        if !self.nodes.contains_key(&node_id) {
             return;
         }
-        self.nodes[node_id as usize].clear();
-        for conns in &mut self.nodes {
+        self.nodes.get_mut(&node_id).unwrap().clear();
+        for conns in self.nodes.values_mut() {
             conns.remove(&node_id);
         }
         self.entry_points.retain(|&ep| ep != node_id);
@@ -431,7 +434,7 @@ impl HnswLayer {
     /// Tuple of (node_count, total_connections, avg_connections_per_node)
     pub fn get_statistics(&self) -> (usize, usize, f32) {
         let node_count = self.nodes.len();
-        let total_connections: usize = self.nodes.iter().map(|conns| conns.len()).sum();
+        let total_connections: usize = self.nodes.values().map(|conns| conns.len()).sum();
 
         let avg_connections = if node_count > 0 {
             total_connections as f32 / node_count as f32
@@ -494,9 +497,13 @@ mod tests {
         let mut layer = HnswLayer::new(0, 8);
 
         layer.add_node(0).unwrap();
+        layer.add_node(7756).unwrap();
 
-        let result = layer.add_node(2); // Skipping 1 should fail
-        assert!(result.is_err());
+        assert!(layer.contains_node(7756));
+        assert_eq!(layer.node_count(), 2);
+
+        let dup = layer.add_node(0);
+        assert!(dup.is_err());
     }
 
     #[test]
