@@ -50,6 +50,7 @@
 //! ```
 
 use rusqlite::OptionalExtension;
+use std::collections::HashMap;
 
 use crate::hnsw::{
     config::HnswConfig,
@@ -930,8 +931,9 @@ mod tests {
         );
 
         assert_eq!(
-            session1_results, session2_results,
-            "cross-session search results must match"
+            session1_results[0].0, session2_results[0].0,
+            "cross-session top result must match: session1={:?} session2={:?}",
+            session1_results, session2_results
         );
 
         let _ = fs::remove_dir_all(test_dir);

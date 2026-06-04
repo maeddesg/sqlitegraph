@@ -528,7 +528,7 @@ impl VectorStorage for SQLiteVectorStorage {
             .as_secs() as i64;
 
         self.conn.execute(
-            "INSERT INTO hnsw_vectors (id, index_id, vector_data, metadata, created_at, updated_at)
+            "INSERT OR IGNORE INTO hnsw_vectors (id, index_id, vector_data, metadata, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 &id,

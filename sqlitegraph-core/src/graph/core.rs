@@ -248,61 +248,91 @@ impl SqliteGraph {
     ) -> Result<HashMap<String, HnswIndex>, SqliteGraphError> {
         let mut indexes = HashMap::new();
 
-        // Get list of existing indexes
         let index_names = HnswIndex::list_indexes(conn).map_err(|e| {
             SqliteGraphError::invalid_input(format!("Failed to load HNSW indexes: {}", e))
         })?;
 
-        // Determine the underlying file path so we can attach a persistent
-        // storage backend. Empty path == in-memory database; leave the
-        // default in-memory storage in place in that case.
         let db_path: String = conn
             .pragma_query_value(None, "database_list", |row| row.get::<_, String>(2))
             .unwrap_or_default();
 
-        // Load each index with vectors
+        let is_file_db = !db_path.is_empty() && db_path != ":memory:";
+
         for name in index_names {
-            match HnswIndex::load_with_vectors(conn, &name) {
-                Ok(mut hnsw) => {
-                    if !db_path.is_empty() && db_path != ":memory:" {
-                        match HnswIndex::get_index_id(conn, &name) {
-                            Ok(Some(index_id)) => match rusqlite::Connection::open(&db_path) {
-                                Ok(storage_conn) => {
-                                    let _ = crate::schema::ensure_schema(&storage_conn);
-                                    hnsw.storage =
-                                        Box::new(crate::hnsw::storage::SQLiteVectorStorage::new(
-                                            index_id,
-                                            storage_conn,
-                                        ));
-                                }
+            let mut hnsw = match HnswIndex::load_metadata(conn, &name) {
+                Ok(h) => h,
+                Err(e) => {
+                    eprintln!("Warning: Failed to load HNSW index '{}': {}", name, e);
+                    continue;
+                }
+            };
+
+            if is_file_db {
+                match HnswIndex::get_index_id(conn, &name) {
+                    Ok(Some(index_id)) => match rusqlite::Connection::open(&db_path) {
+                        Ok(storage_conn) => {
+                            let _ = crate::schema::ensure_schema(&storage_conn);
+                            hnsw.storage =
+                                Box::new(crate::hnsw::storage::SQLiteVectorStorage::new(
+                                    index_id,
+                                    storage_conn,
+                                ));
+                            let needs_rebuild = match hnsw.restore_topology() {
+                                Ok(true) => false,
+                                Ok(false) => true,
                                 Err(e) => {
                                     eprintln!(
-                                        "Warning: HNSW index '{}' loaded with in-memory storage; failed to open persistent storage: {}",
+                                        "Warning: restore_topology failed for '{}', falling back to rebuild: {}",
                                         name, e
                                     );
+                                    true
                                 }
-                            },
-                            Ok(None) => {
-                                eprintln!(
-                                    "Warning: HNSW index '{}' has no id row in hnsw_indexes; staying with in-memory storage",
-                                    name
-                                );
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "Warning: failed to look up id for HNSW index '{}': {}",
-                                    name, e
-                                );
+                            };
+                            if needs_rebuild {
+                                if let Err(e) = hnsw.load_vectors_and_rebuild(conn) {
+                                    eprintln!("Warning: rebuild failed for '{}': {}", name, e);
+                                    continue;
+                                }
                             }
                         }
+                        Err(e) => {
+                            eprintln!(
+                                "Warning: HNSW index '{}' loaded with in-memory storage; failed to open persistent storage: {}",
+                                name, e
+                            );
+                            if let Err(e) = hnsw.load_vectors_and_rebuild(conn) {
+                                eprintln!("Warning: Failed to load vectors for '{}': {}", name, e);
+                                continue;
+                            }
+                        }
+                    },
+                    Ok(None) => {
+                        eprintln!(
+                            "Warning: HNSW index '{}' has no id row in hnsw_indexes; staying with in-memory storage",
+                            name
+                        );
+                        if let Err(e) = hnsw.load_vectors_and_rebuild(conn) {
+                            eprintln!("Warning: Failed to load vectors for '{}': {}", name, e);
+                            continue;
+                        }
                     }
-                    indexes.insert(name, hnsw);
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: failed to look up id for HNSW index '{}': {}",
+                            name, e
+                        );
+                        if let Err(e) = hnsw.load_vectors_and_rebuild(conn) {
+                            eprintln!("Warning: Failed to load vectors for '{}': {}", name, e);
+                            continue;
+                        }
+                    }
                 }
-                Err(e) => {
-                    // Log warning but continue loading other indexes
-                    eprintln!("Warning: Failed to load HNSW index '{}': {}", name, e);
-                }
+            } else if let Err(e) = hnsw.load_vectors_and_rebuild(conn) {
+                eprintln!("Warning: Failed to load vectors for '{}': {}", name, e);
+                continue;
             }
+
+            indexes.insert(name, hnsw);
         }
 
         Ok(indexes)

@@ -1,5 +1,35 @@
 # SQLiteGraph Changelog
 
+## [3.1.1] - 2026-06-04
+
+### Fixed
+
+- **`restore_topology` returns `Result<bool>`** — `true` if topology was found and
+  restored, `false` if no persisted topology exists. Callers use this to decide
+  whether to fall back to `load_vectors_and_rebuild`. Previously returned `Ok(())`
+  for both cases, preventing the fallback.
+- **`load_hnsw_indexes` uses `restore_topology` instead of expensive rebuild** —
+  `SqliteGraph::open` now loads index metadata cheaply, attaches
+  `SQLiteVectorStorage`, then calls `restore_topology` (O(E)) instead of
+  `load_vectors_and_rebuild` (O(N log N)). Falls back to rebuild only when no
+  topology is persisted (pre-3.1.0 databases or in-memory storage).
+- **Entry point ordering preserved across sessions** — Added `order_idx` column
+  to `hnsw_entry_points` (schema migration 6). `persist_topology` stores entry
+  points with their Vec position; `restore_topology` reads back with
+  `ORDER BY order_idx ASC`. Fixes wrong search start node causing different
+  results between insert-time and restore-time.
+- **`load_vectors_as_array` → `load_vectors_as_map`** — Replaced dense
+  `Vec<Vec<f32>>` indexed by `(vector_id - 1)` with `HashMap<u64, Vec<f32>>`
+  keyed by `node_id`. Eliminates the sequential-ID assumption that would cause
+  massive memory allocation and incorrect lookups when multiple HNSW indexes
+  coexist in the same database with non-overlapping ID ranges.
+- **`SQLiteVectorStorage::store_vector_with_id` uses `INSERT OR IGNORE`** —
+  Prevents `UNIQUE constraint failed` when `load_vectors_and_rebuild` is called
+  on an index whose vectors are already persisted in the database.
+- **`search_layer` accepts `&HashMap<u64, Vec<f32>>`** — Updated from
+  `&[Vec<f32>]` to match the new vector map. Lookups use `vectors.get(&node_id)`
+  instead of `vectors[node_id as usize]`.
+
 ## [3.1.0] - 2026-06-04
 
 ### Changed

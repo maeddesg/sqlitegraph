@@ -22,7 +22,7 @@
 use crate::hnsw::distance_metric::{DistanceMetric, compute_distance};
 use crate::hnsw::errors::{HnswError, HnswIndexError};
 use crate::hnsw::layer::HnswLayer;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Search candidate for k-NN algorithms
 ///
@@ -266,7 +266,7 @@ impl NeighborhoodSearch {
         &self,
         layer: &HnswLayer,
         query_vector: &[f32],
-        vectors: &[Vec<f32>],
+        vectors: &HashMap<u64, Vec<f32>>,
         entry_points: &[u64],
         k: usize,
     ) -> Result<SearchResult, HnswError> {
@@ -296,8 +296,12 @@ impl NeighborhoodSearch {
         // Add entry points to candidate list
         for &entry_point in entry_points {
             if layer.contains_node(entry_point) {
-                let distance =
-                    self.compute_distance(query_vector, &vectors[entry_point as usize])?;
+                let distance = self.compute_distance(
+                    query_vector,
+                    vectors
+                        .get(&entry_point)
+                        .ok_or(HnswError::Index(HnswIndexError::NodeNotFound(entry_point)))?,
+                )?;
                 candidates.push(SearchCandidate::new(entry_point, distance, layer.level()));
                 visited.insert(entry_point);
             }
@@ -325,8 +329,12 @@ impl NeighborhoodSearch {
                 for &neighbor_id in connections {
                     if !visited.contains(&neighbor_id) {
                         visited.insert(neighbor_id);
-                        let distance =
-                            self.compute_distance(query_vector, &vectors[neighbor_id as usize])?;
+                        let distance = self.compute_distance(
+                            query_vector,
+                            vectors.get(&neighbor_id).ok_or(HnswError::Index(
+                                HnswIndexError::NodeNotFound(neighbor_id),
+                            ))?,
+                        )?;
                         candidates.push(SearchCandidate::new(neighbor_id, distance, layer.level()));
                     }
                 }
@@ -397,14 +405,18 @@ mod tests {
     use super::*;
     use crate::hnsw::distance_metric::DistanceMetric;
 
-    fn create_test_vectors() -> Vec<Vec<f32>> {
-        vec![
-            vec![1.0, 0.0, 0.0], // Node 0
-            vec![0.0, 1.0, 0.0], // Node 1
-            vec![0.0, 0.0, 1.0], // Node 2
-            vec![1.0, 1.0, 0.0], // Node 3
-            vec![0.5, 0.5, 0.5], // Node 4
-        ]
+    fn create_test_vectors() -> HashMap<u64, Vec<f32>> {
+        let raw: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 1.0],
+            vec![1.0, 1.0, 0.0],
+            vec![0.5, 0.5, 0.5],
+        ];
+        raw.into_iter()
+            .enumerate()
+            .map(|(i, v)| (i as u64, v))
+            .collect()
     }
 
     fn create_test_layer() -> HnswLayer {
@@ -522,7 +534,7 @@ mod tests {
     #[test]
     fn test_search_layer_empty_layer() {
         let search = NeighborhoodSearch::new(DistanceMetric::Cosine);
-        let vectors = vec![];
+        let vectors: HashMap<u64, Vec<f32>> = HashMap::new();
         let layer = HnswLayer::new(0, 4); // Empty layer
         let query_vector = vec![1.0, 0.0, 0.0];
 

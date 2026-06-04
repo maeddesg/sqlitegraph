@@ -250,7 +250,7 @@ impl HnswIndex {
         }
 
         // Load vectors once for all layers
-        let vectors_array = self.load_vectors_as_array()?;
+        let vectors_map = self.load_vectors_as_map()?;
 
         // Start from top layer entry point
         let mut entry_point = *self.entry_points.last()
@@ -267,7 +267,7 @@ impl HnswIndex {
             let result = self.search_engine.search_layer(
                 &self.layers[level],
                 query,
-                &vectors_array,
+                &vectors_map,
                 &[local_id],
                 1, // k=1 for greedy descent
             )?;
@@ -282,7 +282,7 @@ impl HnswIndex {
         let result = self.search_engine.search_layer(
             &self.layers[0],
             query,
-            &vectors_array,
+            &vectors_map,
             &[local_entry],
             self.config.ef_search.max(k),
         )?;

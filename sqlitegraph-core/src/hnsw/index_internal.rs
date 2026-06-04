@@ -81,10 +81,9 @@ impl HnswIndex {
 
         // PROPER HNSW INSERTION: Search for nearest neighbors, then connect to them
         // 1. Load vectors for distance computation
-        let vectors = self.load_vectors_as_array()?;
+        let vectors = self.load_vectors_as_map()?;
 
-        // 2. Get the vector data for the new node
-        let new_vector = &vectors[node_id as usize];
+        let new_vector = vectors.get(&node_id).ok_or(HnswError::Index(HnswIndexError::NodeNotFound(node_id)))?;
 
         // 3. Find entry points to start the search
         let global_entry_points = self.get_layer_entry_points(level);
@@ -280,20 +279,14 @@ impl HnswIndex {
     /// # Returns
     ///
     /// Vectors array indexed by 0-based node IDs
-    pub(crate) fn load_vectors_as_array(&self) -> Result<Vec<Vec<f32>>, crate::hnsw::errors::HnswError> {
+    pub(crate) fn load_vectors_as_map(&self) -> Result<HashMap<u64, Vec<f32>>, crate::hnsw::errors::HnswError> {
         let vector_ids = self.storage.list_vectors()?;
-        let max_vector_id = vector_ids.iter().copied().max().unwrap_or(0);
-
-        let mut vectors_array = vec![vec![]; max_vector_id as usize + 1];
+        let mut vectors_map = HashMap::with_capacity(vector_ids.len());
         for vector_id in vector_ids {
             if let Ok(Some(vector)) = self.storage.get_vector(vector_id) {
-                let node_id = (vector_id - 1) as usize;
-                if node_id < vectors_array.len() {
-                    vectors_array[node_id] = vector;
-                }
+                vectors_map.insert(vector_id - 1, vector);
             }
         }
-
-        Ok(vectors_array)
+        Ok(vectors_map)
     }
 }

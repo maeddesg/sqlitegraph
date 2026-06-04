@@ -87,6 +87,13 @@ const MIGRATION_STEPS: &[MigrationStep] = &[
             "INSERT INTO graph_meta_history(version) VALUES(5)",
         ],
     },
+    MigrationStep {
+        target_version: 6,
+        statements: &[
+            "ALTER TABLE hnsw_entry_points ADD COLUMN order_idx INTEGER NOT NULL DEFAULT 0",
+            "INSERT INTO graph_meta_history(version) VALUES(6)",
+        ],
+    },
 ];
 
 pub const SCHEMA_VERSION: i64 = BASE_SCHEMA_VERSION + MIGRATION_STEPS.len() as i64;

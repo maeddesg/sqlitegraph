@@ -517,9 +517,6 @@ impl HnswIndex {
 
         for layer in &self.layers {
             for (&node_id, connections) in layer.nodes_iter() {
-                if connections.is_empty() {
-                    continue;
-                }
                 let connections_bytes: Vec<u8> = connections
                     .iter()
                     .flat_map(|c| c.to_le_bytes())
@@ -533,10 +530,10 @@ impl HnswIndex {
             }
         }
 
-        for &ep in &self.entry_points {
+        for (i, &ep) in self.entry_points.iter().enumerate() {
             conn.execute(
-                "INSERT OR REPLACE INTO hnsw_entry_points (index_id, node_id) VALUES (?1, ?2)",
-                rusqlite::params![index_id, ep as i64],
+                "INSERT OR REPLACE INTO hnsw_entry_points (index_id, node_id, order_idx) VALUES (?1, ?2, ?3)",
+                rusqlite::params![index_id, ep as i64, i as i64],
             )
             .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
         }
@@ -544,11 +541,11 @@ impl HnswIndex {
         Ok(())
     }
 
-    pub fn restore_topology(&mut self) -> Result<(), crate::hnsw::errors::HnswError> {
+    pub fn restore_topology(&mut self) -> Result<bool, crate::hnsw::errors::HnswError> {
         use crate::hnsw::errors::HnswStorageError;
 
         let Some((conn, index_id)) = self.storage.as_sqlite_connection() else {
-            return Ok(());
+            return Ok(false);
         };
 
         let has_layers: bool = conn
@@ -560,7 +557,7 @@ impl HnswIndex {
             .unwrap_or(false);
 
         if !has_layers {
-            return Ok(());
+            return Ok(false);
         }
 
         for layer in &mut self.layers {
@@ -607,7 +604,7 @@ impl HnswIndex {
         }
 
         let mut ep_stmt = conn
-            .prepare("SELECT node_id FROM hnsw_entry_points WHERE index_id = ?")
+            .prepare("SELECT node_id FROM hnsw_entry_points WHERE index_id = ? ORDER BY order_idx ASC")
             .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
 
         self.entry_points = ep_stmt
@@ -619,6 +616,6 @@ impl HnswIndex {
 
         self.vector_count = self.layers.first().map(|l| l.node_count()).unwrap_or(0);
 
-        Ok(())
+        Ok(true)
     }
 }
