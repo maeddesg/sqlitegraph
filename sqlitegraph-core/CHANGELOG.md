@@ -1,5 +1,14 @@
 # SQLiteGraph Changelog
 
+## [3.1.4] - 2026-06-06
+
+### Fixed
+- Set `busy_timeout(5000ms)` on `conn_for_storage` in `hnsw_index_persistent`. Without
+  this, concurrent writes from the magellan service daemon caused `persist_topology` to
+  receive SQLITE_BUSY and silently discard entry_points and layer data (via
+  `let _ = self.persist_topology()`). Result: 0 rows in hnsw_entry_points,
+  incomplete hnsw_layers, and "Index not initialized" errors on every hopgraph query.
+
 ## [3.1.3] - 2026-06-06
 
 ### Fixed

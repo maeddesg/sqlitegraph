@@ -537,6 +537,10 @@ impl crate::SqliteGraph {
             let conn_for_storage = rusqlite::Connection::open(&db_path)
                 .map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to open connection for storage: {}", e)))?;
 
+            // Set busy_timeout so persist_topology retries on SQLITE_BUSY instead of
+            // silently discarding the error via `let _ = self.persist_topology()`.
+            let _ = conn_for_storage.busy_timeout(std::time::Duration::from_millis(5000));
+
             // Ensure schema is initialized on the new connection
             crate::schema::ensure_schema(&conn_for_storage)
                 .map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to ensure schema: {}", e)))?;
