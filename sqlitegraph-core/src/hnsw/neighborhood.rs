@@ -308,48 +308,70 @@ impl NeighborhoodSearch {
         }
 
         let mut candidates_examined = 0;
-        let mut result_candidates = Vec::new();
+        // W: dynamic result set, capped at ef_search size (k is ef_search here)
+        let mut result_set: Vec<SearchCandidate> = Vec::new();
 
-        // Greedy search with ef-sized candidate list
-        while !candidates.is_empty() && result_candidates.len() < k + layer.max_connections() {
-            // Find best candidate (smallest distance)
+        // Standard HNSW greedy search: expand candidates, prune result set to ef_search
+        while !candidates.is_empty() {
+            // Pop closest candidate
             candidates.sort_by(|a, b| {
                 a.distance
                     .partial_cmp(&b.distance)
                     .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| a.node_id.cmp(&b.node_id))
             });
-
             let candidate = candidates.remove(0);
             candidates_examined += 1;
-            result_candidates.push(candidate.clone());
+
+            // Early termination: if candidate is farther than worst in result set, stop
+            if result_set.len() >= k {
+                let worst = result_set
+                    .iter()
+                    .map(|c| c.distance)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                if candidate.distance > worst {
+                    break;
+                }
+            }
+
+            result_set.push(candidate.clone());
 
             // Expand neighbors
             if let Ok(connections) = layer.get_connections(candidate.node_id) {
                 for &neighbor_id in connections {
                     if !visited.contains(&neighbor_id) {
                         visited.insert(neighbor_id);
-                        let distance = self.compute_distance(
-                            query_vector,
-                            vectors.get(&neighbor_id).ok_or(HnswError::Index(
-                                HnswIndexError::NodeNotFound(neighbor_id),
-                            ))?,
-                        )?;
-                        candidates.push(SearchCandidate::new(neighbor_id, distance, layer.level()));
+                        if let Some(vec) = vectors.get(&neighbor_id) {
+                            let distance = self.compute_distance(query_vector, vec)?;
+                            candidates.push(SearchCandidate::new(
+                                neighbor_id,
+                                distance,
+                                layer.level(),
+                            ));
+                        }
                     }
                 }
             }
+
+            // Prune result set to ef_search
+            if result_set.len() > k {
+                result_set.sort_by(|a, b| {
+                    a.distance
+                        .partial_cmp(&b.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+                result_set.truncate(k);
+            }
         }
 
-        // Sort results by distance and select top k
-        result_candidates.sort_by(|a, b| {
+        // Sort final result set by distance
+        result_set.sort_by(|a, b| {
             a.distance
                 .partial_cmp(&b.distance)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.node_id.cmp(&b.node_id))
         });
 
-        result_candidates.truncate(k);
+        let result_candidates = result_set;
 
         // Extract neighbors and distances
         let neighbors: Vec<u64> = result_candidates.iter().map(|c| c.node_id).collect();

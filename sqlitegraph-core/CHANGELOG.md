@@ -1,5 +1,15 @@
 # SQLiteGraph Changelog
 
+## [3.1.3] - 2026-06-06
+
+### Fixed
+- `search_layer` now implements proper HNSW greedy search with early termination. Previous
+  implementation stopped after `k + M` candidates (e.g. 21 for k=5, M=16), exploring only
+  the entry point's immediate neighborhood. New implementation uses `ef_search` as the
+  candidate pool size and stops when the closest unexplored candidate is farther than the
+  worst result seen, matching the standard HNSW algorithm. Fixes hopgraph returning only
+  symbols from the first indexed file regardless of query.
+
 ## [3.1.2] - 2026-06-04
 
 ### Fixed
