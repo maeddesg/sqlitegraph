@@ -390,6 +390,21 @@ pub trait VectorStorage: Send {
     fn as_sqlite_connection(&self) -> Option<(&rusqlite::Connection, i64)> {
         None
     }
+
+    /// Begin a bulk-insert transaction. No-op for non-SQLite backends.
+    fn begin_bulk_insert(&mut self) -> Result<(), HnswError> {
+        Ok(())
+    }
+
+    /// Commit a bulk-insert transaction. No-op for non-SQLite backends.
+    fn commit_bulk_insert(&mut self) -> Result<(), HnswError> {
+        Ok(())
+    }
+
+    /// Roll back a bulk-insert transaction. No-op for non-SQLite backends.
+    fn rollback_bulk_insert(&mut self) {
+        // Best-effort; ignore errors
+    }
 }
 
 /// Vector storage statistics
@@ -700,6 +715,24 @@ impl VectorStorage for SQLiteVectorStorage {
 
     fn as_sqlite_connection(&self) -> Option<(&rusqlite::Connection, i64)> {
         Some((&self.conn, self.index_id))
+    }
+
+    fn begin_bulk_insert(&mut self) -> Result<(), HnswError> {
+        self.conn
+            .execute("BEGIN IMMEDIATE", [])
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+        Ok(())
+    }
+
+    fn commit_bulk_insert(&mut self) -> Result<(), HnswError> {
+        self.conn
+            .execute("COMMIT", [])
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+        Ok(())
+    }
+
+    fn rollback_bulk_insert(&mut self) {
+        let _ = self.conn.execute("ROLLBACK", []);
     }
 }
 

@@ -264,27 +264,41 @@ impl HnswIndex {
 
         let mut ids = Vec::with_capacity(vectors.len());
 
-        // Insert each vector into the in-memory graph structure
-        for (vec, metadata) in vectors.iter() {
-            let vector_id = self.storage.store_vector(vec, metadata.clone())?;
+        self.storage.begin_bulk_insert()?;
 
-            let insertion_level = if let Some(manager) = &mut self.multi_layer_manager {
-                let (highest_level, _layer_assignments) = manager.insert_vector(vector_id)?;
-                highest_level
-            } else {
-                self.determine_insertion_level()
-            };
+        let result: Result<(), crate::hnsw::errors::HnswError> = (|| {
+            for (vec, metadata) in vectors.iter() {
+                let vector_id = self.storage.store_vector(vec, metadata.clone())?;
 
-            for level in (0..=insertion_level).rev() {
-                self.insert_into_layer(vector_id, level)?;
+                let insertion_level = if let Some(manager) = &mut self.multi_layer_manager {
+                    let (highest_level, _layer_assignments) = manager.insert_vector(vector_id)?;
+                    highest_level
+                } else {
+                    self.determine_insertion_level()
+                };
+
+                for level in (0..=insertion_level).rev() {
+                    self.insert_into_layer(vector_id, level)?;
+                }
+
+                if insertion_level >= self.entry_points.len() {
+                    self.entry_points.push(vector_id);
+                }
+
+                self.vector_count += 1;
+                ids.push(vector_id);
             }
+            Ok(())
+        })();
 
-            if insertion_level >= self.entry_points.len() {
-                self.entry_points.push(vector_id);
+        match result {
+            Ok(()) => {
+                self.storage.commit_bulk_insert()?;
             }
-
-            self.vector_count += 1;
-            ids.push(vector_id);
+            Err(e) => {
+                self.storage.rollback_bulk_insert();
+                return Err(e);
+            }
         }
 
         // Persist topology once for the entire batch

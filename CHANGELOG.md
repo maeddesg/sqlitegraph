@@ -1,5 +1,19 @@
 # SQLiteGraph Changelog
 
+## [3.2.1] - 2026-06-06
+
+### Fixed
+
+- **`batch_insert_vectors()` wraps vector stores in a single SQLite transaction** —
+  Previously each `store_vector()` call inside the batch loop was an individual
+  autocommit `INSERT`, making bulk inserts O(N) fsyncs instead of O(1). The
+  `VectorStorage` trait now has `begin_bulk_insert()`, `commit_bulk_insert()`, and
+  `rollback_bulk_insert()` methods with default no-op implementations.
+  `SQLiteVectorStorage` overrides them with `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`.
+  `InMemoryVectorStorage` uses the no-op defaults. `batch_insert_vectors()` now
+  calls `begin_bulk_insert()` before the loop, `commit_bulk_insert()` on success,
+  and `rollback_bulk_insert()` + propagates the error on failure.
+
 ## [3.2.0] - 2026-06-07
 
 ### Added

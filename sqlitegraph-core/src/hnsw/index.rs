@@ -1187,4 +1187,78 @@ mod tests {
             .unwrap();
         assert!(!results.is_empty(), "search should find results");
     }
+
+    #[test]
+    fn test_batch_insert_uses_transaction_for_sqlite() {
+        // Regression: batch_insert_vectors must wrap SQLite stores in a single
+        // transaction. Without it each store_vector is an autocommit —
+        // bulk inserts are O(N) fsync instead of O(1).
+        // Uses a file-backed SqliteGraph to exercise the SQLiteVectorStorage path.
+        use std::fs;
+
+        let test_dir = "/tmp/test_hnsw_batch_tx";
+        let db_path = format!("{}/test.db", test_dir);
+        let _ = fs::remove_dir_all(test_dir);
+        fs::create_dir_all(test_dir).unwrap();
+
+        let n = 500usize;
+        let batch: Vec<(Vec<f32>, Option<serde_json::Value>)> = (0..n)
+            .map(|i| {
+                let f = i as f32;
+                (
+                    vec![f.sin(), f.cos(), f * 0.01, 1.0 - f * 0.005],
+                    Some(serde_json::json!({"seq": i})),
+                )
+            })
+            .collect();
+
+        let config = HnswConfigBuilder::new()
+            .dimension(4)
+            .distance_metric(DistanceMetric::Cosine)
+            .build()
+            .unwrap();
+
+        let graph = SqliteGraph::open(&db_path).unwrap();
+        {
+            let _guard = graph.hnsw_index_persistent("tx_test", config).unwrap();
+        }
+
+        let start = std::time::Instant::now();
+        let ids = graph
+            .get_hnsw_index_mut("tx_test", |idx| idx.batch_insert_vectors(&batch).unwrap())
+            .unwrap();
+        let elapsed = start.elapsed();
+
+        assert_eq!(ids.len(), n, "all {n} vectors must be inserted");
+
+        graph
+            .get_hnsw_index_ref("tx_test", |idx| {
+                assert_eq!(
+                    idx.statistics().unwrap().vector_count,
+                    n,
+                    "vector_count must equal batch size"
+                );
+            })
+            .unwrap();
+
+        // Without a transaction, 500 SQLite autocommits take >> 500ms on any real disk.
+        // With a single transaction this completes in under 500ms.
+        assert!(
+            elapsed.as_millis() < 500,
+            "batch_insert_vectors took {}ms for {n} vectors — missing transaction wrapper",
+            elapsed.as_millis()
+        );
+
+        let results = graph
+            .get_hnsw_index_ref("tx_test", |idx| {
+                idx.search(&[0.0, 1.0, 0.0, 1.0], 5).unwrap()
+            })
+            .unwrap();
+        assert!(
+            !results.is_empty(),
+            "search must find results after batch insert"
+        );
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
 }
