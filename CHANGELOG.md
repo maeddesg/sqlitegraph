@@ -1,5 +1,61 @@
 # SQLiteGraph Changelog
 
+## [3.1.5] - 2026-06-06
+
+### Fixed
+
+- **`load_vectors_as_local_map(level)` replaces `load_vectors_as_map()`** —
+  The old function keyed the vector map by `vector_id - 1`, assuming the
+  multi-layer manager assigns local IDs as `0, 1, 2, …` matching sequential
+  vector IDs starting at 1. This breaks in two cases: (1) after any table wipe
+  with `AUTOINCREMENT` active, where new vector IDs continue from the prior
+  max (e.g. 6541+), so `vector_id - 1` never matches local ID 0 and every
+  insert after the first silently fails with `NodeNotFound`; (2) in multi-layer
+  mode, nodes in layer ≥ 1 have independent local ID sequences that diverge
+  from their global vector IDs even with sequential IDs starting at 1.
+  The new function takes a `level` parameter and uses
+  `manager.get_local_id(vector_id, level)` as the map key in multi-layer mode,
+  falling back to `vector_id - 1` in single-layer mode where the invariant holds.
+- **`search()` builds per-level vector maps** — Previously loaded one map before
+  the layer-descent loop and reused it for all levels. Because different layers
+  have independent local ID spaces, the same key in the shared map could resolve
+  to the wrong vector for layer ≥ 1. Each level now builds its own map via
+  `load_vectors_as_local_map(level)`.
+- **`search()` returns actual storage vector IDs** — Layer-0 results were
+  returned as `local_id + 1`, which equals the real vector ID only when IDs
+  start at 1. Now uses `get_global_id_for_layer(0, local_id)` so callers
+  receive the correct ID regardless of where in the autoincrement sequence
+  the index was built.
+
+## [3.1.4] - 2026-06-05
+
+### Fixed
+
+- **`hnsw_index_persistent` sets `busy_timeout` on the storage connection** —
+  `persist_topology` uses a dedicated SQLite connection for topology writes.
+  Without a busy timeout that connection would return `SQLITE_BUSY` immediately
+  when the main pool held a write lock, silently discarding topology updates
+  (`let _ = self.persist_topology()`). Now sets a 5-second busy timeout so
+  the storage connection retries on lock contention instead of dropping the write.
+
+## [3.1.3] - 2026-06-05
+
+### Fixed
+
+- **`SqliteGraph::open_with_config` sets `busy_timeout` pragma** — connections
+  opened without the pragma returned `SQLITE_BUSY` immediately under concurrent
+  access, causing query failures instead of retrying. Default timeout: 5 000 ms.
+
+## [3.1.2] - 2026-06-04
+
+### Fixed
+
+- **`hnsw_index_persistent` allows loading an existing index** — Previously
+  returned an error if the index name already existed in the in-memory map.
+  Now returns `Ok` early if the index is already loaded, enabling idempotent
+  calls from CLI commands that open a fresh `SqliteGraph` connection per
+  invocation.
+
 ## [3.1.1] - 2026-06-04
 
 ### Fixed
