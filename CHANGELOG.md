@@ -1,5 +1,24 @@
 # SQLiteGraph Changelog
 
+## [3.2.0] - 2026-06-07
+
+### Added
+
+- **`HnswIndex::batch_insert_vectors()`** — Insert multiple vectors in a single
+  call. Acquires the HNSW index mutex once, inserts all vectors into the
+  in-memory graph, then persists topology to SQLite only once (instead of after
+  every individual insert). Validated all vector dimensions upfront before any
+  mutation, preventing partial-insert inconsistency. Returns assigned vector IDs
+  in insertion order.
+
+### Changed
+
+- **`persist_topology()` now uses a SQLite transaction** — Wraps the
+  DELETE-all-layers + INSERT-each-connection sequence in `BEGIN IMMEDIATE` /
+  `COMMIT` / `ROLLBACK`. This improves performance even for single inserts by
+  batching the write operations into one atomic transaction instead of N
+  individual autocommit statements.
+
 ## [3.1.5] - 2026-06-06
 
 ### Fixed

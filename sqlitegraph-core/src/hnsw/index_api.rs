@@ -206,6 +206,92 @@ impl HnswIndex {
         Ok(vector_id)
     }
 
+    /// Insert multiple vectors in a single batch, persisting topology once at the end.
+    ///
+    /// This is significantly faster than calling `insert_vector` in a loop because:
+    /// - The HNSW index mutex is acquired only once
+    /// - Topology is persisted to SQLite only once (not after every insert)
+    /// - SQLite operations are wrapped in a transaction
+    ///
+    /// # Arguments
+    ///
+    /// * `vectors` - Slice of (vector_data, metadata) tuples
+    ///
+    /// # Returns
+    ///
+    /// Vector of assigned IDs in insertion order, or the first error encountered.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use sqlitegraph::hnsw::{HnswIndex, HnswConfigBuilder, DistanceMetric};
+    ///
+    /// let config = HnswConfigBuilder::new()
+    ///     .dimension(3)
+    ///     .distance_metric(DistanceMetric::Euclidean)
+    ///     .build()
+    ///     .unwrap();
+    /// let mut hnsw = HnswIndex::new("batch_test", config).unwrap();
+    ///
+    /// let batch: Vec<(Vec<f32>, Option<serde_json::Value>)> = vec![
+    ///     (vec![1.0, 0.0, 0.0], None),
+    ///     (vec![0.0, 1.0, 0.0], Some(serde_json::json!({"label": "y-axis"}))),
+    ///     (vec![0.0, 0.0, 1.0], None),
+    /// ];
+    /// let ids = hnsw.batch_insert_vectors(&batch).unwrap();
+    /// assert_eq!(ids.len(), 3);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn batch_insert_vectors(
+        &mut self,
+        vectors: &[(Vec<f32>, Option<serde_json::Value>)],
+    ) -> Result<Vec<u64>, crate::hnsw::errors::HnswError> {
+        use crate::hnsw::errors::{HnswError, HnswIndexError};
+
+        if vectors.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Validate all dimensions first before any mutation
+        for (vec, _) in vectors.iter() {
+            if vec.len() != self.config.dimension {
+                return Err(HnswError::Index(HnswIndexError::VectorDimensionMismatch {
+                    expected: self.config.dimension,
+                    actual: vec.len(),
+                }));
+            }
+        }
+
+        let mut ids = Vec::with_capacity(vectors.len());
+
+        // Insert each vector into the in-memory graph structure
+        for (vec, metadata) in vectors.iter() {
+            let vector_id = self.storage.store_vector(vec, metadata.clone())?;
+
+            let insertion_level = if let Some(manager) = &mut self.multi_layer_manager {
+                let (highest_level, _layer_assignments) = manager.insert_vector(vector_id)?;
+                highest_level
+            } else {
+                self.determine_insertion_level()
+            };
+
+            for level in (0..=insertion_level).rev() {
+                self.insert_into_layer(vector_id, level)?;
+            }
+
+            if insertion_level >= self.entry_points.len() {
+                self.entry_points.push(vector_id);
+            }
+
+            self.vector_count += 1;
+            ids.push(vector_id);
+        }
+
+        // Persist topology once for the entire batch
+        let _ = self.persist_topology();
+        Ok(ids)
+    }
+
     /// Search for the k nearest neighbors to a query vector
     ///
     /// # Arguments

@@ -1041,4 +1041,150 @@ mod tests {
 
         let _ = fs::remove_dir_all(test_dir);
     }
+
+    #[test]
+    fn test_batch_insert_empty() {
+        let config = HnswConfigBuilder::new()
+            .dimension(3)
+            .distance_metric(DistanceMetric::Euclidean)
+            .build()
+            .unwrap();
+        let mut hnsw = HnswIndex::new("batch_empty", config).unwrap();
+        let ids = hnsw.batch_insert_vectors(&[]).unwrap();
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn test_batch_insert_basic() {
+        let config = HnswConfigBuilder::new()
+            .dimension(3)
+            .distance_metric(DistanceMetric::Euclidean)
+            .build()
+            .unwrap();
+        let mut hnsw = HnswIndex::new("batch_basic", config).unwrap();
+
+        let batch: Vec<(Vec<f32>, Option<serde_json::Value>)> = vec![
+            (vec![1.0, 0.0, 0.0], None),
+            (
+                vec![0.0, 1.0, 0.0],
+                Some(serde_json::json!({"label": "y-axis"})),
+            ),
+            (vec![0.0, 0.0, 1.0], None),
+        ];
+
+        let ids = hnsw.batch_insert_vectors(&batch).unwrap();
+        assert_eq!(ids.len(), 3);
+        assert_eq!(hnsw.statistics().unwrap().vector_count, 3);
+
+        // Search should find results
+        let results = hnsw.search(&[0.9, 0.1, 0.0], 2).unwrap();
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_batch_insert_dimension_mismatch() {
+        let config = HnswConfigBuilder::new()
+            .dimension(3)
+            .distance_metric(DistanceMetric::Euclidean)
+            .build()
+            .unwrap();
+        let mut hnsw = HnswIndex::new("batch_dim", config).unwrap();
+
+        let batch: Vec<(Vec<f32>, Option<serde_json::Value>)> = vec![
+            (vec![1.0, 0.0, 0.0], None),
+            (vec![0.0, 1.0], None), // wrong dimension
+        ];
+
+        let result = hnsw.batch_insert_vectors(&batch);
+        assert!(result.is_err());
+        // No vectors should have been inserted (dimension check happens before any mutation)
+        assert_eq!(hnsw.statistics().unwrap().vector_count, 0);
+    }
+
+    #[test]
+    fn test_batch_insert_vs_individual_equivalence() {
+        let config = HnswConfigBuilder::new()
+            .dimension(4)
+            .distance_metric(DistanceMetric::Cosine)
+            .m_connections(8)
+            .build()
+            .unwrap();
+
+        let vectors: Vec<(Vec<f32>, Option<serde_json::Value>)> = (0..20)
+            .map(|i| {
+                let v = vec![
+                    (i as f32).cos(),
+                    (i as f32).sin(),
+                    ((i + 1) as f32).cos(),
+                    ((i + 1) as f32).sin(),
+                ];
+                (v, Some(serde_json::json!({"idx": i})))
+            })
+            .collect();
+
+        // Insert individually
+        let mut hnsw_individual = HnswIndex::new("batch_vs_ind", config.clone()).unwrap();
+        for (vec, meta) in &vectors {
+            hnsw_individual.insert_vector(vec, meta.clone()).unwrap();
+        }
+
+        // Insert as batch
+        let mut hnsw_batch = HnswIndex::new("batch_vs_batch", config).unwrap();
+        let batch_ids = hnsw_batch.batch_insert_vectors(&vectors).unwrap();
+        assert_eq!(batch_ids.len(), 20);
+
+        // Both should have same vector count
+        assert_eq!(
+            hnsw_individual.statistics().unwrap().vector_count,
+            hnsw_batch.statistics().unwrap().vector_count
+        );
+
+        // Both should find results for the same query
+        let query = vec![1.0, 0.0, 0.9, 0.1];
+        let results_ind = hnsw_individual.search(&query, 5).unwrap();
+        let results_batch = hnsw_batch.search(&query, 5).unwrap();
+
+        assert!(!results_ind.is_empty());
+        assert!(!results_batch.is_empty());
+    }
+
+    #[test]
+    fn test_batch_insert_with_persistence() {
+        // Tests that batch_insert_vectors works through SqliteGraph's
+        // get_hnsw_index_mut API (which acquires the mutex once for the batch)
+        let graph = SqliteGraph::open_in_memory().unwrap();
+        let config = HnswConfigBuilder::new()
+            .dimension(3)
+            .distance_metric(DistanceMetric::Cosine)
+            .build()
+            .unwrap();
+
+        // Create index — must drop the MutexGuard before calling get_hnsw_index_mut
+        // to avoid deadlock (both acquire hnsw_indexes lock)
+        {
+            let _guard = graph.hnsw_index("test_idx", config).unwrap();
+        }
+
+        let batch: Vec<(Vec<f32>, Option<serde_json::Value>)> = vec![
+            (vec![1.0, 0.0, 0.0], Some(serde_json::json!({"id": 1}))),
+            (vec![0.0, 1.0, 0.0], Some(serde_json::json!({"id": 2}))),
+            (vec![0.0, 0.0, 1.0], Some(serde_json::json!({"id": 3}))),
+        ];
+
+        let ids = graph
+            .get_hnsw_index_mut("test_idx", |idx| idx.batch_insert_vectors(&batch).unwrap())
+            .unwrap();
+
+        assert_eq!(ids.len(), 3);
+
+        // Verify via search
+        let results = graph
+            .get_hnsw_index_ref("test_idx", |idx| {
+                let stats = idx.statistics().unwrap();
+                assert_eq!(stats.vector_count, 3);
+                idx.search(&[1.0, 0.0, 0.0], 2).unwrap()
+            })
+            .unwrap();
+        assert!(!results.is_empty(), "search should find results");
+    }
 }

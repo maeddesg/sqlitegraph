@@ -503,6 +503,32 @@ impl HnswIndex {
             return Ok(());
         };
 
+        // Wrap all operations in a transaction for batch efficiency
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+
+        let result = self.persist_topology_inner(conn, index_id);
+
+        match &result {
+            Ok(()) => {
+                let _ = conn.execute_batch("COMMIT");
+            }
+            Err(_) => {
+                let _ = conn.execute_batch("ROLLBACK");
+            }
+        }
+
+        result
+    }
+
+    /// Internal topology persistence — caller must handle transaction.
+    fn persist_topology_inner(
+        &self,
+        conn: &rusqlite::Connection,
+        index_id: i64,
+    ) -> Result<(), crate::hnsw::errors::HnswError> {
+        use crate::hnsw::errors::HnswStorageError;
+
         conn.execute(
             "DELETE FROM hnsw_layers WHERE index_id = ?",
             [index_id],
