@@ -249,20 +249,18 @@ impl HnswIndex {
             return Ok(Vec::new());
         }
 
-        // Load vectors once for all layers
-        let vectors_map = self.load_vectors_as_map()?;
-
         // Start from top layer entry point
         let mut entry_point = *self.entry_points.last()
             .ok_or(HnswError::Index(HnswIndexError::IndexNotInitialized))?;
 
         // Greedy descent through higher layers (k=1 for greedy)
-        // Start from the top layer and go down to layer 1
+        // Build per-level maps so local node IDs resolve to correct vectors.
         for level in (1..self.layers.len()).rev() {
             if self.layers[level].node_count() == 0 {
                 continue;
             }
 
+            let vectors_map = self.load_vectors_as_local_map(level)?;
             let local_id = self.get_local_id_for_layer(entry_point, level)?;
             let result = self.search_engine.search_layer(
                 &self.layers[level],
@@ -278,6 +276,7 @@ impl HnswIndex {
         }
 
         // Layer 0: Full ef-search
+        let vectors_map = self.load_vectors_as_local_map(0)?;
         let local_entry = self.get_local_id_for_layer(entry_point, 0)?;
         let result = self.search_engine.search_layer(
             &self.layers[0],
@@ -287,11 +286,13 @@ impl HnswIndex {
             self.config.ef_search.max(k),
         )?;
 
-        // Convert results to 1-based vector IDs
+        // Convert layer-0 local IDs to global storage vector IDs.
         let results: Vec<(u64, f32)> = result.neighbors()
             .iter()
             .zip(result.distances().iter())
-            .map(|(&local_id, &dist)| (local_id + 1, dist))
+            .filter_map(|(&local_id, &dist)| {
+                self.get_global_id_for_layer(0, local_id).ok().map(|gid| (gid, dist))
+            })
             .take(k)
             .collect();
 

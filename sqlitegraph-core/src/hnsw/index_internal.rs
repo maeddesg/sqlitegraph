@@ -81,7 +81,7 @@ impl HnswIndex {
 
         // PROPER HNSW INSERTION: Search for nearest neighbors, then connect to them
         // 1. Load vectors for distance computation
-        let vectors = self.load_vectors_as_map()?;
+        let vectors = self.load_vectors_as_local_map(level)?;
 
         let new_vector = vectors.get(&node_id).ok_or(HnswError::Index(HnswIndexError::NodeNotFound(node_id)))?;
 
@@ -271,20 +271,24 @@ impl HnswIndex {
         }
     }
 
-    /// Load all vectors as a 0-indexed array for layer operations
+    /// Load vectors keyed by layer-local node IDs for a specific layer.
     ///
-    /// Creates a vectors array where vectors[node_id] = vector_data,
-    /// allowing efficient lookup by layer-local node IDs.
-    ///
-    /// # Returns
-    ///
-    /// Vectors array indexed by 0-based node IDs
-    pub(crate) fn load_vectors_as_map(&self) -> Result<HashMap<u64, Vec<f32>>, crate::hnsw::errors::HnswError> {
+    /// In multi-layer mode, uses the manager's global→local mapping for `level`.
+    /// In single-layer mode, uses `vector_id - 1` (local_id == vector_id - 1 by convention).
+    /// Vectors not present in the given layer are omitted.
+    pub(crate) fn load_vectors_as_local_map(&self, level: usize) -> Result<HashMap<u64, Vec<f32>>, crate::hnsw::errors::HnswError> {
         let vector_ids = self.storage.list_vectors()?;
         let mut vectors_map = HashMap::with_capacity(vector_ids.len());
         for vector_id in vector_ids {
             if let Ok(Some(vector)) = self.storage.get_vector(vector_id) {
-                vectors_map.insert(vector_id - 1, vector);
+                let key = if let Some(manager) = &self.multi_layer_manager {
+                    manager.get_local_id(vector_id, level)
+                } else {
+                    Some(vector_id - 1)
+                };
+                if let Some(k) = key {
+                    vectors_map.insert(k, vector);
+                }
             }
         }
         Ok(vectors_map)
