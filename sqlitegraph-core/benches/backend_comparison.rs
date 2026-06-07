@@ -1,13 +1,12 @@
-//! Criterion Benchmark: SQLite vs Native V3 Backend
+//! Criterion benchmark: curated SQLite vs Native V3 backend comparison.
 //!
-//! Run with: cargo bench --features native-v3 -- backend_comparison
+//! Run with: cargo bench --features native-v3 --bench backend_comparison
 //!
-//! This benchmark provides statistically rigorous comparisons between
-//! SQLite and Native V3 backends using Criterion.rs for measurement.
+//! This suite is intentionally curated to finish in practical time on a
+//! developer workstation. It focuses on the highest-signal workload families.
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::time::Duration;
-use tempfile::TempDir;
 
 // Import graph types
 use sqlitegraph::algo::backend::{bfs_traversal, dfs_traversal, k_hop_neighbors, shortest_path};
@@ -15,8 +14,10 @@ use sqlitegraph::backend::native::v3::V3Backend;
 use sqlitegraph::backend::{EdgeSpec, GraphBackend, NodeSpec, SqliteGraphBackend};
 use sqlitegraph::snapshot::SnapshotId;
 
+mod bench_utils;
 // Graph topology generators
 mod graph_generators;
+use bench_utils::create_v3_bench_context;
 
 /// Hardware and environment information
 #[derive(Debug, Clone)]
@@ -169,7 +170,6 @@ fn bench_bfs_traversal(c: &mut Criterion) {
     for (name, nodes, edges) in &[
         ("small_random_1k_5k", 1000, 5000),
         ("medium_random_10k_50k", 10000, 50000),
-        ("large_random_50k_250k", 50000, 250000),
     ] {
         group.throughput(Throughput::Elements(*nodes as u64));
 
@@ -196,13 +196,12 @@ fn bench_bfs_traversal(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                    populate_v3_backend(&backend, data);
-                    (backend, temp) // Keep temp alive
+                    let ctx = create_v3_bench_context("v3.db");
+                    populate_v3_backend(&ctx.backend, data);
+                    ctx
                 },
-                |(backend, _temp)| {
-                    let result = bfs_traversal(&backend, black_box(1)).unwrap();
+                |ctx| {
+                    let result = bfs_traversal(&ctx.backend, black_box(1)).unwrap();
                     black_box(result.len());
                 },
                 criterion::BatchSize::SmallInput,
@@ -216,7 +215,7 @@ fn bench_bfs_traversal(c: &mut Criterion) {
 /// Benchmark: DFS Traversal
 fn bench_dfs_traversal(c: &mut Criterion) {
     let mut group = c.benchmark_group("dfs_traversal");
-    group.measurement_time(Duration::from_secs(10));
+    group.measurement_time(Duration::from_secs(8));
     group.sample_size(10);
 
     for (name, nodes, edges) in &[
@@ -244,13 +243,12 @@ fn bench_dfs_traversal(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                    populate_v3_backend(&backend, data);
-                    (backend, temp)
+                    let ctx = create_v3_bench_context("v3.db");
+                    populate_v3_backend(&ctx.backend, data);
+                    ctx
                 },
-                |(backend, _temp)| {
-                    let result = dfs_traversal(&backend, black_box(1)).unwrap();
+                |ctx| {
+                    let result = dfs_traversal(&ctx.backend, black_box(1)).unwrap();
                     black_box(result.len());
                 },
                 criterion::BatchSize::SmallInput,
@@ -264,7 +262,8 @@ fn bench_dfs_traversal(c: &mut Criterion) {
 /// Benchmark: k-hop neighbors
 fn bench_k_hop(c: &mut Criterion) {
     let mut group = c.benchmark_group("k_hop_neighbors");
-    group.measurement_time(Duration::from_secs(5));
+    group.measurement_time(Duration::from_secs(4));
+    group.sample_size(10);
 
     for (name, nodes, edges, k) in &[
         ("small_k2", 1000, 5000, 2),
@@ -299,14 +298,13 @@ fn bench_k_hop(c: &mut Criterion) {
             |b, (data, k)| {
                 b.iter_batched(
                     || {
-                        let temp = TempDir::new().unwrap();
-                        let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                        populate_v3_backend(&backend, data);
-                        (backend, temp)
+                        let ctx = create_v3_bench_context("v3.db");
+                        populate_v3_backend(&ctx.backend, data);
+                        ctx
                     },
-                    |(backend, _temp)| {
+                    |ctx| {
                         let result =
-                            k_hop_neighbors(&backend, black_box(1), black_box(*k)).unwrap();
+                            k_hop_neighbors(&ctx.backend, black_box(1), black_box(*k)).unwrap();
                         black_box(result.len());
                     },
                     criterion::BatchSize::SmallInput,
@@ -321,7 +319,8 @@ fn bench_k_hop(c: &mut Criterion) {
 /// Benchmark: Shortest path
 fn bench_shortest_path(c: &mut Criterion) {
     let mut group = c.benchmark_group("shortest_path");
-    group.measurement_time(Duration::from_secs(5));
+    group.measurement_time(Duration::from_secs(4));
+    group.sample_size(10);
 
     for (name, nodes, edges) in &[("small", 1000, 5000), ("medium", 10000, 50000)] {
         let graph_data = generate_random_graph(*nodes, *edges);
@@ -353,14 +352,13 @@ fn bench_shortest_path(c: &mut Criterion) {
             |b, (data, target)| {
                 b.iter_batched(
                     || {
-                        let temp = TempDir::new().unwrap();
-                        let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                        populate_v3_backend(&backend, data);
-                        (backend, temp)
+                        let ctx = create_v3_bench_context("v3.db");
+                        populate_v3_backend(&ctx.backend, data);
+                        ctx
                     },
-                    |(backend, _temp)| {
+                    |ctx| {
                         let result =
-                            shortest_path(&backend, black_box(1), black_box(*target)).unwrap();
+                            shortest_path(&ctx.backend, black_box(1), black_box(*target)).unwrap();
                         black_box(result.map(|p| p.len()));
                     },
                     criterion::BatchSize::SmallInput,
@@ -375,6 +373,8 @@ fn bench_shortest_path(c: &mut Criterion) {
 /// Benchmark: Point lookup (get_node)
 fn bench_point_lookup(c: &mut Criterion) {
     let mut group = c.benchmark_group("point_lookup");
+    group.measurement_time(Duration::from_secs(4));
+    group.sample_size(10);
 
     for (name, nodes) in &[("1k", 1000), ("10k", 10000), ("100k", 100000)] {
         let graph_data = generate_random_graph(*nodes, 0); // No edges for pure lookup test
@@ -406,14 +406,13 @@ fn bench_point_lookup(c: &mut Criterion) {
             |b, (data, target)| {
                 b.iter_batched(
                     || {
-                        let temp = TempDir::new().unwrap();
-                        let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                        populate_v3_backend(&backend, data);
-                        (backend, temp, *target)
+                        let ctx = create_v3_bench_context("v3.db");
+                        populate_v3_backend(&ctx.backend, data);
+                        (ctx, *target)
                     },
-                    |(backend, _temp, target)| {
+                    |(ctx, target)| {
                         let snapshot = SnapshotId::current();
-                        let result = backend.get_node(snapshot, black_box(target)).unwrap();
+                        let result = ctx.backend.get_node(snapshot, black_box(target)).unwrap();
                         black_box(result);
                     },
                     criterion::BatchSize::SmallInput,
@@ -428,6 +427,8 @@ fn bench_point_lookup(c: &mut Criterion) {
 /// Benchmark: Fetch outgoing edges
 fn bench_fetch_outgoing(c: &mut Criterion) {
     let mut group = c.benchmark_group("fetch_outgoing");
+    group.measurement_time(Duration::from_secs(4));
+    group.sample_size(10);
 
     for (name, nodes, edges) in &[
         ("sparse_1k_1k", 1000, 1000),  // 1 edge per node avg
@@ -455,13 +456,12 @@ fn bench_fetch_outgoing(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                    populate_v3_backend(&backend, data);
-                    (backend, temp)
+                    let ctx = create_v3_bench_context("v3.db");
+                    populate_v3_backend(&ctx.backend, data);
+                    ctx
                 },
-                |(backend, _temp)| {
-                    let result = backend.fetch_outgoing(black_box(1)).unwrap();
+                |ctx| {
+                    let result = ctx.backend.fetch_outgoing(black_box(1)).unwrap();
                     black_box(result.len());
                 },
                 criterion::BatchSize::SmallInput,
@@ -475,7 +475,8 @@ fn bench_fetch_outgoing(c: &mut Criterion) {
 /// Benchmark: Batch insert performance
 fn bench_batch_insert(c: &mut Criterion) {
     let mut group = c.benchmark_group("batch_insert");
-    group.measurement_time(Duration::from_secs(20));
+    group.measurement_time(Duration::from_secs(8));
+    group.sample_size(10);
 
     for (name, count) in &[("100_nodes", 100), ("1k_nodes", 1000), ("10k_nodes", 10000)] {
         group.throughput(Throughput::Elements(*count as u64));
@@ -502,13 +503,9 @@ fn bench_batch_insert(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("v3", name), count, |b, &count| {
             b.iter_batched(
-                || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                    (backend, temp)
-                },
-                |(backend, _temp)| {
-                    let mut batch = backend.begin_batch();
+                || create_v3_bench_context("v3.db"),
+                |ctx| {
+                    let mut batch = ctx.backend.begin_batch();
                     for i in 0..count {
                         batch
                             .insert_node(sqlitegraph::backend::NodeSpec {

@@ -5,6 +5,13 @@ crate of the same name has its own changelog at the repository root.
 
 ## [Unreleased]
 
+### Changed
+
+- **Removed poison handling from HNSW index lock calls** — The upstream Rust
+  crate switched `hnsw_indexes` from `std::sync::Mutex` to `parking_lot::Mutex`,
+  which does not return `LockResult`. Removed 7 `.map_err(...)` calls in the
+  PyO3 bindings that handled mutex poisoning (no longer possible). (SG-1)
+
 ## [0.4.1] - 2026-05-18
 
 ### Fixed

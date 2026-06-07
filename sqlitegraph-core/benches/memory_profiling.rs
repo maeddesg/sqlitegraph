@@ -8,19 +8,12 @@
 
 #[cfg(feature = "memory_profiling")]
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-#[cfg(feature = "memory_profiling")]
-use std::time::Duration;
-#[cfg(feature = "memory_profiling")]
-use tempfile::TempDir;
-
-#[cfg(feature = "memory_profiling")]
-use sqlitegraph::backend::native::v3::V3Backend;
 use sqlitegraph::backend::{BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec};
 use sqlitegraph::snapshot::SnapshotId;
 
 mod bench_utils;
 #[cfg(feature = "memory_profiling")]
-use bench_utils::{MEASURE, WARM_UP};
+use bench_utils::{MEASURE, WARM_UP, create_v3_bench_context};
 
 // ============================================================================
 // MEMORY PROFILING UTILITIES
@@ -72,12 +65,9 @@ fn bench_memory_per_1000_nodes(criterion: &mut Criterion) {
             &size,
             |b, &size| {
                 b.iter_batched(
-                    || {
-                        let temp = TempDir::new().unwrap();
-                        let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                        (backend, temp)
-                    },
-                    |(backend, _temp)| {
+                    || create_v3_bench_context("v3.db"),
+                    |ctx| {
+                        let backend = &ctx.backend;
                         let rss_before = get_rss_bytes();
 
                         // Insert nodes
@@ -131,8 +121,8 @@ fn bench_memory_during_traversal(criterion: &mut Criterion) {
             |b, &size| {
                 b.iter_batched(
                     || {
-                        let temp = TempDir::new().unwrap();
-                        let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                        let ctx = create_v3_bench_context("v3.db");
+                        let backend = &ctx.backend;
 
                         // Create a chain graph for traversal
                         let mut node_ids = Vec::with_capacity(size);
@@ -160,9 +150,10 @@ fn bench_memory_during_traversal(criterion: &mut Criterion) {
                             }
                         }
 
-                        (backend, node_ids, temp)
+                        (ctx, node_ids)
                     },
-                    |(backend, node_ids, _temp)| {
+                    |(ctx, node_ids)| {
+                        let backend = &ctx.backend;
                         let snapshot = SnapshotId::current();
                         let rss_before = get_rss_bytes();
 

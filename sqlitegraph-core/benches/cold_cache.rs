@@ -12,8 +12,9 @@ use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, 
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::Duration;
-use tempfile::TempDir;
 
+mod bench_utils;
+use bench_utils::BenchmarkState;
 use sqlitegraph::backend::native::v3::V3Backend;
 use sqlitegraph::backend::{BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec};
 use sqlitegraph::snapshot::SnapshotId;
@@ -74,8 +75,8 @@ fn bench_cold_cache_bfs(c: &mut Criterion) {
             // Setup: Create a fresh database for each iteration
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let db_path = temp.path().join("cold_cache_bfs.db");
+                    let temp_dir = bench_utils::create_benchmark_temp_dir();
+                    let db_path = temp_dir.path().join("cold_cache_bfs.db");
                     let backend = V3Backend::create(&db_path).unwrap();
 
                     // Create chain graph: 0 -> 1 -> 2 -> ... -> (size-1)
@@ -116,10 +117,11 @@ fn bench_cold_cache_bfs(c: &mut Criterion) {
                     // Reopen backend (this will be cold cache)
                     let backend = V3Backend::open(&db_path).unwrap();
 
-                    (backend, node_ids, temp)
+                    (BenchmarkState { backend, temp_dir }, node_ids)
                 },
-                |(backend, node_ids, _temp)| {
+                |(ctx, node_ids)| {
                     // BFS traversal from first node
+                    let backend = &ctx.backend;
                     let snapshot = SnapshotId::current();
                     let mut visited = std::collections::HashSet::new();
                     let mut queue = vec![node_ids[0]];
@@ -177,8 +179,8 @@ fn bench_cold_cache_point_lookup(c: &mut Criterion) {
             // Setup: Create a fresh database for each iteration
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let db_path = temp.path().join("cold_cache_lookup.db");
+                    let temp_dir = bench_utils::create_benchmark_temp_dir();
+                    let db_path = temp_dir.path().join("cold_cache_lookup.db");
                     let backend = V3Backend::create(&db_path).unwrap();
 
                     // Create nodes
@@ -207,10 +209,11 @@ fn bench_cold_cache_point_lookup(c: &mut Criterion) {
                     // Reopen backend (this will be cold cache)
                     let backend = V3Backend::open(&db_path).unwrap();
 
-                    (backend, node_ids, temp)
+                    (BenchmarkState { backend, temp_dir }, node_ids)
                 },
-                |(backend, node_ids, _temp)| {
+                |(ctx, node_ids)| {
                     // Point lookups: fetch every 10th node
+                    let backend = &ctx.backend;
                     let snapshot = SnapshotId::current();
                     let mut count = 0;
 
@@ -248,8 +251,8 @@ fn bench_cold_cache_sequential_scan(c: &mut Criterion) {
             // Setup: Create a fresh database for each iteration
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let db_path = temp.path().join("cold_cache_scan.db");
+                    let temp_dir = bench_utils::create_benchmark_temp_dir();
+                    let db_path = temp_dir.path().join("cold_cache_scan.db");
                     let backend = V3Backend::create(&db_path).unwrap();
 
                     // Create nodes
@@ -278,10 +281,11 @@ fn bench_cold_cache_sequential_scan(c: &mut Criterion) {
                     // Reopen backend (this will be cold cache)
                     let backend = V3Backend::open(&db_path).unwrap();
 
-                    (backend, node_ids, temp)
+                    (BenchmarkState { backend, temp_dir }, node_ids)
                 },
-                |(backend, node_ids, _temp)| {
+                |(ctx, node_ids)| {
                     // Sequential scan: fetch all nodes in order
+                    let backend = &ctx.backend;
                     let snapshot = SnapshotId::current();
                     let mut count = 0;
 

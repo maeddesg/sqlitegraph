@@ -1,5 +1,65 @@
 # SQLiteGraph Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Benchmarking guidance corrected and consolidated** — Removed stale
+  benchmark tables that no longer matched clean runs, added
+  `docs/BENCHMARKING.md`, and updated README / MANUAL / API guidance to
+  distinguish release-mode microbenchmarks from Criterion workload suites.
+- **Curated backend benchmark runner added** — `scripts/run-curated-benchmarks.sh`
+  now runs the release-mode microbenchmark, the curated `backend_comparison`
+  Criterion suite, and the new `sqlite_v3_curated` suite with log capture.
+- **`sqlite_v3_curated` benchmark added** — A dedicated small-case Criterion
+  suite for high-signal SQLite vs V3 comparisons without relying on fragile
+  benchmark-name filters.
+- **`test_performance_comparison` now documents release-mode usage and avoids
+  hardcoded backend recommendations** — The example is now clearly described as
+  a warm-cache microbenchmark and points users to Criterion benches for
+  workload-level comparisons.
+
+- **HNSW index lock upgraded from `std::sync::Mutex` to `parking_lot::Mutex`** —
+  Removed poison handling overhead at 17 call sites across `sqlitegraph-core`
+  and `sqlitegraph-py`. The `HnswIndex` type is `!Sync` (wraps
+  `rusqlite::Connection` via `Box<dyn VectorStorage>`), so `RwLock` is not
+  viable, but `parking_lot::Mutex` provides smaller lock size, faster
+  acquisition, and eliminates the `LockResult::map_err` poison unwrap pattern.
+  (SG-1, HPC optimization plan)
+
+- **Remaining `std::sync::Mutex` replaced with `parking_lot::Mutex`** —
+  `progress.rs` (2 lock sites in `ProgressState`), `statement_tracker.rs`
+  (1 lock site), `publisher.rs` (5 lock sites in `Publisher`). Eliminated all
+  `.expect("... poisoned")` and `match self.xxx.lock() { Ok/Err }` patterns.
+  (SG-2, HPC optimization plan)
+
+- **HNSW runtime operation counters added with atomics** — `HnswIndexStats`
+  now reports lock-free `insert_count`, `search_count`, `vector_cache_hits`,
+  and `vector_cache_misses`, all backed by `AtomicU64`. Rebuild/autoload paths
+  reset these counters after internal recovery so they reflect runtime traffic
+  instead of startup repair work. `Publisher::next_id` also now uses
+  lock-free `fetch_add(1, Ordering::Relaxed)` instead of `Arc<Mutex<u64>>`.
+  (SG-2/SG-3, HPC optimization plan)
+
+- **Query cache lock upgraded from `std::sync::RwLock` to `parking_lot::RwLock`** —
+  Removed 11 poison handling blocks (6 read, 5 write) across all cache methods
+  in `query_cache.rs`. `parking_lot::RwLock` returns guards directly (no
+  `Result`), is smaller, and has faster acquisition. (SG-2, HPC optimization plan)
+
+### Added
+
+- **Streaming graph traversal iterators** (`bfs_iter`, `dfs_iter`, `topological_sort_iter`, `connected_components_iter`) —
+  Lazy `Iterator` implementations for BFS, DFS, topological sort, and connected
+  components that yield results one at a time instead of materializing the full
+  `Vec`. Peak memory is O(frontier) instead of O(N) for single-node iterators,
+  and O(|V_component|) instead of O(|V|) for `ConnectedComponentsIter`. Supports
+  early termination (`.take(n)`), pipeline processing, and memory-constrained
+  environments. BFS/DFS/topo iterators implement the `GraphIterator` trait;
+  `ConnectedComponentsIter` yields `Result<Vec<i64>>` per component (bidirectional
+  BFS with both incoming and outgoing edges). The existing `Vec`-returning
+  functions remain unchanged for backward compatibility.
+  (SG-4, HPC optimization plan)
+
 ## [3.2.1] - 2026-06-06
 
 ### Fixed

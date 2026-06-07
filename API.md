@@ -1,11 +1,11 @@
 # SQLiteGraph API Reference
 
-**Version:** v3.0.0
-**Last Updated:** 2026-05-18
+**Version:** 3.2.x
+**Last Updated:** 2026-06-07
 
 The complete API documentation is available at **[docs.rs/sqlitegraph](https://docs.rs/sqlitegraph)**.
 
-This document provides a quick overview of the main API surface.
+This document provides a quick overview of the current public API surface.
 
 ---
 
@@ -90,7 +90,7 @@ let backend = SqliteGraphBackend::from_graph(graph);
 let graph = backend.graph();
 ```
 
-### Pub/Sub (New in v2.0.0)
+### Pub/Sub
 
 ```rust
 use sqlitegraph::backend::{SubscriptionFilter, PubSubEvent};
@@ -168,7 +168,7 @@ backend.kv_delete_v3(b"my_key");
 - SQLite backend only supports `SnapshotId(0)` (no historical snapshots)
 - Native-v3 backend supports both snapshot types
 
-### Node Caching (v2.1.0+)
+### Node Caching
 
 V3Backend includes an LRU cache for node record lookups:
 
@@ -197,13 +197,14 @@ let is_empty = cache.is_empty();
 ```
 
 **Performance Impact:**
-- Point lookups: 114× faster when cached (warm cache vs cold cache)
-- Hit rate: 85-95% for traversal workloads
+- Warm-cache lookups can improve significantly
+- Hit rate depends on graph shape and workload locality
 - Thread-safe: Mutex-protected for concurrent access
+- Use [docs/BENCHMARKING.md](docs/BENCHMARKING.md) to measure on your hardware
 
-### Parallel BFS (v2.1.1+)
+### Parallel BFS
 
-V3Backend supports parallel breadth-first search using Rayon (fixed in v2.1.1):
+V3Backend supports parallel breadth-first search using Rayon:
 
 ```rust
 use sqlitegraph::backend::native::v3::algorithm::parallel_bfs;
@@ -225,13 +226,12 @@ println!("Max depth: {}", result.max_depth);
 ```
 
 **Performance Impact:**
-- **Thread-safe:** Minecraft-style chunked processing, zero shared state during parallel phase
+- **Thread-safe:** Chunked processing with no shared state during the parallel phase
 - **Sequential fallback:** Automatically uses sequential BFS for graphs <1K nodes
-- **Measured performance:** 1.0-1.17× speedup on small graphs (100-500 nodes)
 - **Status:** Stable for small graphs, experimental for larger graphs
-- **Note:** Correct expectations - thread-safe implementation, not a major performance win
+- Measure on your workload before claiming a speedup; benchmark methodology is in [docs/BENCHMARKING.md](docs/BENCHMARKING.md)
 
-### Adaptive Page Sizing (v2.1.0+)
+### Adaptive Page Sizing
 
 V3Backend automatically adapts page size based on storage media:
 
@@ -253,11 +253,10 @@ match media_type {
 ```
 
 **Performance Impact:**
-- **Measured:** 15-25% I/O improvement on appropriate media (verified)
 - SSD detection → 4KB pages (matches SSD block size)
-- HDD detection → 16KB pages (reduces seek overhead by 4×)
+- HDD detection → 16KB pages (reduces seek overhead)
 - Fallback → 8KB pages if detection fails
-- **Status:** Fully wired and verified
+- Measure on the target medium with the workflow in [docs/BENCHMARKING.md](docs/BENCHMARKING.md)
 
 ### HNSW Vector Storage
 
@@ -390,34 +389,70 @@ dict with `results` and `count`.
 
 **SQLite Backend:**
 ```rust
-use sqlitegraph::hnsw::{HnswConfig, HnswIndex};
+use sqlitegraph::SqliteGraph;
+use sqlitegraph::hnsw::{DistanceMetric, HnswConfigBuilder};
 
-let config = HnswConfig::builder()
+let graph = SqliteGraph::open("vectors.db")?;
+let config = HnswConfigBuilder::new()
     .dimension(768)
     .distance_metric(DistanceMetric::Cosine)
     .build()?;
 
-let index = HnswIndex::new_with_sqlite_storage("my_index", config, conn)?;
+let _guard = graph.hnsw_index_persistent("my_index", config)?;
 ```
 
-**V3 Backend:**
+**Direct construction with an explicit storage backend:**
 ```rust
-let storage = backend.create_hnsw_storage("my_index").unwrap();
-let index = HnswIndex::new_with_storage("my_index", config, storage)?;
+use rusqlite::Connection;
+use sqlitegraph::hnsw::{DistanceMetric, HnswConfigBuilder, HnswIndex};
+
+let config = HnswConfigBuilder::new()
+    .dimension(768)
+    .distance_metric(DistanceMetric::Cosine)
+    .build()?;
+
+let conn = Connection::open("vectors.db")?;
+let mut index = HnswIndex::with_persistent_storage("my_index", config, conn)?;
 ```
 
 ### Common Operations
 
 ```rust
-// Insert
-let vector = vec![0.1, 0.2, 0.3, /* ... 768 dims */];
-let id = index.insert(&vector, Some(json!({"doc_id": "123"})))?;
+use serde_json::json;
 
-// Search
+let vector = vec![0.1, 0.2, 0.3 /* ... 768 dims */];
+let id = index.insert_vector(&vector, Some(json!({"doc_id": "123"})))?;
+
+let batch = vec![
+    (vec![0.1, 0.2, 0.3], Some(json!({"doc_id": "123"}))),
+    (vec![0.3, 0.2, 0.1], Some(json!({"doc_id": "124"}))),
+];
+let ids = index.batch_insert_vectors(&batch)?;
+
 let results = index.search(&query_vector, 10)?; // top 10
 for (id, distance) in results {
     println!("ID: {}, Distance: {}", id, distance);
 }
+
+let stats = index.statistics()?;
+println!(
+    "vectors={} inserts={} searches={} cache_hits={} cache_misses={}",
+    stats.vector_count,
+    stats.insert_count,
+    stats.search_count,
+    stats.vector_cache_hits,
+    stats.vector_cache_misses,
+);
+```
+
+### Accessing a Persistent Index Through `SqliteGraph`
+
+```rust
+let stats = graph.get_hnsw_index_ref("my_index", |idx| idx.statistics())??;
+println!("indexed vectors: {}", stats.vector_count);
+
+let index_names = graph.list_hnsw_indexes()?;
+println!("available indexes: {:?}", index_names);
 ```
 
 ---
@@ -560,4 +595,4 @@ pub enum SqliteGraphError {
 
 ---
 
-**Note:** This API reference is accurate for v3.0.0. We document deprecations and limitations honestly - check backend-specific sections for feature availability.
+**Note:** This API reference is maintained for the current 3.2 line. We document deprecations and limitations honestly; check backend-specific sections for feature availability.

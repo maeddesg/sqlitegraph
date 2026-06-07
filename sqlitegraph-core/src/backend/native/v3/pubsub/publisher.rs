@@ -4,8 +4,10 @@
 //! Events are emitted synchronously on the commit path (no background threads).
 
 use crate::backend::native::v3::pubsub::types::{PubSubEvent, SubscriberId, SubscriptionFilter};
+use parking_lot::Mutex;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
 
 /// Type alias for subscriber channel entries.
 type SubscriberEntry = (SubscriberId, Sender<PubSubEvent>, SubscriptionFilter);
@@ -28,8 +30,8 @@ pub struct Publisher {
     /// Channel senders for each subscriber
     /// Each tuple contains: (SubscriberId, Sender, SubscriptionFilter)
     senders: Arc<Mutex<Vec<SubscriberEntry>>>,
-    /// Next subscriber ID
-    next_id: Arc<Mutex<u64>>,
+    /// Next subscriber ID (lock-free atomic counter)
+    next_id: AtomicU64,
 }
 
 impl Default for Publisher {
@@ -43,7 +45,7 @@ impl Publisher {
     pub fn new() -> Self {
         Self {
             senders: Arc::new(Mutex::new(Vec::new())),
-            next_id: Arc::new(Mutex::new(1)),
+            next_id: AtomicU64::new(1),
         }
     }
 
@@ -60,20 +62,9 @@ impl Publisher {
     pub fn subscribe(&self, filter: SubscriptionFilter) -> (SubscriberId, Receiver<PubSubEvent>) {
         let (tx, rx) = mpsc::channel();
 
-        let id = {
-            let mut next = self
-                .next_id
-                .lock()
-                .expect("publisher next_id lock poisoned");
-            let id = *next;
-            *next = next.wrapping_add(1);
-            SubscriberId::new(id)
-        };
+        let id = SubscriberId::new(self.next_id.fetch_add(1, Ordering::Relaxed));
 
-        let mut senders = self
-            .senders
-            .lock()
-            .expect("publisher senders lock poisoned");
+        let mut senders = self.senders.lock();
 
         senders.push((id, tx, filter));
 
@@ -88,10 +79,7 @@ impl Publisher {
     /// # Arguments
     /// * `subscriber_id` - The subscriber ID returned by subscribe()
     pub fn unsubscribe(&self, subscriber_id: SubscriberId) -> bool {
-        let mut senders = self
-            .senders
-            .lock()
-            .expect("publisher senders lock poisoned");
+        let mut senders = self.senders.lock();
         let pos = senders.iter().position(|(id, _, _)| *id == subscriber_id);
 
         if let Some(pos) = pos {
@@ -112,10 +100,7 @@ impl Publisher {
     /// # Arguments
     /// * `event` - The event to emit
     pub fn emit(&self, event: PubSubEvent) {
-        let senders = self
-            .senders
-            .lock()
-            .expect("publisher senders lock poisoned");
+        let senders = self.senders.lock();
 
         for (_, sender, filter) in senders.iter() {
             if filter.matches(&event) {
@@ -127,10 +112,7 @@ impl Publisher {
 
     /// Get the number of active subscribers
     pub fn subscriber_count(&self) -> usize {
-        let senders = self
-            .senders
-            .lock()
-            .expect("publisher senders lock poisoned");
+        let senders = self.senders.lock();
         senders.len()
     }
 

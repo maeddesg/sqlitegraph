@@ -1,5 +1,47 @@
 # SQLiteGraph Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Benchmarking guidance corrected and consolidated** — Added
+  `docs/BENCHMARKING.md`, updated README benchmark instructions to use release
+  mode for the quick comparison example, and removed stale claims that no
+  longer matched current clean runs.
+- **`sqlite_v3_curated` benchmark added** — A small-case Criterion suite for
+  high-signal SQLite vs V3 comparisons that completes in practical time on a
+  developer workstation.
+- **`examples/test_performance_comparison.rs` now describes itself correctly** —
+  The example is documented as a warm-cache microbenchmark and no longer ends
+  with hardcoded backend recommendations that could contradict measured output.
+
+- **HNSW index lock upgraded from `std::sync::Mutex` to `parking_lot::Mutex`** —
+  Removed poison handling at 10 call sites in `index_api.rs`. `parking_lot::Mutex`
+  provides smaller lock size and eliminates poison handling overhead. (SG-1)
+
+- **All remaining `std::sync::Mutex` replaced with `parking_lot::Mutex`** —
+  `progress.rs` (2 sites), `statement_tracker.rs` (1 site), `publisher.rs`
+  (5 sites). All `.expect("... poisoned")` patterns eliminated. (SG-2)
+
+- **HNSW runtime operation counters added with atomics** — `HnswIndexStats`
+  now reports lock-free `insert_count`, `search_count`, `vector_cache_hits`,
+  and `vector_cache_misses`, all backed by `AtomicU64`. Rebuild/autoload paths
+  reset these counters after internal recovery so they reflect runtime traffic
+  instead of startup repair work. `Publisher::next_id` also now uses
+  `AtomicU64` instead of `Arc<Mutex<u64>>`. (SG-2/SG-3)
+
+- **`std::sync::RwLock` replaced with `parking_lot::RwLock` in `query_cache.rs`** —
+  11 poison handling blocks removed. (SG-2)
+
+### Added
+
+- **Streaming graph traversal iterators** — `bfs_iter`, `dfs_iter`,
+  `topological_sort_iter`, `connected_components_iter` in
+  `algo::backend::iterator`. Implement `GraphIterator` trait (BFS/DFS/topo)
+  and `Iterator<Item=Result<Vec<i64>>>` (connected components) for lazy,
+  composable traversal. O(frontier) memory for node iterators,
+  O(|V_component|) for connected components. (SG-4)
+
 ## [3.1.4] - 2026-06-06
 
 ### Fixed

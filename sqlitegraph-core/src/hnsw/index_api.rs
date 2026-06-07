@@ -132,6 +132,10 @@ impl HnswIndex {
             level_distributor,
             multi_layer_manager,
             vector_cache: HashMap::new(),
+            insert_count: std::sync::atomic::AtomicU64::new(0),
+            search_count: std::sync::atomic::AtomicU64::new(0),
+            vector_cache_hits: std::sync::atomic::AtomicU64::new(0),
+            vector_cache_misses: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -206,6 +210,8 @@ impl HnswIndex {
         }
 
         self.vector_count += 1;
+        self.insert_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let _ = self.persist_topology();
         Ok(vector_id)
     }
@@ -293,6 +299,8 @@ impl HnswIndex {
                 }
 
                 self.vector_count += 1;
+                self.insert_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 ids.push(vector_id);
             }
             Ok(())
@@ -355,6 +363,9 @@ impl HnswIndex {
         if self.vector_count == 0 {
             return Ok(Vec::new());
         }
+
+        self.search_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         // Start from top layer entry point
         let mut entry_point = *self.entry_points.last()
@@ -463,6 +474,18 @@ impl HnswIndex {
             distance_metric: self.config.distance_metric,
             storage_stats,
             layer_stats,
+            insert_count: self
+                .insert_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            search_count: self
+                .search_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            vector_cache_hits: self
+                .vector_cache_hits
+                .load(std::sync::atomic::Ordering::Relaxed),
+            vector_cache_misses: self
+                .vector_cache_misses
+                .load(std::sync::atomic::Ordering::Relaxed),
         })
     }
 
@@ -510,6 +533,46 @@ mod index_api_tests {
             result
         );
     }
+
+    #[test]
+    fn test_search_updates_hnsw_operation_counters() {
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        let mut index = HnswIndex::new("test_search_stats", config).unwrap();
+
+        index.insert_vector(&[1.0, 0.0, 0.0], None).unwrap();
+        index.insert_vector(&[0.0, 1.0, 0.0], None).unwrap();
+
+        let before = index.statistics().unwrap();
+        assert_eq!(before.search_count, 0);
+
+        let results = index.search(&[1.0, 0.0, 0.0], 1).unwrap();
+        assert_eq!(results.len(), 1);
+
+        let after = index.statistics().unwrap();
+        assert_eq!(after.insert_count, 2);
+        assert_eq!(after.search_count, 1);
+        assert!(after.vector_cache_hits >= before.vector_cache_hits);
+        assert_eq!(after.vector_cache_misses, before.vector_cache_misses);
+    }
+
+    #[test]
+    fn test_search_records_vector_cache_miss_when_cache_is_empty() {
+        let config = HnswConfig::new(3, 16, 200, DistanceMetric::Euclidean);
+        let mut index = HnswIndex::new("test_search_cache_miss", config).unwrap();
+
+        index.insert_vector(&[1.0, 0.0, 0.0], None).unwrap();
+        index.insert_vector(&[0.0, 1.0, 0.0], None).unwrap();
+        index.vector_cache.clear();
+
+        let before = index.statistics().unwrap();
+        assert_eq!(before.vector_cache_misses, 0);
+
+        let results = index.search(&[1.0, 0.0, 0.0], 1).unwrap();
+        assert_eq!(results.len(), 1);
+
+        let after = index.statistics().unwrap();
+        assert_eq!(after.vector_cache_misses, 1);
+    }
 }
 
 /// SQLiteGraph extension for HNSW vector search
@@ -542,13 +605,13 @@ impl crate::SqliteGraph {
         &self,
         name: &str,
         config: crate::hnsw::config::HnswConfig,
-    ) -> Result<std::sync::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
+    ) -> Result<parking_lot::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
         
         
 
         // Check if index already exists
         {
-            let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
+            let indexes = self.hnsw_indexes.lock();
             if indexes.contains_key(name) {
                 return Err(crate::SqliteGraphError::invalid_input(format!("HNSW index '{}' already exists. Use get_hnsw_index() to retrieve it.", name)));
             }
@@ -563,7 +626,7 @@ impl crate::SqliteGraph {
         hnsw.save_metadata(conn_ref).map_err(|e| crate::SqliteGraphError::invalid_input(format!("Failed to save HNSW index metadata: {}", e)))?;
 
         // Store the index
-        let mut indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
+        let mut indexes = self.hnsw_indexes.lock();
         indexes.insert(name.to_string(), hnsw);
 
         Ok(indexes)
@@ -602,13 +665,13 @@ impl crate::SqliteGraph {
         &self,
         name: &str,
         config: crate::hnsw::config::HnswConfig,
-    ) -> Result<std::sync::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
+    ) -> Result<parking_lot::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>, crate::SqliteGraphError> {
         
         
 
         // Check if index already exists
         {
-            let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
+            let indexes = self.hnsw_indexes.lock();
             if indexes.contains_key(name) {
                 return Err(crate::SqliteGraphError::invalid_input(format!("HNSW index '{}' already exists. Use get_hnsw_index() to retrieve it.", name)));
             }
@@ -667,7 +730,7 @@ impl crate::SqliteGraph {
         };
 
         // Store the index (metadata already saved to database above)
-        let mut indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
+        let mut indexes = self.hnsw_indexes.lock();
         indexes.insert(name.to_string(), hnsw);
 
         Ok(indexes)
@@ -684,11 +747,11 @@ impl crate::SqliteGraph {
     pub fn get_hnsw_index(
         &self,
         name: &str,
-    ) -> Result<Option<std::sync::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>>, crate::SqliteGraphError> {
+    ) -> Result<Option<parking_lot::MutexGuard<'_, std::collections::HashMap<String, HnswIndex>>>, crate::SqliteGraphError> {
         
         
 
-        let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
+        let indexes = self.hnsw_indexes.lock();
 
         if indexes.contains_key(name) {
             Ok(Some(indexes))
@@ -708,7 +771,7 @@ impl crate::SqliteGraph {
     {
         
 
-        let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
+        let indexes = self.hnsw_indexes.lock();
 
         if let Some(hnsw) = indexes.get(name) {
             Ok(f(hnsw))
@@ -728,7 +791,7 @@ impl crate::SqliteGraph {
     {
         
 
-        let mut indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
+        let mut indexes = self.hnsw_indexes.lock();
 
         if let Some(hnsw) = indexes.get_mut(name) {
             Ok(f(hnsw))
@@ -741,7 +804,7 @@ impl crate::SqliteGraph {
     pub fn list_hnsw_indexes(&self) -> Result<Vec<String>, crate::SqliteGraphError> {
 
 
-        let indexes = self.hnsw_indexes.lock().map_err(|e| crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e)))?;
+        let indexes = self.hnsw_indexes.lock();
         Ok(indexes.keys().cloned().collect())
     }
 
@@ -751,9 +814,7 @@ impl crate::SqliteGraph {
         // Remove from in-memory map first so other operations can't race
         // with the DB-side delete.
         {
-            let mut indexes = self.hnsw_indexes.lock().map_err(|e| {
-                crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e))
-            })?;
+            let mut indexes = self.hnsw_indexes.lock();
             indexes.remove(name);
         }
         let conn = self.connection();
@@ -767,9 +828,7 @@ impl crate::SqliteGraph {
         index_name: &str,
         vector_id: u64,
     ) -> Result<(), crate::SqliteGraphError> {
-        let mut indexes = self.hnsw_indexes.lock().map_err(|e| {
-            crate::SqliteGraphError::invalid_input(format!("Mutex poisoned: {}", e))
-        })?;
+        let mut indexes = self.hnsw_indexes.lock();
         let hnsw = indexes
             .get_mut(index_name)
             .ok_or_else(|| {

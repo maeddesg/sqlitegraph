@@ -1,16 +1,16 @@
-//! SQLite vs V3 Backend Performance Comparison (Defensible)
+//! SQLite vs V3 backend microbenchmark.
 //!
-//! This example provides accurate, apples-to-apples performance comparisons
-//! between SQLite and V3 backends, clearly distinguishing:
+//! This example is a quick release-mode sanity check, not a substitute for the
+//! Criterion suites under `benches/`. It measures three narrow warm-cache
+//! operations:
 //!
 //! 1. POINT LOOKUP: Single node lookup by ID (B+tree traversal)
 //! 2. ADJACENCY FETCH: Getting neighbors of a node (cached)
 //! 3. TRAVERSAL: BFS/DFS through multiple hops (bulk operation)
 //!
-//! KEY INSIGHT:
-//! - SQLite wins on POINT LOOKUP (mature B-tree optimization)
-//! - V3 wins on TRAVERSAL (contiguous adjacency storage)
-//! - ADJACENCY FETCH depends on cache state and API overhead
+//! Run it with:
+//!
+//! `cargo run --release --example test_performance_comparison --features native-v3`
 
 use sqlitegraph::{
     BackendDirection, EdgeSpec, GraphConfig, NeighborQuery, NodeSpec, SnapshotId, open_graph,
@@ -34,17 +34,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     test_traversal()?;
 
     println!("\n═══════════════════════════════════════════════════════════════════");
-    println!("  SUMMARY: When to use which backend");
+    println!("  SUMMARY: How to interpret these numbers");
     println!("═══════════════════════════════════════════════════════════════════");
-    println!("  Use SQLITE when:");
-    println!("    • Primary workload is single-node lookups");
-    println!("    • Widely-used storage with standard SQL tooling for debugging");
-    println!("    • Debuggability with SQL is important");
-    println!();
-    println!("  Use V3 when:");
-    println!("    • Primary workload is graph traversal (BFS/DFS)");
-    println!("    • Need high-throughput adjacency queries");
-    println!("    • Working with large graphs (see benchmarks for workload-specific limits)");
+    println!("  • This example runs a warm-cache microbenchmark in release mode.");
+    println!("  • It is useful for fast sanity checks and regression spotting.");
+    println!("  • For workload-level backend comparisons, run the Criterion suites:");
+    println!("      cargo bench --features native-v3 --bench backend_comparison");
+    println!("      cargo bench --features native-v3 --bench sqlite_v3_comparison");
+    println!("  • Do not generalize these numbers across different graph shapes,");
+    println!("    cache states, storage media, or hardware without rerunning.");
     println!("═══════════════════════════════════════════════════════════════════");
 
     Ok(())
@@ -251,7 +249,7 @@ fn test_traversal() -> Result<(), Box<dyn std::error::Error>> {
     println!("───────────────────────────────────────────────────────────────────");
     println!("  TEST 3: TRAVERSAL (BFS - 3 hops from start)");
     println!("───────────────────────────────────────────────────────────────────");
-    println!("  This is where V3 shines due to contiguous adjacency storage\n");
+    println!("  Traversal behavior depends on graph shape, cache state, and backend layout\n");
 
     let sqlite_time;
     let v3_time;

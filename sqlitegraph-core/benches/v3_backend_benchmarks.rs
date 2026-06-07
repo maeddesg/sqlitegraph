@@ -18,6 +18,9 @@ use sqlitegraph::backend::native::v3::{PageAllocator, PersistentHeaderV3, V3Back
 use sqlitegraph::backend::{BackendDirection, EdgeSpec, GraphBackend, NeighborQuery, NodeSpec};
 use std::sync::Arc;
 
+mod bench_utils;
+use bench_utils::create_v3_bench_context;
+
 // ============================================================================
 // A. PAGE ALLOCATOR BENCHMARKS
 // ============================================================================
@@ -132,15 +135,11 @@ fn bench_v3_insert_nodes(c: &mut Criterion) {
         group.throughput(Throughput::Elements(size as u64));
         group.bench_with_input(BenchmarkId::new("nodes", size), &size, |b, &size| {
             b.iter_batched(
-                || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                    (backend, temp)
-                },
-                |(backend, _temp)| {
+                || create_v3_bench_context("v3.db"),
+                |ctx| {
                     for i in 0..size {
                         black_box(
-                            backend
+                            ctx.backend
                                 .insert_node(NodeSpec {
                                     kind: "Node".to_string(),
                                     name: format!("node_{}", i),
@@ -168,12 +167,11 @@ fn bench_v3_insert_edges(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("edges", name), &nodes, |b, &nodes| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                    let ctx = create_v3_bench_context("v3.db");
                     let mut node_ids = Vec::with_capacity(nodes);
                     for i in 0..nodes {
                         node_ids.push(
-                            backend
+                            ctx.backend
                                 .insert_node(NodeSpec {
                                     kind: "Node".to_string(),
                                     name: format!("n_{}", i),
@@ -183,13 +181,13 @@ fn bench_v3_insert_edges(c: &mut Criterion) {
                                 .unwrap(),
                         );
                     }
-                    (backend, node_ids, temp)
+                    (ctx, node_ids)
                 },
-                |(backend, node_ids, _temp)| {
+                |(ctx, node_ids)| {
                     // Create chain edges: 0->1->2->...
                     for i in 0..node_ids.len() - 1 {
                         black_box(
-                            backend
+                            ctx.backend
                                 .insert_edge(EdgeSpec {
                                     from: node_ids[i],
                                     to: node_ids[i + 1],

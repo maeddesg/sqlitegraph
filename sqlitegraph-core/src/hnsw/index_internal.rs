@@ -280,6 +280,8 @@ impl HnswIndex {
         // Fast path: use incremental cache instead of querying SQLite per vector.
         // The cache is populated on store_vector, so it's always in sync with storage.
         if !self.vector_cache.is_empty() {
+            self.vector_cache_hits
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let mut vectors_map = HashMap::with_capacity(self.vector_cache.len());
             for (&vector_id, vector) in &self.vector_cache {
                 let key = if let Some(manager) = &self.multi_layer_manager {
@@ -296,6 +298,8 @@ impl HnswIndex {
 
         // Fallback: query SQLite per vector (slow, used when cache is empty
         // e.g. on low-memory systems where bulk cache load was skipped).
+        self.vector_cache_misses
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let vector_ids = self.storage.list_vectors()?;
         let mut vectors_map = HashMap::with_capacity(vector_ids.len());
         for vector_id in vector_ids {

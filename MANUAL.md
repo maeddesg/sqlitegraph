@@ -1,6 +1,7 @@
 # SQLiteGraph Manual
 
-Usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V3).
+Usage guide for SQLiteGraph in the current 3.2 release line, with dual backend
+architecture (SQLite and Native V3).
 
 > Looking for the Python wrapper? See
 > [`sqlitegraph-py/README.md`](./sqlitegraph-py/README.md) — `pip install sqlitegraph`.
@@ -17,10 +18,10 @@ Usage guide for SQLiteGraph with dual backend architecture (SQLite and Native V3
 
 ```toml
 [dependencies]
-sqlitegraph = "3.0"
+sqlitegraph = "3.2"
 
 # For Native V3 backend
-sqlitegraph = { version = "3.0", features = ["native-v3"] }
+sqlitegraph = { version = "3.2", features = ["native-v3"] }
 ```
 
 ### Basic Usage
@@ -207,7 +208,7 @@ let scores = algo::pagerank_with_progress(&graph, 0.85, 50, ConsoleProgress::new
 | **Security** | `algo::taint_forward` | Security analysis |
 | **ML** | `algo::subgraph_isomorphism` | Pattern matching |
 
-### TypedDiGraph (In-Memory, v3.0.5+)
+### TypedDiGraph (In-Memory)
 
 `TypedDiGraph<N, E>` is a lightweight in-memory directed graph with generic
 node and edge weights. It does **not** implement `GraphBackend` — no SQLite, no
@@ -271,14 +272,15 @@ cargo test '*wal*'
 
 ### Native V3 Performance
 
-Based on project benchmark runs:
+Performance depends heavily on graph shape, cache state, storage medium, and
+which benchmark harness you use. The project now distinguishes:
 
-| Operation | Performance |
-|-----------|-------------|
-| **Node Insert** | ~50K ops/sec |
-| **Edge Insert** | ~100K ops/sec (bulk) |
-| **Neighbor Query** | <1ms (clustered) |
-| **Vector Search** | <1ms with 95%+ accuracy |
+- release-mode microbenchmarks for quick sanity checks
+- curated Criterion comparisons for fast backend checks
+- Criterion suites for workload comparisons
+
+Use the commands and workflow in [docs/BENCHMARKING.md](docs/BENCHMARKING.md)
+instead of treating any single table in this manual as universal.
 
 ### Parallel WAL Recovery
 
@@ -295,10 +297,11 @@ let graph = open_graph("large.db", &config)?;
 ```
 
 **Performance**:
-- 2-3x speedup for 500+ transactions
-- 1.5-2x speedup for 50-100 transactions
+- Measure on your real workload using the benchmarking workflow in
+  [docs/BENCHMARKING.md](docs/BENCHMARKING.md)
+- Recovery speedup depends on WAL size, storage medium, and contention
 
-### V3 Performance Improvements (v2.1.0)
+### V3 Performance Improvements
 
 #### LRU Node Caching
 
@@ -310,14 +313,15 @@ use sqlitegraph::backend::native::v3::NodeCache;
 // Cache is automatic - no configuration needed
 // Default: 1000 nodes, 85-95% hit rate for traversals
 
-// Performance: 114× faster point lookups (warm cache)
+// Warm-cache behavior is workload-dependent; benchmark on your hardware
 let node = backend.get_node_by_id(node_id)?;
 ```
 
 **Performance Impact:**
-- Point lookups: 2.8× faster (when cached)
-- Traversals: 85-95% cache hit rate
-- Memory: ~100KB per 1000 cached nodes
+- Warm-cache lookups can improve substantially, but the exact gain is
+  workload-dependent
+- Validate hit rate and memory tradeoffs with the benchmark workflow in
+  [docs/BENCHMARKING.md](docs/BENCHMARKING.md)
 
 #### Parallel BFS
 
@@ -334,9 +338,9 @@ let result = parallel_bfs(&backend, start_node, None)?;
 ```
 
 **Performance Impact:**
-- **Note:** Feature implemented but performance not yet verified
-- Small graphs (<1K nodes): Sequential (no overhead)
-- Thread-safe: Concurrent visited set
+- Feature implemented
+- Small graphs (<1K nodes): sequential fallback to avoid overhead
+- Measure on your workload before claiming a speedup
 
 #### Adaptive Page Sizing
 
@@ -352,8 +356,8 @@ Storage media detection for optimal page size:
 ```
 
 **Performance Impact:**
-- SSD storage: 15% faster
-- HDD storage: 15% faster
+- Designed to reduce storage-mismatch overhead
+- Verify on the target disk using the benchmark workflow before quoting gains
 
 #### Delta Encoding
 
@@ -389,13 +393,13 @@ match graph.insert_entity(&entity) {
 ### Debug Features
 
 ```toml
-# Enable V3 I/O tracing
-sqlitegraph-core = { version = "3.0", features = ["trace_v3_io"] }
+# Enable debug logging / native backend diagnostics
+sqlitegraph = { version = "3.2", features = ["debug", "v3-forensics"] }
 ```
 
 ```bash
 # Run with debug output
-RUST_LOG=debug cargo run --features trace_v3_io
+RUST_LOG=debug cargo run --features debug,v3-forensics
 ```
 
 ---

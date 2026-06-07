@@ -684,10 +684,7 @@ impl Graph {
         {
             let this = slf.borrow();
             let graph = this.backend.graph();
-            let indexes = graph
-                .hnsw_indexes
-                .lock()
-                .map_err(|e| BackendError::new_err(format!("Mutex poisoned: {}", e)))?;
+            let indexes = graph.hnsw_indexes.lock();
             if !indexes.contains_key(&name) {
                 return Err(NotFoundError::new_err(format!(
                     "Index '{}' not found",
@@ -748,10 +745,7 @@ impl HnswIndexWrapper {
         let parent = self.parent.borrow(py);
         let graph = parent.backend.graph();
 
-        let mut indexes = graph
-            .hnsw_indexes
-            .lock()
-            .map_err(|e| BackendError::new_err(format!("Mutex poisoned: {}", e)))?;
+        let mut indexes = graph.hnsw_indexes.lock();
         let index = indexes
             .get_mut(&self.name)
             .ok_or_else(|| NotFoundError::new_err("Index not found"))?;
@@ -771,10 +765,7 @@ impl HnswIndexWrapper {
     fn bulk_insert_vectors(&self, py: Python<'_>, items: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
         let parent = self.parent.borrow(py);
         let graph = parent.backend.graph();
-        let mut indexes = graph
-            .hnsw_indexes
-            .lock()
-            .map_err(|e| BackendError::new_err(format!("Mutex poisoned: {}", e)))?;
+        let mut indexes = graph.hnsw_indexes.lock();
         let index = indexes
             .get_mut(&self.name)
             .ok_or_else(|| NotFoundError::new_err("Index not found"))?;
@@ -823,10 +814,7 @@ impl HnswIndexWrapper {
     fn bulk_insert_numpy(&self, py: Python<'_>, array: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
         let parent = self.parent.borrow(py);
         let graph = parent.backend.graph();
-        let mut indexes = graph
-            .hnsw_indexes
-            .lock()
-            .map_err(|e| BackendError::new_err(format!("Mutex poisoned: {}", e)))?;
+        let mut indexes = graph.hnsw_indexes.lock();
         let index = indexes
             .get_mut(&self.name)
             .ok_or_else(|| NotFoundError::new_err("Index not found"))?;
@@ -877,10 +865,7 @@ impl HnswIndexWrapper {
     fn search(&self, py: Python<'_>, query: Vec<f32>, k: usize) -> PyResult<Vec<(u64, f32)>> {
         let parent = self.parent.borrow(py);
         let graph = parent.backend.graph();
-        let indexes = graph
-            .hnsw_indexes
-            .lock()
-            .map_err(|e| BackendError::new_err(format!("Mutex poisoned: {}", e)))?;
+        let indexes = graph.hnsw_indexes.lock();
         let index = indexes
             .get(&self.name)
             .ok_or_else(|| NotFoundError::new_err("Index not found"))?;
@@ -895,10 +880,7 @@ impl HnswIndexWrapper {
     ) -> PyResult<Option<(Vec<f32>, Bound<'py, PyDict>)>> {
         let parent = self.parent.borrow(py);
         let graph = parent.backend.graph();
-        let indexes = graph
-            .hnsw_indexes
-            .lock()
-            .map_err(|e| BackendError::new_err(format!("Mutex poisoned: {}", e)))?;
+        let indexes = graph.hnsw_indexes.lock();
         let index = indexes
             .get(&self.name)
             .ok_or_else(|| NotFoundError::new_err("Index not found"))?;
@@ -921,10 +903,7 @@ impl HnswIndexWrapper {
     fn vector_count(&self, py: Python<'_>) -> PyResult<usize> {
         let parent = self.parent.borrow(py);
         let graph = parent.backend.graph();
-        let indexes = graph
-            .hnsw_indexes
-            .lock()
-            .map_err(|e| BackendError::new_err(format!("Mutex poisoned: {}", e)))?;
+        let indexes = graph.hnsw_indexes.lock();
         let index = indexes
             .get(&self.name)
             .ok_or_else(|| NotFoundError::new_err("Index not found"))?;

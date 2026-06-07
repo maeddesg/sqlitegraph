@@ -128,6 +128,11 @@ harness = false
 name = "sqlite_v3_comparison"
 harness = false
 
+# Curated SQLite vs V3 comparison suite
+[[bench]]
+name = "sqlite_v3_curated"
+harness = false
+
 # Phase 45: Graph Theory algorithms benchmarks
 [[bench]]
 name = "graph_theory_benchmarks"

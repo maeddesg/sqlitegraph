@@ -195,7 +195,7 @@
 //! }
 //! ```
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use std::time::{Duration, Instant};
 
 /// Callback trait for progress reporting on long-running operations.
@@ -441,10 +441,7 @@ where
     /// progress.update(50, Some(100), "Processing");
     /// ```
     pub fn update(&mut self, current: usize, total: Option<usize>, message: &str) {
-        let mut last_update = match self.last_update.lock() {
-            Ok(guard) => guard,
-            Err(_) => return, // Mutex poisoned - skip update
-        };
+        let mut last_update = self.last_update.lock();
 
         let now = Instant::now();
 
@@ -472,9 +469,7 @@ where
     #[inline]
     pub fn force_update(&mut self, current: usize, total: Option<usize>, message: &str) {
         self.callback.on_progress(current, total, message);
-        if let Ok(mut last_update) = self.last_update.lock() {
-            *last_update = Instant::now();
-        }
+        *self.last_update.lock() = Instant::now();
     }
 
     /// Returns the configured update interval.

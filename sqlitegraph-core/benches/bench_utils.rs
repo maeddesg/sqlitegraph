@@ -15,12 +15,35 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 use rand::{RngCore, SeedableRng};
+use sqlitegraph::backend::native::v3::V3Backend;
 use sqlitegraph::{BackendKind, EdgeSpec, GraphConfig, NodeSpec, open_graph};
 
 /// Common benchmark configuration
 pub const SAMPLE_SIZE: usize = 20;
 pub const WARM_UP: Duration = Duration::from_millis(300);
 pub const MEASURE: Duration = Duration::from_millis(500);
+
+/// Benchmark-owned state that guarantees the backend drops before the temp dir.
+///
+/// Benchmarks often need an ephemeral on-disk backend. Returning `(backend,
+/// temp_dir)` from `iter_batched` is subtly wrong because pattern destructuring
+/// drops the temp dir before the backend, which triggers teardown noise in
+/// `V3Backend::drop`. This wrapper makes the intended drop order explicit.
+pub struct BenchmarkState<B, T> {
+    pub backend: B,
+    pub temp_dir: T,
+}
+
+pub type V3BenchContext = BenchmarkState<V3Backend, TempDir>;
+
+pub fn create_v3_bench_context(db_name: &str) -> V3BenchContext {
+    let temp_dir = create_benchmark_temp_dir();
+    let db_path = temp_dir.path().join(db_name);
+    let backend = V3Backend::create(&db_path)
+        .unwrap_or_else(|e| panic!("Failed to create V3 backend at {:?}: {}", db_path, e));
+
+    V3BenchContext { backend, temp_dir }
+}
 
 /// Graph topology types for benchmarking
 #[derive(Debug, Clone, Copy)]

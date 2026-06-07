@@ -1,6 +1,6 @@
-//! Phase 1 Benchmark: SQLite vs Native V3 Backend
+//! Phase 1 benchmark: SQLite vs Native V3 backend.
 //!
-//! Run with: cargo bench --features native-v3 -- sqlite_v3_comparison
+//! Run with: cargo bench --features native-v3 --bench sqlite_v3_comparison
 //!
 //! Minimal but useful benchmark suite comparing SQLite and Native V3
 //! on supported operations only.
@@ -27,6 +27,8 @@ use sqlitegraph::{
     snapshot::SnapshotId,
 };
 
+mod bench_utils;
+use bench_utils::create_v3_bench_context;
 mod graph_generators;
 use graph_generators::*;
 
@@ -43,8 +45,8 @@ const SIZES: &[(&str, usize, usize)] = &[
 /// Benchmark: Node insertion throughput
 fn bench_insert_nodes(c: &mut Criterion) {
     let mut group = c.benchmark_group("write/insert_nodes");
-    group.measurement_time(Duration::from_secs(10));
-    group.sample_size(20);
+    group.measurement_time(Duration::from_secs(5));
+    group.sample_size(10);
 
     for (name, nodes, _edges) in SIZES {
         let graph_data = GraphTopology::Chain.generate(*nodes, 0);
@@ -71,11 +73,11 @@ fn bench_insert_nodes(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                    (backend, temp, data.nodes.clone())
+                    let ctx = create_v3_bench_context("v3.db");
+                    (ctx, data.nodes.clone())
                 },
-                |(backend, _temp_dir, nodes)| {
+                |(ctx, nodes)| {
+                    let backend = &ctx.backend;
                     for spec in nodes {
                         black_box(backend.insert_node(spec).unwrap());
                     }
@@ -91,8 +93,8 @@ fn bench_insert_nodes(c: &mut Criterion) {
 /// Benchmark: Edge insertion throughput
 fn bench_insert_edges(c: &mut Criterion) {
     let mut group = c.benchmark_group("write/insert_edges");
-    group.measurement_time(Duration::from_secs(10));
-    group.sample_size(20);
+    group.measurement_time(Duration::from_secs(5));
+    group.sample_size(10);
 
     for (name, nodes, edges) in SIZES {
         let graph_data = GraphTopology::Random.generate(*nodes, *edges);
@@ -123,14 +125,15 @@ fn bench_insert_edges(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                    let ctx = create_v3_bench_context("v3.db");
+                    let backend = &ctx.backend;
                     for spec in data.nodes.clone() {
                         backend.insert_node(spec).unwrap();
                     }
-                    (backend, temp, data.edges.clone())
+                    (ctx, data.edges.clone())
                 },
-                |(backend, _temp_dir, edges)| {
+                |(ctx, edges)| {
+                    let backend = &ctx.backend;
                     for spec in edges {
                         black_box(backend.insert_edge(spec).unwrap());
                     }
@@ -150,8 +153,8 @@ fn bench_insert_edges(c: &mut Criterion) {
 /// Benchmark: Point lookup (get_node by ID)
 fn bench_get_node(c: &mut Criterion) {
     let mut group = c.benchmark_group("read/get_node");
-    group.measurement_time(Duration::from_secs(5));
-    group.sample_size(100);
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
 
     for (name, nodes, edges) in SIZES {
         let graph_data = GraphTopology::Random.generate(*nodes, *edges);
@@ -182,8 +185,8 @@ fn bench_get_node(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                    let ctx = create_v3_bench_context("v3.db");
+                    let backend = &ctx.backend;
                     for spec in data.nodes.clone() {
                         backend.insert_node(spec).unwrap();
                     }
@@ -191,9 +194,10 @@ fn bench_get_node(c: &mut Criterion) {
                         backend.insert_edge(spec).unwrap();
                     }
                     let target_id = (data.node_count / 2) as i64;
-                    (backend, temp, target_id)
+                    (ctx, target_id)
                 },
-                |(backend, _temp_dir, target_id)| {
+                |(ctx, target_id)| {
+                    let backend = &ctx.backend;
                     black_box(backend.get_node(SnapshotId::current(), target_id).ok());
                 },
                 criterion::BatchSize::SmallInput,
@@ -211,8 +215,8 @@ fn bench_get_node(c: &mut Criterion) {
 /// the working set has been loaded into cache.
 fn bench_warm_get_node(c: &mut Criterion) {
     let mut group = c.benchmark_group("read/warm_get_node");
-    group.measurement_time(Duration::from_secs(5));
-    group.sample_size(100);
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
 
     for (name, nodes, edges) in SIZES {
         let graph_data = GraphTopology::Random.generate(*nodes, *edges);
@@ -265,8 +269,8 @@ fn bench_warm_get_node(c: &mut Criterion) {
 /// Benchmark: Neighbor fetch
 fn bench_neighbors(c: &mut Criterion) {
     let mut group = c.benchmark_group("read/neighbors");
-    group.measurement_time(Duration::from_secs(5));
-    group.sample_size(100);
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
 
     for (name, nodes, edges) in SIZES {
         let graph_data = GraphTopology::Random.generate(*nodes, *edges);
@@ -304,8 +308,8 @@ fn bench_neighbors(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                    let ctx = create_v3_bench_context("v3.db");
+                    let backend = &ctx.backend;
                     for spec in data.nodes.clone() {
                         backend.insert_node(spec).unwrap();
                     }
@@ -313,9 +317,10 @@ fn bench_neighbors(c: &mut Criterion) {
                         backend.insert_edge(spec).unwrap();
                     }
                     let target_id = (data.node_count / 2) as i64;
-                    (backend, temp, target_id)
+                    (ctx, target_id)
                 },
-                |(backend, _temp_dir, target_id)| {
+                |(ctx, target_id)| {
+                    let backend = &ctx.backend;
                     let query = NeighborQuery {
                         direction: BackendDirection::Outgoing,
                         edge_type: None,
@@ -340,8 +345,8 @@ fn bench_neighbors(c: &mut Criterion) {
 /// across iterations).
 fn bench_warm_neighbors(c: &mut Criterion) {
     let mut group = c.benchmark_group("read/warm_neighbors");
-    group.measurement_time(Duration::from_secs(5));
-    group.sample_size(100);
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
 
     for (name, nodes, edges) in SIZES {
         let graph_data = GraphTopology::Random.generate(*nodes, *edges);
@@ -412,8 +417,8 @@ fn bench_warm_neighbors(c: &mut Criterion) {
 /// Benchmark: Reopen cost (time to open existing database)
 fn bench_reopen_cost(c: &mut Criterion) {
     let mut group = c.benchmark_group("reopen/cost");
-    group.measurement_time(Duration::from_secs(10));
-    group.sample_size(20);
+    group.measurement_time(Duration::from_secs(5));
+    group.sample_size(10);
 
     for (name, nodes, edges) in SIZES {
         let graph_data = GraphTopology::Random.generate(*nodes, *edges);
@@ -472,7 +477,9 @@ fn bench_reopen_cost(c: &mut Criterion) {
                 },
                 |(temp, db_path, _node_count)| {
                     // Measure: reopen time
-                    black_box(V3Backend::open(&db_path).unwrap());
+                    let backend = V3Backend::open(&db_path).unwrap();
+                    black_box(&backend);
+                    drop(backend);
                     drop(temp);
                 },
                 criterion::BatchSize::PerIteration,
@@ -486,8 +493,8 @@ fn bench_reopen_cost(c: &mut Criterion) {
 /// Benchmark: Cold neighbors query after reopen
 fn bench_cold_neighbors(c: &mut Criterion) {
     let mut group = c.benchmark_group("reopen/cold_neighbors");
-    group.measurement_time(Duration::from_secs(10));
-    group.sample_size(20);
+    group.measurement_time(Duration::from_secs(5));
+    group.sample_size(10);
 
     for (name, nodes, edges) in SIZES {
         let graph_data = GraphTopology::Random.generate(*nodes, *edges);
@@ -526,6 +533,7 @@ fn bench_cold_neighbors(c: &mut Criterion) {
                             .neighbors(SnapshotId::current(), target_id, query)
                             .unwrap(),
                     );
+                    drop(backend);
                     drop(temp);
                 },
                 criterion::BatchSize::PerIteration,
@@ -543,20 +551,17 @@ fn bench_cold_neighbors(c: &mut Criterion) {
 /// Benchmark: KV set operations (V3 native KV store)
 fn bench_kv_set(c: &mut Criterion) {
     let mut group = c.benchmark_group("kv/set");
-    group.measurement_time(Duration::from_secs(5));
-    group.sample_size(50);
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
 
     for (name, nodes, _edges) in SIZES {
         group.throughput(Throughput::Elements(*nodes as u64));
 
         group.bench_with_input(BenchmarkId::new("v3", name), nodes, |b, &count| {
             b.iter_batched(
-                || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
-                    (backend, temp)
-                },
-                |(backend, _temp_dir)| {
+                || create_v3_bench_context("v3.db"),
+                |ctx| {
+                    let backend = &ctx.backend;
                     for i in 0..count {
                         let key = format!("key_{}", i).into_bytes();
                         let _: () = backend.kv_set_v3(key, KvValue::Integer(i as i64), None);
@@ -574,15 +579,15 @@ fn bench_kv_set(c: &mut Criterion) {
 /// Benchmark: KV get operations
 fn bench_kv_get(c: &mut Criterion) {
     let mut group = c.benchmark_group("kv/get");
-    group.measurement_time(Duration::from_secs(5));
-    group.sample_size(100);
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
 
     for (name, nodes, _edges) in SIZES {
         group.bench_with_input(BenchmarkId::new("v3", name), nodes, |b, &count| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                    let ctx = create_v3_bench_context("v3.db");
+                    let backend = &ctx.backend;
 
                     // Pre-populate KV store
                     for i in 0..count {
@@ -591,9 +596,10 @@ fn bench_kv_get(c: &mut Criterion) {
                     }
 
                     let target_key = format!("key_{}", count / 2);
-                    (backend, temp, target_key)
+                    (ctx, target_key)
                 },
-                |(backend, _temp_dir, target_key)| {
+                |(ctx, target_key)| {
+                    let backend = &ctx.backend;
                     black_box(backend.kv_get_v3(SnapshotId::current(), target_key.as_bytes()));
                 },
                 criterion::BatchSize::SmallInput,
@@ -607,8 +613,8 @@ fn bench_kv_get(c: &mut Criterion) {
 /// Benchmark: KV retrieval after reopen
 fn bench_kv_reopen(c: &mut Criterion) {
     let mut group = c.benchmark_group("kv/reopen");
-    group.measurement_time(Duration::from_secs(10));
-    group.sample_size(20);
+    group.measurement_time(Duration::from_secs(5));
+    group.sample_size(10);
 
     for (name, nodes, _edges) in SIZES {
         group.bench_with_input(BenchmarkId::new("v3", name), nodes, |b, &count| {
@@ -633,6 +639,7 @@ fn bench_kv_reopen(c: &mut Criterion) {
                 |(temp, db_path, target_key)| {
                     let backend = V3Backend::open(&db_path).unwrap();
                     black_box(backend.kv_get_v3(SnapshotId::current(), target_key.as_bytes()));
+                    drop(backend);
                     drop(temp);
                 },
                 criterion::BatchSize::PerIteration,
@@ -656,8 +663,8 @@ fn bench_kv_reopen(c: &mut Criterion) {
 /// Results are correct, but V3 will be slower for large graphs.
 fn bench_query_by_kind(c: &mut Criterion) {
     let mut group = c.benchmark_group("query/by_kind");
-    group.measurement_time(Duration::from_secs(5));
-    group.sample_size(50);
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
 
     // Use smaller sizes for O(n) scan benchmark
     let sizes = &[("tiny", 100, 500), ("small", 1_000, 5_000)];
@@ -687,14 +694,15 @@ fn bench_query_by_kind(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                    let ctx = create_v3_bench_context("v3.db");
+                    let backend = &ctx.backend;
                     for spec in data.nodes.clone() {
                         backend.insert_node(spec).unwrap();
                     }
-                    (backend, temp)
+                    ctx
                 },
-                |(backend, _temp_dir)| {
+                |ctx| {
+                    let backend = &ctx.backend;
                     let _ =
                         black_box(backend.query_nodes_by_kind(SnapshotId::current(), "TargetKind"));
                 },
@@ -715,8 +723,8 @@ fn bench_query_by_kind(c: &mut Criterion) {
 /// Results are NOT directly comparable due to semantic difference!
 fn bench_query_by_name_pattern(c: &mut Criterion) {
     let mut group = c.benchmark_group("query/by_name_pattern");
-    group.measurement_time(Duration::from_secs(5));
-    group.sample_size(50);
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
 
     // Use smaller sizes for O(n) scan benchmark
     let sizes = &[("tiny", 100, 500), ("small", 1_000, 5_000)];
@@ -748,14 +756,15 @@ fn bench_query_by_name_pattern(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                    let ctx = create_v3_bench_context("v3.db");
+                    let backend = &ctx.backend;
                     for spec in data.nodes.clone() {
                         backend.insert_node(spec).unwrap();
                     }
-                    (backend, temp)
+                    ctx
                 },
-                |(backend, _temp_dir)| {
+                |ctx| {
+                    let backend = &ctx.backend;
                     // V3 prefix match: "target*" matches "target_node_0", etc.
                     // Same semantics as SQLite GLOB "target*"
                     let _ = black_box(
@@ -878,8 +887,8 @@ use sqlitegraph::algo::backend::bfs_traversal;
 /// Benchmark: BFS traversal
 fn bench_bfs(c: &mut Criterion) {
     let mut group = c.benchmark_group("traversal/bfs");
-    group.measurement_time(Duration::from_secs(10));
-    group.sample_size(20);
+    group.measurement_time(Duration::from_secs(5));
+    group.sample_size(10);
 
     for (name, nodes, edges) in SIZES {
         let graph_data = GraphTopology::Random.generate(*nodes, *edges);
@@ -911,17 +920,18 @@ fn bench_bfs(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("v3", name), &graph_data, |b, data| {
             b.iter_batched(
                 || {
-                    let temp = TempDir::new().unwrap();
-                    let backend = V3Backend::create(temp.path().join("v3.db")).unwrap();
+                    let ctx = create_v3_bench_context("v3.db");
+                    let backend = &ctx.backend;
                     for spec in data.nodes.clone() {
                         backend.insert_node(spec).unwrap();
                     }
                     for spec in data.edges.clone() {
                         backend.insert_edge(spec).unwrap();
                     }
-                    (backend, temp)
+                    ctx
                 },
-                |(backend, _temp_dir)| {
+                |ctx| {
+                    let backend = &ctx.backend;
                     let result = bfs_traversal(&backend, 1).unwrap();
                     black_box(result.len());
                 },

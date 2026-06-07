@@ -191,6 +191,10 @@ impl HnswIndex {
             level_distributor,
             multi_layer_manager,
             vector_cache: HashMap::new(),
+            insert_count: std::sync::atomic::AtomicU64::new(0),
+            search_count: std::sync::atomic::AtomicU64::new(0),
+            vector_cache_hits: std::sync::atomic::AtomicU64::new(0),
+            vector_cache_misses: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -231,6 +235,16 @@ impl HnswIndex {
             // Use internal insert that doesn't re-persist to database
             self.insert_vector_internal(vector_id, &data, metadata)?;
         }
+
+        // Rebuild traffic should not pollute runtime operation counters.
+        self.insert_count
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.search_count
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.vector_cache_hits
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.vector_cache_misses
+            .store(0, std::sync::atomic::Ordering::Relaxed);
 
         Ok(())
     }

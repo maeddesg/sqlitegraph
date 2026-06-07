@@ -33,9 +33,14 @@
 
 pub mod centrality;
 pub mod graph_ops;
+pub mod iterator;
 pub mod traversal;
 
 // Re-export commonly used algorithms
 pub use centrality::{betweenness_centrality, pagerank};
 pub use graph_ops::{bfs, shortest_path, strongly_connected_components, topological_sort};
+pub use iterator::{
+    BfsIter, ConnectedComponentsIter, DfsIter, GraphIterator, TopologicalSortIter, bfs_iter,
+    connected_components_iter, dfs_iter, topological_sort_iter,
+};
 pub use traversal::{bfs_traversal, dfs_traversal, k_hop_neighbors};

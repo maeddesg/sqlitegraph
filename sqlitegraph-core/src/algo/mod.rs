@@ -455,9 +455,11 @@ pub use taint_analysis::{
 
 // Backend-agnostic algorithms (work with any GraphBackend)
 pub use backend::{
-    betweenness_centrality as betweenness_centrality_backend, bfs_traversal, dfs_traversal,
-    k_hop_neighbors, pagerank as pagerank_backend, shortest_path as shortest_path_backend,
-    strongly_connected_components as scc_backend, topological_sort as topological_sort_backend,
+    BfsIter, ConnectedComponentsIter, DfsIter, GraphIterator, TopologicalSortIter,
+    betweenness_centrality as betweenness_centrality_backend, bfs_iter, connected_components_iter,
+    dfs_iter, dfs_traversal, k_hop_neighbors, pagerank as pagerank_backend,
+    shortest_path as shortest_path_backend, strongly_connected_components as scc_backend,
+    topological_sort as topological_sort_backend, topological_sort_iter,
 };
 
 // Module declarations

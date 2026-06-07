@@ -12,20 +12,19 @@ SQLite: stable, mature, and easy to inspect with standard tooling. Native V3:
 graph-oriented storage with cache, KV, pub/sub, and traversal features. See the
 benchmarks below for workload-specific behavior.
 
-## What's New in v3.0.0
+## What's New in the 3.2 Line
 
-`v3.0.0` is the first release that ships the full Cypher engine, the
-expanded CLI surface, and the cross-session HNSW persistence fix:
+The current 3.2 release line builds on the 3.0 backend/model transition with
+concrete HNSW and traversal improvements:
 
-- Cypher-inspired `MATCH`, `CREATE`, `SET`, `DELETE`, multi-hop, variable-depth,
-  star/multi-pattern joins, `WHERE` with precedence/parentheses, and HNSW
-  vector search via `CALL db.index.vector.queryNodes(...)`.
-- CLI coverage for PageRank, betweenness, WCC/SCC, Louvain, label propagation,
-  cycle search, dominators, topological sort, critical path, and HNSW
-  create/insert/search/list/delete.
-- Python `Graph.query()` plus algorithm bindings for SCC, label propagation,
-  cycle search, dominators, critical path, and HNSW index deletion.
-- V3 durability fixes and HNSW autoload persistence fixes.
+- `HnswIndex::batch_insert_vectors()` for lower-overhead bulk vector ingestion.
+- Transactional topology persistence for HNSW metadata and layers.
+- `HnswIndexStats` runtime counters for inserts, searches, vector-cache hits,
+  and vector-cache misses.
+- Streaming traversal iterators for BFS, DFS, topological sort, and connected
+  components, so callers can avoid materializing full `Vec`s when they only
+  need incremental results.
+- `parking_lot`-based lock cleanup across the HNSW path and related hot locks.
 
 See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md) for full history.
 
@@ -39,33 +38,36 @@ See [CHANGELOG](https://github.com/oldnordic/sqlitegraph/blob/main/CHANGELOG.md)
 | Graph algorithms | 35+ | 35+ |
 | HNSW vectors | Yes | Yes |
 | Pub/Sub | Yes | Yes |
-| LRU Cache | No | Yes (v2.1.0) |
-| Parallel BFS | No | Yes (v2.1.1) |
+| LRU Cache | No | Yes |
+| Parallel BFS | No | Yes |
 
 ## Benchmarks
 
-See [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) for system design details.
+See [Architecture](https://github.com/oldnordic/sqlitegraph/blob/main/docs/ARCHITECTURE.md) for system design details and [Benchmarking](https://github.com/oldnordic/sqlitegraph/blob/main/docs/BENCHMARKING.md) for methodology.
 
-**Backend Comparison (v2.2.4 — AMD Ryzen 7 7800X3D, tmpfs, Rust 1.95.0):**
+**Representative clean samples from 2026-06-07 (AMD Ryzen 7 7800X3D, tmpfs, Rust 1.95.0):**
 
-| Benchmark | SQLite | V3 | Ratio |
-|-----------|--------|----|-------|
-| BFS 1K nodes / 5K edges | 2.5ms | 0.45ms | V3 **5.5x faster** |
-| BFS 10K / 50K | 26ms | 27ms | ~parity |
-| BFS 50K / 250K | 160ms | 586ms | SQLite 3.6x faster |
-| DFS 1K / 5K | 2.4ms | 0.46ms | V3 **5.2x faster** |
-| Point lookup 1K | 15µs | 82µs | SQLite 5.4x faster |
-| Point lookup 10K | 27µs | 503µs | SQLite 18x faster |
-| Shortest path 1K | 304µs | 393µs | SQLite 29% faster |
+| Benchmark | SQLite | V3 |
+|-----------|--------|----|
+| Criterion `bfs_traversal/small_random_1k_5k` | `2.3680 ms` | `3.3191 ms` |
+| Criterion `bfs_traversal/medium_random_10k_50k` | `26.510 ms` | `56.240 ms` |
+| Release microbenchmark point lookup | `3965 ns` | `146 ns` |
 
-V3 excels at small-scale traversals (contiguous page storage, LRU cache). SQLite dominates at scale (mmap, WAL, FTS5) and point lookups.
+These numbers are workload-specific. The release microbenchmark is warm-cache
+and intentionally narrow; the Criterion suites are better for backend
+comparisons under realistic workloads.
 
 **Run benchmarks yourself:**
 
 ```bash
 git clone https://github.com/oldnordic/sqlitegraph.git
-cd sqlitegraph/sqlitegraph-core
+cd sqlitegraph
+./scripts/run-curated-benchmarks.sh
+
+cd sqlitegraph-core
+cargo run --release --example test_performance_comparison --features native-v3
 cargo bench --features native-v3 --bench backend_comparison
+cargo bench --features native-v3 --bench sqlite_v3_curated
 ```
 
 ## Quick Start
@@ -73,10 +75,10 @@ cargo bench --features native-v3 --bench backend_comparison
 ```toml
 [dependencies]
 # SQLite backend (default)
-sqlitegraph = "3.0"
+sqlitegraph = "3.2"
 
 # OR Native V3 backend (graph-oriented storage)
-sqlitegraph = { version = "3.0", features = ["native-v3"] }
+sqlitegraph = { version = "3.2", features = ["native-v3"] }
 ```
 
 ```rust
@@ -124,7 +126,7 @@ let mut dfs = Dfs::new(&g, a);
 assert_eq!(dfs.by_ref().collect::<Vec<_>>(), vec![a, b, c]);
 ```
 
-New in v3.0.5. See [API.md](API.md#typeddigraph-api) for the full method list.
+Available in the current 3.x line. See [API.md](API.md#typeddigraph-api) for the full method list.
 
 ## CLI
 

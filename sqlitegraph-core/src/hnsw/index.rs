@@ -51,6 +51,7 @@
 
 use rusqlite::OptionalExtension;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU64;
 
 use crate::hnsw::{
     config::HnswConfig,
@@ -110,6 +111,18 @@ pub struct HnswIndex {
     /// Avoids re-querying SQLite on every insert during HNSW construction.
     /// Populated incrementally on store_vector, or in bulk from restore_topology.
     pub(crate) vector_cache: HashMap<u64, Vec<f32>>,
+
+    /// Lock-free counter for vector insert operations.
+    pub(crate) insert_count: AtomicU64,
+
+    /// Lock-free counter for search operations.
+    pub(crate) search_count: AtomicU64,
+
+    /// Lock-free counter for vector cache hits while building/searching layers.
+    pub(crate) vector_cache_hits: AtomicU64,
+
+    /// Lock-free counter for vector cache misses while building/searching layers.
+    pub(crate) vector_cache_misses: AtomicU64,
 }
 
 /// Comprehensive statistics for an HNSW index
@@ -135,6 +148,18 @@ pub struct HnswIndexStats {
 
     /// Per-layer statistics (node_count, total_connections, avg_connections)
     pub layer_stats: Vec<(usize, usize, f32)>,
+
+    /// Total successful insert operations.
+    pub insert_count: u64,
+
+    /// Total successful search operations.
+    pub search_count: u64,
+
+    /// Count of vector cache hits while materializing layer-local vectors.
+    pub vector_cache_hits: u64,
+
+    /// Count of vector cache misses while materializing layer-local vectors.
+    pub vector_cache_misses: u64,
 }
 
 // Include split module implementations using the include! macro
@@ -163,6 +188,10 @@ mod tests {
         assert_eq!(stats.vector_count, 0);
         assert_eq!(stats.dimension, 3);
         assert_eq!(stats.distance_metric, DistanceMetric::Euclidean);
+        assert_eq!(stats.insert_count, 0);
+        assert_eq!(stats.search_count, 0);
+        assert_eq!(stats.vector_cache_hits, 0);
+        assert_eq!(stats.vector_cache_misses, 0);
     }
 
     #[test]
@@ -302,6 +331,10 @@ mod tests {
         assert_eq!(stats.vector_count, 5);
         assert_eq!(stats.layer_count, 3);
         assert_eq!(stats.dimension, 3);
+        assert_eq!(stats.insert_count, 5);
+        assert_eq!(stats.search_count, 0);
+        assert_eq!(stats.vector_cache_hits, 4);
+        assert_eq!(stats.vector_cache_misses, 0);
         assert!(!stats.layer_stats.is_empty());
     }
 
