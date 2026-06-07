@@ -3,7 +3,7 @@
 This file tracks releases of the `sqlitegraph` package on PyPI. The Rust
 crate of the same name has its own changelog at the repository root.
 
-## [Unreleased]
+## [0.5.2] - 2026-06-07
 
 ### Changed
 
