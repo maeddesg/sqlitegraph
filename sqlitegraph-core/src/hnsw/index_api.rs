@@ -131,6 +131,7 @@ impl HnswIndex {
             search_engine,
             level_distributor,
             multi_layer_manager,
+            vector_cache: HashMap::new(),
         })
     }
 
@@ -177,6 +178,9 @@ impl HnswIndex {
 
         // Store the vector
         let vector_id = self.storage.store_vector(vector, metadata)?;
+
+        // Cache the vector for fast neighbor lookups during subsequent inserts
+        self.vector_cache.insert(vector_id, vector.to_vec());
 
         // Determine insertion layer and register with multi-layer manager
         // In multi-layer mode, the manager determines the level and creates mappings
@@ -269,6 +273,9 @@ impl HnswIndex {
         let result: Result<(), crate::hnsw::errors::HnswError> = (|| {
             for (vec, metadata) in vectors.iter() {
                 let vector_id = self.storage.store_vector(vec, metadata.clone())?;
+
+                // Cache the vector for fast neighbor lookups during subsequent inserts
+                self.vector_cache.insert(vector_id, vec.clone());
 
                 let insertion_level = if let Some(manager) = &mut self.multi_layer_manager {
                     let (highest_level, _layer_assignments) = manager.insert_vector(vector_id)?;

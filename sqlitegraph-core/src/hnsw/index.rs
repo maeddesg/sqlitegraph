@@ -105,6 +105,11 @@ pub struct HnswIndex {
     /// Multi-layer node manager for tracking layer assignments and ID translation
     /// Only initialized when enable_multilayer == true
     pub(crate) multi_layer_manager: Option<MultiLayerNodeManager>,
+
+    /// Incremental cache of all vectors, keyed by vector_id.
+    /// Avoids re-querying SQLite on every insert during HNSW construction.
+    /// Populated incrementally on store_vector, or in bulk from restore_topology.
+    pub(crate) vector_cache: HashMap<u64, Vec<f32>>,
 }
 
 /// Comprehensive statistics for an HNSW index
@@ -1261,4 +1266,44 @@ mod tests {
 
         let _ = fs::remove_dir_all(test_dir);
     }
+}
+
+/// Returns available physical memory in bytes, or 0 if detection fails.
+/// Used to gate vector cache loading so we don't OOM on low-memory systems.
+fn available_memory_bytes() -> u64 {
+    #[cfg(target_os = "linux")]
+    {
+        use std::fs;
+        if let Ok(content) = fs::read_to_string("/proc/meminfo") {
+            for line in content.lines() {
+                if line.starts_with("MemAvailable:") {
+                    let kb: u64 = line
+                        .split_whitespace()
+                        .nth(1)
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(0);
+                    return kb * 1024;
+                }
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS, use sysctl hw.memsize as approximation.
+        // vm_stat page_count * page_size would be more accurate but complex.
+        if let Ok(output) = std::process::Command::new("sysctl")
+            .args(["-n", "hw.memsize"])
+            .output()
+        {
+            if let Ok(s) = String::from_utf8(output.stdout) {
+                if let Ok(total) = s.trim().parse::<u64>() {
+                    // Conservative: assume 50% available
+                    return total / 2;
+                }
+            }
+        }
+    }
+    // Unknown platform or detection failed: return 0 so caller uses
+    // the cache unconditionally (no memory limit enforced).
+    0
 }

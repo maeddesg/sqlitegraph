@@ -190,6 +190,7 @@ impl HnswIndex {
             search_engine,
             level_distributor,
             multi_layer_manager,
+            vector_cache: HashMap::new(),
         })
     }
 
@@ -336,6 +337,9 @@ impl HnswIndex {
 
         // Store the vector in memory (not to database)
         self.storage.store_vector_with_id(vector_id, vector.to_vec(), metadata)?;
+
+        // Cache the vector for fast neighbor lookups during subsequent inserts.
+        self.vector_cache.insert(vector_id, vector.to_vec());
 
         // Determine insertion layer and register with multi-layer manager
         // In multi-layer mode, the manager determines the level and creates mappings
@@ -641,6 +645,27 @@ impl HnswIndex {
             .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
 
         self.vector_count = self.layers.first().map(|l| l.node_count()).unwrap_or(0);
+
+        // Populate vector_cache from storage so subsequent operations
+        // (search, insert) don't need to query SQLite per vector.
+        // Only cache if estimated memory fits within available RAM.
+        self.vector_cache.clear();
+        if let Ok(vector_ids) = self.storage.list_vectors() {
+            let est_bytes = vector_ids.len() as u64 * (40 + self.config.dimension as u64 * 4);
+            let available_bytes = available_memory_bytes();
+            // Use at most 25% of available RAM for the vector cache.
+            // Leave 75% for the OS, application, and other data structures.
+            if available_bytes == 0 || est_bytes < available_bytes / 4 {
+                self.vector_cache.reserve(vector_ids.len());
+                for vid in vector_ids {
+                    if let Ok(Some(vec)) = self.storage.get_vector(vid) {
+                        self.vector_cache.insert(vid, vec);
+                    }
+                }
+            }
+            // else: skip caching, load_vectors_as_local_map will fall back
+            // to per-query SQLite lookups (slower but memory-safe).
+        }
 
         Ok(true)
     }

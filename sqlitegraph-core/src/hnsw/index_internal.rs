@@ -277,6 +277,25 @@ impl HnswIndex {
     /// In single-layer mode, uses `vector_id - 1` (local_id == vector_id - 1 by convention).
     /// Vectors not present in the given layer are omitted.
     pub(crate) fn load_vectors_as_local_map(&self, level: usize) -> Result<HashMap<u64, Vec<f32>>, crate::hnsw::errors::HnswError> {
+        // Fast path: use incremental cache instead of querying SQLite per vector.
+        // The cache is populated on store_vector, so it's always in sync with storage.
+        if !self.vector_cache.is_empty() {
+            let mut vectors_map = HashMap::with_capacity(self.vector_cache.len());
+            for (&vector_id, vector) in &self.vector_cache {
+                let key = if let Some(manager) = &self.multi_layer_manager {
+                    manager.get_local_id(vector_id, level)
+                } else {
+                    Some(vector_id - 1)
+                };
+                if let Some(k) = key {
+                    vectors_map.insert(k, vector.clone());
+                }
+            }
+            return Ok(vectors_map);
+        }
+
+        // Fallback: query SQLite per vector (slow, used when cache is empty
+        // e.g. on low-memory systems where bulk cache load was skipped).
         let vector_ids = self.storage.list_vectors()?;
         let mut vectors_map = HashMap::with_capacity(vector_ids.len());
         for vector_id in vector_ids {
