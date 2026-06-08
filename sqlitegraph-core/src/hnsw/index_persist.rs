@@ -236,6 +236,12 @@ impl HnswIndex {
             self.insert_vector_internal(vector_id, &data, metadata)?;
         }
 
+        // Nodes were rebuilt from DB — clear dirty flags so we don't
+        // re-persist them on the next topology write.
+        for layer in &mut self.layers {
+            layer.clear_dirty();
+        }
+
         // Rebuild traffic should not pollute runtime operation counters.
         self.insert_count
             .store(0, std::sync::atomic::Ordering::Relaxed);
@@ -514,7 +520,7 @@ impl HnswIndex {
         Ok(())
     }
 
-    pub fn persist_topology(&self) -> Result<(), crate::hnsw::errors::HnswError> {
+    pub fn persist_topology(&mut self) -> Result<(), crate::hnsw::errors::HnswError> {
         use crate::hnsw::errors::HnswStorageError;
 
         let Some((conn, index_id)) = self.storage.as_sqlite_connection() else {
@@ -536,10 +542,19 @@ impl HnswIndex {
             }
         }
 
+        if result.is_ok() {
+            for layer in &mut self.layers {
+                layer.clear_dirty();
+            }
+        }
+
         result
     }
 
     /// Internal topology persistence — caller must handle transaction.
+    ///
+    /// Only writes nodes that have been marked dirty since the last persist.
+    /// This makes batch inserts O(batch_size) instead of O(total_nodes).
     fn persist_topology_inner(
         &self,
         conn: &rusqlite::Connection,
@@ -547,32 +562,37 @@ impl HnswIndex {
     ) -> Result<(), crate::hnsw::errors::HnswError> {
         use crate::hnsw::errors::HnswStorageError;
 
-        conn.execute(
-            "DELETE FROM hnsw_layers WHERE index_id = ?",
-            [index_id],
-        )
-        .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+        let has_dirty = self.layers.iter().any(|l| !l.dirty_nodes().is_empty());
 
+        if has_dirty {
+            for (level, layer) in self.layers.iter().enumerate() {
+                let dirty = layer.dirty_nodes();
+                if dirty.is_empty() {
+                    continue;
+                }
+                for &node_id in dirty {
+                    if let Some(connections) = layer.get_node_connections(node_id) {
+                        let connections_bytes: Vec<u8> = connections
+                            .iter()
+                            .flat_map(|c| c.to_le_bytes())
+                            .collect();
+                        conn.execute(
+                            "INSERT OR REPLACE INTO hnsw_layers (index_id, layer_level, node_id, connections)
+                             VALUES (?1, ?2, ?3, ?4)",
+                            rusqlite::params![index_id, level as i64, node_id as i64, connections_bytes],
+                        )
+                        .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
+                    }
+                }
+            }
+        }
+
+        // Entry points are small; always rewrite for simplicity.
         conn.execute(
             "DELETE FROM hnsw_entry_points WHERE index_id = ?",
             [index_id],
         )
         .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
-
-        for layer in &self.layers {
-            for (&node_id, connections) in layer.nodes_iter() {
-                let connections_bytes: Vec<u8> = connections
-                    .iter()
-                    .flat_map(|c| c.to_le_bytes())
-                    .collect();
-                conn.execute(
-                    "INSERT OR REPLACE INTO hnsw_layers (index_id, layer_level, node_id, connections)
-                     VALUES (?1, ?2, ?3, ?4)",
-                    rusqlite::params![index_id, layer.level() as i64, node_id as i64, connections_bytes],
-                )
-                .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
-            }
-        }
 
         for (i, &ep) in self.entry_points.iter().enumerate() {
             conn.execute(
@@ -659,6 +679,11 @@ impl HnswIndex {
             .map_err(|e| HnswError::Storage(HnswStorageError::DatabaseError(e.to_string())))?;
 
         self.vector_count = self.layers.first().map(|l| l.node_count()).unwrap_or(0);
+
+        // Loaded from DB — nothing is dirty.
+        for layer in &mut self.layers {
+            layer.clear_dirty();
+        }
 
         // Populate vector_cache from storage so subsequent operations
         // (search, insert) don't need to query SQLite per vector.

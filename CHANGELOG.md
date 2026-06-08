@@ -1,5 +1,22 @@
 # SQLiteGraph Changelog
 
+## [3.2.4] - 2026-06-07
+
+### Fixed
+
+- **Incremental HNSW topology persistence** — `persist_topology()` no longer
+  deletes and re-inserts every `hnsw_layers` record on each call. Instead, only
+  nodes that have been modified since the last persist are written to the
+  database. A `dirty_nodes: HashSet<u64>` field was added to `HnswLayer`; all
+  mutation methods (`add_node`, `add_connection`, `prune_connections`,
+  `remove_node`, etc.) mark affected nodes as dirty. `persist_topology_inner`
+  now skips layers with no dirty nodes and uses `INSERT OR REPLACE` only for
+  the changed subset. Entry points continue to be rewritten (small set).
+
+  This fixes catastrophic slowdown during bulk embedding of large codebases
+  (e.g. rocmforge: ~126K layer records caused ~2.5 vectors/sec; with this
+  fix the rate returns to the expected ~30 vectors/sec).
+
 ## [3.2.3] - 2026-06-07
 
 ### Changed

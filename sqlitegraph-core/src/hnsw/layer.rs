@@ -44,6 +44,10 @@ pub struct HnswLayer {
 
     /// Total number of vectors indexed in the layer
     vector_count: usize,
+
+    /// Nodes that have been modified since the last persist_topology call.
+    /// Used for incremental persistence — only dirty nodes are written to DB.
+    dirty_nodes: HashSet<u64>,
 }
 
 impl HnswLayer {
@@ -78,6 +82,7 @@ impl HnswLayer {
             nodes: HashMap::new(),
             entry_points: Vec::new(),
             vector_count: 0,
+            dirty_nodes: HashSet::new(),
         }
     }
 
@@ -136,6 +141,13 @@ impl HnswLayer {
         self.nodes.contains_key(&node_id)
     }
 
+    /// Get connections for a node without returning an error if missing.
+    ///
+    /// Used by incremental persistence to look up dirty nodes efficiently.
+    pub(crate) fn get_node_connections(&self, node_id: u64) -> Option<&HashSet<u64>> {
+        self.nodes.get(&node_id)
+    }
+
     /// Get connections for a specific node
     ///
     /// # Arguments
@@ -183,6 +195,7 @@ impl HnswLayer {
         }
 
         self.nodes.insert(node_id, HashSet::new());
+        self.dirty_nodes.insert(node_id);
         self.vector_count += 1;
 
         // Add as entry point if this is one of the first nodes
@@ -223,6 +236,7 @@ impl HnswLayer {
         }
 
         self.nodes.get_mut(&from_node).unwrap().insert(to_node);
+        self.dirty_nodes.insert(from_node);
         Ok(())
     }
 
@@ -258,6 +272,8 @@ impl HnswLayer {
         // Add bidirectional connection
         self.nodes.get_mut(&node_a).unwrap().insert(node_b);
         self.nodes.get_mut(&node_b).unwrap().insert(node_a);
+        self.dirty_nodes.insert(node_a);
+        self.dirty_nodes.insert(node_b);
 
         // Prune connections if needed
         self.prune_connections(node_a);
@@ -297,6 +313,7 @@ impl HnswLayer {
 
             // Update the connections set
             *connections = conn_vec.into_iter().collect();
+            self.dirty_nodes.insert(node_id);
         }
     }
 
@@ -340,6 +357,7 @@ impl HnswLayer {
                 .collect();
 
             *connections = to_keep;
+            self.dirty_nodes.insert(node_id);
         }
     }
 
@@ -413,6 +431,17 @@ impl HnswLayer {
         self.nodes.clear();
         self.entry_points.clear();
         self.vector_count = 0;
+        self.dirty_nodes.clear();
+    }
+
+    /// Return the set of node IDs that have been modified since the last persist.
+    pub fn dirty_nodes(&self) -> &HashSet<u64> {
+        &self.dirty_nodes
+    }
+
+    /// Clear the dirty-node set after a successful persist.
+    pub fn clear_dirty(&mut self) {
+        self.dirty_nodes.clear();
     }
 
     pub fn remove_node(&mut self, node_id: u64) {
@@ -420,8 +449,11 @@ impl HnswLayer {
             return;
         }
         self.nodes.get_mut(&node_id).unwrap().clear();
-        for conns in self.nodes.values_mut() {
-            conns.remove(&node_id);
+        self.dirty_nodes.insert(node_id);
+        for (other_id, conns) in self.nodes.iter_mut() {
+            if *other_id != node_id && conns.remove(&node_id) {
+                self.dirty_nodes.insert(*other_id);
+            }
         }
         self.entry_points.retain(|&ep| ep != node_id);
         self.vector_count = self.vector_count.saturating_sub(1);
