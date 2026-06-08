@@ -270,6 +270,23 @@ impl NeighborhoodSearch {
         entry_points: &[u64],
         k: usize,
     ) -> Result<SearchResult, HnswError> {
+        self.search_layer_fn(
+            layer,
+            query_vector,
+            |node_id| vectors.get(&node_id).map(|v| v.as_slice()),
+            entry_points,
+            k,
+        )
+    }
+
+    pub(crate) fn search_layer_fn<'a>(
+        &self,
+        layer: &HnswLayer,
+        query_vector: &[f32],
+        lookup: impl Fn(u64) -> Option<&'a [f32]>,
+        entry_points: &[u64],
+        k: usize,
+    ) -> Result<SearchResult, HnswError> {
         if query_vector.is_empty() {
             return Err(HnswError::Index(HnswIndexError::InvalidSearchParameters));
         }
@@ -298,8 +315,7 @@ impl NeighborhoodSearch {
             if layer.contains_node(entry_point) {
                 let distance = self.compute_distance(
                     query_vector,
-                    vectors
-                        .get(&entry_point)
+                    lookup(entry_point)
                         .ok_or(HnswError::Index(HnswIndexError::NodeNotFound(entry_point)))?,
                 )?;
                 candidates.push(SearchCandidate::new(entry_point, distance, layer.level()));
@@ -340,7 +356,7 @@ impl NeighborhoodSearch {
                 for &neighbor_id in connections {
                     if !visited.contains(&neighbor_id) {
                         visited.insert(neighbor_id);
-                        if let Some(vec) = vectors.get(&neighbor_id) {
+                        if let Some(vec) = lookup(neighbor_id) {
                             let distance = self.compute_distance(query_vector, vec)?;
                             candidates.push(SearchCandidate::new(
                                 neighbor_id,

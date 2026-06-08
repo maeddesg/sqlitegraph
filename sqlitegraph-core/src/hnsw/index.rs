@@ -978,6 +978,47 @@ mod tests {
     }
 
     #[test]
+    fn test_batch_insert_speed_large_index() {
+        use crate::hnsw::{DistanceMetric, HnswConfigBuilder, HnswIndex};
+
+        let config = HnswConfigBuilder::new()
+            .dimension(768)
+            .distance_metric(DistanceMetric::Cosine)
+            .build()
+            .unwrap();
+        let mut index = HnswIndex::new("bench", config).unwrap();
+        let dummy = vec![0.5f32; 768];
+
+        // Build 50K vectors in batches of 256 to avoid per-insert persist overhead
+        for batch_idx in 0..(50_000 / 256) {
+            let batch: Vec<_> = (0..256)
+                .map(|i| {
+                    let mut v = dummy.clone();
+                    v[0] = ((batch_idx * 256 + i) as f32) * 0.00001;
+                    (v, None)
+                })
+                .collect();
+            index.batch_insert_vectors(&batch).unwrap();
+        }
+
+        let start = std::time::Instant::now();
+        let batch: Vec<_> = (0..16)
+            .map(|i| {
+                let mut v = dummy.clone();
+                v[0] = (50_000 + i) as f32 * 0.00001;
+                (v, None)
+            })
+            .collect();
+        index.batch_insert_vectors(&batch).unwrap();
+        let elapsed = start.elapsed();
+        println!(
+            "Batch insert into 50K in-memory index: {:?} for 16 vectors = {:.1} vectors/sec",
+            elapsed,
+            16.0 / elapsed.as_secs_f64()
+        );
+    }
+
+    #[test]
     fn test_multi_index_coexistence() {
         use std::fs;
 

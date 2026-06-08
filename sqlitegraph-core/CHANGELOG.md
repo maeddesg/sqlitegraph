@@ -1,5 +1,25 @@
 # SQLiteGraph Changelog
 
+## [3.2.5] - 2026-06-07
+
+### Fixed
+- **`insert_into_layer` no longer clones all vectors per insertion** — Added
+  `search_layer_fn` which accepts a lookup closure instead of a `HashMap` of
+  all vectors. `insert_into_layer` now looks up vectors on-demand from
+  `vector_cache` during HNSW search, eliminating ~2.3M heap allocations and
+  ~7GB of memory copies per batch of 16 vectors when the index holds 145K
+  vectors. Batch insert speed into a 50K index improved from ~2.8 to
+  ~160 vectors/sec. (SG-5)
+
+## [3.2.4] - 2026-06-07
+
+### Fixed
+- **`persist_topology` rewritten for incremental writes** — Tracks dirty nodes
+  per layer in `HnswLayer::dirty_nodes` (a `HashSet<u64>`). Only dirty nodes
+  are written to `hnsw_layers` via `INSERT OR REPLACE`, instead of the previous
+  full table rewrite. This reduces per-batch persist time from seconds to
+  milliseconds for large indexes. (SG-4)
+
 ## [3.2.3] - 2026-06-07
 
 ### Changed

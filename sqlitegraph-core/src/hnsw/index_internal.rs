@@ -79,12 +79,6 @@ impl HnswIndex {
             return Ok(());
         }
 
-        // PROPER HNSW INSERTION: Search for nearest neighbors, then connect to them
-        // 1. Load vectors for distance computation
-        let vectors = self.load_vectors_as_local_map(level)?;
-
-        let new_vector = vectors.get(&node_id).ok_or(HnswError::Index(HnswIndexError::NodeNotFound(node_id)))?;
-
         // 3. Find entry points to start the search
         let global_entry_points = self.get_layer_entry_points(level);
         let entry_points: Vec<u64> = if let Some(manager) = &self.multi_layer_manager {
@@ -107,14 +101,41 @@ impl HnswIndex {
         }
 
         // 4. Search for the nearest neighbors to the new vector
+        // Use a closure to look up vectors on-demand from vector_cache, avoiding
+        // the expensive clone of all vectors into a local HashMap.
         let ef = self.config.ef_construction;
-        let search_result = self.search_engine.search_layer(
-            &self.layers[level],
-            new_vector,
-            &vectors,
-            &entry_points,
-            ef,
-        )?;
+        let vector_cache = &self.vector_cache;
+        let search_engine = &self.search_engine;
+        let layer_ref = &self.layers[level];
+        let new_vector = vector_cache
+            .get(&vector_id)
+            .ok_or(HnswError::Index(HnswIndexError::NodeNotFound(vector_id)))?;
+        self.vector_cache_hits
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        let search_result = if let Some(manager) = &self.multi_layer_manager {
+            search_engine.search_layer_fn(
+                layer_ref,
+                new_vector,
+                |local_id: u64| {
+                    let global_id = manager.get_global_id(level, local_id)?;
+                    vector_cache.get(&global_id).map(|v| v.as_slice())
+                },
+                &entry_points,
+                ef,
+            )?
+        } else {
+            search_engine.search_layer_fn(
+                layer_ref,
+                new_vector,
+                |local_id: u64| {
+                    let global_id = local_id + 1;
+                    vector_cache.get(&global_id).map(|v| v.as_slice())
+                },
+                &entry_points,
+                ef,
+            )?
+        };
 
         // 5. Select top M neighbors (limited by max_connections)
         let candidates = search_result.neighbors();
